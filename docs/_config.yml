@@ -1,0 +1,125 @@
+# 🎯 TDD Project Template - Jekyll Configuration
+# Professional Test-Driven Development template with automated tracking
+
+# Basic site settings
+title: "Test TDD Project - Live Dashboard"
+description: "Demonstration of TDD template with real epic tracking and progress visualization"
+url: "https://davidcantidio.github.io"
+baseurl: "/test-tdd-project"
+
+# Author information
+author:
+  name: "David Cantidio"
+  email: "dbcantidio@gmail.com"
+  twitter: "davidcantidio"
+
+# GitHub repository info
+github:
+  repository_url: https://github.com/davidcantidio/test-tdd-project
+  repository_name: davidcantidio/test-tdd-project
+  is_template: false
+  template_source: https://github.com/davidcantidio/tdd-project-template
+
+# Theme and plugins
+theme: minima
+plugins:
+  - jekyll-feed
+  - jekyll-sitemap
+  - jekyll-seo-tag
+  - jekyll-github-metadata
+
+# TDD Dashboard features
+tdd_dashboard:
+  show_gantt_chart: true
+  show_epic_progress: true
+  show_phase_distribution: true
+  auto_refresh_minutes: 5
+  template_mode: false
+  demo_mode: true
+
+# Mermaid diagram support
+mermaid:
+  enabled: true
+  theme: default
+
+# Navigation
+header_pages:
+  - index.md
+  - setup.md
+  - features.md
+  - examples.md
+
+# Collections
+collections:
+  epics:
+    output: true
+    permalink: /:collection/:name/
+
+# Defaults
+defaults:
+  - scope:
+      path: ""
+      type: "posts"
+    values:
+      layout: "post"
+      author: "David Cantidio"
+  - scope:
+      path: ""
+      type: "epics"
+    values:
+      layout: "epic"
+
+# Build settings
+markdown: kramdown
+highlighter: rouge
+permalink: pretty
+timezone: America/Sao_Paulo
+
+# SEO
+lang: en_US
+twitter:
+  username: davidcantidio
+  card: summary_large_image
+
+social:
+  name: David Cantidio
+  links:
+    - https://twitter.com/davidcantidio
+    - https://github.com/davidcantidio
+
+# Sass
+sass:
+  style: compressed
+  sass_dir: _sass
+
+# Liquid
+liquid:
+  error_mode: warn
+  strict_filters: false
+  strict_variables: false
+
+# Exclude from processing
+exclude:
+  - .sass-cache/
+  - .jekyll-cache/
+  - gemfiles/
+  - Gemfile
+  - Gemfile.lock
+  - node_modules/
+  - vendor/bundle/
+  - vendor/cache/
+  - vendor/gems/
+  - vendor/ruby/
+  - README.md
+  - LICENSE
+  - setup/
+  - scripts/
+  - tdah_tools/
+  - tests/
+  - .env*
+  - *.log
+
+# Include files
+include:
+  - _pages
+  - .well-known

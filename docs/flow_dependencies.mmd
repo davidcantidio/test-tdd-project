@@ -1,0 +1,106 @@
+flowchart TD
+    Start([Project Start])
+    [EPIC_ID][[Epic Name]]
+    Start --> [EPIC_ID]
+    0[Environment & Production Safety]
+    Start --> 0
+    X.Y[[Nome do Épico]]
+    Start --> X.Y
+    [EPIC_ID]_1[TEST: [specific behavior]]:::red
+    [EPIC_ID] --> [EPIC_ID]_1
+    [EPIC_ID]_2[IMPL: [minimal functionality]]:::green
+    [EPIC_ID] --> [EPIC_ID]_2
+    [EPIC_ID]_1 --> [EPIC_ID]_2
+    [EPIC_ID]_3[REFACTOR: [design improvement]]:::blue
+    [EPIC_ID] --> [EPIC_ID]_3
+    [EPIC_ID]_2 --> [EPIC_ID]_3
+    0_1[Mapear comportamento atual do warning_suppressor]
+    0 --> 0_1
+    0_2[Analisar impacto do production_mode no logging]
+    0 --> 0_2
+    0_3_1[TEST: test_module_0_3_should_arquivo_envexample_criado]:::red
+    0 --> 0_3_1
+    0_3_2[IMPL: module_0_3 arquivo .env.example criado]:::green
+    0 --> 0_3_2
+    0_3_4[TEST: test_module_0_3_should_defaults_seguros_para_prod_e_dev_definid]:::red
+    0 --> 0_3_4
+    0_3_5[IMPL: module_0_3 defaults seguros para prod e d]:::green
+    0 --> 0_3_5
+    0_4_1[TEST: test_performance_should_beforeapicallop_incrementa_contador_e_re]:::red
+    0 --> 0_4_1
+    0_4_2[IMPL: performance before_api_call("op") incremen]:::green
+    0 --> 0_4_2
+    0_4_4[TEST: test_performance_should_exceo_emitida_ao_exceder_maxcalls]:::red
+    0 --> 0_4_4
+    0_4_5[IMPL: performance exceção emitida ao exceder max]:::green
+    0 --> 0_4_5
+    0_4_7[TEST: test_performance_should_logs_incluem_as_operaes_registradas]:::red
+    0 --> 0_4_7
+    0_4_8[IMPL: performance logs incluem as operações regi]:::green
+    0 --> 0_4_8
+    0_4_9[REFACTOR: performance]:::blue
+    0 --> 0_4_9
+    0_5_1[TEST: test_module_0_5_should_contagem_de_chamadas_idntica_ao_baseline]:::red
+    0 --> 0_5_1
+    0_5_2[IMPL: module_0_5 contagem de chamadas idêntica ]:::green
+    0 --> 0_5_2
+    0_5_4[TEST: test_module_0_5_should_calllog_apresenta_as_duas_operaes_espera]:::red
+    0 --> 0_5_4
+    0_5_5[IMPL: module_0_5 call_log apresenta as duas ope]:::green
+    0 --> 0_5_5
+    0_6_1[TEST: test_config_should_loader_l_env_e_valida_combinaes_invlidas]:::red
+    0 --> 0_6_1
+    0_6_2[IMPL: config loader lê .env e valida combin]:::green
+    0 --> 0_6_2
+    0_6_4[TEST: test_config_should_objeto_de_configurao_acessvel_por_mdulos]:::red
+    0 --> 0_6_4
+    0_6_5[IMPL: config objeto de configuração acessív]:::green
+    0 --> 0_6_5
+    0_7[Verificar existência e papel de early_exit_checker.py]
+    0 --> 0_7
+    0_8[Verificar existência e papel de schema_validator.py]
+    0 --> 0_8
+    0_9_1[TEST: test_module_0_9_should_reload_no_duplica_hooks_nem_eventos]:::red
+    0 --> 0_9_1
+    0_9_2[IMPL: module_0_9 reload não duplica hooks nem e]:::green
+    0 --> 0_9_2
+    0_9_4[TEST: test_module_0_9_should_caches_permanecem_consistentes_aps_reloa]:::red
+    0 --> 0_9_4
+    0_9_5[IMPL: module_0_9 caches permanecem consistentes]:::green
+    0 --> 0_9_5
+    0_10_1[TEST: test_environment_should_api_simples_isproduction]:::red
+    0 --> 0_10_1
+    0_10_2[IMPL: environment api simples: is_production()]:::green
+    0 --> 0_10_2
+    0_10_4[TEST: test_environment_should_override_via_env_documentado_e_testado]:::red
+    0 --> 0_10_4
+    0_10_5[IMPL: environment override via env documentado e]:::green
+    0 --> 0_10_5
+    0_11_1[TEST: test_module_0_11_should_matriz_com_entradas_para_cada_sistema_cr]:::red
+    0 --> 0_11_1
+    0_11_2[IMPL: module_0_11 matriz com entradas para cada ]:::green
+    0 --> 0_11_2
+    0_11_4[TEST: test_module_0_11_should_recomendaes_claras_para_devtestprod]:::red
+    0 --> 0_11_4
+    0_11_5[IMPL: module_0_11 recomendações claras para dev/]:::green
+    0 --> 0_11_5
+    0_12_1[TEST: test_module_0_12_should_nenhuma_regresso_de_chamadas_externas]:::red
+    0 --> 0_12_1
+    0_12_2[IMPL: module_0_12 nenhuma regressão de chamadas ]:::green
+    0 --> 0_12_2
+    0_12_4[TEST: test_module_0_12_should_zero_crashes_e_warnings_crticos_visveis]:::red
+    0 --> 0_12_4
+    0_12_5[IMPL: module_0_12 zero crashes e warnings crític]:::green
+    0 --> 0_12_5
+    X_Y_1[TEST: [comportamento específico]]:::red
+    X.Y --> X_Y_1
+    X_Y_2[IMPL: [funcionalidade mínima]]:::green
+    X.Y --> X_Y_2
+    X_Y_1 --> X_Y_2
+    X_Y_3[REFACTOR: [melhoria de design]]:::blue
+    X.Y --> X_Y_3
+    X_Y_2 --> X_Y_3
+
+    classDef red fill:#ffebee,stroke:#f44336,stroke-width:2px
+    classDef green fill:#e8f5e8,stroke:#4caf50,stroke-width:2px
+    classDef blue fill:#e3f2fd,stroke:#2196f3,stroke-width:2px
