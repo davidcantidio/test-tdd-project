@@ -1,0 +1,86 @@
+---
+---
+
+/**
+ * TDD Dashboard Styles
+ * 
+ * Specific styles for TDD dashboard components, charts, and analytics.
+ * This file is processed by Jekyll and compiled to CSS.
+ */
+
+// Import the main TDD dashboard styles
+@import "tdd-dashboard";
+
+// Additional dashboard-specific enhancements
+.dashboard-container {
+  display: grid;
+  gap: 2rem;
+  margin: 2rem 0;
+}
+
+.dashboard-card {
+  background: #fff;
+  border: 1px solid #e1e4e8;
+  border-radius: 12px;
+  padding: 1.5rem;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+  transition: box-shadow 0.2s;
+}
+
+.dashboard-card:hover {
+  box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+}
+
+.dashboard-title {
+  margin: 0 0 1rem 0;
+  color: #0366d6;
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+
+// Epic progress indicators
+.epic-progress {
+  display: flex;
+  gap: 0.5rem;
+  margin: 1rem 0;
+}
+
+.progress-indicator {
+  flex: 1;
+  height: 8px;
+  border-radius: 4px;
+  background: #e1e4e8;
+  position: relative;
+  overflow: hidden;
+}
+
+.progress-bar {
+  height: 100%;
+  transition: width 0.3s ease;
+}
+
+// Phase colors
+.phase-red .progress-bar { background: #dc3545; }
+.phase-green .progress-bar { background: #28a745; }
+.phase-refactor .progress-bar { background: #17a2b8; }
+
+// Interactive charts
+.chart-container {
+  margin: 1.5rem 0;
+  min-height: 400px;
+}
+
+// Mobile responsive dashboard
+@media (max-width: 768px) {
+  .dashboard-container {
+    gap: 1rem;
+  }
+  
+  .dashboard-card {
+    padding: 1rem;
+  }
+  
+  .chart-container {
+    min-height: 300px;
+  }
+}

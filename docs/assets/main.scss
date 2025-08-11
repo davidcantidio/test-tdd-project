@@ -1,0 +1,138 @@
+---
+---
+
+/**
+ * Main stylesheet for TDD Project Template
+ * 
+ * This file compiles all SCSS into CSS for the Jekyll site.
+ * The front matter (--- ---) tells Jekyll to process this file.
+ */
+
+// Import TDD Dashboard custom styles
+@import "tdd-dashboard";
+
+// Base styles for Jekyll site
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  line-height: 1.6;
+  color: #333;
+  margin: 0;
+  padding: 0;
+}
+
+// Container and layout
+.site-container {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.site-main {
+  flex: 1;
+}
+
+.main-wrapper {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+// Header styles
+.site-header {
+  background: #fff;
+  border-bottom: 1px solid #e1e4e8;
+  padding: 1rem 0;
+}
+
+.header-wrapper {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.site-title {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #0366d6;
+  text-decoration: none;
+}
+
+// Navigation
+.site-nav {
+  display: flex;
+  align-items: center;
+}
+
+.nav-menu {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+}
+
+.nav-link {
+  color: #586069;
+  text-decoration: none;
+  font-weight: 500;
+  padding: 0.5rem 1rem;
+  border-radius: 6px;
+  transition: all 0.2s;
+}
+
+.nav-link:hover {
+  background: #f6f8fa;
+  color: #0366d6;
+}
+
+// Content
+.page-content {
+  max-width: none;
+}
+
+// Footer
+.site-footer {
+  background: #f6f8fa;
+  border-top: 1px solid #e1e4e8;
+  margin-top: auto;
+  padding: 2rem 0;
+}
+
+.footer-wrapper {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 20px;
+}
+
+.footer-content {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 2rem;
+  margin-bottom: 1.5rem;
+}
+
+.footer-bottom {
+  text-align: center;
+  padding-top: 1.5rem;
+  border-top: 1px solid #e1e4e8;
+  color: #586069;
+  font-size: 0.9rem;
+}
+
+// Mobile responsiveness
+@media (max-width: 768px) {
+  .header-wrapper {
+    flex-direction: column;
+    gap: 1rem;
+  }
+  
+  .nav-menu {
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  
+  .main-wrapper {
+    padding: 15px;
+  }
+}
