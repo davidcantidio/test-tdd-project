@@ -8,16 +8,17 @@
  * The front matter (--- ---) tells Jekyll to process this file.
  */
 
-// Import TDD Dashboard custom styles
+// Import TDD Dashboard custom styles from _sass directory
 @import "tdd-dashboard";
 
-// Base styles for Jekyll site
+// Base styles for Jekyll site without theme
 body {
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   line-height: 1.6;
   color: #333;
   margin: 0;
   padding: 0;
+  background: #fff;
 }
 
 // Container and layout
@@ -60,6 +61,11 @@ body {
   text-decoration: none;
 }
 
+.site-title:hover {
+  text-decoration: none;
+  color: #0256cc;
+}
+
 // Navigation
 .site-nav {
   display: flex;
@@ -70,6 +76,12 @@ body {
   display: flex;
   gap: 1rem;
   align-items: center;
+}
+
+.nav-trigger {
+  display: none;
+  cursor: pointer;
+  padding: 0.5rem;
 }
 
 .nav-link {
@@ -84,11 +96,58 @@ body {
 .nav-link:hover {
   background: #f6f8fa;
   color: #0366d6;
+  text-decoration: none;
 }
 
-// Content
+// Content area
 .page-content {
   max-width: none;
+  margin-bottom: 2rem;
+}
+
+.page-header {
+  border-bottom: 1px solid #e1e4e8;
+  padding-bottom: 1rem;
+  margin-bottom: 2rem;
+}
+
+.page-title {
+  margin: 0 0 0.5rem 0;
+  color: #24292e;
+}
+
+.page-description {
+  color: #586069;
+  margin: 0;
+}
+
+// Breadcrumb
+.breadcrumb {
+  margin-bottom: 1rem;
+}
+
+.breadcrumb ol {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  font-size: 0.9rem;
+}
+
+.breadcrumb li:not(:last-child):after {
+  content: " / ";
+  color: #586069;
+  margin: 0 0.5rem;
+}
+
+.breadcrumb a {
+  color: #0366d6;
+  text-decoration: none;
+}
+
+.breadcrumb a:hover {
+  text-decoration: underline;
 }
 
 // Footer
@@ -112,12 +171,26 @@ body {
   margin-bottom: 1.5rem;
 }
 
+.footer-section h4 {
+  margin: 0 0 1rem 0;
+  color: #24292e;
+}
+
 .footer-bottom {
   text-align: center;
   padding-top: 1.5rem;
   border-top: 1px solid #e1e4e8;
   color: #586069;
   font-size: 0.9rem;
+}
+
+.footer-bottom a {
+  color: #0366d6;
+  text-decoration: none;
+}
+
+.footer-bottom a:hover {
+  text-decoration: underline;
 }
 
 // Mobile responsiveness
@@ -127,12 +200,89 @@ body {
     gap: 1rem;
   }
   
+  .nav-trigger {
+    display: block;
+  }
+  
   .nav-menu {
-    flex-wrap: wrap;
-    justify-content: center;
+    display: none;
+    width: 100%;
+    flex-direction: column;
+    position: absolute;
+    top: 100%;
+    left: 0;
+    background: #fff;
+    border-top: 1px solid #e1e4e8;
+    padding: 1rem;
+  }
+  
+  .nav-menu.active {
+    display: flex;
   }
   
   .main-wrapper {
     padding: 15px;
+  }
+  
+  .footer-content {
+    grid-template-columns: 1fr;
+  }
+}
+
+// Basic markdown content styles
+.page-content {
+  h1, h2, h3, h4, h5, h6 {
+    color: #24292e;
+    margin-top: 2rem;
+    margin-bottom: 1rem;
+  }
+  
+  h1 { font-size: 2rem; }
+  h2 { font-size: 1.5rem; }
+  h3 { font-size: 1.25rem; }
+  
+  p {
+    margin-bottom: 1rem;
+    color: #24292e;
+  }
+  
+  a {
+    color: #0366d6;
+    text-decoration: none;
+  }
+  
+  a:hover {
+    text-decoration: underline;
+  }
+  
+  ul, ol {
+    margin-bottom: 1rem;
+    padding-left: 2rem;
+  }
+  
+  li {
+    margin-bottom: 0.5rem;
+  }
+  
+  code {
+    background: #f6f8fa;
+    padding: 0.2rem 0.4rem;
+    border-radius: 3px;
+    font-size: 0.9em;
+  }
+  
+  pre {
+    background: #f6f8fa;
+    padding: 1rem;
+    border-radius: 6px;
+    overflow-x: auto;
+    margin-bottom: 1rem;
+  }
+  
+  blockquote {
+    border-left: 4px solid #dfe2e5;
+    padding-left: 1rem;
+    margin-left: 0;
+    color: #586069;
   }
 }
