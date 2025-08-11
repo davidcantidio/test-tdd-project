@@ -1,0 +1,101 @@
+# TDD Project Template - Jekyll Configuration
+# Built with GitHub Pages compatibility
+
+title: "TDD Project Template - Dashboard"
+description: "Enhanced TDD Project Template with Gantt Charts, Analytics, and GitHub Pages Integration"
+
+# GitHub Pages settings
+baseurl: "/test-tdd-project"
+url: "https://davidcantidio.github.io"
+
+# Repository info
+repository: davidcantidio/test-tdd-project
+github_username: davidcantidio
+
+# GitHub integration
+github:
+  repository_url: https://github.com/davidcantidio/test-tdd-project
+  repository_name: davidcantidio/test-tdd-project
+
+# Build settings
+markdown: kramdown
+highlighter: rouge
+theme: minima
+
+# Plugins
+plugins:
+  - jekyll-feed
+  - jekyll-sitemap
+  - jekyll-github-metadata
+
+# Kramdown settings
+kramdown:
+  input: GFM
+  syntax_highlighter: rouge
+
+# Exclude from processing
+exclude:
+  - Gemfile
+  - Gemfile.lock
+  - node_modules
+  - vendor
+  - .bundle
+  - .sass-cache
+  - .jekyll-cache
+  - .jekyll-metadata
+  - "*.tmp"
+  - "*.bak"
+  - "*.log"
+
+# Include files
+include:
+  - _pages
+
+# Collections
+collections:
+  epics:
+    output: true
+    permalink: /:collection/:name/
+
+# Defaults
+defaults:
+  - scope:
+      path: ""
+      type: "posts"
+    values:
+      layout: "post"
+      author: "TDD Project Template"
+  - scope:
+      path: ""
+      type: "epics"
+    values:
+      layout: "epic"
+
+# TDD Project specific settings
+tdd_project:
+  name: "My TDD Project"
+  version: "1.0.0"
+  epic_count: 9
+  features:
+    - "Enhanced TDD Gantt Charts"
+    - "Real-time Commit Tracking"
+    - "Interactive Analytics Dashboard"
+    - "GitHub Pages Integration"
+    - "Plotly Visualizations"
+
+# Analytics (optional - uncomment and configure)
+# google_analytics: UA-XXXXXXXX-X
+
+# Social media (optional)
+# twitter:
+#   username: your-twitter
+# facebook:
+#   app_id: your-facebook-app-id
+
+# SEO settings
+lang: en
+timezone: America/New_York
+
+# GitHub Pages safe mode
+safe: true
+incremental: false
