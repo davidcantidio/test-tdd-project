@@ -38,7 +38,7 @@ include = [
 ]
 
 [tool.poetry.dependencies]
-python = "^3.8"
+python = "^3.10,<4.0"
 
 # Core dependencies
 click = "^8.0.0"
@@ -79,8 +79,8 @@ pre-commit = "^3.3.0"
 bandit = "^1.7.5"
 safety = "^2.3.0"
 
-# Development tools
-ipython = "^8.14.0"
+# Development tools (ipython removed due to Python version conflict)
+# ipython = "^8.14.0"  # Requires Python >=3.10
 ipdb = "^0.13.13"
 
 [tool.poetry.group.docs.dependencies]
