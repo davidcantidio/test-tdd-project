@@ -52,16 +52,16 @@ jobs:
   update-tdd-charts:
     name: 🧠 Generate TDD Diagrams
     runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+    # environment: 
+    #   name: github-pages
+    #   url: ${{ steps.deployment.outputs.page_url }}
     
     permissions:
       contents: write          # For automatic commit
       issues: read            # For reading Issues
       repository-projects: read # For reading Projects
-      pages: write            # For GitHub Pages deploy
-      id-token: write         # For GitHub Pages authentication
+      # pages: write            # For GitHub Pages deploy (DISABLED - using static.yml)
+      # id-token: write         # For GitHub Pages authentication (DISABLED - using static.yml)
       
     steps:
       - name: 📥 Checkout Repository
@@ -266,20 +266,21 @@ jobs:
           echo "✅ Jekyll site built successfully"
           ls -la _site/
 
-      - name: 📄 Setup Pages
-        if: steps.git-check.outputs.changes == 'true' || github.event_name == 'workflow_dispatch' || github.event.inputs.force_deploy == 'true'
-        uses: actions/configure-pages@v4
-        
-      - name: 📦 Upload Pages Artifact
-        if: steps.git-check.outputs.changes == 'true' || github.event_name == 'workflow_dispatch' || github.event.inputs.force_deploy == 'true'
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: ./docs/_site
-          
-      - name: 🚀 Deploy to GitHub Pages
-        if: steps.git-check.outputs.changes == 'true' || github.event_name == 'workflow_dispatch' || github.event.inputs.force_deploy == 'true'
-        id: deployment
-        uses: actions/deploy-pages@v4
+      # GitHub Pages deployment DISABLED - handled by static.yml workflow
+      # - name: 📄 Setup Pages
+      #   if: steps.git-check.outputs.changes == 'true' || github.event_name == 'workflow_dispatch' || github.event.inputs.force_deploy == 'true'
+      #   uses: actions/configure-pages@v4
+      #   
+      # - name: 📦 Upload Pages Artifact
+      #   if: steps.git-check.outputs.changes == 'true' || github.event_name == 'workflow_dispatch' || github.event.inputs.force_deploy == 'true'
+      #   uses: actions/upload-pages-artifact@v3
+      #   with:
+      #     path: ./docs/_site
+      #     
+      # - name: 🚀 Deploy to GitHub Pages
+      #   if: steps.git-check.outputs.changes == 'true' || github.event_name == 'workflow_dispatch' || github.event.inputs.force_deploy == 'true'
+      #   id: deployment
+      #   uses: actions/deploy-pages@v4
       
       - name: 💬 Comment on Related Issues (if triggered by issue)
         if: github.event_name == 'issues' && steps.git-check.outputs.changes == 'true'
