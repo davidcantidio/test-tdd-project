@@ -1,0 +1,67 @@
+{
+  "epic_id": "X",
+  "title": "Epic Title Here",
+  "description": "Detailed description of what this epic accomplishes and why it's important",
+  "section": "Foundation|Core Features|Advanced Features|Quality Assurance",
+  "priority": "high|medium|low",
+  "status": "pending|active|blocked|done",
+  "estimated_hours": 0.0,
+  "planned_start": "YYYY-MM-DD",
+  "planned_end": "YYYY-MM-DD", 
+  "assigned_developer": "developer-name",
+  "tags": ["tag1", "tag2", "tdd"],
+  
+  "acceptance_criteria": [
+    "Criterion 1: Specific, measurable, achievable outcome",
+    "Criterion 2: Another specific requirement",
+    "Criterion 3: Must have 100% test coverage for TDD compliance"
+  ],
+  
+  "tasks": [
+    {
+      "task_id": "X.1",
+      "phase": "analysis|red|green|refactor", 
+      "title": "Task title describing what to do",
+      "description": "Detailed description of the task and expected outcome",
+      "estimated_time_minutes": 30,
+      "status": "pending|in_progress|done",
+      "type": "feat|fix|docs|test|refactor|chore|style|perf"
+    }
+  ],
+  
+  "dependencies": [
+    "List of epic IDs that must complete before this one"
+  ],
+  "blockers": [
+    "Description of anything blocking progress on this epic"
+  ],
+  
+  "tdd_metrics": {
+    "total_estimated_minutes": 0,
+    "phases_distribution": {
+      "analysis": 0,
+      "red": 0,
+      "green": 0,
+      "refactor": 0
+    },
+    "expected_tdd_cycles": 0,
+    "test_coverage_target": 100
+  },
+  
+  "github_integration": {
+    "repository": "your-username/your-repo",
+    "milestone": "Milestone name",
+    "labels": ["epic-X", "relevant-labels"],
+    "project_board": "Project Board Name"
+  },
+  
+  "notes": [
+    "Any additional notes or considerations",
+    "Remember to follow TDD methodology strictly",
+    "Use [EPIC-X] commit pattern for all work"
+  ],
+  
+  "created_date": "YYYY-MM-DDTHH:MM:SSZ",
+  "updated_date": "YYYY-MM-DDTHH:MM:SSZ", 
+  "version": "1.0"
+}

@@ -1,0 +1,194 @@
+[tool.poetry]
+name = "tdd-project-template"
+version = "1.0.0"
+description = "Enhanced TDD Project Template with Real-time Analytics and GitHub Integration"
+authors = ["TDD Template Contributors <noreply@github.com>"]
+readme = "README.md"
+homepage = "https://github.com/your-username/tdd-project-template"
+repository = "https://github.com/your-username/tdd-project-template"
+documentation = "https://your-username.github.io/tdd-project-template"
+keywords = ["tdd", "test-driven-development", "gantt", "analytics", "github-pages"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Topic :: Software Development :: Testing",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+
+# Lista explícita dos diretórios-módulo que fazem parte do template TDD
+packages = [
+    { include = "scripts" },
+    { include = "epics" },
+    { include = "config" },
+    { include = "tdah_tools" }
+]
+
+[tool.poetry.dependencies]
+python = "^3.9,<3.13"
+# Core analytics e visualização - baseado em ETL Debrito
+plotly = "^5.17.0"          # Para Gantt charts interativos e dashboards
+pandas = "^2.0.0"           # Manipulação de dados para analytics  
+numpy = "^1.24.0"           # Suporte matemático para pandas
+# Utilidades essenciais
+python-dotenv = "^1.0.0"    # Gerenciamento de environment variables
+pyyaml = "^6.0.0"           # Parsing de arquivos de configuração
+click = "^8.1.0"            # CLI interfaces para scripts
+colorama = "^0.4.6"         # Terminal colors multiplataforma
+# Git e automação
+gitpython = "^3.1.0"       # Integração Git para commit parsing
+requests = "^2.31.0"        # HTTP requests para APIs GitHub
+# Desenvolvimento e qualidade
+rich = "^13.0.0"            # Beautiful terminal output
+typer = "^0.9.0"            # Modern CLI framework
+
+[tool.poetry.group.dev.dependencies]
+# Testing framework
+pytest = "^8.0.0"           # Framework de testes principal
+pytest-cov = "^4.1.0"       # Cobertura de testes
+pytest-mock = "^3.12.0"     # Mocking para testes
+pytest-asyncio = "^0.23.0"  # Suporte async para testes
+mock = "^5.1.0"             # Mock objects
+# Code quality e linting
+ruff = "^0.4.0"             # Fast Python linter e formatter
+mypy = "^1.10.0"            # Static type checking
+black = "^24.0.0"           # Code formatter (fallback para ruff)
+isort = "^5.13.0"           # Import sorting (fallback para ruff)
+# Documentation
+mkdocs = "^1.5.0"           # Documentation generator
+mkdocs-material = "^9.5.0"  # Material theme para docs
+# Development tools
+pre-commit = "^3.6.0"       # Git hooks para quality gates
+jupyter = "^1.0.0"          # Jupyter notebooks para exploration
+ipykernel = "^6.29.0"       # Jupyter kernel support
+
+[tool.poetry.group.optional.dependencies]
+# GitHub integration (optional para environments restritos)
+pygithub = "^2.1.0"         # GitHub API integration
+github3-py = "^4.0.0"       # Alternative GitHub API client
+# Advanced analytics (optional)
+scikit-learn = "^1.4.0"     # Machine learning para trend analysis
+matplotlib = "^3.8.0"       # Static plots (fallback para plotly)
+seaborn = "^0.13.0"         # Statistical visualizations
+# Database support (optional)
+sqlalchemy = "^2.0.0"       # Database toolkit
+sqlite3 = "*"               # SQLite support (built-in)
+
+[tool.poetry.scripts]
+# CLI commands para o template
+tdd-commit = "scripts.commit_helper:main"
+tdd-gantt = "scripts.visualization.tdd_gantt_tracker:main"
+tdd-init = "scripts.init_project:main"
+tdd-validate = "scripts.validate_epic:main"
+
+[build-system]
+requires = ["poetry-core>=1.9.0"]
+build-backend = "poetry.core.masonry.api"
+
+# Configurações de ferramentas
+[tool.ruff]
+target-version = "py39"
+line-length = 100
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings  
+    "F",   # pyflakes
+    "I",   # isort
+    "B",   # flake8-bugbear
+    "C4",  # flake8-comprehensions
+    "UP",  # pyupgrade
+]
+ignore = [
+    "E501",  # Line too long (handled by formatter)
+    "B008",  # Do not perform function calls in argument defaults
+    "C901",  # Function is too complex
+]
+
+[tool.ruff.per-file-ignores]
+"__init__.py" = ["F401"]  # Allow unused imports in __init__.py
+"tests/**/*" = ["B011"]   # Allow assert False in tests
+
+[tool.black]
+line-length = 100
+target-version = ['py39', 'py310', 'py311', 'py312']
+
+[tool.isort]
+profile = "black"
+line_length = 100
+multi_line_output = 3
+
+[tool.mypy]
+python_version = "3.9"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+disallow_untyped_decorators = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_no_return = true
+warn_unreachable = true
+strict_equality = true
+
+# Ignore missing type stubs para libraries externas
+[[tool.mypy.overrides]]
+module = [
+    "plotly.*",
+    "pandas.*",
+    "numpy.*",
+    "yaml.*",
+    "git.*",
+    "rich.*",
+]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py", "*_test.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = [
+    "--cov=scripts",
+    "--cov=tdah_tools", 
+    "--cov-report=term-missing",
+    "--cov-report=html",
+    "--cov-fail-under=80",
+    "-v",
+    "--tb=short",
+]
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "integration: marks tests as integration tests",
+    "unit: marks tests as unit tests",
+    "tdd: marks tests as TDD workflow tests",
+]
+
+[tool.coverage.run]
+source = ["scripts", "tdah_tools"]
+omit = [
+    "*/tests/*",
+    "*/venv/*",
+    "*/__pycache__/*",
+    "setup.py",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "if self.debug:",
+    "if settings.DEBUG",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if 0:",
+    "if __name__ == .__main__.:",
+    "class .*\\bProtocol\\):",
+    "@(abc\\.)?abstractmethod",
+]

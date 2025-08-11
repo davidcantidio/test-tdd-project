@@ -1,0 +1,36 @@
+# TDD Project Template - Requirements Backup
+# 
+# Esta é uma versão simplificada para environments que não suportam Poetry.
+# Para desenvolvimento completo, use: poetry install
+#
+# Instalar: pip install -r requirements.txt
+
+# Core analytics e visualização
+plotly>=5.17.0,<6.0.0
+pandas>=2.0.0,<3.0.0
+numpy>=1.24.0,<2.0.0
+
+# Utilidades essenciais
+python-dotenv>=1.0.0,<2.0.0
+pyyaml>=6.0.0,<7.0.0
+click>=8.1.0,<9.0.0
+colorama>=0.4.6,<1.0.0
+
+# Git e automação
+gitpython>=3.1.0,<4.0.0
+requests>=2.31.0,<3.0.0
+
+# Terminal output
+rich>=13.0.0,<14.0.0
+typer>=0.9.0,<1.0.0
+
+# Development dependencies (comentadas por serem opcionais em produção)
+# pytest>=8.0.0,<9.0.0
+# pytest-cov>=4.1.0,<5.0.0
+# ruff>=0.4.0,<1.0.0
+# mypy>=1.10.0,<2.0.0
+
+# Optional dependencies (apenas se necessário)
+# pygithub>=2.1.0,<3.0.0
+# scikit-learn>=1.4.0,<2.0.0
+# matplotlib>=3.8.0,<4.0.0

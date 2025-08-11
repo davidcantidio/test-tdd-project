@@ -1,0 +1,148 @@
+{
+  "epic_id": "1",
+  "title": "User Authentication System",
+  "description": "Implement secure user authentication with login, registration, and session management using TDD methodology",
+  "section": "Core Features",
+  "priority": "high",
+  "status": "active",
+  "estimated_hours": 12.5,
+  "planned_start": "2024-01-15",
+  "planned_end": "2024-01-22",
+  "assigned_developer": "developer-name",
+  "tags": ["authentication", "security", "user-management", "tdd"],
+  
+  "acceptance_criteria": [
+    "Users can register with email and password",
+    "Users can login with valid credentials", 
+    "Invalid login attempts are properly handled",
+    "User sessions are managed securely",
+    "Password requirements are enforced",
+    "All features have 100% test coverage"
+  ],
+  
+  "tasks": [
+    {
+      "task_id": "1.1",
+      "phase": "analysis",
+      "title": "Define authentication requirements",
+      "description": "Analyze security requirements, define user stories, and plan implementation approach",
+      "estimated_time_minutes": 30,
+      "status": "pending",
+      "type": "docs"
+    },
+    {
+      "task_id": "1.2", 
+      "phase": "red",
+      "title": "Write user registration tests",
+      "description": "Create failing tests for user registration functionality",
+      "estimated_time_minutes": 45,
+      "status": "pending",
+      "type": "test"
+    },
+    {
+      "task_id": "1.3",
+      "phase": "green", 
+      "title": "Implement user registration",
+      "description": "Build user registration endpoint and validation logic",
+      "estimated_time_minutes": 90,
+      "status": "pending",
+      "type": "feat"
+    },
+    {
+      "task_id": "1.4",
+      "phase": "refactor",
+      "title": "Refactor registration validation",
+      "description": "Extract validation utilities and improve code structure",
+      "estimated_time_minutes": 30,
+      "status": "pending", 
+      "type": "refactor"
+    },
+    {
+      "task_id": "1.5",
+      "phase": "red",
+      "title": "Write login authentication tests",
+      "description": "Create failing tests for login functionality and session management",
+      "estimated_time_minutes": 60,
+      "status": "pending",
+      "type": "test"
+    },
+    {
+      "task_id": "1.6",
+      "phase": "green",
+      "title": "Implement login system",
+      "description": "Build login endpoint, session management, and authentication middleware",
+      "estimated_time_minutes": 120,
+      "status": "pending",
+      "type": "feat"
+    },
+    {
+      "task_id": "1.7",
+      "phase": "refactor",
+      "title": "Optimize authentication flow",
+      "description": "Improve performance, add security enhancements, and clean up code",
+      "estimated_time_minutes": 45,
+      "status": "pending",
+      "type": "refactor"
+    },
+    {
+      "task_id": "1.8",
+      "phase": "red",
+      "title": "Write password validation tests",
+      "description": "Create tests for password strength requirements and security validations",
+      "estimated_time_minutes": 30,
+      "status": "pending",
+      "type": "test"
+    },
+    {
+      "task_id": "1.9",
+      "phase": "green",
+      "title": "Implement password validation",
+      "description": "Build password strength checker and security enforcement",
+      "estimated_time_minutes": 60,
+      "status": "pending", 
+      "type": "feat"
+    },
+    {
+      "task_id": "1.10",
+      "phase": "refactor",
+      "title": "Final authentication refactor",
+      "description": "Final code cleanup, documentation, and security audit",
+      "estimated_time_minutes": 30,
+      "status": "pending",
+      "type": "refactor"
+    }
+  ],
+  
+  "dependencies": [],
+  "blockers": [],
+  
+  "tdd_metrics": {
+    "total_estimated_minutes": 540,
+    "phases_distribution": {
+      "analysis": 30,
+      "red": 135,
+      "green": 270, 
+      "refactor": 105
+    },
+    "expected_tdd_cycles": 3,
+    "test_coverage_target": 100
+  },
+  
+  "github_integration": {
+    "repository": "your-username/your-repo",
+    "milestone": "v1.0 - Core Authentication",
+    "labels": ["epic-1", "authentication", "tdd", "high-priority"],
+    "project_board": "TDD Project Board"
+  },
+  
+  "notes": [
+    "This epic follows strict TDD methodology with Red-Green-Refactor cycles",
+    "Each task should have corresponding commit using [EPIC-1] pattern", 
+    "Security review required before marking as complete",
+    "Integration tests should be added after all features are complete"
+  ],
+  
+  "created_date": "2024-01-10T10:00:00Z",
+  "updated_date": "2024-01-10T10:00:00Z",
+  "version": "1.0"
+}
