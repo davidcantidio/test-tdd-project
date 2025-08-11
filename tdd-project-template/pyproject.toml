@@ -30,7 +30,7 @@ packages = [
 ]
 
 [tool.poetry.dependencies]
-python = "^3.9,<3.13"
+python = "^3.10,<4.0"
 # Core analytics e visualização - baseado em ETL Debrito
 plotly = "^5.17.0"          # Para Gantt charts interativos e dashboards
 pandas = "^2.0.0"           # Manipulação de dados para analytics  
