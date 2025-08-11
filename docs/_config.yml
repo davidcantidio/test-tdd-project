@@ -82,10 +82,10 @@ twitter:
   card: summary_large_image
 
 social:
-  name: David Cantidio
-  links:
-    - https://twitter.com/davidcantidio
-    - https://github.com/davidcantidio
+  - name: Twitter
+    url: https://twitter.com/davidcantidio
+  - name: GitHub  
+    url: https://github.com/davidcantidio
 
 # Sass
 sass:
