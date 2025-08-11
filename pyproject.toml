@@ -25,7 +25,6 @@ classifiers = [
     "Framework :: Pytest",
 ]
 packages = [
-    {include = "src"},
     {include = "tdah_tools"},
     {include = "scripts"}
 ]
