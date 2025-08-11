@@ -1,0 +1,126 @@
+name: 🎯 TDD Epic Task
+description: Create a new TDD task following red-green-refactor methodology
+title: "[EPIC-ID.TASK] [TDD-PHASE]: [Task Title]"
+labels: ["tdd", "epic-task"]
+projects: ["TDD Development Board"]
+assignees:
+  - octocat
+body:
+  - type: input
+    id: epic_id
+    attributes:
+      label: Epic ID
+      description: Which epic does this task belong to?
+      placeholder: "EPIC-1.2"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: tdd_phase
+    attributes:
+      label: TDD Phase
+      description: What TDD phase is this task for?
+      options:
+        - red (Write failing test)
+        - green (Make test pass)
+        - refactor (Improve design)
+        - analysis (Research/Planning)
+    validations:
+      required: true
+
+  - type: input
+    id: estimate
+    attributes:
+      label: Time Estimate (minutes)
+      description: How long should this task take?
+      placeholder: "15"
+    validations:
+      required: true
+
+  - type: input
+    id: story_points
+    attributes:
+      label: Story Points
+      description: Complexity estimation (1-8)
+      placeholder: "3"
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Task Description
+      description: Detailed description of what needs to be done
+      placeholder: "Write a test that verifies..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: test_specs
+    attributes:
+      label: Test Specifications
+      description: What specific behaviors should be tested?
+      placeholder: |
+        - should_return_true_when_valid_input
+        - should_raise_error_when_invalid_input
+    validations:
+      required: false
+
+  - type: textarea
+    id: acceptance_criteria
+    attributes:
+      label: Acceptance Criteria
+      description: What conditions must be met for this task to be complete?
+      placeholder: |
+        - [ ] Test written and fails appropriately
+        - [ ] Implementation makes test pass
+        - [ ] All existing tests still pass
+    validations:
+      required: true
+
+  - type: textarea
+    id: deliverables
+    attributes:
+      label: Deliverables
+      description: What files/artifacts will be created or modified?
+      placeholder: |
+        - tests/test_module.py
+        - src/module.py
+    validations:
+      required: false
+
+  - type: textarea
+    id: dependencies
+    attributes:
+      label: Dependencies
+      description: What other tasks must be completed first?
+      placeholder: "EPIC-1.1, EPIC-2.3"
+    validations:
+      required: false
+
+  - type: input
+    id: branch
+    attributes:
+      label: Branch Name
+      description: What branch will this work be done on?
+      placeholder: "feature/epic-1-user-authentication"
+    validations:
+      required: false
+
+  - type: textarea
+    id: risk
+    attributes:
+      label: Risk Assessment
+      description: What could go wrong with this task?
+      placeholder: "Potential performance impact on large datasets"
+    validations:
+      required: false
+
+  - type: textarea
+    id: mitigation
+    attributes:
+      label: Risk Mitigation
+      description: How will identified risks be handled?
+      placeholder: "Implement caching and add performance tests"
+    validations:
+      required: false

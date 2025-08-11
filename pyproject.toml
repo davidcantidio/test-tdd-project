@@ -1,0 +1,304 @@
+[tool.poetry]
+name = "[PROJECT_NAME]"
+version = "0.1.0"
+description = "TDD project with epic management and automated progress tracking"
+authors = ["[AUTHOR_NAME] <[AUTHOR_EMAIL]>"]
+maintainers = ["[AUTHOR_NAME] <[AUTHOR_EMAIL]>"]
+license = "MIT"
+readme = "README.md"
+homepage = "https://github.com/[USERNAME]/[REPOSITORY_NAME]"
+repository = "https://github.com/[USERNAME]/[REPOSITORY_NAME]"
+documentation = "https://[USERNAME].github.io/[REPOSITORY_NAME]/"
+keywords = ["tdd", "testing", "project-management", "epic"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Testing",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Framework :: Pytest",
+]
+packages = [
+    {include = "src"},
+    {include = "tdah_tools"},
+    {include = "scripts"}
+]
+include = [
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE",
+    "epics/*.json",
+    "docs/*.md"
+]
+
+[tool.poetry.dependencies]
+python = "^3.8"
+
+# Core dependencies
+click = "^8.0.0"
+pydantic = "^2.0.0"
+rich = "^13.0.0"
+typer = "^0.9.0"
+
+# Data processing (optional)
+pandas = {version = "^2.0.0", optional = true}
+numpy = {version = "^1.24.0", optional = true}
+
+# Visualization (optional)
+plotly = {version = "^5.15.0", optional = true}
+jupyter = {version = "^1.0.0", optional = true}
+
+# HTTP requests (optional)
+requests = {version = "^2.31.0", optional = true}
+httpx = {version = "^0.24.0", optional = true}
+
+[tool.poetry.group.dev.dependencies]
+# Testing
+pytest = "^7.4.0"
+pytest-cov = "^4.1.0"
+pytest-mock = "^3.11.1"
+pytest-xdist = "^3.3.1"
+pytest-timeout = "^2.1.0"
+pytest-asyncio = "^0.21.0"
+coverage = {extras = ["toml"], version = "^7.2.0"}
+
+# Code quality
+black = "^23.7.0"
+isort = "^5.12.0"
+flake8 = "^6.0.0"
+mypy = "^1.5.0"
+pre-commit = "^3.3.0"
+
+# Security
+bandit = "^1.7.5"
+safety = "^2.3.0"
+
+# Development tools
+ipython = "^8.14.0"
+ipdb = "^0.13.13"
+
+[tool.poetry.group.docs.dependencies]
+# Documentation
+mkdocs = "^1.5.0"
+mkdocs-material = "^9.1.0"
+mkdocs-mermaid2-plugin = "^1.1.0"
+mkdocstrings = {extras = ["python"], version = "^0.22.0"}
+
+[tool.poetry.group.analytics.dependencies]
+# Analytics and visualization
+pandas = "^2.0.0"
+plotly = "^5.15.0"
+jupyter = "^1.0.0"
+numpy = "^1.24.0"
+seaborn = "^0.12.0"
+matplotlib = "^3.7.0"
+
+[tool.poetry.extras]
+# Optional feature sets
+analytics = ["pandas", "numpy", "plotly", "jupyter"]
+web = ["requests", "httpx"]
+all = ["pandas", "numpy", "plotly", "jupyter", "requests", "httpx"]
+
+[tool.poetry.scripts]
+# CLI commands
+tdd-timer = "tdah_tools.task_timer:main"
+epic-validator = "scripts.validate_epic:main"
+tdd-converter = "scripts.convert_to_tdd:main"
+diagram-generator = "scripts.visualization.tdd_diagram_generator:main"
+analytics-engine = "tdah_tools.analytics_engine:main"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+# Black configuration
+[tool.black]
+line-length = 88
+target-version = ['py38', 'py39', 'py310', 'py311', 'py312']
+include = '\.pyi?$'
+extend-exclude = '''
+/(
+    \.eggs
+  | \.git
+  | \.hg
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | _build
+  | buck-out
+  | build
+  | dist
+  | venv
+  | env
+)/
+'''
+
+# isort configuration
+[tool.isort]
+profile = "black"
+multi_line_output = 3
+line_length = 88
+known_first_party = ["src", "tests", "tdah_tools", "scripts"]
+known_third_party = ["pytest", "click", "pydantic", "rich", "typer"]
+skip = [".venv", "venv", "env", ".env"]
+sections = ["FUTURE", "STDLIB", "THIRDPARTY", "FIRSTPARTY", "LOCALFOLDER"]
+
+# MyPy configuration
+[tool.mypy]
+python_version = "3.8"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+disallow_untyped_decorators = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_no_return = true
+warn_unreachable = true
+strict_equality = true
+show_error_codes = true
+
+# Ignore missing imports for specific packages
+[[tool.mypy.overrides]]
+module = [
+    "plotly.*",
+    "pandas.*", 
+    "numpy.*",
+    "jupyter.*",
+    "seaborn.*",
+    "matplotlib.*"
+]
+ignore_missing_imports = true
+
+# Pytest configuration
+[tool.pytest.ini_options]
+minversion = "7.0"
+testpaths = ["tests"]
+addopts = [
+    "-v",
+    "--strict-markers", 
+    "--strict-config",
+    "--cov=src",
+    "--cov=tdah_tools", 
+    "--cov=scripts",
+    "--cov-report=term-missing",
+    "--cov-report=html:htmlcov",
+    "--cov-report=xml",
+    "--cov-fail-under=90",
+    "--tb=short",
+    "--durations=10",
+    "--color=yes"
+]
+markers = [
+    # TDD phases
+    "red: RED phase - tests that should fail initially",
+    "green: GREEN phase - tests that should pass after implementation",
+    "refactor: REFACTOR phase - tests that should remain green during refactoring",
+    
+    # Test categories
+    "unit: Unit tests - test individual functions/classes", 
+    "integration: Integration tests - test component interactions",
+    "e2e: End-to-end tests - test complete workflows",
+    
+    # Performance
+    "slow: Tests that take more than 1 second",
+    "fast: Tests that should complete in under 100ms",
+    
+    # Epic specific
+    "epic: Tests related to epic management",
+    "analytics: Tests for analytics features",
+    "timer: Tests for TDAH timer functionality",
+    "visualization: Tests for diagram generation",
+]
+filterwarnings = [
+    "error",
+    "ignore::UserWarning",
+    "ignore::DeprecationWarning",
+]
+
+# Coverage configuration
+[tool.coverage.run]
+source = ["src", "tdah_tools", "scripts"]
+branch = true
+omit = [
+    "*/tests/*",
+    "*/test_*.py", 
+    "*_test.py",
+    "*/conftest.py",
+    "*/__pycache__/*",
+    "*/venv/*",
+    "*/env/*",
+    ".venv/*",
+    ".env/*"
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "def __str__", 
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+    "@abc.abstractmethod",
+    "pass"
+]
+show_missing = true
+skip_covered = false
+precision = 2
+sort = "Cover"
+
+[tool.coverage.html]
+directory = "htmlcov"
+title = "TDD Project - Code Coverage Report"
+
+# Bandit security configuration
+[tool.bandit]
+exclude_dirs = ["tests", ".venv", "venv", "env", ".env"]
+skips = ["B101", "B601"]
+
+# Ruff configuration (modern alternative to flake8)
+[tool.ruff]
+line-length = 88
+target-version = "py38"
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings  
+    "F",   # pyflakes
+    "UP",  # pyupgrade
+    "B",   # flake8-bugbear
+    "SIM", # flake8-simplify
+    "I",   # isort
+]
+ignore = [
+    "E501",  # line too long (handled by black)
+    "B008",  # do not perform function calls in argument defaults
+]
+exclude = [
+    ".git",
+    "__pycache__",
+    ".venv",
+    "venv", 
+    "env",
+    ".env",
+    "build",
+    "dist",
+    ".eggs",
+    "*.egg-info"
+]
+
+[tool.ruff.per-file-ignores]
+"tests/*" = ["S101"]  # Allow assert in tests
+
+# Poetry plugin configuration for development
+[tool.poetry.plugins."poetry.command"]
+test = "poetry_test_plugin:TestCommand"

@@ -1,0 +1,215 @@
+# TDD Project Template - Docker Ignore File
+# Optimized for Python projects with Poetry
+
+# Version control
+.git
+.gitignore
+.gitattributes
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Poetry
+poetry.lock
+
+# Testing
+.coverage
+.pytest_cache/
+cover/
+htmlcov/
+.tox/
+.nox/
+.coverage.*
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+
+# MyPy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# IDEs and editors
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# OS files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Logs
+*.log
+logs/
+log/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.temp
+
+# Documentation build
+docs/_site/
+docs/.jekyll-cache/
+docs/.sass-cache/
+site/
+
+# Node.js (if using Node tools)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+
+# Package files
+*.tar.gz
+*.zip
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+data/
+*.dump
+
+# Environment files
+.env*
+!.env.example
+
+# Configuration files with secrets
+config/secrets/
+secrets/
+creds.json
+*.pem
+*.key
+*.crt
+
+# Output directories
+output/
+results/
+reports/
+
+# Cache directories
+.cache/
+cache/
+
+# Development files
+Dockerfile.dev
+docker-compose.dev.yml
+docker-compose.override.yml
+
+# CI/CD files (include only main ones)
+.github/
+!.github/workflows/
+
+# Documentation source (exclude, include only built docs)
+README.md
+CHANGELOG.md
+CONTRIBUTING.md
+docs/
+!docs/_site
+
+# Project specific
+task_timer.db
+tdd_conversion_analysis.json
+*.mmd
+htmlcov/
+
+# Large files that shouldn't be in container
+*.csv
+*.json
+!epics/*.json
+!template*.json
+
+# Test artifacts
+test-results/
+screenshots/
+videos/
+
+# Backup files
+*.bak
+*.backup
+*~
+
+# Poetry virtual environment in project
+.venv/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+*.ipynb
+
+# pyenv
+.python-version
+
+# pipenv
+Pipfile.lock
+
+# PEP 582
+__pypackages__/
+
+# Celery
+celerybeat-schedule
+celerybeat.pid
+
+# SageMath parsed files
+*.sage.py
+
+# Spyder project settings
+.spyderproject
+.spyproject
+
+# Rope project settings
+.ropeproject
+
+# mkdocs documentation
+/site
+
+# Pyre type checker
+.pyre/
+
+# pytype static type analyzer
+.pytype/
+
+# Cython debug symbols
+cython_debug/

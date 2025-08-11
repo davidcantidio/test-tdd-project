@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="{{ site.lang | default: page.lang | default: 'en' }}">
+
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  <title>
+    {%- if page.title -%}
+      {{ page.title | escape }} | {{ site.title | escape }}
+    {%- else -%}
+      {{ site.title | escape }}
+    {%- endif -%}
+  </title>
+
+  <meta name="description" content="{{ page.description | default: site.description | strip_html | normalize_whitespace | truncate: 160 | escape }}">
+  <meta name="author" content="{{ site.author.name | default: 'TDD Project' }}">
+
+  <!-- Open Graph / Facebook -->
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="{{ page.url | absolute_url }}">
+  <meta property="og:title" content="{{ page.title | default: site.title }}">
+  <meta property="og:description" content="{{ page.description | default: site.description | strip_html | normalize_whitespace | truncate: 160 }}">
+  <meta property="og:image" content="{{ site.url }}{{ site.baseurl }}/assets/og-image.png">
+
+  <!-- Twitter -->
+  <meta property="twitter:card" content="summary_large_image">
+  <meta property="twitter:url" content="{{ page.url | absolute_url }}">
+  <meta property="twitter:title" content="{{ page.title | default: site.title }}">
+  <meta property="twitter:description" content="{{ page.description | default: site.description | strip_html | normalize_whitespace | truncate: 160 }}">
+  <meta property="twitter:image" content="{{ site.url }}{{ site.baseurl }}/assets/og-image.png">
+
+  <!-- Canonical URL -->
+  <link rel="canonical" href="{{ page.url | absolute_url }}">
+
+  <!-- RSS Feed -->
+  <link rel="alternate" type="application/rss+xml" title="{{ site.title | escape }}" href="{{ '/feed.xml' | relative_url }}">
+
+  <!-- Favicon -->
+  <link rel="icon" type="image/x-icon" href="{{ '/assets/favicon.ico' | relative_url }}">
+  <link rel="apple-touch-icon" href="{{ '/assets/apple-touch-icon.png' | relative_url }}">
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <!-- CSS -->
+  <link rel="stylesheet" href="{{ '/assets/main.css' | relative_url }}">
+  <link rel="stylesheet" href="{{ '/assets/tdd-dashboard.css' | relative_url }}">
+  
+  <!-- Theme color -->
+  <meta name="theme-color" content="#0366d6">
+
+  <!-- Mermaid for diagrams -->
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.1/dist/mermaid.min.js"></script>
+  
+  <!-- Plotly for interactive charts (if needed) -->
+  {% if page.plotly or site.tdd_dashboard.enable_plotly %}
+  <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+  {% endif %}
+
+  <!-- Google Analytics -->
+  {% if site.google_analytics %}
+    <!-- Global site tag (gtag.js) - Google Analytics -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id={{ site.google_analytics }}"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      gtag('config', '{{ site.google_analytics }}');
+    </script>
+  {% endif %}
+</head>
+
+<body>
+  <div class="site-container">
+    <!-- Header -->
+    <header class="site-header">
+      <div class="header-wrapper">
+        <div class="header-left">
+          <a class="site-title" href="{{ site.baseurl }}/">
+            {{ site.title | escape }}
+          </a>
+          {% if site.project.methodology %}
+          <span class="methodology-badge">{{ site.project.methodology }}</span>
+          {% endif %}
+        </div>
+
+        <nav class="site-nav">
+          <div class="nav-trigger">☰</div>
+          
+          <div class="nav-menu">
+            {% if site.header_pages %}
+              {% for path in site.header_pages %}
+                {% assign page_obj = site.pages | where: "path", path | first %}
+                <a class="nav-link" href="{{ page_obj.url | relative_url }}">
+                  {{ page_obj.title | default: path | replace: '.md', '' | replace: '_', ' ' | capitalize }}
+                </a>
+              {% endfor %}
+            {% endif %}
+            
+            {% if site.github.repository_url %}
+            <a class="nav-link nav-github" href="{{ site.github.repository_url }}" target="_blank">
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/>
+              </svg>
+              GitHub
+            </a>
+            {% endif %}
+          </div>
+        </nav>
+      </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="site-main">
+      <div class="main-wrapper">
+        <!-- Page Header (if enabled) -->
+        {% if page.show_header != false and page.layout != 'home' %}
+        <div class="page-header">
+          <h1 class="page-title">{{ page.title | default: site.title }}</h1>
+          {% if page.description %}
+          <p class="page-description">{{ page.description }}</p>
+          {% endif %}
+          
+          {% if page.last_updated or page.date %}
+          <div class="page-meta">
+            <time datetime="{{ page.last_updated | default: page.date | date_to_xmlschema }}">
+              Updated: {{ page.last_updated | default: page.date | date: "%Y-%m-%d" }}
+            </time>
+          </div>
+          {% endif %}
+        </div>
+        {% endif %}
+
+        <!-- Breadcrumb Navigation -->
+        {% unless page.hide_breadcrumb %}
+        {% if page.url != '/' %}
+        <nav class="breadcrumb" aria-label="Breadcrumb">
+          <ol>
+            <li><a href="{{ site.baseurl }}/">Home</a></li>
+            {% assign url_parts = page.url | split: '/' %}
+            {% assign url_path = '' %}
+            {% for part in url_parts %}
+              {% unless part == '' or forloop.last %}
+                {% assign url_path = url_path | append: '/' | append: part %}
+                <li><a href="{{ url_path }}">{{ part | replace: '-', ' ' | capitalize }}</a></li>
+              {% endunless %}
+            {% endfor %}
+            {% if page.title %}
+            <li aria-current="page">{{ page.title }}</li>
+            {% endif %}
+          </ol>
+        </nav>
+        {% endif %}
+        {% endunless %}
+
+        <!-- Content -->
+        <div class="page-content">
+          {{ content }}
+        </div>
+
+        <!-- Page Navigation -->
+        {% if page.show_navigation != false %}
+        <nav class="page-navigation">
+          {% if page.previous %}
+          <a class="nav-prev" href="{{ page.previous.url | relative_url }}">
+            ← {{ page.previous.title | truncate: 50 }}
+          </a>
+          {% endif %}
+          
+          {% if page.next %}
+          <a class="nav-next" href="{{ page.next.url | relative_url }}">
+            {{ page.next.title | truncate: 50 }} →
+          </a>
+          {% endif %}
+        </nav>
+        {% endif %}
+      </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="site-footer">
+      <div class="footer-wrapper">
+        <div class="footer-content">
+          <div class="footer-section">
+            <h4>{{ site.title }}</h4>
+            <p>{{ site.description | truncate: 100 }}</p>
+          </div>
+
+          {% if site.social and site.social.size > 0 %}
+          <div class="footer-section">
+            <h4>Connect</h4>
+            <div class="social-links">
+              {% for social in site.social %}
+              <a href="{{ social.url }}" target="_blank" rel="noopener">
+                {{ social.name }}
+              </a>
+              {% endfor %}
+            </div>
+          </div>
+          {% endif %}
+
+          <div class="footer-section">
+            <h4>Project</h4>
+            <div class="project-links">
+              {% if site.github.repository_url %}
+              <a href="{{ site.github.repository_url }}" target="_blank">Repository</a>
+              <a href="{{ site.github.repository_url }}/issues" target="_blank">Issues</a>
+              <a href="{{ site.github.repository_url }}/milestones" target="_blank">Milestones</a>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+
+        <div class="footer-bottom">
+          <p>
+            © {{ 'now' | date: '%Y' }} {{ site.author.name | default: 'TDD Project' }}. 
+            Powered by <a href="https://jekyllrb.com" target="_blank">Jekyll</a> 
+            & <a href="https://pages.github.com" target="_blank">GitHub Pages</a>.
+          </p>
+          
+          {% if site.project.version %}
+          <p class="version-info">Version {{ site.project.version }}</p>
+          {% endif %}
+        </div>
+      </div>
+    </footer>
+  </div>
+
+  <!-- JavaScript -->
+  <script>
+    // Initialize Mermaid
+    if (typeof mermaid !== 'undefined') {
+      mermaid.initialize({
+        startOnLoad: true,
+        theme: 'default',
+        securityLevel: 'loose',
+        fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif'
+      });
+    }
+
+    // Mobile navigation toggle
+    const navTrigger = document.querySelector('.nav-trigger');
+    const navMenu = document.querySelector('.nav-menu');
+    
+    if (navTrigger && navMenu) {
+      navTrigger.addEventListener('click', function() {
+        navMenu.classList.toggle('active');
+      });
+    }
+
+    // Auto-refresh for development (remove in production)
+    {% if jekyll.environment == 'development' %}
+    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+      setTimeout(() => window.location.reload(), 300000); // 5 minutes
+    }
+    {% endif %}
+
+    // Service Worker for PWA (optional)
+    {% if site.pwa.enabled %}
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', function() {
+        navigator.serviceWorker.register('/sw.js')
+          .then(function(registration) {
+            console.log('ServiceWorker registration successful');
+          }, function(err) {
+            console.log('ServiceWorker registration failed: ', err);
+          });
+      });
+    }
+    {% endif %}
+
+    // Analytics events (if Google Analytics is enabled)
+    {% if site.google_analytics %}
+    function trackEvent(action, category, label) {
+      if (typeof gtag !== 'undefined') {
+        gtag('event', action, {
+          'event_category': category,
+          'event_label': label
+        });
+      }
+    }
+
+    // Track epic and task interactions
+    document.addEventListener('click', function(e) {
+      if (e.target.classList.contains('epic-link')) {
+        trackEvent('click', 'epic', e.target.textContent);
+      } else if (e.target.classList.contains('task-link')) {
+        trackEvent('click', 'task', e.target.textContent);
+      }
+    });
+    {% endif %}
+  </script>
+
+  <!-- Custom JavaScript from page -->
+  {% if page.custom_js %}
+    {% for js_file in page.custom_js %}
+      <script src="{{ js_file | relative_url }}"></script>
+    {% endfor %}
+  {% endif %}
+</body>
+</html>

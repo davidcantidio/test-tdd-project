@@ -1,0 +1,162 @@
+# TDD Project Template - GitHub Pages Configuration
+# Customize this file for your project
+
+title: "[PROJECT_NAME] - TDD Dashboard"
+description: >-
+  TDD Project Management Dashboard with real-time progress tracking,
+  interactive Gantt charts, and automated epic visualization.
+
+# Build settings
+theme: minima
+plugins:
+  - jekyll-feed
+  - jekyll-sitemap
+  - jekyll-seo-tag
+
+# Site settings (CUSTOMIZE THESE)
+url: "https://[USERNAME].github.io"
+baseurl: "/[REPOSITORY_NAME]"
+lang: en-US
+
+# Author/Organization (CUSTOMIZE THESE)
+author:
+  name: "[AUTHOR_NAME]"
+  email: "[AUTHOR_EMAIL]"
+  twitter: "[TWITTER_HANDLE]"  # optional
+
+# GitHub integration (CUSTOMIZE THESE)
+github:
+  repository_url: https://github.com/[USERNAME]/[REPOSITORY_NAME]
+  repository_name: [USERNAME]/[REPOSITORY_NAME]
+  owner_name: [USERNAME]
+
+# Project metadata (CUSTOMIZE THESE)
+project:
+  methodology: "Test-Driven Development"
+  started_date: "[YYYY-MM-DD]"
+  status: "Active Development"
+  version: "1.0.0"
+  
+# Social media and contact (CUSTOMIZE OR REMOVE)
+social:
+  - name: GitHub
+    url: https://github.com/[USERNAME]/[REPOSITORY_NAME]
+    icon: github
+  - name: Issues
+    url: https://github.com/[USERNAME]/[REPOSITORY_NAME]/issues
+    icon: bug
+  - name: Discussions
+    url: https://github.com/[USERNAME]/[REPOSITORY_NAME]/discussions
+    icon: comments
+
+# Navigation menu
+header_pages:
+  - index.md
+  - about.md
+
+# SEO and metadata
+seo:
+  type: Organization
+  name: "[PROJECT_NAME] TDD Project"
+  links:
+    - https://github.com/[USERNAME]/[REPOSITORY_NAME]
+
+# Mermaid configuration for diagram rendering
+mermaid:
+  enabled: true
+  theme: default
+
+# TDD Dashboard configuration
+tdd_dashboard:
+  show_gantt_chart: true
+  show_epic_progress: true
+  show_phase_distribution: true
+  auto_refresh_minutes: 5
+  
+# Minima theme customization
+minima:
+  skin: auto  # auto, classic, dark, solarized
+  social_links:
+    github: [USERNAME]
+    twitter: [TWITTER_HANDLE]  # optional
+    linkedin: [LINKEDIN_USERNAME]  # optional
+
+# Analytics (optional)
+google_analytics: "[GA_TRACKING_ID]"
+
+# Collections for organized content
+collections:
+  epics:
+    output: true
+    permalink: /:collection/:name/
+  guides:
+    output: true
+    permalink: /guides/:name/
+
+# Default front matter
+defaults:
+  - scope:
+      path: ""
+      type: "pages"
+    values:
+      layout: "default"
+      
+  - scope:
+      path: ""
+      type: "epics"
+    values:
+      layout: "epic"
+      
+  - scope:
+      path: ""
+      type: "guides"
+    values:
+      layout: "guide"
+
+# Markdown settings
+markdown: kramdown
+highlighter: rouge
+kramdown:
+  input: GFM
+  syntax_highlighter: rouge
+  math_engine: mathjax
+
+# Timezone
+timezone: America/New_York  # CUSTOMIZE THIS
+
+# Exclude from processing
+exclude:
+  - .sass-cache/
+  - .jekyll-cache/
+  - gemfiles/
+  - Gemfile
+  - Gemfile.lock
+  - node_modules/
+  - vendor/bundle/
+  - vendor/cache/
+  - vendor/gems/
+  - vendor/ruby/
+  - "*.pyc"
+  - "__pycache__"
+  - ".pytest_cache/"
+  - "venv/"
+  - "env/"
+  - "*.log"
+  - "task_timer.db"
+  - "tdd_conversion_analysis.json"
+
+# Include additional files
+include:
+  - _redirects
+  - .htaccess
+
+# Liquid options
+liquid:
+  error_mode: warn
+  strict_filters: false
+  strict_variables: false
+
+# Sass/SCSS settings
+sass:
+  sass_dir: _sass
+  style: compressed

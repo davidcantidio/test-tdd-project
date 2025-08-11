@@ -1,0 +1,197 @@
+version: '3.8'
+
+services:
+  # Main application service
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+    container_name: ${PROJECT_NAME:-tdd-project}-app
+    restart: unless-stopped
+    environment:
+      - ENVIRONMENT=production
+      - LOG_LEVEL=INFO
+      - DATABASE_URL=${DATABASE_URL:-sqlite:///data/app.db}
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+      - ./output:/app/output
+      # Mount epic files for runtime updates
+      - ./epics:/app/epics:ro
+    ports:
+      - "${APP_PORT:-8000}:8000"
+    networks:
+      - tdd-network
+    depends_on:
+      - database
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Development service
+  app-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: development
+    container_name: ${PROJECT_NAME:-tdd-project}-dev
+    environment:
+      - ENVIRONMENT=development
+      - LOG_LEVEL=DEBUG
+      - DATABASE_URL=${DATABASE_URL:-sqlite:///data/app.db}
+      - PYTHONPATH=/app
+    volumes:
+      # Mount entire codebase for live reload
+      - .:/app
+      - /app/.venv  # Preserve virtual environment
+      - ./data:/app/data
+      - ./logs:/app/logs
+    ports:
+      - "${DEV_PORT:-8001}:8000"
+      - "5678:5678"  # Debugger port
+    networks:
+      - tdd-network
+    depends_on:
+      - database
+    command: ["python", "-m", "src.main", "--reload"]
+    tty: true
+    stdin_open: true
+
+  # Testing service
+  test:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: testing
+    container_name: ${PROJECT_NAME:-tdd-project}-test
+    environment:
+      - ENVIRONMENT=testing
+      - DATABASE_URL=sqlite:///:memory:
+    volumes:
+      - .:/app
+      - ./test-results:/app/test-results
+      - ./htmlcov:/app/htmlcov
+    networks:
+      - tdd-network
+    command: ["poetry", "run", "pytest", "--cov=src", "--cov-report=html", "--cov-report=term", "-v"]
+
+  # Database service (PostgreSQL)
+  database:
+    image: postgres:15-alpine
+    container_name: ${PROJECT_NAME:-tdd-project}-db
+    restart: unless-stopped
+    environment:
+      - POSTGRES_DB=${DB_NAME:-tdd_project}
+      - POSTGRES_USER=${DB_USER:-tdd_user}
+      - POSTGRES_PASSWORD=${DB_PASSWORD:-tdd_password}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    networks:
+      - tdd-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-tdd_user} -d ${DB_NAME:-tdd_project}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis for caching (optional)
+  redis:
+    image: redis:7-alpine
+    container_name: ${PROJECT_NAME:-tdd-project}-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    networks:
+      - tdd-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+
+  # TDD Timer Analytics Service
+  analytics:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+    container_name: ${PROJECT_NAME:-tdd-project}-analytics
+    environment:
+      - ENVIRONMENT=production
+      - ANALYTICS_MODE=server
+      - DATABASE_URL=${DATABASE_URL:-sqlite:///data/app.db}
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+      - ./analytics-output:/app/output
+    ports:
+      - "${ANALYTICS_PORT:-8002}:8000"
+    networks:
+      - tdd-network
+    depends_on:
+      - database
+    command: ["python", "-m", "tdah_tools.analytics_engine", "server"]
+
+  # Nginx reverse proxy (for production)
+  nginx:
+    image: nginx:alpine
+    container_name: ${PROJECT_NAME:-tdd-project}-nginx
+    restart: unless-stopped
+    ports:
+      - "${NGINX_PORT:-80}:80"
+      - "${NGINX_SSL_PORT:-443}:443"
+    volumes:
+      - ./config/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./config/nginx/ssl:/etc/nginx/ssl:ro
+      - ./docs:/usr/share/nginx/html/docs:ro
+    networks:
+      - tdd-network
+    depends_on:
+      - app
+    profiles:
+      - production
+
+  # GitHub Pages development server
+  docs-dev:
+    image: jekyll/jekyll:4
+    container_name: ${PROJECT_NAME:-tdd-project}-docs
+    environment:
+      - JEKYLL_ENV=development
+    volumes:
+      - ./docs:/srv/jekyll
+    ports:
+      - "${DOCS_PORT:-4000}:4000"
+    command: ["jekyll", "serve", "--watch", "--force_polling", "--host", "0.0.0.0"]
+    profiles:
+      - docs
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  tdd-network:
+    driver: bridge
+
+# Additional configurations for different environments
+x-common-variables: &common-variables
+  TZ: ${TZ:-UTC}
+  PROJECT_NAME: ${PROJECT_NAME:-tdd-project}
+  LOG_LEVEL: ${LOG_LEVEL:-INFO}
+
+# Healthcheck template
+x-healthcheck: &healthcheck
+  interval: 30s
+  timeout: 10s
+  retries: 3
+  start_period: 30s

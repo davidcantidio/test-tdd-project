@@ -1,0 +1,172 @@
+{
+  "epic": {
+    "id": "[EPIC-ID]",
+    "name": "[Epic Name]",
+    "summary": "[Summary focused on testable behaviors and business value]",
+    "tdd_enabled": true,
+    "methodology": "Test-Driven Development",
+    "goals": [
+      "[Goal 1: Specific verifiable behavior via test]",
+      "[Goal 2: Functionality with clear acceptance criteria]",
+      "[Goal 3: Measurable performance or quality goal]"
+    ],
+    "definition_of_done": [
+      "All tests written before implementation",
+      "100% test coverage on new modules",
+      "Red-green-refactor cycle followed consistently",
+      "[Epic-specific criteria]",
+      "[Other measurable criteria]"
+    ],
+    "duration": "[X days]",
+    "labels": ["tdd", "feature", "[project-domain]"],
+    "tasks": [
+      {
+        "id": "[EPIC-ID].1",
+        "title": "TEST: [specific behavior]",
+        "tdd_phase": "red",
+        "estimate_minutes": 5,
+        "story_points": 2,
+        "description": "Write test that verifies: [specific behavior]",
+        "test_specs": [
+          "should_[specific_behavior]_when_[condition]",
+          "should_raise_[exception]_when_[invalid_input]"
+        ],
+        "acceptance_criteria": [
+          "Test fails with correct and informative assertion",
+          "Error message is clear and specific",
+          "Test covers identified edge case"
+        ],
+        "deliverables": [
+          "tests/test_[module].py::[test_name]"
+        ],
+        "dependencies": [],
+        "branch": "feature/[epic-name]",
+        "files_touched": [
+          "tests/test_[module].py"
+        ],
+        "risk": "[Specific test risk]",
+        "mitigation": "[How to mitigate the risk]"
+      },
+      {
+        "id": "[EPIC-ID].2",
+        "title": "IMPL: [minimal functionality]",
+        "tdd_phase": "green",
+        "estimate_minutes": 8,
+        "story_points": 3,
+        "description": "Implement minimal code to pass test [EPIC-ID].1",
+        "test_specs": [
+          "should_[specific_behavior]_when_[condition]"
+        ],
+        "acceptance_criteria": [
+          "RED phase test now passes",
+          "No previous tests break",
+          "Implementation is minimal and focused"
+        ],
+        "deliverables": [
+          "tests/test_[module].py::[test_name]",
+          "[module_path]/[module].py"
+        ],
+        "dependencies": ["[EPIC-ID].1"],
+        "branch": "feature/[epic-name]",
+        "files_touched": [
+          "[module_path]/[module].py"
+        ],
+        "risk": "[Implementation risk]",
+        "mitigation": "[How to mitigate]"
+      },
+      {
+        "id": "[EPIC-ID].3",
+        "title": "REFACTOR: [design improvement]",
+        "tdd_phase": "refactor",
+        "estimate_minutes": 10,
+        "story_points": 3,
+        "description": "Improve design/structure while keeping all tests green",
+        "test_specs": [
+          "all_existing_tests_still_pass"
+        ],
+        "acceptance_criteria": [
+          "All tests continue to be green",
+          "Code is cleaner and more maintainable",
+          "Cyclomatic complexity reduced or maintained",
+          "No code duplication"
+        ],
+        "deliverables": [
+          "refactored_code_with_green_tests"
+        ],
+        "dependencies": ["[EPIC-ID].2"],
+        "branch": "feature/[epic-name]",
+        "files_touched": [
+          "[module_path]/[module].py"
+        ],
+        "risk": "Breaking existing functionality during refactoring",
+        "mitigation": "Run all tests before and after refactoring"
+      }
+    ],
+    "checklist_epic_level": [
+      "All tests written before implementation",
+      "100% test coverage on new modules", 
+      "Red-green-refactor cycle followed consistently",
+      "No regression in existing tests",
+      "Code review approved with focus on test quality",
+      "Behavior documentation updated",
+      "CI/CD pipeline passing with new tests"
+    ],
+    "automation_hooks": {
+      "create_labels": ["tdd", "feature", "test-driven"],
+      "project_board": {
+        "name": "TDD Development Board",
+        "columns": ["Red (Failing Tests)", "Green (Implementation)", "Refactor", "Done"]
+      },
+      "default_branch": "main",
+      "test_runner": "pytest",
+      "coverage_threshold": 90,
+      "pre_commit_hooks": ["pytest", "coverage", "black", "flake8"],
+      "issue_template_fields": [
+        "title", "description", "tdd_phase", "test_specs", 
+        "acceptance_criteria", "deliverables", "dependencies", 
+        "estimate_minutes", "risk", "mitigation"
+      ],
+      "milestone": "EPIC [EPIC-ID] - [Epic Name]"
+    },
+    "tdd_guidelines": {
+      "red_phase_rules": [
+        "Write the simplest possible test that fails",
+        "Test should clearly express desired behavior",
+        "Use descriptive test names (should_do_something_when_condition)",
+        "Avoid complex logic in tests themselves"
+      ],
+      "green_phase_rules": [
+        "Write minimal code to pass the test",
+        "Don't worry about elegance in this phase",
+        "Don't implement untested functionality",
+        "Run ALL tests to ensure non-regression"
+      ],
+      "refactor_phase_rules": [
+        "Improve only design, not functionality",
+        "Keep all tests green during refactoring",
+        "Eliminate duplication and improve clarity",
+        "Consider SOLID principles and design patterns"
+      ]
+    },
+    "quality_gates": {
+      "test_coverage_minimum": 90,
+      "cyclomatic_complexity_max": 10,
+      "test_execution_time_max": "30s",
+      "code_duplication_max": "5%"
+    }
+  },
+  "_metadata": {
+    "template_version": "1.0",
+    "created_date": "2025-01-11",
+    "description": "Template for creating epics following TDD methodology",
+    "usage_instructions": [
+      "1. Replace all [PLACEHOLDERS] with real values",
+      "2. Define specific and testable behaviors in goals",
+      "3. Create tasks always following red-green-refactor cycle",
+      "4. Keep estimate_minutes low (5-15 min per micro-task)",
+      "5. Prioritize clear and specific test_specs",
+      "6. Use feature branches per epic",
+      "7. Configure automation_hooks according to project environment"
+    ]
+  }
+}

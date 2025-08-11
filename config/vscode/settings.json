@@ -1,0 +1,257 @@
+{
+  "// TDD Project Template - VSCode Settings": "",
+  "// Optimized for Python development with Poetry": "",
+
+  "// === PYTHON CONFIGURATION ===": "",
+  "python.defaultInterpreterPath": ".venv/bin/python",
+  "python.terminal.activateEnvironment": true,
+  "python.terminal.activateEnvInCurrentTerminal": true,
+
+  "// === TESTING CONFIGURATION ===": "",
+  "python.testing.pytestEnabled": true,
+  "python.testing.unittestEnabled": false,
+  "python.testing.pytestArgs": [
+    "tests",
+    "--tb=short",
+    "-v",
+    "--cov=src",
+    "--cov-report=term-missing"
+  ],
+  "python.testing.autoTestDiscoverOnSaveEnabled": true,
+
+  "// === FORMATTING CONFIGURATION ===": "",
+  "python.formatting.provider": "black",
+  "python.formatting.blackArgs": ["--line-length=88"],
+  "python.sortImports.args": ["--profile", "black"],
+  
+  "// === LINTING CONFIGURATION ===": "",
+  "python.linting.enabled": true,
+  "python.linting.flake8Enabled": true,
+  "python.linting.pylintEnabled": false,
+  "python.linting.mypyEnabled": true,
+  "python.linting.banditEnabled": true,
+  "python.linting.flake8Args": [
+    "--max-line-length=88",
+    "--extend-ignore=E203,W503"
+  ],
+  "python.linting.mypyArgs": [
+    "--ignore-missing-imports",
+    "--show-column-numbers"
+  ],
+
+  "// === AUTO-SAVE AND FORMATTING ===": "",
+  "files.autoSave": "onFocusChange",
+  "editor.formatOnSave": true,
+  "editor.formatOnPaste": true,
+  "editor.formatOnType": false,
+  "editor.codeActionsOnSave": {
+    "source.organizeImports": true,
+    "source.fixAll": true
+  },
+
+  "// === EDITOR SETTINGS ===": "",
+  "editor.rulers": [88],
+  "editor.tabSize": 4,
+  "editor.insertSpaces": true,
+  "editor.detectIndentation": false,
+  "editor.trimAutoWhitespace": true,
+  "files.trimTrailingWhitespace": true,
+  "files.insertFinalNewline": true,
+  "files.trimFinalNewlines": true,
+
+  "// === FILE ASSOCIATIONS ===": "",
+  "files.associations": {
+    "*.mmd": "mermaid",
+    "*.json": "jsonc",
+    "pyproject.toml": "toml",
+    "*.yml": "yaml",
+    "*.yaml": "yaml",
+    ".env*": "dotenv"
+  },
+
+  "// === EXCLUDE PATTERNS ===": "",
+  "files.exclude": {
+    "**/__pycache__": true,
+    "**/*.pyc": true,
+    "**/*.pyo": true,
+    "**/*.pyd": true,
+    "**/.pytest_cache": true,
+    "**/.coverage": true,
+    "**/htmlcov": true,
+    "**/.mypy_cache": true,
+    "**/node_modules": true,
+    "**/.git": true,
+    "**/.svn": true,
+    "**/.hg": true,
+    "**/CVS": true,
+    "**/.DS_Store": true,
+    "**/Thumbs.db": true,
+    "**/.venv": true,
+    "**/venv": true,
+    "**/env": true,
+    "**/.env": true,
+    "**/dist": true,
+    "**/build": true,
+    "**/*.egg-info": true,
+    "**/task_timer.db": true
+  },
+
+  "// === SEARCH CONFIGURATION ===": "",
+  "search.exclude": {
+    "**/.git": true,
+    "**/.pytest_cache": true,
+    "**/htmlcov": true,
+    "**/.mypy_cache": true,
+    "**/node_modules": true,
+    "**/.venv": true,
+    "**/venv": true,
+    "**/dist": true,
+    "**/build": true,
+    "**/*.egg-info": true
+  },
+
+  "// === GIT CONFIGURATION ===": "",
+  "git.ignoreLimitWarning": true,
+  "git.autofetch": true,
+  "git.enableSmartCommit": true,
+  "git.confirmSync": false,
+
+  "// === TERMINAL CONFIGURATION ===": "",
+  "terminal.integrated.defaultProfile.linux": "bash",
+  "terminal.integrated.defaultProfile.osx": "zsh",
+  "terminal.integrated.defaultProfile.windows": "PowerShell",
+
+  "// === TDD WORKFLOW SETTINGS ===": "",
+  "workbench.colorCustomizations": {
+    "terminal.background": "#1e1e1e",
+    "terminal.foreground": "#d4d4d4"
+  },
+
+  "// === EXTENSION SETTINGS ===": "",
+  "// Python extension settings": "",
+  "python.analysis.typeCheckingMode": "basic",
+  "python.analysis.autoImportCompletions": true,
+  "python.analysis.autoSearchPaths": true,
+  "python.analysis.extraPaths": ["./src", "./tdah_tools", "./scripts"],
+
+  "// === JUPYTER SETTINGS ===": "",
+  "jupyter.askForKernelRestart": false,
+  "jupyter.sendSelectionToInteractiveWindow": true,
+
+  "// === MARKDOWN SETTINGS ===": "",
+  "markdown.preview.breaks": true,
+  "markdown.preview.linkify": true,
+  "[markdown]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode",
+    "editor.wordWrap": "on",
+    "editor.quickSuggestions": false
+  },
+
+  "// === JSON SETTINGS ===": "",
+  "[json]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "[jsonc]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+
+  "// === YAML SETTINGS ===": "",
+  "[yaml]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode",
+    "editor.insertSpaces": true,
+    "editor.tabSize": 2
+  },
+
+  "// === PYTHON FILE SETTINGS ===": "",
+  "[python]": {
+    "editor.defaultFormatter": "ms-python.black-formatter",
+    "editor.formatOnSave": true,
+    "editor.codeActionsOnSave": {
+      "source.organizeImports": true
+    }
+  },
+
+  "// === TASK CONFIGURATION ===": "",
+  "tasks.version": "2.0.0",
+
+  "// === EXTENSIONS RECOMMENDATIONS ===": "",
+  "extensions.showRecommendationsOnlyOnDemand": false,
+
+  "// === MERMAID SETTINGS ===": "",
+  "mermaid.theme": "default",
+
+  "// === TODO HIGHLIGHTS ===": "",
+  "todohighlight.keywords": [
+    {
+      "text": "TODO:",
+      "color": "#ff6b6b",
+      "backgroundColor": "transparent"
+    },
+    {
+      "text": "FIXME:",
+      "color": "#ff9500",
+      "backgroundColor": "transparent"
+    },
+    {
+      "text": "RED:",
+      "color": "#dc3545",
+      "backgroundColor": "rgba(220, 53, 69, 0.1)"
+    },
+    {
+      "text": "GREEN:",
+      "color": "#28a745", 
+      "backgroundColor": "rgba(40, 167, 69, 0.1)"
+    },
+    {
+      "text": "REFACTOR:",
+      "color": "#17a2b8",
+      "backgroundColor": "rgba(23, 162, 184, 0.1)"
+    },
+    {
+      "text": "EPIC:",
+      "color": "#6f42c1",
+      "backgroundColor": "rgba(111, 66, 193, 0.1)"
+    }
+  ],
+
+  "// === PROBLEM MATCHERS ===": "",
+  "problemMatcher": {
+    "pattern": {
+      "regexp": "^(.*):(\\d+):(\\d+):\\s+(warning|error):\\s+(.*)$",
+      "file": 1,
+      "line": 2,
+      "column": 3,
+      "severity": 4,
+      "message": 5
+    }
+  },
+
+  "// === EMMET SETTINGS ===": "",
+  "emmet.includeLanguages": {
+    "markdown": "html"
+  },
+
+  "// === EDITOR MINIMAP ===": "",
+  "editor.minimap.enabled": true,
+  "editor.minimap.showSlider": "always",
+
+  "// === BREADCRUMBS ===": "",
+  "breadcrumbs.enabled": true,
+
+  "// === WORKSPACE SETTINGS ===": "",
+  "workbench.startupEditor": "readme",
+  "workbench.editor.enablePreview": false,
+  "workbench.editor.enablePreviewFromQuickOpen": false,
+
+  "// === PERFORMANCE SETTINGS ===": "",
+  "search.useIgnoreFiles": true,
+  "search.useGlobalIgnoreFiles": true,
+  "files.watcherExclude": {
+    "**/.git/objects/**": true,
+    "**/.git/subtree-cache/**": true,
+    "**/node_modules/**": true,
+    "**/.pytest_cache/**": true,
+    "**/htmlcov/**": true,
+    "**/.mypy_cache/**": true
+  }
+}

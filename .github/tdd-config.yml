@@ -1,0 +1,198 @@
+# TDD Project Configuration for GitHub Automation
+# This file defines how TDD epics are mapped to GitHub features
+
+project_settings:
+  name: "TDD Development Project"
+  methodology: "Test-Driven Development"
+  default_branch: "main"
+  development_branch: "develop"
+
+# Epic to GitHub Issue Mapping
+epic_mapping:
+  issue_labels:
+    red: ["tdd-red", "testing", "failing-test"]
+    green: ["tdd-green", "implementation", "make-tests-pass"]  
+    refactor: ["tdd-refactor", "code-improvement", "design"]
+    analysis: ["tdd-analysis", "research", "planning"]
+    
+  status_rules:
+    # Map TDD phases to GitHub issue states
+    red_phase:
+      github_status: "In Progress"
+      project_status: "Red (Writing Tests)"
+      required_labels: ["tdd-red"]
+      
+    green_phase:
+      github_status: "In Progress"  
+      project_status: "Green (Implementation)"
+      required_labels: ["tdd-green"]
+      
+    refactor_phase:
+      github_status: "In Progress"
+      project_status: "Refactor (Optimization)"
+      required_labels: ["tdd-refactor"]
+      
+    completed:
+      github_status: "Done"
+      project_status: "Completed"
+      required_labels: ["tdd-complete"]
+
+# GitHub Projects v2 Integration
+projects_v2:
+  board_name: "TDD Development Board"
+  
+  # Custom fields for TDD tracking
+  custom_fields:
+    - name: "TDD Phase"
+      type: "single_select"
+      options: ["Analysis", "Red", "Green", "Refactor", "Complete"]
+      
+    - name: "Epic ID"
+      type: "text"
+      
+    - name: "Story Points"
+      type: "number"
+      
+    - name: "Time Estimate (min)"
+      type: "number"
+      
+    - name: "Test Coverage %"
+      type: "number"
+      
+    - name: "Complexity"
+      type: "single_select"
+      options: ["Low", "Medium", "High", "Very High"]
+
+  # Workflow states
+  workflow_states:
+    - name: "Backlog"
+      description: "Epic tasks waiting to be started"
+      
+    - name: "Red Phase" 
+      description: "Writing failing tests"
+      
+    - name: "Green Phase"
+      description: "Implementing code to pass tests"
+      
+    - name: "Refactor Phase"
+      description: "Improving design while keeping tests green"
+      
+    - name: "Code Review"
+      description: "Peer review of TDD implementation"
+      
+    - name: "Done"
+      description: "TDD cycle completed successfully"
+
+# Automation Triggers
+automation:
+  # Automatic actions when issues are created/updated
+  issue_automation:
+    - trigger: "issue_opened"
+      condition: "has_label:tdd-red"
+      action: "move_to_column:Red Phase"
+      
+    - trigger: "issue_labeled" 
+      condition: "label_added:tdd-green"
+      action: "move_to_column:Green Phase"
+      
+    - trigger: "issue_labeled"
+      condition: "label_added:tdd-refactor" 
+      action: "move_to_column:Refactor Phase"
+      
+    - trigger: "issue_closed"
+      action: "move_to_column:Done"
+
+  # Pull request automation
+  pr_automation:
+    - trigger: "pr_opened"
+      condition: "title_contains:[EPIC-"
+      action: "add_to_project"
+      
+    - trigger: "pr_merged"
+      action: "close_related_issues"
+
+# Gantt Chart Generation Rules
+gantt_settings:
+  # How to determine epic status for Gantt charts
+  status_mapping:
+    not_started: ["backlog", "todo"]
+    in_progress: ["red phase", "green phase", "refactor phase", "code review"]
+    completed: ["done", "closed"]
+    
+  # Visual styling for different TDD phases
+  phase_styling:
+    red: "crit"          # Critical/Red styling
+    green: "active"      # Active/Green styling  
+    refactor: "done"     # Done/Blue styling
+    analysis: "milestone" # Milestone styling
+
+  # Time estimation rules
+  time_estimation:
+    default_task_minutes: 15
+    phase_multipliers:
+      red: 1.0    # Writing tests (base time)
+      green: 1.5  # Implementation (1.5x test time)
+      refactor: 0.8 # Refactoring (0.8x test time)
+      
+# Quality Gates
+quality_gates:
+  test_coverage:
+    minimum_percentage: 90
+    fail_pr_below: 80
+    
+  cyclomatic_complexity:
+    maximum_per_function: 10
+    fail_pr_above: 15
+    
+  test_execution_time:
+    maximum_seconds: 30
+    warning_above: 10
+    
+# Notifications
+notifications:
+  slack:
+    enabled: false
+    webhook_url: ""
+    channels:
+      epic_complete: "#tdd-updates"
+      phase_transition: "#dev-notifications"
+      
+  email:
+    enabled: false
+    epic_complete: []
+    phase_transition: []
+
+# Branch Strategy for TDD
+branch_strategy:
+  feature_branch_pattern: "feature/epic-{epic_id}"
+  pr_branch_pattern: "tdd/{epic_id}-{phase}"
+  
+  # Automatic branch protection
+  branch_protection:
+    main:
+      require_pr_reviews: true
+      required_status_checks:
+        - "pytest"
+        - "coverage-check" 
+        - "tdd-validation"
+      dismiss_stale_reviews: true
+      
+    develop:
+      require_pr_reviews: false
+      required_status_checks:
+        - "pytest"
+
+# Integration with external tools
+integrations:
+  time_tracking:
+    enabled: true
+    tool: "internal"  # or "toggl", "harvest", etc.
+    
+  code_quality:
+    sonarcloud: false
+    codeclimate: false
+    
+  deployment:
+    github_pages: true
+    netlify: false
+    vercel: false

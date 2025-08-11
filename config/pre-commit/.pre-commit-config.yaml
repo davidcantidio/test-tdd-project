@@ -1,0 +1,183 @@
+# TDD Project Template - Pre-commit Configuration
+# Automated code quality and formatting checks
+
+repos:
+  # Python code formatting
+  - repo: https://github.com/psf/black
+    rev: 23.7.0
+    hooks:
+      - id: black
+        language_version: python3.11
+        args: [--line-length=88]
+
+  # Python import sorting
+  - repo: https://github.com/pycqa/isort
+    rev: 5.12.0
+    hooks:
+      - id: isort
+        args: [--profile, black, --line-length=88]
+
+  # Python linting
+  - repo: https://github.com/pycqa/flake8
+    rev: 6.0.0
+    hooks:
+      - id: flake8
+        args: [--max-line-length=88, --extend-ignore=E203,W503]
+        additional_dependencies:
+          - flake8-bugbear
+          - flake8-comprehensions
+          - flake8-simplify
+
+  # Python security linting
+  - repo: https://github.com/PyCQA/bandit
+    rev: 1.7.5
+    hooks:
+      - id: bandit
+        args: [-c, pyproject.toml]
+        additional_dependencies: ["bandit[toml]"]
+
+  # Python type checking
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.5.1
+    hooks:
+      - id: mypy
+        additional_dependencies: [types-requests]
+        args: [--ignore-missing-imports]
+
+  # Generic code quality
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.4.0
+    hooks:
+      # Python specific
+      - id: check-ast               # Check Python AST
+      - id: check-builtin-literals  # Check builtin type constructor use
+      - id: check-docstring-first   # Check docstring is first
+      - id: debug-statements        # Check for debugger imports/statements
+      - id: name-tests-test         # Verify test naming
+      
+      # General file checks
+      - id: check-added-large-files # Prevent large files
+        args: ['--maxkb=1000']
+      - id: check-case-conflict     # Check filename case conflicts
+      - id: check-merge-conflict    # Check merge conflict markers
+      - id: check-symlinks          # Check broken symlinks
+      - id: destroyed-symlinks      # Detect destroyed symlinks
+      
+      # JSON/YAML/TOML formatting
+      - id: check-json              # Validate JSON syntax
+      - id: check-yaml              # Validate YAML syntax
+        args: [--multi]
+      - id: check-toml              # Validate TOML syntax
+      - id: pretty-format-json      # Format JSON files
+        args: [--autofix, --no-sort-keys]
+      
+      # Line ending and whitespace
+      - id: end-of-file-fixer       # Ensure EOF newline
+      - id: trailing-whitespace     # Remove trailing whitespace
+        args: [--markdown-linebreak-ext=md]
+      - id: mixed-line-ending       # Check line endings
+        args: [--fix=lf]
+      
+      # Security
+      - id: detect-private-key      # Detect private keys
+
+  # YAML linting
+  - repo: https://github.com/adrienverge/yamllint
+    rev: v1.32.0
+    hooks:
+      - id: yamllint
+        args: [-c=.yamllint.yml]
+
+  # Markdown linting
+  - repo: https://github.com/igorshubovych/markdownlint-cli
+    rev: v0.35.0
+    hooks:
+      - id: markdownlint
+        args: [--config=.markdownlint.yml]
+
+  # Shell script linting
+  - repo: https://github.com/shellcheck-py/shellcheck-py
+    rev: v0.9.0.5
+    hooks:
+      - id: shellcheck
+
+  # Dockerfile linting
+  - repo: https://github.com/hadolint/hadolint
+    rev: v2.12.0
+    hooks:
+      - id: hadolint-docker
+        args: [--ignore, DL3008, --ignore, DL3009]
+
+  # Git commit message formatting
+  - repo: https://github.com/compilerla/conventional-pre-commit
+    rev: v2.4.0
+    hooks:
+      - id: conventional-pre-commit
+        stages: [commit-msg]
+        args: [--types=feat,fix,docs,style,refactor,test,chore,epic]
+
+  # Python dependency security check
+  - repo: https://github.com/Lucas-C/pre-commit-hooks-safety
+    rev: v1.3.2
+    hooks:
+      - id: python-safety-dependencies-check
+        args: [--ignore=51668]  # Ignore specific vulnerabilities if needed
+
+  # TDD/Epic specific hooks
+  - repo: local
+    hooks:
+      # Validate epic JSON files
+      - id: validate-epics
+        name: Validate Epic JSON Files
+        entry: python scripts/validate_epic.py
+        language: system
+        files: ^epics/.*\.json$
+        pass_filenames: true
+
+      # Check TDD commit format
+      - id: tdd-commit-format
+        name: Check TDD Commit Format
+        entry: python scripts/check_tdd_commit.py
+        language: system
+        stages: [commit-msg]
+        pass_filenames: false
+
+      # Run tests before commit
+      - id: run-tests
+        name: Run TDD Tests
+        entry: pytest tests/ -x --tb=short
+        language: system
+        pass_filenames: false
+        stages: [pre-push]
+
+      # Check test coverage
+      - id: coverage-check
+        name: Check Test Coverage
+        entry: pytest --cov=src --cov-fail-under=90 --cov-report=term-missing
+        language: system
+        pass_filenames: false
+        stages: [pre-push]
+
+      # Generate diagrams if epic files changed
+      - id: update-diagrams
+        name: Update Mermaid Diagrams
+        entry: python scripts/visualization/tdd_diagram_generator.py
+        language: system
+        files: ^epics/.*\.json$
+        pass_filenames: false
+
+# Configuration for specific tools
+default_language_version:
+  python: python3.11
+  node: system
+
+default_stages: [commit, merge-commit]
+
+# Minimum pre-commit version required
+minimum_pre_commit_version: 3.3.0
+
+# CI configuration
+ci:
+  autoupdate_schedule: weekly
+  skip: []
+  submodules: false
