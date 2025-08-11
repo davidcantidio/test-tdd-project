@@ -117,7 +117,7 @@ exclude:
   - tdah_tools/
   - tests/
   - .env*
-  - *.log
+  - "*.log"
 
 # Include files
 include:
