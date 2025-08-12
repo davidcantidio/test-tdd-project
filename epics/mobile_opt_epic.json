@@ -1,0 +1,57 @@
+{
+  "epic": {
+    "id": "MOBILE_OPT",
+    "name": "Mobile Optimization",
+    "summary": "Otimizar framework para dispositivos móveis com interface responsiva e performance aprimorada.",
+    "goals": [
+      "Interface responsiva funcionando em todos os dispositivos",
+      "Performance mobile otimizada (< 3s load time)",
+      "Touch interactions implementadas corretamente"
+    ],
+    "definition_of_done": [
+      "Layout responsivo funcionando em tablet e smartphone",
+      "Performance targets atingidos em 4G",
+      "Testes em dispositivos reais passando"
+    ],
+    "duration": "10 dias",
+    "labels": [
+      "mobile",
+      "responsive",
+      "performance"
+    ],
+    "status": "pending",
+    "priority": 2,
+    "tasks": [
+      {
+        "id": "MO.1",
+        "title": "Implementar layout responsivo",
+        "description": "Adaptar todas as páginas para funcionar em dispositivos móveis.",
+        "tdd_phase": "analysis",
+        "status": "pending",
+        "estimate_minutes": 120,
+        "actual_minutes": 0,
+        "story_points": 4,
+        "acceptance_criteria": [
+          "Layout funciona em telas de 320px+",
+          "Elementos são touch-friendly",
+          "Navegação mobile intuitiva"
+        ]
+      },
+      {
+        "id": "MO.2",
+        "title": "Otimizar performance mobile",
+        "description": "Implementar lazy loading, compressão e cache para melhorar performance mobile.",
+        "tdd_phase": "analysis",
+        "status": "pending",
+        "estimate_minutes": 180,
+        "actual_minutes": 0,
+        "story_points": 6,
+        "acceptance_criteria": [
+          "Load time < 3s em 4G",
+          "Imagens otimizadas automaticamente",
+          "Cache funcionando corretamente"
+        ]
+      }
+    ]
+  }
+}

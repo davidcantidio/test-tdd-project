@@ -1,0 +1,205 @@
+{
+  "epic": {
+    "id": "STREAMLIT_FRAMEWORK",
+    "name": "Streamlit Framework Implementation",
+    "summary": "Implementar framework completo Streamlit com gamificação, multi-user support e integração GitHub para gerenciamento de projetos TDD.",
+    "goals": [
+      "Implementar dashboard Streamlit funcional com visualizações interativas",
+      "Integrar sistema de gamificação com pontos, achievements e streaks",
+      "Configurar sincronização automática com GitHub Projects V2",
+      "Implementar sistema multi-user com autenticação e permissões",
+      "Criar sistema de time tracking integrado com TDAH-friendly metrics"
+    ],
+    "definition_of_done": [
+      "Dashboard Streamlit funcionando com todas as visualizações",
+      "Sistema de gamificação totalmente implementado e testado",
+      "Integração GitHub Projects V2 sincronizando corretamente",
+      "Multi-user support com controle de acesso funcional",
+      "Time tracking integrado e funcionando com métricas TDAH",
+      "Testes de integração passando 100%",
+      "Performance atendendo targets (< 2s load time)",
+      "Documentação completa e deploy realizado"
+    ],
+    "duration": "21 dias",
+    "labels": [
+      "streamlit",
+      "framework",
+      "gamification",
+      "github",
+      "multi-user"
+    ],
+    "tasks": [
+      {
+        "id": "SF.1",
+        "title": "Implementar dashboard principal Streamlit",
+        "description": "Criar dashboard principal com visualizações de épicos, tasks e métricas de progresso usando Streamlit e Plotly.",
+        "tdd_phase": "green",
+        "status": "completed",
+        "estimate_minutes": 180,
+        "actual_minutes": 165,
+        "story_points": 5,
+        "acceptance_criteria": [
+          "Dashboard carrega em menos de 2 segundos",
+          "Todas as visualizações são interativas",
+          "Dados são atualizados em tempo real"
+        ],
+        "deliverables": [
+          "streamlit_app.py",
+          "pages/dashboard.py",
+          "components/metrics_widgets.py"
+        ],
+        "github_branch": "feature/streamlit-dashboard",
+        "github_pr_number": 42,
+        "risk": "Performance pode ser lenta com muitos dados",
+        "mitigation": "Implementar cache e paginação"
+      },
+      {
+        "id": "SF.2",
+        "title": "Implementar sistema de gamificação",
+        "description": "Criar sistema completo de pontos, achievements e streaks com visualizações e notificações.",
+        "tdd_phase": "red",
+        "status": "in_progress",
+        "estimate_minutes": 240,
+        "actual_minutes": 120,
+        "story_points": 8,
+        "acceptance_criteria": [
+          "Pontos calculados automaticamente por task",
+          "Achievements desbloqueados baseado em ações",
+          "Streaks mantidos corretamente"
+        ],
+        "deliverables": [
+          "gamification/achievements_engine.py",
+          "gamification/points_calculator.py",
+          "pages/leaderboard.py"
+        ],
+        "github_branch": "feature/gamification",
+        "dependencies": [
+          "SF.1"
+        ],
+        "risk": "Complexidade das regras de gamificação",
+        "mitigation": "Começar com regras simples e iterar"
+      },
+      {
+        "id": "SF.3",
+        "title": "Integração GitHub Projects V2",
+        "description": "Implementar sincronização bidirecional com GitHub Projects V2 usando GraphQL API.",
+        "tdd_phase": "analysis",
+        "status": "pending",
+        "estimate_minutes": 300,
+        "actual_minutes": 0,
+        "story_points": 8,
+        "acceptance_criteria": [
+          "Sincronização automática de issues e milestones",
+          "Webhooks configurados e funcionando",
+          "Conflict resolution implementado"
+        ],
+        "deliverables": [
+          "github_integration/sync_engine.py",
+          "github_integration/webhook_handler.py",
+          "config/github_settings.py"
+        ],
+        "dependencies": [
+          "SF.1",
+          "SF.2"
+        ],
+        "risk": "Rate limits da API do GitHub",
+        "mitigation": "Implementar cache inteligente e throttling"
+      },
+      {
+        "id": "SF.4",
+        "title": "Sistema multi-user com autenticação",
+        "description": "Implementar sistema de usuários com login, permissões e perfis personalizados.",
+        "tdd_phase": "analysis",
+        "status": "pending",
+        "estimate_minutes": 200,
+        "actual_minutes": 0,
+        "story_points": 6,
+        "acceptance_criteria": [
+          "Login/logout funcionando",
+          "Controle de acesso por role",
+          "Perfis personalizáveis"
+        ],
+        "deliverables": [
+          "auth/user_manager.py",
+          "auth/permissions.py",
+          "pages/profile.py"
+        ],
+        "dependencies": [
+          "SF.1"
+        ],
+        "risk": "Complexidade de autenticação Streamlit",
+        "mitigation": "Usar streamlit-authenticator como base"
+      },
+      {
+        "id": "SF.5",
+        "title": "Time tracking com métricas TDAH",
+        "description": "Implementar sistema de time tracking com métricas específicas para TDAH (foco, energia, interrupções).",
+        "tdd_phase": "analysis",
+        "status": "pending",
+        "estimate_minutes": 180,
+        "actual_minutes": 0,
+        "story_points": 5,
+        "acceptance_criteria": [
+          "Timer integrado com interface amigável",
+          "Métricas TDAH coletadas automaticamente",
+          "Relatórios de produtividade disponíveis"
+        ],
+        "deliverables": [
+          "time_tracking/timer_widget.py",
+          "time_tracking/tdah_metrics.py",
+          "pages/time_analytics.py"
+        ],
+        "dependencies": [
+          "SF.1",
+          "SF.4"
+        ],
+        "risk": "Métricas TDAH podem ser invasivas",
+        "mitigation": "Fazer coleta opcional e transparente"
+      }
+    ],
+    "checklist_epic_level": [
+      "Todos os testes escritos antes da implementação",
+      "100% de cobertura de testes nos novos módulos",
+      "Ciclo red-green-refactor seguido consistentemente",
+      "Criar e validar .env.example",
+      "Integrar PerformanceGuard sem regressão de chamadas",
+      "Publicar matriz de compatibilidade",
+      "Executar smoke tests em DEV/TEST/PROD",
+      "Aprovação em peer review"
+    ],
+    "automation_hooks": {
+      "create_labels": [
+        "streamlit",
+        "framework",
+        "gamification",
+        "github",
+        "multi-user"
+      ],
+      "project_board": {
+        "name": "Streamlit Framework Development",
+        "columns": [
+          "Backlog",
+          "In Progress",
+          "Review",
+          "Done"
+        ]
+      },
+      "default_branch": "main",
+      "milestone": "Streamlit Framework V1.0"
+    },
+    "tdd_enabled": true,
+    "methodology": "Test-Driven Development",
+    "performance_constraints": {
+      "dashboard_load_time": "2s",
+      "api_response_time": "500ms",
+      "concurrent_users": 10
+    },
+    "quality_gates": {
+      "test_coverage": "90%",
+      "performance_score": "85+",
+      "accessibility_score": "AA"
+    },
+    "status": "in_progress",
+    "priority": 1
+  }
+}

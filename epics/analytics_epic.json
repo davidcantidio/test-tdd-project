@@ -1,0 +1,42 @@
+{
+  "epic": {
+    "id": "ANALYTICS",
+    "name": "Analytics e Reporting",
+    "summary": "Implementar sistema completo de analytics e relatórios para insights de produtividade.",
+    "goals": [
+      "Dashboards analíticos com métricas detalhadas",
+      "Relatórios exportáveis em múltiplos formatos",
+      "Insights de produtividade e tendências"
+    ],
+    "definition_of_done": [
+      "Pelo menos 5 dashboards analíticos funcionais",
+      "Export para PDF, Excel e CSV funcionando",
+      "Sistema de alertas implementado"
+    ],
+    "duration": "15 dias",
+    "labels": [
+      "analytics",
+      "reporting",
+      "insights"
+    ],
+    "status": "pending",
+    "priority": 3,
+    "tasks": [
+      {
+        "id": "AN.1",
+        "title": "Dashboard de métricas de produtividade",
+        "description": "Criar dashboard com métricas de velocity, burndown e efficiency.",
+        "tdd_phase": "analysis",
+        "status": "pending",
+        "estimate_minutes": 150,
+        "actual_minutes": 0,
+        "story_points": 5,
+        "acceptance_criteria": [
+          "Métricas calculadas corretamente",
+          "Gráficos interativos funcionando",
+          "Filtros por período e usuário"
+        ]
+      }
+    ]
+  }
+}
