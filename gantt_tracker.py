@@ -369,6 +369,15 @@ def generate_interactive_html(epics: List[Dict[str, Any]], git_analysis: Dict[st
                 border-radius: 8px; 
                 box-shadow: 0 2px 4px rgba(0,0,0,0.1);
             }}
+            .gantt-panel {{
+                background: white; 
+                margin: 20px; 
+                padding: 15px; 
+                border-radius: 8px; 
+                box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+                overflow-x: auto;
+                overflow-y: hidden;
+            }}
             .metric {{ 
                 display: inline-block; 
                 margin: 10px; 
@@ -383,6 +392,19 @@ def generate_interactive_html(epics: List[Dict[str, Any]], git_analysis: Dict[st
         <div class="header">
             <h1>🎯 TDD Project Progress Dashboard</h1>
             <p>Real-time analytics and progress tracking</p>
+        </div>
+        
+        <!-- 📅 GANTT CHART SECTION - PRIMEIRO ELEMENTO -->
+        <div class="gantt-panel">
+            <h2 style="margin-top: 0; color: #333; border-bottom: 2px solid #eee; padding-bottom: 10px;">
+                📅 TDD Task Timeline - Gantt Chart com Escala Temporal
+            </h2>
+            <p style="color: #666; font-size: 14px;">
+                Timeline interativo com escala proporcional à duração das tarefas. Use a barra de rolagem horizontal para navegar.
+            </p>
+            <div id="gantt-chart-container" style="width: 100%; height: auto;">
+                {gantt_chart_html}
+            </div>
         </div>
         
         <div class="info-panel">
@@ -401,15 +423,6 @@ def generate_interactive_html(epics: List[Dict[str, Any]], git_analysis: Dict[st
         </div>
         
         {html_div}
-        
-        <!-- Gantt Chart Section -->
-        <div class="info-panel">
-            <h3>📅 TDD Task Timeline - Gantt Chart</h3>
-            <p>Interactive timeline showing all tasks with TDD phase progression and estimated durations.</p>
-            <div id="gantt-chart-container">
-                {gantt_chart_html}
-            </div>
-        </div>
         
         <div class="info-panel">
             <h3>📊 Analysis Summary</h3>
@@ -515,7 +528,7 @@ def extract_all_tasks_timeline(epics: List[Dict[str, Any]]) -> List[Dict[str, An
     return timeline_tasks
 
 def create_gantt_chart(timeline_tasks: List[Dict[str, Any]]) -> 'go.Figure':
-    """Create horizontal swimlane Gantt chart similar to mermaid.mmd layout."""
+    """Create horizontal swimlane Gantt chart with proportional temporal scale."""
     if not PLOTLY_AVAILABLE or not timeline_tasks:
         return None
     
@@ -527,10 +540,23 @@ def create_gantt_chart(timeline_tasks: List[Dict[str, Any]]) -> 'go.Figure':
         'analysis': '#ffc107'  # Analysis phase - planning
     }
     
-    # Section order and positioning
-    section_order = ['Fundações', 'Núcleo', 'Dados e Produtividade', 'Observabilidade', 'Outros']
-    section_height = 1.0  # Height of each section lane
-    lane_spacing = 0.3    # Space between sections
+    # Section order and positioning (include Marcos section)
+    section_order = ['Fundações', 'Núcleo', 'Dados e Produtividade', 'Observabilidade', 'Marcos', 'Outros']
+    
+    # Milestones data based on mermaid.mmd
+    milestones = [
+        {'name': 'Foundation Complete', 'date': datetime.now() + timedelta(days=1), 'section': 'Marcos'},
+        {'name': 'Core System Ready', 'date': datetime.now() + timedelta(days=7), 'section': 'Marcos'},
+        {'name': 'Analytics Live', 'date': datetime.now() + timedelta(days=9), 'section': 'Marcos'}
+    ]
+    
+    # Calculate temporal scale - Find min duration for base unit
+    min_duration_minutes = min(task.get('EstimateMinutes', 60) for task in timeline_tasks) if timeline_tasks else 30
+    max_duration_minutes = max(task.get('EstimateMinutes', 60) for task in timeline_tasks) if timeline_tasks else 60
+    
+    # Base scale: minimum task gets 50px, scale proportionally
+    base_width_px = 50
+    pixels_per_minute = base_width_px / min_duration_minutes
     
     # Group tasks by section
     tasks_by_section = {}
@@ -539,6 +565,10 @@ def create_gantt_chart(timeline_tasks: List[Dict[str, Any]]) -> 'go.Figure':
         if section not in tasks_by_section:
             tasks_by_section[section] = []
         tasks_by_section[section].append(task)
+    
+    # Add milestones to Marcos section
+    if 'Marcos' not in tasks_by_section:
+        tasks_by_section['Marcos'] = []
     
     # Create figure with custom layout
     fig = go.Figure()
@@ -549,9 +579,56 @@ def create_gantt_chart(timeline_tasks: List[Dict[str, Any]]) -> 'go.Figure':
     for section in section_order:
         section_positions[section] = y_pos
         y_pos -= 1
+        
+    # Calculate timeline bounds for proportional positioning
+    if timeline_tasks:
+        earliest_start = min(task['Start'] for task in timeline_tasks)
+        latest_end = max(task['Finish'] for task in timeline_tasks)
+        total_timeline_minutes = (latest_end - earliest_start).total_seconds() / 60
+    else:
+        earliest_start = datetime.now()
+        latest_end = earliest_start + timedelta(hours=8)
+        total_timeline_minutes = 480  # 8 hours
     
-    # Add swimlane bars for each task
+    # Add milestones to Marcos section
+    marcos_y = section_positions.get('Marcos', 0)
+    for milestone in milestones:
+        milestone_x = milestone['date']
+        
+        # Add vertical line for milestone using shapes
+        fig.add_shape(
+            type="line",
+            x0=milestone_x,
+            x1=milestone_x,
+            y0=-1,
+            y1=len(section_order),
+            line=dict(color='#ff6b6b', width=3, dash='dash'),
+        )
+        
+        # Add milestone marker in Marcos section
+        fig.add_trace(go.Scatter(
+            x=[milestone_x],
+            y=[marcos_y],
+            mode='markers+text',
+            marker=dict(
+                symbol='diamond',
+                size=15,
+                color='#ff6b6b',
+                line=dict(color='white', width=2)
+            ),
+            text=[milestone['name']],
+            textposition='top center',
+            textfont=dict(size=9, color='#ff6b6b'),
+            name='Milestone',
+            showlegend=False,
+            hovertemplate=f"<b>📍 {milestone['name']}</b><br>Date: {milestone_x.strftime('%Y-%m-%d')}<br><extra></extra>"
+        ))
+    
+    # Add swimlane bars for each task with proportional temporal scale
     for section, tasks in tasks_by_section.items():
+        if section == 'Marcos':  # Skip marcos section for tasks (milestones already added)
+            continue
+            
         base_y = section_positions.get(section, 0)
         
         # Track lane usage within section to handle overlaps
@@ -564,6 +641,8 @@ def create_gantt_chart(timeline_tasks: List[Dict[str, Any]]) -> 'go.Figure':
             # Find available lane (check for temporal overlaps)
             task_start = task['Start']
             task_end = task['Finish']
+            task_duration_minutes = task.get('EstimateMinutes', 60)
+            
             assigned_lane = 0
             
             # Check existing lanes for overlaps
@@ -583,10 +662,10 @@ def create_gantt_chart(timeline_tasks: List[Dict[str, Any]]) -> 'go.Figure':
             lane_tasks[assigned_lane].append(task)
             
             # Calculate y position for this task (within section lane)
-            task_y = base_y - (assigned_lane * 0.15)  # Offset within section
-            bar_height = 0.12  # Thin bars for tasks
+            task_y = base_y - (assigned_lane * 0.2)  # More space between sub-lanes
+            bar_height = 0.15  # Slightly thicker bars for better visibility
             
-            # Add horizontal bar for this task
+            # Add horizontal bar for this task with proportional width
             fig.add_trace(go.Scatter(
                 x=[task_start, task_end, task_end, task_start, task_start],
                 y=[task_y - bar_height/2, task_y - bar_height/2, task_y + bar_height/2, task_y + bar_height/2, task_y - bar_height/2],
@@ -601,12 +680,13 @@ def create_gantt_chart(timeline_tasks: List[Dict[str, Any]]) -> 'go.Figure':
                     f"Section: {section}<br>"
                     f"Phase: {phase.upper()}<br>"
                     f"Epic: {task['Epic']}<br>"
-                    f"Duration: {task['EstimateMinutes']} min<br>"
+                    f"Duration: {task_duration_minutes} min<br>"
+                    f"Relative Scale: {task_duration_minutes/min_duration_minutes:.1f}x base<br>"
                     f"Start: {task_start.strftime('%Y-%m-%d %H:%M')}<br>"
                     f"End: {task_end.strftime('%Y-%m-%d %H:%M')}<br>"
                     "<extra></extra>"
                 ),
-                text=f"[{phase.upper()}] {task['TaskId']}"
+                text=f"[{phase.upper()}] {task['TaskId']} ({task_duration_minutes}min)"
             ))
     
     # Add section labels and dividers
@@ -626,48 +706,85 @@ def create_gantt_chart(timeline_tasks: List[Dict[str, Any]]) -> 'go.Figure':
                 annotation_position="left"
             )
     
-    # Customize layout for horizontal swimlanes
+    # Calculate optimal canvas width based on timeline and task durations
+    if timeline_tasks:
+        # Calculate total expanded width based on proportional scale
+        max_task_duration = max(task.get('EstimateMinutes', 60) for task in timeline_tasks)
+        canvas_width = max(1500, int(total_timeline_minutes * pixels_per_minute * 0.8))  # Minimum 1500px
+        canvas_width = min(canvas_width, 5000)  # Cap at 5000px for performance
+    else:
+        canvas_width = 1500
+    
+    # Customize layout for horizontal swimlanes with temporal scale
     fig.update_layout(
         title=dict(
-            text='📅 TDD Project Timeline - Horizontal Swimlanes',
+            text='📅 TDD Project Timeline - Escala Temporal Proporcional',
             x=0.5,
             font=dict(size=16)
         ),
         xaxis=dict(
-            title='Timeline',
+            title=f'Timeline Proporcional (Base: {min_duration_minutes} min = {base_width_px}px)',
             showgrid=True,
             gridcolor='lightgray',
             gridwidth=1,
-            tickformat='%m/%d %H:%M'
+            tickformat='%m/%d %H:%M',
+            range=[earliest_start, latest_end] if timeline_tasks else None
         ),
         yaxis=dict(
-            title='Project Sections',
+            title='Seções do Projeto (Swimlanes)',
             tickmode='array',
-            tickvals=[section_positions[s] for s in section_order if s in tasks_by_section],
-            ticktext=[s for s in section_order if s in tasks_by_section],
-            range=[-0.5, len(section_order) - 0.5],
+            tickvals=[section_positions[s] for s in section_order if s in tasks_by_section or s == 'Marcos'],
+            ticktext=[s for s in section_order if s in tasks_by_section or s == 'Marcos'],
+            range=[-1, len(section_order)],  # More space for sub-lanes
             automargin=True
         ),
-        height=max(400, len(section_order) * 120 + 150),
-        width=1200,  # Wide enough for horizontal scrolling
-        margin=dict(l=200, r=50, t=80, b=50),
+        height=max(500, len(section_order) * 140 + 150),  # More height for better visibility
+        width=canvas_width,  # Dynamic width based on temporal scale
+        margin=dict(l=220, r=50, t=100, b=50),  # More left margin for section names
         template='plotly_white',
-        showlegend=False
+        showlegend=False,
+        # Enable horizontal scrolling
+        xaxis_rangeslider=dict(visible=False),  # Disable range slider for cleaner look
     )
     
-    # Add custom legend for TDD phases
+    # Add custom legend for TDD phases and scale info
     legend_x = 0.02
     legend_y = 0.98
     for i, (phase, color) in enumerate(phase_color_map.items()):
         fig.add_annotation(
-            x=legend_x + i * 0.15,
+            x=legend_x + i * 0.12,
             y=legend_y,
             xref="paper",
             yref="paper",
             text=f"<span style='background-color:{color}; color:white; padding:2px 6px; border-radius:3px;'>{phase.upper()}</span>",
             showarrow=False,
-            font=dict(size=11)
+            font=dict(size=10)
         )
+    
+    # Add scale information
+    fig.add_annotation(
+        x=0.02,
+        y=0.94,
+        xref="paper", 
+        yref="paper",
+        text=f"<b>📐 Escala:</b> Menor tarefa: {min_duration_minutes}min | Maior: {max_duration_minutes}min | Ratio: {max_duration_minutes/min_duration_minutes:.1f}x",
+        showarrow=False,
+        font=dict(size=9, color='#666'),
+        bgcolor='rgba(255,255,255,0.8)',
+        bordercolor='lightgray',
+        borderwidth=1
+    )
+    
+    # Add milestone legend
+    fig.add_annotation(
+        x=0.6,
+        y=0.98,
+        xref="paper",
+        yref="paper", 
+        text='<span style="color:#ff6b6b;">♦</span> <b>Marcos</b> (Milestones)',
+        showarrow=False,
+        font=dict(size=10, color='#ff6b6b')
+    )
     
     return fig
 
