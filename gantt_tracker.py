@@ -425,38 +425,81 @@ def generate_interactive_html(epics: List[Dict[str, Any]], git_analysis: Dict[st
     
     return full_html
 
+def map_epic_to_section(epic_id: str, epic_name: str) -> str:
+    """Map epic ID/name to mermaid.mmd sections for swimlane grouping."""
+    # Based on mermaid.mmd structure
+    section_mapping = {
+        '0': 'Fundações',      # Epic 0 Environment and Production Safety
+        '0.5': 'Fundações',    # Epic 0.5 Integration Architecture Fixes
+        '2': 'Núcleo',         # Epic 2 Discovery and Compatibility
+        '3': 'Núcleo',         # Epic 3 Interactive Warning System  
+        '5': 'Núcleo',         # Epic 5 Cache Management Specifics
+        '7': 'Núcleo',         # Epic 7 Missing Caches Integration
+        '4': 'Dados e Produtividade', # Epic 4 TDAH Tooling Implementation
+        '6': 'Dados e Produtividade', # Epic 6 Data Migration and Issues Integration
+        '8': 'Observabilidade', # Epic 8 Task Time Monitoring and Analytics
+    }
+    
+    # Try mapping by ID first, then by name patterns
+    if epic_id in section_mapping:
+        return section_mapping[epic_id]
+    
+    # Fallback mapping by name patterns
+    name_lower = epic_name.lower()
+    if any(keyword in name_lower for keyword in ['environment', 'production', 'safety', 'integration', 'architecture']):
+        return 'Fundações'
+    elif any(keyword in name_lower for keyword in ['discovery', 'compatibility', 'warning', 'cache']):
+        return 'Núcleo'
+    elif any(keyword in name_lower for keyword in ['data', 'migration', 'tdah', 'tooling', 'produtividade']):
+        return 'Dados e Produtividade'  
+    elif any(keyword in name_lower for keyword in ['monitoring', 'analytics', 'observability']):
+        return 'Observabilidade'
+    
+    # Default fallback
+    return 'Outros'
+
 def extract_all_tasks_timeline(epics: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    """Extract all tasks from all epics for Gantt timeline visualization."""
+    """Extract all tasks from all epics for Gantt timeline visualization with sections."""
     timeline_tasks = []
     current_date = datetime.now()
     
+    # Section order for vertical positioning (top to bottom)
+    section_order = ['Fundações', 'Núcleo', 'Dados e Produtividade', 'Observabilidade', 'Outros']
+    
     for epic in epics:
-        # Get epic information
+        # Get epic information  
         epic_name = epic.get('name', epic.get('title', f"Epic {epic.get('id', 'Unknown')}"))
-        epic_id = epic.get('id', 'Unknown')
+        epic_id = str(epic.get('id', epic.get('epic_id', 'Unknown')))
         tasks = epic.get('tasks', [])
         
-        # Start date for this epic's tasks
-        epic_start_date = current_date
+        # Map epic to section for swimlane grouping
+        section = map_epic_to_section(epic_id, epic_name)
+        section_index = section_order.index(section) if section in section_order else len(section_order)
+        
+        # Start date for this epic's tasks (stagger by section)
+        epic_start_date = current_date + timedelta(days=section_index * 0.2)
         
         for task in tasks:
             # Calculate duration from estimate_minutes (convert to days)
             estimate_minutes = task.get('estimate_minutes', 60)
-            # Assume 8-hour work days (480 minutes)
-            duration_days = max(0.1, estimate_minutes / (8 * 60))
+            # Assume 8-hour work days (480 minutes), minimum 2 hours
+            duration_days = max(0.25, estimate_minutes / (8 * 60))
             
             task_start_date = epic_start_date
             task_end_date = task_start_date + timedelta(days=duration_days)
             
-            # Create task entry for timeline
+            # Create task entry for timeline with section info
             timeline_task = {
-                'Task': f"{task.get('id', 'N/A')}: {task.get('title', 'Unnamed Task')}",
+                'Task': f"{task.get('id', task.get('task_id', 'N/A'))}: {task.get('title', 'Unnamed Task')}",
                 'Start': task_start_date,
                 'Finish': task_end_date,
                 'Resource': epic_name,
                 'Phase': task.get('tdd_phase', task.get('phase', 'analysis')),
                 'Status': task.get('status', 'pending'),
                 'Epic': epic_name,
+                'EpicId': epic_id,
+                'Section': section,
+                'SectionIndex': section_index,
                 'EstimateMinutes': estimate_minutes,
                 'TaskId': task.get('id', task.get('task_id', 'N/A'))
             }
@@ -464,15 +507,15 @@ def extract_all_tasks_timeline(epics: List[Dict[str, Any]]) -> List[Dict[str, An
             timeline_tasks.append(timeline_task)
             
             # Next task starts when current ends (sequential within epic)
-            epic_start_date = task_end_date + timedelta(hours=1)  # Small gap between tasks
+            epic_start_date = task_end_date + timedelta(hours=0.5)  # Small gap between tasks
         
-        # Next epic starts after current epic finishes
-        current_date = epic_start_date + timedelta(days=0.5)  # Gap between epics
+        # Next epic starts with some offset
+        current_date = epic_start_date + timedelta(hours=2)  # Gap between epics
     
     return timeline_tasks
 
 def create_gantt_chart(timeline_tasks: List[Dict[str, Any]]) -> 'go.Figure':
-    """Create interactive hierarchical Plotly Gantt chart from timeline tasks."""
+    """Create horizontal swimlane Gantt chart similar to mermaid.mmd layout."""
     if not PLOTLY_AVAILABLE or not timeline_tasks:
         return None
     
@@ -484,95 +527,146 @@ def create_gantt_chart(timeline_tasks: List[Dict[str, Any]]) -> 'go.Figure':
         'analysis': '#ffc107'  # Analysis phase - planning
     }
     
-    # Get unique epics for color mapping (required by figure_factory)
-    unique_epics = list(set(task['Epic'] for task in timeline_tasks))
-    epic_colors = {epic: f'rgb({i*60%255}, {i*90%255}, {i*120%255})' for i, epic in enumerate(unique_epics)}
+    # Section order and positioning
+    section_order = ['Fundações', 'Núcleo', 'Dados e Produtividade', 'Observabilidade', 'Outros']
+    section_height = 1.0  # Height of each section lane
+    lane_spacing = 0.3    # Space between sections
     
-    # Prepare data for figure_factory format
-    gantt_data = []
+    # Group tasks by section
+    tasks_by_section = {}
     for task in timeline_tasks:
-        # Get phase info for customization
-        phase = task.get('Phase', 'analysis')
+        section = task.get('Section', 'Outros')
+        if section not in tasks_by_section:
+            tasks_by_section[section] = []
+        tasks_by_section[section].append(task)
+    
+    # Create figure with custom layout
+    fig = go.Figure()
+    
+    # Y-axis positions for each section (reversed for top-to-bottom order)
+    section_positions = {}
+    y_pos = len(section_order) - 1
+    for section in section_order:
+        section_positions[section] = y_pos
+        y_pos -= 1
+    
+    # Add swimlane bars for each task
+    for section, tasks in tasks_by_section.items():
+        base_y = section_positions.get(section, 0)
         
-        gantt_data.append({
-            'Task': f"[{phase.upper()}] {task['Task']}",  # Include phase in task name
-            'Start': task['Start'],
-            'Finish': task['Finish'],
-            'Resource': task['Epic'],  # Epic name as main grouping
-            'Complete': 0 if task.get('Status') == 'pending' else 100
-        })
+        # Track lane usage within section to handle overlaps
+        lane_tasks = {}  # lane_index -> list of tasks
+        
+        for task in tasks:
+            phase = task.get('Phase', 'analysis')
+            color = phase_color_map.get(phase, '#9e9e9e')
+            
+            # Find available lane (check for temporal overlaps)
+            task_start = task['Start']
+            task_end = task['Finish']
+            assigned_lane = 0
+            
+            # Check existing lanes for overlaps
+            for lane_idx, lane_task_list in lane_tasks.items():
+                has_overlap = any(
+                    not (task_end <= existing_task['Start'] or task_start >= existing_task['Finish'])
+                    for existing_task in lane_task_list
+                )
+                if not has_overlap:
+                    assigned_lane = lane_idx
+                    break
+                assigned_lane = max(assigned_lane, lane_idx + 1)
+            
+            # Initialize lane if needed
+            if assigned_lane not in lane_tasks:
+                lane_tasks[assigned_lane] = []
+            lane_tasks[assigned_lane].append(task)
+            
+            # Calculate y position for this task (within section lane)
+            task_y = base_y - (assigned_lane * 0.15)  # Offset within section
+            bar_height = 0.12  # Thin bars for tasks
+            
+            # Add horizontal bar for this task
+            fig.add_trace(go.Scatter(
+                x=[task_start, task_end, task_end, task_start, task_start],
+                y=[task_y - bar_height/2, task_y - bar_height/2, task_y + bar_height/2, task_y + bar_height/2, task_y - bar_height/2],
+                fill='toself',
+                fillcolor=color,
+                line=dict(color=color, width=1),
+                mode='lines',
+                name=f"{phase.upper()}",
+                showlegend=False,  # We'll add custom legend
+                hovertemplate=(
+                    f"<b>{task['Task']}</b><br>"
+                    f"Section: {section}<br>"
+                    f"Phase: {phase.upper()}<br>"
+                    f"Epic: {task['Epic']}<br>"
+                    f"Duration: {task['EstimateMinutes']} min<br>"
+                    f"Start: {task_start.strftime('%Y-%m-%d %H:%M')}<br>"
+                    f"End: {task_end.strftime('%Y-%m-%d %H:%M')}<br>"
+                    "<extra></extra>"
+                ),
+                text=f"[{phase.upper()}] {task['TaskId']}"
+            ))
     
-    # Create figure_factory Gantt chart with epic-based colors
-    fig = ff.create_gantt(
-        gantt_data,
-        colors=epic_colors,
-        index_col='Resource',  # Group by Epic
-        show_colorbar=False,
-        group_tasks=True,  # Enable hierarchical grouping
-        title='📅 TDD Epic Timeline - Hierarchical Gantt Chart',
-        bar_width=0.6
-    )
+    # Add section labels and dividers
+    section_labels = []
+    section_dividers_y = []
+    for section in section_order:
+        if section in tasks_by_section:
+            y_pos = section_positions[section]
+            section_labels.append(section)
+            section_dividers_y.append(y_pos + 0.4)
+            
+            # Add section divider line
+            fig.add_hline(
+                y=y_pos + 0.4, 
+                line=dict(color='lightgray', width=1, dash='dot'),
+                annotation_text=section,
+                annotation_position="left"
+            )
     
-    # Post-process to apply phase colors to individual bars
-    for i, trace in enumerate(fig.data):
-        # Extract phase from task name and apply appropriate color
-        if hasattr(trace, 'text') and trace.text:
-            for j, task_text in enumerate(trace.text if isinstance(trace.text, list) else [trace.text]):
-                if task_text:
-                    if '[RED]' in task_text:
-                        trace.marker.color = phase_color_map['red']
-                    elif '[GREEN]' in task_text:
-                        trace.marker.color = phase_color_map['green'] 
-                    elif '[REFACTOR]' in task_text:
-                        trace.marker.color = phase_color_map['refactor']
-                    elif '[ANALYSIS]' in task_text:
-                        trace.marker.color = phase_color_map['analysis']
-    
-    # Customize layout for better readability and hierarchical view
+    # Customize layout for horizontal swimlanes
     fig.update_layout(
-        height=max(500, len(timeline_tasks) * 30 + 150),  # Dynamic height based on task count
-        yaxis_title='Epics and Tasks (Hierarchical)',
-        xaxis_title='Timeline (Estimated Duration)',
-        showlegend=True,
-        legend=dict(
-            orientation="h",
-            yanchor="bottom",
-            y=1.05,
-            xanchor="center",
+        title=dict(
+            text='📅 TDD Project Timeline - Horizontal Swimlanes',
             x=0.5,
-            title="TDD Epic Groups"
+            font=dict(size=16)
         ),
-        margin=dict(l=280, r=80, t=100, b=80),  # More space for epic/task names
-        template="plotly_white"
+        xaxis=dict(
+            title='Timeline',
+            showgrid=True,
+            gridcolor='lightgray',
+            gridwidth=1,
+            tickformat='%m/%d %H:%M'
+        ),
+        yaxis=dict(
+            title='Project Sections',
+            tickmode='array',
+            tickvals=[section_positions[s] for s in section_order if s in tasks_by_section],
+            ticktext=[s for s in section_order if s in tasks_by_section],
+            range=[-0.5, len(section_order) - 0.5],
+            automargin=True
+        ),
+        height=max(400, len(section_order) * 120 + 150),
+        width=1200,  # Wide enough for horizontal scrolling
+        margin=dict(l=200, r=50, t=80, b=50),
+        template='plotly_white',
+        showlegend=False
     )
     
-    # Update y-axis for hierarchical display
-    fig.update_yaxes(
-        tickmode='linear',
-        automargin=True,
-        categoryorder='category ascending'
-    )
-    
-    # Update x-axis for better time display
-    fig.update_xaxes(
-        tickformat='%m/%d',
-        showgrid=True,
-        gridwidth=1,
-        gridcolor='lightgray'
-    )
-    
-    # Add phase color legend manually
-    phase_annotations = []
-    y_pos = 1.08
-    for phase, color in phase_color_map.items():
+    # Add custom legend for TDD phases
+    legend_x = 0.02
+    legend_y = 0.98
+    for i, (phase, color) in enumerate(phase_color_map.items()):
         fig.add_annotation(
-            x=0.02 + list(phase_color_map.keys()).index(phase) * 0.15,
-            y=y_pos,
+            x=legend_x + i * 0.15,
+            y=legend_y,
             xref="paper",
-            yref="paper", 
-            text=f"<b style='color:{color}'>{phase.upper()}</b>",
+            yref="paper",
+            text=f"<span style='background-color:{color}; color:white; padding:2px 6px; border-radius:3px;'>{phase.upper()}</span>",
             showarrow=False,
-            font=dict(size=10)
+            font=dict(size=11)
         )
     
     return fig
