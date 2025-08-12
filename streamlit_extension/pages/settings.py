@@ -250,8 +250,29 @@ def _render_github_settings(config):
             "GitHub Token",
             value=config.github_token or "",
             type="password",
-            help="Personal access token for GitHub API"
+            help="Personal access token for GitHub API (starts with 'ghp_', 'github_pat_', 'gho_', 'ghu_', 'ghs_', or 'ghr_')"
         )
+        
+        # GitHub token validation
+        if github_token:
+            import re
+            # GitHub token patterns: https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/about-authentication-to-github
+            token_patterns = [
+                r'^ghp_[a-zA-Z0-9]{36}$',           # Personal access token (classic)
+                r'^github_pat_[a-zA-Z0-9]{22}_[a-zA-Z0-9]{59}$',  # Fine-grained personal access token
+                r'^gho_[a-zA-Z0-9]{36}$',           # OAuth access token
+                r'^ghu_[a-zA-Z0-9]{36}$',           # GitHub App user access token
+                r'^ghs_[a-zA-Z0-9]{36}$',           # GitHub App server-to-server token
+                r'^ghr_[a-zA-Z0-9]{76}$',           # GitHub App refresh token
+            ]
+            
+            is_valid_token = any(re.match(pattern, github_token) for pattern in token_patterns)
+            
+            if is_valid_token:
+                st.success("✅ Token format is valid")
+            else:
+                st.error("❌ Invalid token format. GitHub tokens should start with 'ghp_', 'github_pat_', 'gho_', 'ghu_', 'ghs_', or 'ghr_' and match the expected format.")
+                st.info("💡 Generate a new token at: https://github.com/settings/tokens")
         
         github_repo_owner = st.text_input(
             "Repository Owner",
@@ -308,6 +329,24 @@ def _render_github_settings(config):
     
     # Save GitHub settings
     if st.button("💾 Save GitHub Settings"):
+        # Validate token format before saving
+        if github_token:
+            import re
+            token_patterns = [
+                r'^ghp_[a-zA-Z0-9]{36}$',           # Personal access token (classic)
+                r'^github_pat_[a-zA-Z0-9]{22}_[a-zA-Z0-9]{59}$',  # Fine-grained personal access token
+                r'^gho_[a-zA-Z0-9]{36}$',           # OAuth access token
+                r'^ghu_[a-zA-Z0-9]{36}$',           # GitHub App user access token
+                r'^ghs_[a-zA-Z0-9]{36}$',           # GitHub App server-to-server token
+                r'^ghr_[a-zA-Z0-9]{76}$',           # GitHub App refresh token
+            ]
+            
+            is_valid_token = any(re.match(pattern, github_token) for pattern in token_patterns)
+            
+            if not is_valid_token:
+                st.error("❌ Cannot save: Invalid GitHub token format. Please provide a valid token.")
+                st.stop()
+        
         _save_github_settings(
             github_token=github_token,
             github_repo_owner=github_repo_owner,
