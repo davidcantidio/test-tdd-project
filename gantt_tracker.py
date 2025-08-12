@@ -25,6 +25,7 @@ import re
 try:
     import plotly.graph_objects as go
     import plotly.express as px
+    import plotly.figure_factory as ff
     from plotly.subplots import make_subplots
     import plotly.offline as pyo
     PLOTLY_AVAILABLE = True
@@ -471,62 +472,108 @@ def extract_all_tasks_timeline(epics: List[Dict[str, Any]]) -> List[Dict[str, An
     return timeline_tasks
 
 def create_gantt_chart(timeline_tasks: List[Dict[str, Any]]) -> 'go.Figure':
-    """Create interactive Plotly Gantt chart from timeline tasks."""
+    """Create interactive hierarchical Plotly Gantt chart from timeline tasks."""
     if not PLOTLY_AVAILABLE or not timeline_tasks:
         return None
     
     # Color mapping for TDD phases
-    color_map = {
+    phase_color_map = {
         'red': '#f44336',      # Red phase - failing tests
         'green': '#4caf50',    # Green phase - implementation  
         'refactor': '#2196f3', # Refactor phase - optimization
         'analysis': '#ffc107'  # Analysis phase - planning
     }
     
-    # Create timeline chart using plotly express
-    fig = px.timeline(
-        timeline_tasks,
-        x_start='Start',
-        x_end='Finish', 
-        y='Task',
-        color='Phase',
-        color_discrete_map=color_map,
-        title='📅 TDD Task Timeline - Gantt Chart',
-        labels={'Phase': 'TDD Phase', 'Task': 'Tasks (by Epic)'},
-        hover_data=['EstimateMinutes', 'Status', 'Epic']
+    # Get unique epics for color mapping (required by figure_factory)
+    unique_epics = list(set(task['Epic'] for task in timeline_tasks))
+    epic_colors = {epic: f'rgb({i*60%255}, {i*90%255}, {i*120%255})' for i, epic in enumerate(unique_epics)}
+    
+    # Prepare data for figure_factory format
+    gantt_data = []
+    for task in timeline_tasks:
+        # Get phase info for customization
+        phase = task.get('Phase', 'analysis')
+        
+        gantt_data.append({
+            'Task': f"[{phase.upper()}] {task['Task']}",  # Include phase in task name
+            'Start': task['Start'],
+            'Finish': task['Finish'],
+            'Resource': task['Epic'],  # Epic name as main grouping
+            'Complete': 0 if task.get('Status') == 'pending' else 100
+        })
+    
+    # Create figure_factory Gantt chart with epic-based colors
+    fig = ff.create_gantt(
+        gantt_data,
+        colors=epic_colors,
+        index_col='Resource',  # Group by Epic
+        show_colorbar=False,
+        group_tasks=True,  # Enable hierarchical grouping
+        title='📅 TDD Epic Timeline - Hierarchical Gantt Chart',
+        bar_width=0.6
     )
     
-    # Customize layout for better readability
+    # Post-process to apply phase colors to individual bars
+    for i, trace in enumerate(fig.data):
+        # Extract phase from task name and apply appropriate color
+        if hasattr(trace, 'text') and trace.text:
+            for j, task_text in enumerate(trace.text if isinstance(trace.text, list) else [trace.text]):
+                if task_text:
+                    if '[RED]' in task_text:
+                        trace.marker.color = phase_color_map['red']
+                    elif '[GREEN]' in task_text:
+                        trace.marker.color = phase_color_map['green'] 
+                    elif '[REFACTOR]' in task_text:
+                        trace.marker.color = phase_color_map['refactor']
+                    elif '[ANALYSIS]' in task_text:
+                        trace.marker.color = phase_color_map['analysis']
+    
+    # Customize layout for better readability and hierarchical view
     fig.update_layout(
-        height=max(400, len(timeline_tasks) * 25 + 100),  # Dynamic height based on task count
-        yaxis_title='Tasks (Sequential by Epic)',
+        height=max(500, len(timeline_tasks) * 30 + 150),  # Dynamic height based on task count
+        yaxis_title='Epics and Tasks (Hierarchical)',
         xaxis_title='Timeline (Estimated Duration)',
         showlegend=True,
         legend=dict(
             orientation="h",
             yanchor="bottom",
-            y=1.02,
-            xanchor="right", 
-            x=1
+            y=1.05,
+            xanchor="center",
+            x=0.5,
+            title="TDD Epic Groups"
         ),
-        margin=dict(l=200, r=50, t=80, b=50)  # More space for task names
+        margin=dict(l=280, r=80, t=100, b=80),  # More space for epic/task names
+        template="plotly_white"
     )
     
-    # Update y-axis to show full task names
+    # Update y-axis for hierarchical display
     fig.update_yaxes(
         tickmode='linear',
-        automargin=True
+        automargin=True,
+        categoryorder='category ascending'
     )
     
-    # Update hover template
-    fig.update_traces(
-        hovertemplate="<b>%{y}</b><br>" +
-                      "Start: %{x}<br>" +
-                      "Duration: %{customdata[0]} min<br>" +
-                      "Status: %{customdata[1]}<br>" +
-                      "Epic: %{customdata[2]}<br>" +
-                      "<extra></extra>"
+    # Update x-axis for better time display
+    fig.update_xaxes(
+        tickformat='%m/%d',
+        showgrid=True,
+        gridwidth=1,
+        gridcolor='lightgray'
     )
+    
+    # Add phase color legend manually
+    phase_annotations = []
+    y_pos = 1.08
+    for phase, color in phase_color_map.items():
+        fig.add_annotation(
+            x=0.02 + list(phase_color_map.keys()).index(phase) * 0.15,
+            y=y_pos,
+            xref="paper",
+            yref="paper", 
+            text=f"<b style='color:{color}'>{phase.upper()}</b>",
+            showarrow=False,
+            font=dict(size=10)
+        )
     
     return fig
 
