@@ -53,6 +53,62 @@ class ExistingSystemIntegrator:
         self.analytics = AnalyticsEngine() if ANALYTICS_AVAILABLE else None
         self.gantt = GanttTracker() if GANTT_AVAILABLE else None
     
+    def _validate_epic_data(self, epic_data: Dict[str, Any], filename: str) -> tuple[bool, List[str]]:
+        """
+        Validate and sanitize epic JSON data before processing.
+        
+        Returns:
+            Tuple of (is_valid, list_of_errors)
+        """
+        errors = []
+        
+        if not isinstance(epic_data, dict):
+            errors.append(f"{filename}: Epic data must be a dictionary")
+            return False, errors
+        
+        # Required fields validation
+        required_fields = ["epic_key", "name"]
+        for field in required_fields:
+            if field not in epic_data:
+                errors.append(f"{filename}: Missing required field '{field}'")
+            elif not isinstance(epic_data[field], str) or not epic_data[field].strip():
+                errors.append(f"{filename}: Field '{field}' must be a non-empty string")
+        
+        # Sanitize epic_key (alphanumeric, underscore, hyphen only)
+        if "epic_key" in epic_data:
+            epic_key = str(epic_data["epic_key"]).strip()
+            if not epic_key.replace("_", "").replace("-", "").isalnum():
+                errors.append(f"{filename}: epic_key contains invalid characters. Use only alphanumeric, underscore, hyphen")
+                
+            # Limit epic_key length
+            if len(epic_key) > 50:
+                errors.append(f"{filename}: epic_key too long (max 50 characters)")
+        
+        # Sanitize name field
+        if "name" in epic_data:
+            name = str(epic_data["name"]).strip()
+            if len(name) > 200:
+                errors.append(f"{filename}: name too long (max 200 characters)")
+        
+        # Validate status if present
+        if "status" in epic_data:
+            valid_statuses = ["planning", "active", "on_hold", "completed", "cancelled"]
+            if epic_data["status"] not in valid_statuses:
+                errors.append(f"{filename}: Invalid status '{epic_data['status']}'. Valid: {valid_statuses}")
+        
+        # Validate numeric fields if present
+        numeric_fields = ["priority", "difficulty_level", "points_earned"]
+        for field in numeric_fields:
+            if field in epic_data:
+                try:
+                    value = int(epic_data[field])
+                    if value < 0 or value > 10:
+                        errors.append(f"{filename}: {field} must be between 0 and 10")
+                except (ValueError, TypeError):
+                    errors.append(f"{filename}: {field} must be a valid integer")
+        
+        return len(errors) == 0, errors
+    
     def sync_epics_from_json(self) -> Dict[str, Any]:
         """
         Synchronize epic JSON files with database.
@@ -77,18 +133,27 @@ class ExistingSystemIntegrator:
             results["error"] = "Database manager not available"
             return results
         
+        # Load existing epics once to avoid repeated database calls
+        existing_epics = self.db_manager.get_epics()
+        epic_keys_map = {epic.get("epic_key"): epic for epic in existing_epics}
+        
         for epic_file in epic_files:
             try:
                 with open(epic_file, 'r', encoding='utf-8') as f:
                     epic_data = json.load(f)
                 
-                # Extract epic info
-                epic_key = epic_data.get("epic_key", epic_file.stem)
-                epic_name = epic_data.get("name", epic_key)
+                # Validate and sanitize JSON data
+                is_valid, validation_errors = self._validate_epic_data(epic_data, epic_file.name)
+                if not is_valid:
+                    results["errors"].extend(validation_errors)
+                    continue
                 
-                # Check if epic exists in database
-                existing_epics = self.db_manager.get_epics()
-                existing_epic = next((e for e in existing_epics if e.get("epic_key") == epic_key), None)
+                # Extract sanitized epic info
+                epic_key = epic_data.get("epic_key", epic_file.stem).strip()
+                epic_name = epic_data.get("name", epic_key).strip()
+                
+                # Check if epic exists in database (using pre-loaded map)
+                existing_epic = epic_keys_map.get(epic_key)
                 
                 if existing_epic:
                     results["updated_epics"].append(epic_key)
@@ -97,6 +162,8 @@ class ExistingSystemIntegrator:
                 
                 results["synced"] += 1
                 
+            except json.JSONDecodeError as e:
+                results["errors"].append(f"Invalid JSON in {epic_file.name}: {str(e)}")
             except Exception as e:
                 results["errors"].append(f"Error processing {epic_file.name}: {str(e)}")
         

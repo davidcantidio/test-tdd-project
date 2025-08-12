@@ -189,20 +189,20 @@ class DatabaseManager:
                     SELECT task_reference, user_identifier, started_at, ended_at,
                            planned_duration_minutes, actual_duration_minutes,
                            focus_rating, energy_level, mood_rating,
-                           interruptions_count, notes,
+                           interruptions_count,
                            created_at
                     FROM timer_sessions
-                    WHERE created_at >= DATE('now', '-{} days')
+                    WHERE created_at >= DATE('now', ? || ' days')
                     ORDER BY created_at DESC
                     LIMIT 1000
-                """.format(days)
+                """
                 
                 if SQLALCHEMY_AVAILABLE:
-                    result = conn.execute(text(query))
+                    result = conn.execute(text(query), [f"-{days}"])
                     return [dict(row._mapping) for row in result]
                 else:
                     cursor = conn.cursor()
-                    cursor.execute(query)
+                    cursor.execute(query, [f"-{days}"])
                     return [dict(row) for row in cursor.fetchall()]
         except Exception as e:
             print(f"Error loading timer sessions: {e}")
