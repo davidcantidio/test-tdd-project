@@ -24,33 +24,45 @@ try:
     import streamlit as st
     STREAMLIT_AVAILABLE = True
 except ImportError:
-    print("❌ Streamlit not available. Install with: pip install streamlit")
-    sys.exit(1)
+    # Graceful fallback for testing and development
+    print("⚠️ Streamlit not available - running in headless mode")
+    print("To run the dashboard: pip install streamlit")
+    STREAMLIT_AVAILABLE = False
+    
+    # Mock streamlit module for testing
+    class MockStreamlit:
+        def __getattr__(self, name):
+            def mock_func(*args, **kwargs):
+                return None
+            return mock_func
+    
+    st = MockStreamlit()
 
-# Configure page
-st.set_page_config(
-    page_title="TDD Framework Dashboard",
-    page_icon="🚀",
-    layout="wide",
-    initial_sidebar_state="expanded",
-    menu_items={
-        'Get Help': None,
-        'Report a bug': 'https://github.com/davidcantidio/test-tdd-project/issues',
-        'About': """
-        # TDD Framework - Advanced Dashboard
-        
-        Interactive development environment for TDD workflow with:
-        - ⏱️ Focus timer with TDAH support
-        - 📋 Task management with Kanban
-        - 📊 Analytics and productivity tracking
-        - 🎮 Gamification system
-        - 🐙 GitHub integration
-        
-        **Version:** 1.2.1
-        **Phase:** Enhanced Dashboard
-        """
-    }
-)
+# Configure page (only if Streamlit is available)
+if STREAMLIT_AVAILABLE:
+    st.set_page_config(
+        page_title="TDD Framework Dashboard",
+        page_icon="🚀",
+        layout="wide",
+        initial_sidebar_state="expanded",
+        menu_items={
+            'Get Help': None,
+            'Report a bug': 'https://github.com/davidcantidio/test-tdd-project/issues',
+            'About': """
+            # TDD Framework - Advanced Dashboard
+            
+            Interactive development environment for TDD workflow with:
+            - ⏱️ Focus timer with TDAH support
+            - 📋 Task management with Kanban
+            - 📊 Analytics and productivity tracking
+            - 🎮 Gamification system
+            - 🐙 GitHub integration
+            
+            **Version:** 1.2.1
+            **Phase:** Enhanced Dashboard
+            """
+        }
+    )
 
 # Import components
 try:
@@ -489,6 +501,12 @@ def render_debug_panel():
 
 def main():
     """Main application entry point with enhanced dashboard."""
+    
+    # Check if running in headless mode
+    if not STREAMLIT_AVAILABLE:
+        print("📊 Dashboard functions available for testing")
+        print("Run 'streamlit run streamlit_app.py' for full UI")
+        return
     
     # Initialize session state
     initialize_session_state()

@@ -288,6 +288,18 @@ class AdvancedCache:
             lru_key = self._access_order.pop(0)
             if lru_key in self._memory_cache:
                 del self._memory_cache[lru_key]
+                
+                # CRITICAL FIX: Also remove corresponding disk cache file
+                if self.enable_disk_cache and self.cache_dir:
+                    cache_file = self.cache_dir / f"{lru_key}.cache"
+                    try:
+                        if cache_file.exists():
+                            cache_file.unlink()
+                            self.stats["disk_evictions"] += 1
+                    except OSError:
+                        # File might have been deleted already, continue
+                        pass
+                
                 self.stats["evictions"] += 1
     
     def _get_from_disk(self, cache_key: str) -> Optional[Any]:
@@ -424,6 +436,39 @@ class AdvancedCache:
             except OSError:
                 # File might have been deleted already
                 continue
+    
+    def cleanup_orphaned_cache_files(self) -> int:
+        """
+        Remove orphaned cache files that don't have corresponding memory entries.
+        
+        Returns:
+            int: Number of orphaned files removed
+        """
+        if not self.enable_disk_cache or not self.cache_dir:
+            return 0
+        
+        removed_count = 0
+        
+        try:
+            for cache_file in self.cache_dir.glob("*.cache"):
+                # Extract key from filename
+                cache_key = cache_file.stem
+                
+                # If key not in memory cache, it's orphaned
+                if cache_key not in self._memory_cache:
+                    try:
+                        cache_file.unlink()
+                        removed_count += 1
+                        self.stats["disk_evictions"] += 1
+                    except OSError:
+                        # File might have been deleted already
+                        continue
+        
+        except Exception:
+            # If directory doesn't exist or other error, return 0
+            pass
+        
+        return removed_count
 
 
 # Global cache instance
