@@ -581,3 +581,366 @@ class DatabaseManager:
             return get_cache_statistics()
         else:
             return {"cache_available": False}
+    
+    @cache_database_query("get_productivity_stats", ttl=60) if CACHE_AVAILABLE else lambda f: f
+    def get_productivity_stats(self, days: int = 7) -> Dict[str, Any]:
+        """Get productivity statistics for the last N days."""
+        stats = {
+            "activity_by_date": {},
+            "tasks_completed_total": 0,
+            "focus_time_total": 0,
+            "average_daily_tasks": 0,
+            "average_focus_time": 0,
+            "most_productive_day": None,
+            "current_streak": 0,
+            "best_streak": 0
+        }
+        
+        try:
+            # Get task activity for last N days
+            with self.get_connection("framework") as conn:
+                if SQLALCHEMY_AVAILABLE:
+                    result = conn.execute(text("""
+                        SELECT DATE(updated_at) as date, COUNT(*) as count
+                        FROM framework_tasks
+                        WHERE updated_at >= DATE('now', :days)
+                        AND status = 'completed'
+                        GROUP BY DATE(updated_at)
+                        ORDER BY date DESC
+                    """), {"days": f"-{days} days"})
+                    
+                    for row in result:
+                        date_str = str(row.date)
+                        stats["activity_by_date"][date_str] = row.count
+                        stats["tasks_completed_total"] += row.count
+                else:
+                    cursor = conn.cursor()
+                    cursor.execute("""
+                        SELECT DATE(updated_at) as date, COUNT(*) as count
+                        FROM framework_tasks
+                        WHERE updated_at >= DATE('now', ?)
+                        AND status = 'completed'
+                        GROUP BY DATE(updated_at)
+                        ORDER BY date DESC
+                    """, (f"-{days} days",))
+                    
+                    for row in cursor.fetchall():
+                        date_str = row[0]
+                        stats["activity_by_date"][date_str] = row[1]
+                        stats["tasks_completed_total"] += row[1]
+            
+            # Get focus time from timer database
+            if self.timer_db_path.exists():
+                with self.get_connection("timer") as conn:
+                    if SQLALCHEMY_AVAILABLE:
+                        result = conn.execute(text("""
+                            SELECT DATE(started_at) as date, 
+                                   SUM(actual_duration_minutes) as total_minutes
+                            FROM timer_sessions
+                            WHERE started_at >= DATE('now', :days)
+                            GROUP BY DATE(started_at)
+                        """), {"days": f"-{days} days"})
+                        
+                        for row in result:
+                            stats["focus_time_total"] += row.total_minutes or 0
+                    else:
+                        cursor = conn.cursor()
+                        cursor.execute("""
+                            SELECT DATE(started_at) as date,
+                                   SUM(actual_duration_minutes) as total_minutes
+                            FROM timer_sessions
+                            WHERE started_at >= DATE('now', ?)
+                            GROUP BY DATE(started_at)
+                        """, (f"-{days} days",))
+                        
+                        for row in cursor.fetchall():
+                            stats["focus_time_total"] += row[1] or 0
+            
+            # Calculate averages
+            if days > 0:
+                stats["average_daily_tasks"] = round(stats["tasks_completed_total"] / days, 1)
+                stats["average_focus_time"] = round(stats["focus_time_total"] / days, 1)
+            
+            # Find most productive day
+            if stats["activity_by_date"]:
+                most_productive = max(stats["activity_by_date"].items(), key=lambda x: x[1])
+                stats["most_productive_day"] = most_productive[0]
+            
+            # Calculate streaks
+            stats["current_streak"] = self._calculate_current_streak()
+            stats["best_streak"] = self._get_best_streak()
+            
+        except Exception as e:
+            print(f"Error getting productivity stats: {e}")
+        
+        return stats
+    
+    @cache_database_query("get_daily_summary", ttl=60) if CACHE_AVAILABLE else lambda f: f
+    def get_daily_summary(self) -> Dict[str, Any]:
+        """Get today's activity summary."""
+        summary = {
+            "tasks_completed": 0,
+            "tasks_in_progress": 0,
+            "tasks_created": 0,
+            "focus_time_minutes": 0,
+            "timer_sessions": 0,
+            "achievements_today": 0,
+            "streak_days": 0,
+            "points_earned_today": 0
+        }
+        
+        today = datetime.now().date().isoformat()
+        
+        try:
+            with self.get_connection("framework") as conn:
+                if SQLALCHEMY_AVAILABLE:
+                    # Tasks completed today
+                    result = conn.execute(text("""
+                        SELECT COUNT(*) FROM framework_tasks
+                        WHERE DATE(updated_at) = :today AND status = 'completed'
+                    """), {"today": today})
+                    summary["tasks_completed"] = result.scalar() or 0
+                    
+                    # Tasks in progress
+                    result = conn.execute(text("""
+                        SELECT COUNT(*) FROM framework_tasks
+                        WHERE status = 'in_progress'
+                    """))
+                    summary["tasks_in_progress"] = result.scalar() or 0
+                    
+                    # Tasks created today
+                    result = conn.execute(text("""
+                        SELECT COUNT(*) FROM framework_tasks
+                        WHERE DATE(created_at) = :today
+                    """), {"today": today})
+                    summary["tasks_created"] = result.scalar() or 0
+                    
+                    # Points earned today
+                    result = conn.execute(text("""
+                        SELECT SUM(points_value) FROM framework_tasks
+                        WHERE DATE(completed_at) = :today AND status = 'completed'
+                    """), {"today": today})
+                    summary["points_earned_today"] = result.scalar() or 0
+                    
+                    # Achievements unlocked today
+                    result = conn.execute(text("""
+                        SELECT COUNT(*) FROM user_achievements
+                        WHERE DATE(unlocked_at) = :today
+                    """), {"today": today})
+                    summary["achievements_today"] = result.scalar() or 0
+                    
+                    # Current streak
+                    result = conn.execute(text("""
+                        SELECT current_streak FROM user_streaks
+                        WHERE user_id = 1 AND streak_type = 'daily_tasks'
+                        ORDER BY updated_at DESC LIMIT 1
+                    """))
+                    row = result.fetchone()
+                    if row:
+                        summary["streak_days"] = row[0] or 0
+                else:
+                    cursor = conn.cursor()
+                    
+                    # Tasks completed today
+                    cursor.execute("""
+                        SELECT COUNT(*) FROM framework_tasks
+                        WHERE DATE(updated_at) = ? AND status = 'completed'
+                    """, (today,))
+                    summary["tasks_completed"] = cursor.fetchone()[0] or 0
+                    
+                    # Tasks in progress
+                    cursor.execute("""
+                        SELECT COUNT(*) FROM framework_tasks
+                        WHERE status = 'in_progress'
+                    """)
+                    summary["tasks_in_progress"] = cursor.fetchone()[0] or 0
+                    
+                    # Tasks created today
+                    cursor.execute("""
+                        SELECT COUNT(*) FROM framework_tasks
+                        WHERE DATE(created_at) = ?
+                    """, (today,))
+                    summary["tasks_created"] = cursor.fetchone()[0] or 0
+            
+            # Get timer data if available
+            if self.timer_db_path.exists():
+                with self.get_connection("timer") as conn:
+                    if SQLALCHEMY_AVAILABLE:
+                        result = conn.execute(text("""
+                            SELECT COUNT(*) as sessions, 
+                                   SUM(actual_duration_minutes) as total_minutes
+                            FROM timer_sessions
+                            WHERE DATE(started_at) = :today
+                        """), {"today": today})
+                        row = result.fetchone()
+                        if row:
+                            summary["timer_sessions"] = row[0] or 0
+                            summary["focus_time_minutes"] = row[1] or 0
+                    else:
+                        cursor = conn.cursor()
+                        cursor.execute("""
+                            SELECT COUNT(*) as sessions,
+                                   SUM(actual_duration_minutes) as total_minutes
+                            FROM timer_sessions
+                            WHERE DATE(started_at) = ?
+                        """, (today,))
+                        row = cursor.fetchone()
+                        if row:
+                            summary["timer_sessions"] = row[0] or 0
+                            summary["focus_time_minutes"] = row[1] or 0
+        
+        except Exception as e:
+            print(f"Error getting daily summary: {e}")
+        
+        return summary
+    
+    @cache_database_query("get_pending_notifications", ttl=30) if CACHE_AVAILABLE else lambda f: f
+    def get_pending_notifications(self) -> List[Dict[str, Any]]:
+        """Get pending notifications for the user."""
+        notifications = []
+        
+        try:
+            with self.get_connection("framework") as conn:
+                # Check for overdue tasks
+                if SQLALCHEMY_AVAILABLE:
+                    result = conn.execute(text("""
+                        SELECT title, due_date FROM framework_tasks
+                        WHERE status != 'completed' 
+                        AND due_date IS NOT NULL
+                        AND DATE(due_date) <= DATE('now')
+                        LIMIT 5
+                    """))
+                    
+                    for row in result:
+                        notifications.append({
+                            "type": "warning",
+                            "title": "Task Overdue",
+                            "message": f"{row.title} was due {row.due_date}",
+                            "timestamp": datetime.now()
+                        })
+                
+                # Check for long-running tasks
+                if SQLALCHEMY_AVAILABLE:
+                    result = conn.execute(text("""
+                        SELECT title FROM framework_tasks
+                        WHERE status = 'in_progress'
+                        AND julianday('now') - julianday(updated_at) > 3
+                        LIMIT 3
+                    """))
+                    
+                    for row in result:
+                        notifications.append({
+                            "type": "info",
+                            "title": "Long Running Task",
+                            "message": f"{row.title} has been in progress for over 3 days",
+                            "timestamp": datetime.now()
+                        })
+        
+        except Exception as e:
+            print(f"Error getting notifications: {e}")
+        
+        return notifications
+    
+    @cache_database_query("get_user_achievements", ttl=300) if CACHE_AVAILABLE else lambda f: f
+    def get_user_achievements(self, limit: int = 10) -> List[Dict[str, Any]]:
+        """Get user achievements."""
+        achievements = []
+        
+        try:
+            with self.get_connection("framework") as conn:
+                if SQLALCHEMY_AVAILABLE:
+                    result = conn.execute(text("""
+                        SELECT at.name, at.description, at.icon, at.points_value,
+                               ua.unlocked_at, ua.progress_value
+                        FROM achievement_types at
+                        LEFT JOIN user_achievements ua ON at.id = ua.achievement_id
+                        WHERE at.is_active = TRUE
+                        ORDER BY ua.unlocked_at DESC NULLS LAST
+                        LIMIT :limit
+                    """), {"limit": limit})
+                    
+                    for row in result:
+                        achievements.append({
+                            "name": row.name,
+                            "description": row.description,
+                            "icon": row.icon or "🏆",
+                            "points": row.points_value,
+                            "unlocked": row.unlocked_at is not None,
+                            "unlocked_at": row.unlocked_at,
+                            "progress": row.progress_value
+                        })
+                else:
+                    cursor = conn.cursor()
+                    cursor.execute("""
+                        SELECT at.name, at.description, at.icon, at.points_value,
+                               ua.unlocked_at, ua.progress_value
+                        FROM achievement_types at
+                        LEFT JOIN user_achievements ua ON at.id = ua.achievement_id
+                        WHERE at.is_active = 1
+                        ORDER BY ua.unlocked_at DESC
+                        LIMIT ?
+                    """, (limit,))
+                    
+                    for row in cursor.fetchall():
+                        achievements.append({
+                            "name": row[0],
+                            "description": row[1],
+                            "icon": row[2] or "🏆",
+                            "points": row[3],
+                            "unlocked": row[4] is not None,
+                            "unlocked_at": row[4],
+                            "progress": row[5]
+                        })
+        
+        except Exception as e:
+            print(f"Error getting achievements: {e}")
+        
+        return achievements
+    
+    def _calculate_current_streak(self) -> int:
+        """Calculate current task completion streak."""
+        try:
+            with self.get_connection("framework") as conn:
+                if SQLALCHEMY_AVAILABLE:
+                    result = conn.execute(text("""
+                        SELECT current_streak FROM user_streaks
+                        WHERE user_id = 1 AND streak_type = 'daily_tasks'
+                        ORDER BY updated_at DESC LIMIT 1
+                    """))
+                    row = result.fetchone()
+                    return row[0] if row else 0
+                else:
+                    cursor = conn.cursor()
+                    cursor.execute("""
+                        SELECT current_streak FROM user_streaks
+                        WHERE user_id = 1 AND streak_type = 'daily_tasks'
+                        ORDER BY updated_at DESC LIMIT 1
+                    """)
+                    row = cursor.fetchone()
+                    return row[0] if row else 0
+        except Exception:
+            return 0
+    
+    def _get_best_streak(self) -> int:
+        """Get best streak record."""
+        try:
+            with self.get_connection("framework") as conn:
+                if SQLALCHEMY_AVAILABLE:
+                    result = conn.execute(text("""
+                        SELECT best_streak FROM user_streaks
+                        WHERE user_id = 1 AND streak_type = 'daily_tasks'
+                        ORDER BY best_streak DESC LIMIT 1
+                    """))
+                    row = result.fetchone()
+                    return row[0] if row else 0
+                else:
+                    cursor = conn.cursor()
+                    cursor.execute("""
+                        SELECT best_streak FROM user_streaks
+                        WHERE user_id = 1 AND streak_type = 'daily_tasks'
+                        ORDER BY best_streak DESC LIMIT 1
+                    """)
+                    row = cursor.fetchone()
+                    return row[0] if row else 0
+        except Exception:
+            return 0
