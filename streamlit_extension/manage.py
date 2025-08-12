@@ -107,6 +107,90 @@ def print_dependencies_error(missing: List[str]):
         print("Or use poetry: poetry install --extras streamlit")
 
 
+def _validate_single_epic(epic_file: Path, fix_issues: bool = False) -> List[str]:
+    """Validate a single epic JSON file."""
+    issues = []
+    
+    try:
+        with open(epic_file, 'r', encoding='utf-8') as f:
+            epic_data = json.load(f)
+    except json.JSONDecodeError as e:
+        issues.append(f"Invalid JSON: {str(e)}")
+        return issues
+    except Exception as e:
+        issues.append(f"File error: {str(e)}")
+        return issues
+    
+    # Required fields validation
+    required_fields = ["epic_key", "name", "description", "status"]
+    for field in required_fields:
+        if field not in epic_data or not epic_data[field]:
+            issues.append(f"Missing required field: {field}")
+    
+    # Status validation
+    valid_statuses = ["planning", "active", "on_hold", "completed", "cancelled"]
+    if "status" in epic_data and epic_data["status"] not in valid_statuses:
+        issues.append(f"Invalid status: {epic_data['status']}. Valid: {valid_statuses}")
+    
+    # Epic key format validation
+    if "epic_key" in epic_data:
+        epic_key = epic_data["epic_key"]
+        if not epic_key.replace("_", "").replace("-", "").isalnum():
+            issues.append(f"Invalid epic_key format: {epic_key}. Use alphanumeric, underscore, hyphen only")
+    
+    # Tasks validation (if present)
+    if "tasks" in epic_data and isinstance(epic_data["tasks"], list):
+        for i, task in enumerate(epic_data["tasks"]):
+            if not isinstance(task, dict):
+                issues.append(f"Task {i}: must be an object")
+                continue
+            
+            # Required task fields
+            task_required = ["title", "status"]
+            for field in task_required:
+                if field not in task or not task[field]:
+                    issues.append(f"Task {i}: missing required field '{field}'")
+            
+            # Task status validation
+            valid_task_statuses = ["todo", "in_progress", "completed", "blocked"]
+            if "status" in task and task["status"] not in valid_task_statuses:
+                issues.append(f"Task {i}: invalid status '{task['status']}'. Valid: {valid_task_statuses}")
+    
+    # Auto-fix issues if requested
+    if fix_issues and issues:
+        fixed_data = epic_data.copy()
+        fixed = False
+        
+        # Fix missing fields with defaults
+        if "epic_key" not in fixed_data:
+            fixed_data["epic_key"] = epic_file.stem
+            fixed = True
+        
+        if "name" not in fixed_data or not fixed_data["name"]:
+            fixed_data["name"] = epic_file.stem.replace("_", " ").title()
+            fixed = True
+        
+        if "description" not in fixed_data or not fixed_data["description"]:
+            fixed_data["description"] = f"Epic: {fixed_data.get('name', epic_file.stem)}"
+            fixed = True
+        
+        if "status" not in fixed_data or fixed_data["status"] not in valid_statuses:
+            fixed_data["status"] = "planning"
+            fixed = True
+        
+        # Save fixed file
+        if fixed:
+            try:
+                with open(epic_file, 'w', encoding='utf-8') as f:
+                    json.dump(fixed_data, f, indent=2, ensure_ascii=False)
+                # Re-validate to update issues list
+                return _validate_single_epic(epic_file, False)
+            except Exception as e:
+                issues.append(f"Auto-fix failed: {str(e)}")
+    
+    return issues
+
+
 if TYPER_AVAILABLE:
     @app.command()
     def run_streamlit(
@@ -313,6 +397,77 @@ if TYPER_AVAILABLE:
         
         console.print("🔄 Database migration functionality will be implemented in Task 1.2.3")
         console.print("This is a placeholder for database migrations")
+
+    @app.command()
+    def validate_epics(
+        epics_dir: Optional[str] = typer.Option(None, help="Path to epics directory"),
+        fix_issues: bool = typer.Option(False, help="Automatically fix validation issues"),
+        output_format: str = typer.Option("table", help="Output format: table, json")
+    ):
+        """🔍 Validate epic JSON files structure and content."""
+        print_header()
+        
+        # Determine epics directory
+        if epics_dir:
+            epics_path = Path(epics_dir)
+        else:
+            epics_path = Path.cwd() / "epics"
+        
+        if not epics_path.exists():
+            console.print(f"❌ [red]Epics directory not found: {epics_path}[/red]")
+            raise typer.Exit(1)
+        
+        # Find epic JSON files
+        epic_files = list(epics_path.glob("*.json"))
+        
+        if not epic_files:
+            console.print(f"⚠️ [yellow]No JSON files found in {epics_path}[/yellow]")
+            return
+        
+        console.print(f"🔍 Validating {len(epic_files)} epic files...")
+        
+        validation_results = []
+        total_issues = 0
+        
+        for epic_file in epic_files:
+            issues = _validate_single_epic(epic_file, fix_issues)
+            validation_results.append({
+                "file": epic_file.name,
+                "path": str(epic_file),
+                "issues": issues,
+                "status": "✅ Valid" if not issues else f"❌ {len(issues)} issues"
+            })
+            total_issues += len(issues)
+        
+        # Display results
+        if output_format == "json":
+            console.print(json.dumps(validation_results, indent=2))
+        else:
+            # Table format
+            table = Table(title="Epic Validation Results")
+            table.add_column("File", style="cyan", width=25)
+            table.add_column("Status", width=20)
+            table.add_column("Issues", width=50)
+            
+            for result in validation_results:
+                issues_text = "; ".join(result["issues"]) if result["issues"] else "No issues"
+                table.add_row(
+                    result["file"],
+                    result["status"],
+                    issues_text
+                )
+            
+            console.print(table)
+        
+        # Summary
+        valid_files = len([r for r in validation_results if not r["issues"]])
+        console.print(f"\n📊 Summary: {valid_files}/{len(epic_files)} files valid, {total_issues} total issues")
+        
+        if fix_issues and total_issues > 0:
+            console.print("🔧 Issues were automatically fixed where possible")
+        
+        if total_issues > 0:
+            raise typer.Exit(1)
 
     @app.command()
     def dev_server(

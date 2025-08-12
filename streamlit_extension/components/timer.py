@@ -19,6 +19,18 @@ try:
 except ImportError:
     STREAMLIT_AVAILABLE = False
 
+# Import database utilities
+try:
+    from ..utils.database import DatabaseManager
+    DATABASE_AVAILABLE = True
+except ImportError:
+    try:
+        from streamlit_extension.utils.database import DatabaseManager
+        DATABASE_AVAILABLE = True
+    except ImportError:
+        DatabaseManager = None
+        DATABASE_AVAILABLE = False
+
 
 @dataclass
 class TimerSession:
@@ -31,6 +43,8 @@ class TimerSession:
     ended_at: Optional[datetime] = None
     focus_rating: Optional[int] = None  # 1-10
     interruptions: int = 0
+    actual_duration_minutes: Optional[int] = None
+    notes: Optional[str] = None
 
 
 class TimerComponent:
@@ -310,12 +324,48 @@ class TimerComponent:
         session.is_active = False
         session.ended_at = datetime.now()
         
+        # Calculate actual duration
+        if session.ended_at and session.started_at:
+            actual_duration = (session.ended_at - session.started_at).total_seconds() / 60
+            session.actual_duration_minutes = int(actual_duration)
+        
         # Update completed sessions count
         if session.session_type == "focus":
             config["completed_sessions"] += 1
         
-        # TODO: Save session to database
-        # This would integrate with framework.db and task_timer.db
+        # Save session to database
+        self._save_session_to_database(session)
+    
+    def _save_session_to_database(self, session: TimerSession):
+        """Save timer session to database."""
+        if not DATABASE_AVAILABLE or not session.ended_at:
+            return False
+        
+        try:
+            db_manager = DatabaseManager()
+            
+            # Only save focus sessions to database (breaks are just UI state)
+            if session.session_type == "focus":
+                success = db_manager.create_timer_session(
+                    task_id=int(session.task_id) if session.task_id and session.task_id.isdigit() else None,
+                    duration_minutes=session.duration_minutes,
+                    focus_rating=session.focus_rating,
+                    interruptions=session.interruptions,
+                    actual_duration_minutes=session.actual_duration_minutes,
+                    ended_at=session.ended_at.isoformat() if session.ended_at else None,
+                    notes=session.notes
+                )
+                
+                if success and STREAMLIT_AVAILABLE:
+                    actual_min = session.actual_duration_minutes or session.duration_minutes
+                    interruption_text = f", {session.interruptions} interruptions" if session.interruptions > 0 else ""
+                    st.success(f"✅ Timer session saved ({actual_min}min{interruption_text})")
+                    
+                return success
+        except Exception as e:
+            if STREAMLIT_AVAILABLE:
+                st.warning(f"⚠️ Could not save timer session: {str(e)}")
+            return False
     
     def get_session_summary(self) -> Dict[str, Any]:
         """Get summary of current timer session."""

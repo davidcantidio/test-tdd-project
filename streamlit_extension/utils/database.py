@@ -12,6 +12,7 @@ import sqlite3
 from pathlib import Path
 from typing import Optional, Dict, Any, List, Union
 from contextlib import contextmanager
+from datetime import datetime
 import json
 
 # Graceful imports
@@ -40,6 +41,15 @@ try:
 except ImportError:
     st = None
     STREAMLIT_AVAILABLE = False
+
+# Import timezone utilities
+try:
+    from ..config.streamlit_config import format_datetime_user_tz, format_time_ago_user_tz
+    TIMEZONE_UTILS_AVAILABLE = True
+except ImportError:
+    TIMEZONE_UTILS_AVAILABLE = False
+    format_datetime_user_tz = None
+    format_time_ago_user_tz = None
 
 
 class DatabaseManager:
@@ -107,11 +117,10 @@ class DatabaseManager:
             finally:
                 conn.close()
     
-    @st.cache_data(ttl=300)  # 5 minute cache
-    def get_epics(_self) -> List[Dict[str, Any]]:
+    def get_epics(self) -> List[Dict[str, Any]]:
         """Get all epics with caching."""
         try:
-            with _self.get_connection("framework") as conn:
+            with self.get_connection("framework") as conn:
                 if SQLALCHEMY_AVAILABLE:
                     result = conn.execute(text("""
                         SELECT id, epic_key, name, description, status, 
@@ -137,11 +146,10 @@ class DatabaseManager:
             print(f"Error loading epics: {e}")
             return []
     
-    @st.cache_data(ttl=300)
-    def get_tasks(_self, epic_id: Optional[int] = None) -> List[Dict[str, Any]]:
+    def get_tasks(self, epic_id: Optional[int] = None) -> List[Dict[str, Any]]:
         """Get tasks, optionally filtered by epic."""
         try:
-            with _self.get_connection("framework") as conn:
+            with self.get_connection("framework") as conn:
                 query = """
                     SELECT t.id, t.epic_id, t.title, t.description, t.status,
                            t.estimate_minutes, t.tdd_phase, t.priority,
@@ -170,14 +178,13 @@ class DatabaseManager:
             print(f"Error loading tasks: {e}")
             return []
     
-    @st.cache_data(ttl=180)  # 3 minute cache for timer data
-    def get_timer_sessions(_self, days: int = 30) -> List[Dict[str, Any]]:
+    def get_timer_sessions(self, days: int = 30) -> List[Dict[str, Any]]:
         """Get recent timer sessions."""
-        if not _self.timer_db_path.exists():
+        if not self.timer_db_path.exists():
             return []
         
         try:
-            with _self.get_connection("timer") as conn:
+            with self.get_connection("timer") as conn:
                 query = """
                     SELECT task_reference, user_identifier, started_at, ended_at,
                            planned_duration_minutes, actual_duration_minutes,
@@ -336,8 +343,10 @@ class DatabaseManager:
             return False
     
     def create_timer_session(self, task_id: Optional[int], duration_minutes: int, 
-                           focus_rating: Optional[int] = None) -> bool:
-        """Create a new timer session record."""
+                           focus_rating: Optional[int] = None, interruptions: int = 0,
+                           actual_duration_minutes: Optional[int] = None,
+                           ended_at: Optional[str] = None, notes: Optional[str] = None) -> bool:
+        """Create a new timer session record with full TDAH support."""
         if not self.timer_db_path.exists():
             return False
         
@@ -346,19 +355,37 @@ class DatabaseManager:
                 if SQLALCHEMY_AVAILABLE:
                     conn.execute(text("""
                         INSERT INTO timer_sessions (
-                            task_reference, user_identifier, started_at,
-                            planned_duration_minutes, focus_rating, created_at
-                        ) VALUES (?, 'user1', CURRENT_TIMESTAMP, ?, ?, CURRENT_TIMESTAMP)
-                    """), [str(task_id) if task_id else None, duration_minutes, focus_rating])
+                            task_reference, user_identifier, started_at, ended_at,
+                            planned_duration_minutes, actual_duration_minutes,
+                            focus_rating, interruptions_count, notes, created_at
+                        ) VALUES (?, 'user1', CURRENT_TIMESTAMP, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                    """), [
+                        str(task_id) if task_id else None,
+                        ended_at,
+                        duration_minutes,
+                        actual_duration_minutes or duration_minutes,
+                        focus_rating,
+                        interruptions,
+                        notes
+                    ])
                     conn.commit()
                 else:
                     cursor = conn.cursor()
                     cursor.execute("""
                         INSERT INTO timer_sessions (
-                            task_reference, user_identifier, started_at,
-                            planned_duration_minutes, focus_rating, created_at
-                        ) VALUES (?, 'user1', CURRENT_TIMESTAMP, ?, ?, CURRENT_TIMESTAMP)
-                    """, [str(task_id) if task_id else None, duration_minutes, focus_rating])
+                            task_reference, user_identifier, started_at, ended_at,
+                            planned_duration_minutes, actual_duration_minutes,
+                            focus_rating, interruptions_count, notes, created_at
+                        ) VALUES (?, 'user1', CURRENT_TIMESTAMP, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                    """, [
+                        str(task_id) if task_id else None,
+                        ended_at,
+                        duration_minutes,
+                        actual_duration_minutes or duration_minutes,
+                        focus_rating,
+                        interruptions,
+                        notes
+                    ])
                     conn.commit()
                 
                 return True
@@ -459,3 +486,67 @@ class DatabaseManager:
                 pass
         
         return health
+    
+    def format_database_datetime(self, dt_string: str, format_type: str = "full") -> str:
+        """Format database datetime string with user timezone."""
+        if not dt_string or not TIMEZONE_UTILS_AVAILABLE:
+            return dt_string or "Unknown"
+        
+        try:
+            # Parse database datetime (assume UTC/ISO format)
+            if 'T' in dt_string:
+                dt = datetime.fromisoformat(dt_string.replace('Z', '+00:00'))
+            else:
+                dt = datetime.strptime(dt_string, "%Y-%m-%d %H:%M:%S")
+            
+            if format_type == "ago":
+                return format_time_ago_user_tz(dt)
+            elif format_type == "date":
+                return format_datetime_user_tz(dt, "%Y-%m-%d")
+            elif format_type == "time":
+                return format_datetime_user_tz(dt, "%H:%M")
+            elif format_type == "short":
+                return format_datetime_user_tz(dt, "%m/%d %H:%M")
+            else:  # full
+                return format_datetime_user_tz(dt, "%Y-%m-%d %H:%M:%S")
+                
+        except (ValueError, TypeError) as e:
+            return dt_string or "Invalid date"
+    
+    def get_formatted_epic_data(self) -> List[Dict[str, Any]]:
+        """Get epics with formatted datetime fields."""
+        epics = self.get_epics()
+        
+        for epic in epics:
+            if 'created_at' in epic:
+                epic['created_at_formatted'] = self.format_database_datetime(epic['created_at'], "short")
+                epic['created_at_ago'] = self.format_database_datetime(epic['created_at'], "ago")
+            
+            if 'updated_at' in epic:
+                epic['updated_at_formatted'] = self.format_database_datetime(epic['updated_at'], "short")
+                epic['updated_at_ago'] = self.format_database_datetime(epic['updated_at'], "ago")
+            
+            if 'completed_at' in epic and epic['completed_at']:
+                epic['completed_at_formatted'] = self.format_database_datetime(epic['completed_at'], "short")
+                epic['completed_at_ago'] = self.format_database_datetime(epic['completed_at'], "ago")
+        
+        return epics
+    
+    def get_formatted_timer_sessions(self, days: int = 30) -> List[Dict[str, Any]]:
+        """Get timer sessions with formatted datetime fields."""
+        sessions = self.get_timer_sessions(days)
+        
+        for session in sessions:
+            if 'started_at' in session:
+                session['started_at_formatted'] = self.format_database_datetime(session['started_at'], "short")
+                session['started_at_ago'] = self.format_database_datetime(session['started_at'], "ago")
+            
+            if 'ended_at' in session and session['ended_at']:
+                session['ended_at_formatted'] = self.format_database_datetime(session['ended_at'], "short")
+                session['ended_at_ago'] = self.format_database_datetime(session['ended_at'], "ago")
+            
+            if 'created_at' in session:
+                session['created_at_formatted'] = self.format_database_datetime(session['created_at'], "short")
+                session['created_at_ago'] = self.format_database_datetime(session['created_at'], "ago")
+        
+        return sessions

@@ -30,6 +30,8 @@ except ImportError:
     PYTZ_AVAILABLE = False
     pytz = None
 
+from datetime import datetime
+
 
 @dataclass
 class StreamlitConfig:
@@ -160,6 +162,80 @@ class StreamlitConfig:
             }
         }
     
+    def get_timezone_object(self):
+        """Get pytz timezone object."""
+        if PYTZ_AVAILABLE:
+            try:
+                return pytz.timezone(self.timezone)
+            except pytz.exceptions.UnknownTimeZoneError:
+                print(f"⚠️ Unknown timezone '{self.timezone}', using UTC")
+                return pytz.UTC
+        return None
+    
+    def format_datetime(self, dt: datetime, format_str: str = "%Y-%m-%d %H:%M:%S") -> str:
+        """Format datetime with user's timezone."""
+        if not isinstance(dt, datetime):
+            return str(dt)
+        
+        if PYTZ_AVAILABLE:
+            tz = self.get_timezone_object()
+            if tz:
+                # If datetime is naive, assume UTC
+                if dt.tzinfo is None:
+                    dt = pytz.UTC.localize(dt)
+                
+                # Convert to user's timezone
+                local_dt = dt.astimezone(tz)
+                return local_dt.strftime(format_str)
+        
+        # Fallback to basic formatting
+        return dt.strftime(format_str)
+    
+    def get_current_time(self) -> datetime:
+        """Get current time in user's timezone."""
+        now = datetime.now()
+        
+        if PYTZ_AVAILABLE:
+            tz = self.get_timezone_object()
+            if tz:
+                return tz.localize(now)
+        
+        return now
+    
+    def format_time_ago(self, dt: datetime) -> str:
+        """Format time as 'time ago' string with timezone awareness."""
+        if not isinstance(dt, datetime):
+            return "Unknown time"
+        
+        now = self.get_current_time()
+        
+        # Ensure both datetimes have timezone info for comparison
+        if dt.tzinfo is None and PYTZ_AVAILABLE:
+            dt = pytz.UTC.localize(dt)
+        
+        if now.tzinfo is None and dt.tzinfo is not None:
+            if PYTZ_AVAILABLE:
+                now = pytz.UTC.localize(now.replace(tzinfo=None))
+        
+        try:
+            diff = now - dt
+            seconds = int(diff.total_seconds())
+            
+            if seconds < 60:
+                return "Just now"
+            elif seconds < 3600:
+                minutes = seconds // 60
+                return f"{minutes}m ago"
+            elif seconds < 86400:
+                hours = seconds // 3600
+                return f"{hours}h ago"
+            else:
+                days = seconds // 86400
+                return f"{days}d ago"
+                
+        except TypeError:
+            return "Unknown time"
+
     def to_dict(self) -> Dict[str, Any]:
         """Convert configuration to dictionary."""
         config_dict = {}
@@ -359,3 +435,22 @@ def reload_config(env_file: Optional[str] = None) -> StreamlitConfig:
     global _config
     _config = load_config(env_file)
     return _config
+
+
+# Utility functions for timezone handling
+def format_datetime_user_tz(dt: datetime, format_str: str = "%Y-%m-%d %H:%M:%S") -> str:
+    """Format datetime in user's timezone (convenience function)."""
+    config = get_config()
+    return config.format_datetime(dt, format_str)
+
+
+def format_time_ago_user_tz(dt: datetime) -> str:
+    """Format time ago in user's timezone (convenience function)."""
+    config = get_config()
+    return config.format_time_ago(dt)
+
+
+def get_current_user_time() -> datetime:
+    """Get current time in user's timezone (convenience function)."""
+    config = get_config()
+    return config.get_current_time()
