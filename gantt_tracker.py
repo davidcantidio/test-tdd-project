@@ -329,6 +329,19 @@ def generate_interactive_html(epics: List[Dict[str, Any]], git_analysis: Dict[st
     # Create HTML
     html_div = pyo.plot(fig, output_type='div', include_plotlyjs=True)
     
+    # Generate Gantt chart BEFORE creating HTML
+    timeline_tasks = extract_all_tasks_timeline(epics)
+    gantt_chart_html = ""
+    
+    if timeline_tasks:
+        gantt_fig = create_gantt_chart(timeline_tasks)
+        if gantt_fig:
+            gantt_chart_html = pyo.plot(gantt_fig, output_type='div', include_plotlyjs=False)
+        else:
+            gantt_chart_html = "<p><em>No timeline data available for Gantt chart.</em></p>"
+    else:
+        gantt_chart_html = "<p><em>No tasks found in epic files for timeline visualization.</em></p>"
+    
     # Add custom styling and info
     full_html = f"""
     <!DOCTYPE html>
@@ -408,22 +421,6 @@ def generate_interactive_html(epics: List[Dict[str, Any]], git_analysis: Dict[st
     </body>
     </html>
     """
-    
-    # Generate Gantt chart
-    timeline_tasks = extract_all_tasks_timeline(epics)
-    gantt_chart_html = ""
-    
-    if timeline_tasks:
-        gantt_fig = create_gantt_chart(timeline_tasks)
-        if gantt_fig:
-            gantt_chart_html = pyo.plot(gantt_fig, output_type='div', include_plotlyjs=False)
-        else:
-            gantt_chart_html = "<p><em>No timeline data available for Gantt chart.</em></p>"
-    else:
-        gantt_chart_html = "<p><em>No tasks found in epic files for timeline visualization.</em></p>"
-    
-    # Replace placeholder in HTML
-    full_html = full_html.format(gantt_chart_html=gantt_chart_html)
     
     return full_html
 
