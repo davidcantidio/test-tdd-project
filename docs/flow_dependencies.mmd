@@ -1,11 +1,33 @@
 flowchart TD
     Start([Project Start])
+    STREAMLIT_FRAMEWORK[Streamlit Framework Implementation]
+    Start --> STREAMLIT_FRAMEWORK
     [EPIC_ID][[Epic Name]]
     Start --> [EPIC_ID]
-    0[Environment & Production Safety]
-    Start --> 0
+    MOBILE_OPT[Mobile Optimization]
+    Start --> MOBILE_OPT
+    ANALYTICS[Analytics e Reporting]
+    Start --> ANALYTICS
     X.Y[[Nome do Épico]]
     Start --> X.Y
+    0[Environment & Production Safety]
+    Start --> 0
+    SF_1[Implementar dashboard principal Streamlit]:::green
+    STREAMLIT_FRAMEWORK --> SF_1
+    SF_2[Implementar sistema de gamificação]:::red
+    STREAMLIT_FRAMEWORK --> SF_2
+    SF_1 --> SF_2
+    SF_3[Integração GitHub Projects V2]
+    STREAMLIT_FRAMEWORK --> SF_3
+    SF_1 --> SF_3
+    SF_2 --> SF_3
+    SF_4[Sistema multi-user com autenticação]
+    STREAMLIT_FRAMEWORK --> SF_4
+    SF_1 --> SF_4
+    SF_5[Time tracking com métricas TDAH]
+    STREAMLIT_FRAMEWORK --> SF_5
+    SF_1 --> SF_5
+    SF_4 --> SF_5
     [EPIC_ID]_1[TEST: [specific behavior]]:::red
     [EPIC_ID] --> [EPIC_ID]_1
     [EPIC_ID]_2[IMPL: [minimal functionality]]:::green
@@ -14,6 +36,20 @@ flowchart TD
     [EPIC_ID]_3[REFACTOR: [design improvement]]:::blue
     [EPIC_ID] --> [EPIC_ID]_3
     [EPIC_ID]_2 --> [EPIC_ID]_3
+    MO_1[Implementar layout responsivo]
+    MOBILE_OPT --> MO_1
+    MO_2[Otimizar performance mobile]
+    MOBILE_OPT --> MO_2
+    AN_1[Dashboard de métricas de produtividade]
+    ANALYTICS --> AN_1
+    X_Y_1[TEST: [comportamento específico]]:::red
+    X.Y --> X_Y_1
+    X_Y_2[IMPL: [funcionalidade mínima]]:::green
+    X.Y --> X_Y_2
+    X_Y_1 --> X_Y_2
+    X_Y_3[REFACTOR: [melhoria de design]]:::blue
+    X.Y --> X_Y_3
+    X_Y_2 --> X_Y_3
     0_1[Mapear comportamento atual do warning_suppressor]
     0 --> 0_1
     0_2[Analisar impacto do production_mode no logging]
@@ -92,14 +128,6 @@ flowchart TD
     0 --> 0_12_4
     0_12_5[IMPL: module_0_12 zero crashes e warnings crític]:::green
     0 --> 0_12_5
-    X_Y_1[TEST: [comportamento específico]]:::red
-    X.Y --> X_Y_1
-    X_Y_2[IMPL: [funcionalidade mínima]]:::green
-    X.Y --> X_Y_2
-    X_Y_1 --> X_Y_2
-    X_Y_3[REFACTOR: [melhoria de design]]:::blue
-    X.Y --> X_Y_3
-    X_Y_2 --> X_Y_3
 
     classDef red fill:#ffebee,stroke:#f44336,stroke-width:2px
     classDef green fill:#e8f5e8,stroke:#4caf50,stroke-width:2px
