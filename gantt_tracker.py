@@ -43,8 +43,14 @@ def load_epic_files() -> List[Dict[str, Any]]:
         try:
             with open(epic_file, 'r', encoding='utf-8') as f:
                 epic_data = json.load(f)
+                # Handle different epic JSON structures
                 if 'epic' in epic_data:
                     epics.append(epic_data['epic'])
+                elif 'epic_id' in epic_data or 'title' in epic_data:
+                    # Handle flat structure (like epic_1.json)
+                    epics.append(epic_data)
+                else:
+                    print(f"⚠️ Unrecognized epic format in {epic_file}")
         except Exception as e:
             print(f"⚠️ Error loading {epic_file}: {e}")
     
@@ -382,6 +388,15 @@ def generate_interactive_html(epics: List[Dict[str, Any]], git_analysis: Dict[st
         
         {html_div}
         
+        <!-- Gantt Chart Section -->
+        <div class="info-panel">
+            <h3>📅 TDD Task Timeline - Gantt Chart</h3>
+            <p>Interactive timeline showing all tasks with TDD phase progression and estimated durations.</p>
+            <div id="gantt-chart-container">
+                {gantt_chart_html}
+            </div>
+        </div>
+        
         <div class="info-panel">
             <h3>📊 Analysis Summary</h3>
             <p><strong>Git Analysis:</strong> Found {git_analysis['total_commits']} commits in the last 30 days</p>
@@ -394,7 +409,129 @@ def generate_interactive_html(epics: List[Dict[str, Any]], git_analysis: Dict[st
     </html>
     """
     
+    # Generate Gantt chart
+    timeline_tasks = extract_all_tasks_timeline(epics)
+    gantt_chart_html = ""
+    
+    if timeline_tasks:
+        gantt_fig = create_gantt_chart(timeline_tasks)
+        if gantt_fig:
+            gantt_chart_html = pyo.plot(gantt_fig, output_type='div', include_plotlyjs=False)
+        else:
+            gantt_chart_html = "<p><em>No timeline data available for Gantt chart.</em></p>"
+    else:
+        gantt_chart_html = "<p><em>No tasks found in epic files for timeline visualization.</em></p>"
+    
+    # Replace placeholder in HTML
+    full_html = full_html.format(gantt_chart_html=gantt_chart_html)
+    
     return full_html
+
+def extract_all_tasks_timeline(epics: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Extract all tasks from all epics for Gantt timeline visualization."""
+    timeline_tasks = []
+    current_date = datetime.now()
+    
+    for epic in epics:
+        # Get epic information
+        epic_name = epic.get('name', epic.get('title', f"Epic {epic.get('id', 'Unknown')}"))
+        epic_id = epic.get('id', 'Unknown')
+        tasks = epic.get('tasks', [])
+        
+        # Start date for this epic's tasks
+        epic_start_date = current_date
+        
+        for task in tasks:
+            # Calculate duration from estimate_minutes (convert to days)
+            estimate_minutes = task.get('estimate_minutes', 60)
+            # Assume 8-hour work days (480 minutes)
+            duration_days = max(0.1, estimate_minutes / (8 * 60))
+            
+            task_start_date = epic_start_date
+            task_end_date = task_start_date + timedelta(days=duration_days)
+            
+            # Create task entry for timeline
+            timeline_task = {
+                'Task': f"{task.get('id', 'N/A')}: {task.get('title', 'Unnamed Task')}",
+                'Start': task_start_date,
+                'Finish': task_end_date,
+                'Resource': epic_name,
+                'Phase': task.get('tdd_phase', task.get('phase', 'analysis')),
+                'Status': task.get('status', 'pending'),
+                'Epic': epic_name,
+                'EstimateMinutes': estimate_minutes,
+                'TaskId': task.get('id', task.get('task_id', 'N/A'))
+            }
+            
+            timeline_tasks.append(timeline_task)
+            
+            # Next task starts when current ends (sequential within epic)
+            epic_start_date = task_end_date + timedelta(hours=1)  # Small gap between tasks
+        
+        # Next epic starts after current epic finishes
+        current_date = epic_start_date + timedelta(days=0.5)  # Gap between epics
+    
+    return timeline_tasks
+
+def create_gantt_chart(timeline_tasks: List[Dict[str, Any]]) -> 'go.Figure':
+    """Create interactive Plotly Gantt chart from timeline tasks."""
+    if not PLOTLY_AVAILABLE or not timeline_tasks:
+        return None
+    
+    # Color mapping for TDD phases
+    color_map = {
+        'red': '#f44336',      # Red phase - failing tests
+        'green': '#4caf50',    # Green phase - implementation  
+        'refactor': '#2196f3', # Refactor phase - optimization
+        'analysis': '#ffc107'  # Analysis phase - planning
+    }
+    
+    # Create timeline chart using plotly express
+    fig = px.timeline(
+        timeline_tasks,
+        x_start='Start',
+        x_end='Finish', 
+        y='Task',
+        color='Phase',
+        color_discrete_map=color_map,
+        title='📅 TDD Task Timeline - Gantt Chart',
+        labels={'Phase': 'TDD Phase', 'Task': 'Tasks (by Epic)'},
+        hover_data=['EstimateMinutes', 'Status', 'Epic']
+    )
+    
+    # Customize layout for better readability
+    fig.update_layout(
+        height=max(400, len(timeline_tasks) * 25 + 100),  # Dynamic height based on task count
+        yaxis_title='Tasks (Sequential by Epic)',
+        xaxis_title='Timeline (Estimated Duration)',
+        showlegend=True,
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=1.02,
+            xanchor="right", 
+            x=1
+        ),
+        margin=dict(l=200, r=50, t=80, b=50)  # More space for task names
+    )
+    
+    # Update y-axis to show full task names
+    fig.update_yaxis(
+        tickmode='linear',
+        automargin=True
+    )
+    
+    # Update hover template
+    fig.update_traces(
+        hovertemplate="<b>%{y}</b><br>" +
+                      "Start: %{x}<br>" +
+                      "Duration: %{customdata[0]} min<br>" +
+                      "Status: %{customdata[1]}<br>" +
+                      "Epic: %{customdata[2]}<br>" +
+                      "<extra></extra>"
+    )
+    
+    return fig
 
 def main():
     parser = argparse.ArgumentParser(description="Generate TDD progress dashboard")
