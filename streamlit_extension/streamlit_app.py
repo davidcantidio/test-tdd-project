@@ -74,7 +74,7 @@ try:
         NotificationToast, NotificationData, QuickActionButton
     )
     from streamlit_extension.utils.database import DatabaseManager
-    from streamlit_extension.config import get_config, load_config
+    from streamlit_extension.config import load_config, load_config
 except ImportError as e:
     st.error(f"❌ Import Error: {e}")
     st.error("Make sure to run from the project root directory")

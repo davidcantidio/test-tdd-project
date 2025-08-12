@@ -28,10 +28,10 @@ except ImportError:
 # Local imports
 try:
     from streamlit_extension.utils.database import DatabaseManager
-    from streamlit_extension.config import get_config, reload_config, create_streamlit_config_file
+    from streamlit_extension.config import load_config, create_streamlit_config_file
     DATABASE_UTILS_AVAILABLE = True
 except ImportError:
-    DatabaseManager = get_config = reload_config = create_streamlit_config_file = None
+    DatabaseManager = load_config = create_streamlit_config_file = None
     DATABASE_UTILS_AVAILABLE = False
 
 
@@ -49,7 +49,7 @@ def render_settings_page():
     
     # Load current configuration
     try:
-        config = get_config()
+        config = load_config()
     except Exception as e:
         st.error(f"❌ Error loading configuration: {e}")
         return

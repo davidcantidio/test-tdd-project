@@ -44,10 +44,10 @@ except ImportError:
 # Local imports
 try:
     from streamlit_extension.utils.database import DatabaseManager
-    from streamlit_extension.config import get_config
+    from streamlit_extension.config import load_config
     DATABASE_UTILS_AVAILABLE = True
 except ImportError:
-    DatabaseManager = get_config = None
+    DatabaseManager = load_config = None
     DATABASE_UTILS_AVAILABLE = False
 
 try:
@@ -82,7 +82,7 @@ def render_analytics_page():
     
     # Initialize database manager
     try:
-        config = get_config()
+        config = load_config()
         db_manager = DatabaseManager(
             framework_db_path=str(config.get_database_path()),
             timer_db_path=str(config.get_timer_database_path())

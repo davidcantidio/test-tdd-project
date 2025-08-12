@@ -28,10 +28,10 @@ except ImportError:
 # Local imports
 try:
     from streamlit_extension.utils.database import DatabaseManager
-    from streamlit_extension.config import get_config
+    from streamlit_extension.config import load_config
     DATABASE_UTILS_AVAILABLE = True
 except ImportError:
-    DatabaseManager = get_config = None
+    DatabaseManager = load_config = None
     DATABASE_UTILS_AVAILABLE = False
 
 
@@ -49,7 +49,7 @@ def render_kanban_page():
         return
     
     try:
-        config = get_config()
+        config = load_config()
         db_manager = DatabaseManager(
             framework_db_path=str(config.get_database_path()),
             timer_db_path=str(config.get_timer_database_path())
@@ -263,25 +263,65 @@ def _render_task_card(task: Dict[str, Any], db_manager: DatabaseManager, epics: 
                     _show_edit_task_modal(task, db_manager, epics)
             
             with action_cols[1]:
-                # Status change buttons
-                status_options = {"todo": "📝", "in_progress": "🟡", "completed": "✅"}
-                for status, emoji in status_options.items():
-                    if status != current_status:
-                        if st.button(f"{emoji} {status.replace('_', ' ').title()}", key=f"move_{task_id}_{status}"):
-                            _update_task_status(task_id, status, db_manager)
+                # Smart status movement buttons
+                status_flow = {
+                    "todo": ("in_progress", "🚀 Start"),
+                    "in_progress": ("completed", "✅ Complete"),
+                    "completed": ("todo", "🔄 Reopen")
+                }
+                
+                next_status, button_text = status_flow.get(current_status, ("todo", "📝 To Do"))
+                
+                if st.button(button_text, key=f"move_{task_id}_{next_status}"):
+                    success = _update_task_status(task_id, next_status, db_manager)
+                    if success:
+                        st.success(f"Task moved to {next_status.replace('_', ' ').title()}!")
+                        st.rerun()
+                    else:
+                        st.error("Failed to update task status")
+                
+                # Additional status options in a smaller button
+                other_statuses = [s for s in ["todo", "in_progress", "completed"] 
+                                if s not in [current_status, next_status]]
+                
+                if other_statuses and st.button("⚙️ Other", key=f"other_{task_id}"):
+                    st.session_state[f"show_other_status_{task_id}"] = True
+                
+                if st.session_state.get(f"show_other_status_{task_id}"):
+                    for status in other_statuses:
+                        status_names = {"todo": "📝 To Do", "in_progress": "🟡 In Progress", "completed": "✅ Completed"}
+                        if st.button(status_names[status], key=f"alt_move_{task_id}_{status}"):
+                            success = _update_task_status(task_id, status, db_manager)
+                            if success:
+                                st.success(f"Task moved to {status.replace('_', ' ').title()}!")
+                                st.session_state[f"show_other_status_{task_id}"] = False
+                                st.rerun()
+                            else:
+                                st.error("Failed to update task status")
             
             with action_cols[2]:
-                if st.button("🗑️ Delete", key=f"delete_{task_id}"):
-                    if st.session_state.get(f"confirm_delete_{task_id}"):
-                        # Actually delete
-                        _delete_task(task_id, db_manager)
-                    else:
-                        # Show confirmation
+                if not st.session_state.get(f"confirm_delete_{task_id}"):
+                    if st.button("🗑️ Delete", key=f"delete_{task_id}"):
                         st.session_state[f"confirm_delete_{task_id}"] = True
                         st.rerun()
-                
-                if st.session_state.get(f"confirm_delete_{task_id}"):
-                    st.warning("⚠️ Click again to confirm deletion")
+                else:
+                    st.warning("⚠️ Confirm deletion?")
+                    col_confirm, col_cancel = st.columns(2)
+                    
+                    with col_confirm:
+                        if st.button("✅ Yes", key=f"confirm_yes_{task_id}"):
+                            success = _delete_task(task_id, db_manager)
+                            if success:
+                                st.success("Task deleted successfully!")
+                                st.session_state[f"confirm_delete_{task_id}"] = False
+                                st.rerun()
+                            else:
+                                st.error("Failed to delete task")
+                    
+                    with col_cancel:
+                        if st.button("❌ No", key=f"confirm_no_{task_id}"):
+                            st.session_state[f"confirm_delete_{task_id}"] = False
+                            st.rerun()
 
 
 def _show_quick_add_modal(db_manager: DatabaseManager, epics: List[Dict[str, Any]]):
@@ -442,13 +482,18 @@ def _create_task(title: str, epic_id: Optional[int], tdd_phase: str, db_manager:
                 description: str = "", priority: int = 2, estimate_minutes: int = 0) -> bool:
     """Create a new task in the database."""
     
-    # This is a simplified implementation
-    # In a real application, you would call db_manager.create_task() or similar
     try:
-        # For now, just return True to simulate success
-        # TODO: Implement actual database insertion
-        return True
-    except Exception:
+        task_id = db_manager.create_task(
+            title=title,
+            epic_id=epic_id,
+            description=description,
+            tdd_phase=tdd_phase,
+            priority=priority,
+            estimate_minutes=estimate_minutes
+        )
+        return task_id is not None
+    except Exception as e:
+        print(f"Error creating task: {e}")
         return False
 
 
@@ -466,11 +511,16 @@ def _update_task(task_id: int, title: str, description: str, tdd_phase: str,
     """Update task details."""
     
     try:
-        # This would need to be implemented in DatabaseManager
-        # For now, just return True to simulate success
-        # TODO: Implement actual database update
-        return True
-    except Exception:
+        return db_manager.update_task(
+            task_id=task_id,
+            title=title,
+            description=description,
+            tdd_phase=tdd_phase,
+            priority=priority,
+            estimate_minutes=estimate_minutes
+        )
+    except Exception as e:
+        print(f"Error updating task {task_id}: {e}")
         return False
 
 
@@ -478,11 +528,9 @@ def _delete_task(task_id: int, db_manager: DatabaseManager) -> bool:
     """Delete a task."""
     
     try:
-        # This would need to be implemented in DatabaseManager
-        # For now, just return True to simulate success
-        # TODO: Implement actual database deletion
-        return True
-    except Exception:
+        return db_manager.delete_task(task_id, soft_delete=True)
+    except Exception as e:
+        print(f"Error deleting task {task_id}: {e}")
         return False
 
 

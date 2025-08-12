@@ -945,3 +945,260 @@ class DatabaseManager:
                     return row[0] if row else 0
         except Exception:
             return 0
+    
+    # CRUD Operations for Tasks
+    
+    def create_task(self, title: str, epic_id: int, description: str = "", 
+                   tdd_phase: str = "", priority: int = 2, 
+                   estimate_minutes: int = 0) -> Optional[int]:
+        """Create a new task in the database.
+        
+        Args:
+            title: Task title
+            epic_id: ID of the associated epic
+            description: Optional task description
+            tdd_phase: TDD phase (red, green, refactor)
+            priority: Task priority (1=High, 2=Medium, 3=Low)
+            estimate_minutes: Estimated time in minutes
+            
+        Returns:
+            Task ID if successful, None otherwise
+        """
+        try:
+            with self.get_connection("framework") as conn:
+                if SQLALCHEMY_AVAILABLE:
+                    result = conn.execute(text("""
+                        INSERT INTO framework_tasks 
+                        (title, description, epic_id, tdd_phase, priority, 
+                         estimate_minutes, status, created_at, updated_at)
+                        VALUES (:title, :description, :epic_id, :tdd_phase, 
+                               :priority, :estimate_minutes, 'todo', 
+                               datetime('now'), datetime('now'))
+                    """), {
+                        "title": title,
+                        "description": description,
+                        "epic_id": epic_id,
+                        "tdd_phase": tdd_phase,
+                        "priority": priority,
+                        "estimate_minutes": estimate_minutes
+                    })
+                    conn.commit()
+                    return result.lastrowid
+                else:
+                    cursor = conn.cursor()
+                    cursor.execute("""
+                        INSERT INTO framework_tasks 
+                        (title, description, epic_id, tdd_phase, priority, 
+                         estimate_minutes, status, created_at, updated_at)
+                        VALUES (?, ?, ?, ?, ?, ?, 'todo', datetime('now'), datetime('now'))
+                    """, (title, description, epic_id, tdd_phase, priority, estimate_minutes))
+                    conn.commit()
+                    return cursor.lastrowid
+        except Exception as e:
+            print(f"Error creating task: {e}")
+            return None
+    
+    def update_task(self, task_id: int, title: str = None, description: str = None,
+                   tdd_phase: str = None, priority: int = None, 
+                   estimate_minutes: int = None) -> bool:
+        """Update task details.
+        
+        Args:
+            task_id: ID of the task to update
+            title: New title (optional)
+            description: New description (optional)
+            tdd_phase: New TDD phase (optional)
+            priority: New priority (optional)
+            estimate_minutes: New estimate (optional)
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            # Build dynamic update query
+            updates = []
+            params = {"task_id": task_id}
+            
+            if title is not None:
+                updates.append("title = :title")
+                params["title"] = title
+            
+            if description is not None:
+                updates.append("description = :description")
+                params["description"] = description
+                
+            if tdd_phase is not None:
+                updates.append("tdd_phase = :tdd_phase")
+                params["tdd_phase"] = tdd_phase
+                
+            if priority is not None:
+                updates.append("priority = :priority")
+                params["priority"] = priority
+                
+            if estimate_minutes is not None:
+                updates.append("estimate_minutes = :estimate_minutes")
+                params["estimate_minutes"] = estimate_minutes
+            
+            if not updates:
+                return True  # Nothing to update
+                
+            updates.append("updated_at = datetime('now')")
+            query = f"UPDATE framework_tasks SET {', '.join(updates)} WHERE id = :task_id"
+            
+            with self.get_connection("framework") as conn:
+                if SQLALCHEMY_AVAILABLE:
+                    conn.execute(text(query), params)
+                    conn.commit()
+                else:
+                    # Convert to positional parameters for sqlite3
+                    positional_params = []
+                    positional_query = query.replace(":title", "?").replace(":description", "?")
+                    positional_query = positional_query.replace(":tdd_phase", "?").replace(":priority", "?")
+                    positional_query = positional_query.replace(":estimate_minutes", "?").replace(":task_id", "?")
+                    
+                    for key in ["title", "description", "tdd_phase", "priority", "estimate_minutes"]:
+                        if key in params:
+                            positional_params.append(params[key])
+                    positional_params.append(task_id)
+                    
+                    cursor = conn.cursor()
+                    cursor.execute(positional_query, positional_params)
+                    conn.commit()
+                
+                return True
+        except Exception as e:
+            print(f"Error updating task {task_id}: {e}")
+            return False
+    
+    def delete_task(self, task_id: int, soft_delete: bool = True) -> bool:
+        """Delete a task (soft delete by default).
+        
+        Args:
+            task_id: ID of the task to delete
+            soft_delete: If True, mark as deleted; if False, actually delete
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            with self.get_connection("framework") as conn:
+                if soft_delete:
+                    # Soft delete: mark as deleted
+                    if SQLALCHEMY_AVAILABLE:
+                        conn.execute(text("""
+                            UPDATE framework_tasks 
+                            SET deleted_at = datetime('now'), updated_at = datetime('now')
+                            WHERE id = :task_id
+                        """), {"task_id": task_id})
+                        conn.commit()
+                    else:
+                        cursor = conn.cursor()
+                        cursor.execute("""
+                            UPDATE framework_tasks 
+                            SET deleted_at = datetime('now'), updated_at = datetime('now')
+                            WHERE id = ?
+                        """, (task_id,))
+                        conn.commit()
+                else:
+                    # Hard delete: actually remove from database
+                    if SQLALCHEMY_AVAILABLE:
+                        conn.execute(text("DELETE FROM framework_tasks WHERE id = :task_id"), 
+                                   {"task_id": task_id})
+                        conn.commit()
+                    else:
+                        cursor = conn.cursor()
+                        cursor.execute("DELETE FROM framework_tasks WHERE id = ?", (task_id,))
+                        conn.commit()
+                
+                return True
+        except Exception as e:
+            print(f"Error deleting task {task_id}: {e}")
+            return False
+    
+    @cache_database_query("get_kanban_tasks", ttl=60) if CACHE_AVAILABLE else lambda f: f
+    def get_kanban_tasks(self) -> Dict[str, List[Dict[str, Any]]]:
+        """Get tasks optimized for Kanban board display (grouped by status)."""
+        try:
+            with self.get_connection("framework") as conn:
+                query = """
+                    SELECT t.id, t.epic_id, t.title, t.description, t.status,
+                           t.estimate_minutes, t.tdd_phase, t.priority,
+                           t.created_at, t.updated_at, t.completed_at,
+                           e.name as epic_name, e.epic_key
+                    FROM framework_tasks t
+                    LEFT JOIN framework_epics e ON t.epic_id = e.id
+                    WHERE t.deleted_at IS NULL
+                    ORDER BY t.status ASC, t.priority ASC, t.created_at DESC
+                """
+                
+                if SQLALCHEMY_AVAILABLE:
+                    result = conn.execute(text(query))
+                    tasks = [dict(row._mapping) for row in result]
+                else:
+                    cursor = conn.cursor()
+                    cursor.execute(query)
+                    tasks = [dict(zip([col[0] for col in cursor.description], row)) 
+                           for row in cursor.fetchall()]
+                
+                # Group by status for Kanban display
+                grouped = {"todo": [], "in_progress": [], "completed": []}
+                for task in tasks:
+                    status = task.get("status", "todo")
+                    if status in grouped:
+                        grouped[status].append(task)
+                    else:
+                        grouped["todo"].append(task)  # Default fallback
+                
+                return grouped
+                
+        except Exception as e:
+            print(f"Error loading kanban tasks: {e}")
+            return {"todo": [], "in_progress": [], "completed": []}
+    
+    def get_task_statistics(self) -> Dict[str, int]:
+        """Get quick statistics for tasks (used by dashboard widgets)."""
+        try:
+            with self.get_connection("framework") as conn:
+                if SQLALCHEMY_AVAILABLE:
+                    result = conn.execute(text("""
+                        SELECT status, COUNT(*) as count
+                        FROM framework_tasks
+                        WHERE deleted_at IS NULL
+                        GROUP BY status
+                    """))
+                    
+                    stats = {"todo": 0, "in_progress": 0, "completed": 0, "total": 0}
+                    total = 0
+                    for row in result:
+                        status = row[0] or "todo"
+                        count = row[1]
+                        if status in stats:
+                            stats[status] = count
+                        total += count
+                    stats["total"] = total
+                    
+                    return stats
+                else:
+                    cursor = conn.cursor()
+                    cursor.execute("""
+                        SELECT status, COUNT(*) as count
+                        FROM framework_tasks
+                        WHERE deleted_at IS NULL
+                        GROUP BY status
+                    """)
+                    
+                    stats = {"todo": 0, "in_progress": 0, "completed": 0, "total": 0}
+                    total = 0
+                    for row in cursor.fetchall():
+                        status = row[0] or "todo"
+                        count = row[1]
+                        if status in stats:
+                            stats[status] = count
+                        total += count
+                    stats["total"] = total
+                    
+                    return stats
+                    
+        except Exception as e:
+            print(f"Error getting task statistics: {e}")
+            return {"todo": 0, "in_progress": 0, "completed": 0, "total": 0}
