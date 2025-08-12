@@ -610,9 +610,10 @@ class DatabaseManager:
                     """), {"days": f"-{days} days"})
                     
                     for row in result:
-                        date_str = str(row.date)
-                        stats["activity_by_date"][date_str] = row.count
-                        stats["tasks_completed_total"] += row.count
+                        date_str = str(row[0])  # Access by index for compatibility
+                        count = row[1]
+                        stats["activity_by_date"][date_str] = count
+                        stats["tasks_completed_total"] += count
                 else:
                     cursor = conn.cursor()
                     cursor.execute("""
@@ -642,7 +643,7 @@ class DatabaseManager:
                         """), {"days": f"-{days} days"})
                         
                         for row in result:
-                            stats["focus_time_total"] += row.total_minutes or 0
+                            stats["focus_time_total"] += row[1] or 0  # Access by index for compatibility
                     else:
                         cursor = conn.cursor()
                         cursor.execute("""
@@ -815,7 +816,7 @@ class DatabaseManager:
                         notifications.append({
                             "type": "warning",
                             "title": "Task Overdue",
-                            "message": f"{row.title} was due {row.due_date}",
+                            "message": f"{row[0]} was due {row[1]}",
                             "timestamp": datetime.now()
                         })
                 
@@ -832,7 +833,7 @@ class DatabaseManager:
                         notifications.append({
                             "type": "info",
                             "title": "Long Running Task",
-                            "message": f"{row.title} has been in progress for over 3 days",
+                            "message": f"{row[0]} has been in progress for over 3 days",
                             "timestamp": datetime.now()
                         })
         
@@ -861,13 +862,13 @@ class DatabaseManager:
                     
                     for row in result:
                         achievements.append({
-                            "name": row.name,
-                            "description": row.description,
-                            "icon": row.icon or "🏆",
-                            "points": row.points_value,
-                            "unlocked": row.unlocked_at is not None,
-                            "unlocked_at": row.unlocked_at,
-                            "progress": row.progress_value
+                            "name": row[0],
+                            "description": row[1], 
+                            "icon": row[2] or "🏆",
+                            "points": row[3],
+                            "unlocked": row[4] is not None,
+                            "unlocked_at": row[4],
+                            "progress": row[5]
                         })
                 else:
                     cursor = conn.cursor()

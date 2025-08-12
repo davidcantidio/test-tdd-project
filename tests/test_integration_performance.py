@@ -68,7 +68,6 @@ class TestIntegrationPerformance:
         """Testa performance das queries do database."""
         if not DATABASE_AVAILABLE:
             print("⚠️ SKIP: Database not available")
-            return True
         
         print("\n🧪 Testing database query performance...")
         
@@ -109,17 +108,15 @@ class TestIntegrationPerformance:
             assert metrics['duration_seconds'] < 0.1, f"Query too slow: {metrics['duration_seconds']:.3f}s"
             
             print("   ✅ All database queries meet performance targets")
-            return True
             
         except Exception as e:
             print(f"   ❌ Database performance test failed: {e}")
-            return False
+            assert False, f"Database performance test failed: {e}"
     
     def test_cache_performance_under_load(self):
         """Testa performance do cache sob carga."""
         if not DATABASE_AVAILABLE:
             print("⚠️ SKIP: Cache not available")
-            return True
         
         print("\n🧪 Testing cache performance under load...")
         
@@ -154,17 +151,15 @@ class TestIntegrationPerformance:
             assert hit_count > 400, "Cache hit rate too low"  # Should be >80%
             
             print("   ✅ Cache performance under load acceptable")
-            return True
             
         except Exception as e:
             print(f"   ❌ Cache performance test failed: {e}")
-            return False
+            assert False, f"Cache performance test failed: {e}"
     
     def test_dashboard_load_time(self):
         """Testa tempo de carregamento do dashboard."""
         if not DASHBOARD_AVAILABLE or not DATABASE_AVAILABLE:
             print("⚠️ SKIP: Dashboard or database not available")
-            return True
         
         print("\n🧪 Testing dashboard load time...")
         
@@ -211,17 +206,15 @@ class TestIntegrationPerformance:
             assert metrics['memory_used_mb'] < 50, f"Memory usage too high: {metrics['memory_used_mb']:.1f}MB"
             
             print("   ✅ Dashboard meets performance targets")
-            return True
             
         except Exception as e:
             print(f"   ❌ Dashboard load time test failed: {e}")
-            return False
+            assert False, f"Dashboard load time test failed: {e}"
     
     def test_concurrent_database_access(self):
         """Testa acesso concorrente ao database."""
         if not DATABASE_AVAILABLE:
             print("⚠️ SKIP: Database not available")
-            return True
         
         print("\n🧪 Testing concurrent database access...")
         
@@ -275,17 +268,15 @@ class TestIntegrationPerformance:
             assert success_count >= 4, f"Too many concurrent access failures: {error_count}"
             
             print("   ✅ Concurrent database access working")
-            return True
             
         except Exception as e:
             print(f"   ❌ Concurrent access test failed: {e}")
-            return False
+            assert False, f"Concurrent access test failed: {e}"
     
     def test_memory_leak_detection(self):
         """Detecta vazamentos de memória em operações repetidas."""
         if not DATABASE_AVAILABLE:
             print("⚠️ SKIP: Database not available")
-            return True
         
         print("\n🧪 Testing for memory leaks...")
         
@@ -316,17 +307,15 @@ class TestIntegrationPerformance:
             assert memory_increase < 20, f"Possible memory leak: {memory_increase:.1f}MB increase"
             
             print("   ✅ No significant memory leaks detected")
-            return True
             
         except Exception as e:
             print(f"   ❌ Memory leak test failed: {e}")
-            return False
+            assert False, f"Memory leak test failed: {e}"
     
     def test_edge_case_resilience(self):
         """Testa resiliência a edge cases."""
         if not DATABASE_AVAILABLE:
             print("⚠️ SKIP: Database not available")
-            return True
         
         print("\n🧪 Testing edge case resilience...")
         
@@ -351,11 +340,10 @@ class TestIntegrationPerformance:
             assert isinstance(achievements, list)
             
             print("   ✅ Edge cases handled gracefully")
-            return True
             
         except Exception as e:
             print(f"   ❌ Edge case test failed: {e}")
-            return False
+            assert False, f"Edge case test failed: {e}"
 
 
 def test_integration_performance():
@@ -379,9 +367,8 @@ def test_integration_performance():
     
     for test_func in tests:
         try:
-            result = test_func()
-            if result is not False:
-                passed += 1
+            test_func()  # Test methods now use assertions instead of return values
+            passed += 1
         except Exception as e:
             print(f"   ❌ Test failed with exception: {e}")
     

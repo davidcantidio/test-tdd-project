@@ -55,12 +55,12 @@ class TestCacheLRUFix:
     def skip_test(self, reason):
         """Helper para pular testes quando dependências não disponíveis."""
         print(f"⚠️ SKIP: {reason}")
-        return True
     
     def test_lru_eviction_removes_disk_files(self):
         """CRITICAL TEST: Verifica se evicção LRU remove arquivos do disco."""
         if not CACHE_AVAILABLE:
-            return self.skip_test("Cache not available")
+            self.skip_test("Cache not available")
+            return
         
         print("\n🧪 Testing LRU eviction removes disk files...")
         
@@ -87,12 +87,12 @@ class TestCacheLRUFix:
         assert len(disk_files_after) == 3, f"Expected 3 files after eviction, got {len(disk_files_after)}"
         
         print("   ✅ LRU eviction correctly removes disk files")
-        return True
     
     def test_lru_evicted_data_not_recovered(self):
         """CRITICAL TEST: Dados evicted por LRU não devem ser recuperados do disco."""
         if not CACHE_AVAILABLE:
-            return self.skip_test("Cache not available")
+            self.skip_test("Cache not available")
+            return
         
         print("\n🧪 Testing evicted data is not recovered...")
         
@@ -107,12 +107,12 @@ class TestCacheLRUFix:
         assert result is None, f"Expected None for evicted key, got {result}"
         
         print("   ✅ Evicted data correctly returns None")
-        return True
     
     def test_cleanup_orphaned_files(self):
         """Testa limpeza de arquivos órfãos."""
         if not CACHE_AVAILABLE:
-            return self.skip_test("Cache not available")
+            self.skip_test("Cache not available")
+            return
         
         print("\n🧪 Testing cleanup of orphaned cache files...")
         
@@ -141,12 +141,12 @@ class TestCacheLRUFix:
         assert key2_file.exists(), "key2.cache should still exist"
         
         print("   ✅ Orphaned files cleanup works correctly")
-        return True
     
     def test_cache_consistency_after_eviction(self):
         """Testa consistência do cache após evicções múltiplas."""
         if not CACHE_AVAILABLE:
-            return self.skip_test("Cache not available")
+            self.skip_test("Cache not available")
+            return
         
         print("\n🧪 Testing cache consistency after multiple evictions...")
         
@@ -167,12 +167,12 @@ class TestCacheLRUFix:
             assert key in disk_keys, f"Memory key {key} missing from disk"
         
         print(f"   ✅ Cache consistent: {len(memory_keys)} memory entries, {len(disk_keys)} disk files")
-        return True
     
     def test_performance_benchmark(self):
         """Benchmark de performance das operações de cache."""
         if not CACHE_AVAILABLE:
-            return self.skip_test("Cache not available")
+            self.skip_test("Cache not available")
+            return
         
         print("\n🧪 Testing cache performance...")
         
@@ -196,7 +196,6 @@ class TestCacheLRUFix:
         assert get_time < 0.1, f"GET operations too slow: {get_time:.3f}s"
         
         print("   ✅ Performance benchmarks passed")
-        return True
 
 
 def test_cache_lru_fixes():
@@ -224,9 +223,8 @@ def test_cache_lru_fixes():
     for test_func in tests:
         try:
             test_instance.setup_method()
-            result = test_func()
-            if result is not False:
-                passed += 1
+            test_func()  # Test methods now use assertions instead of return values
+            passed += 1
             test_instance.teardown_method()
         except Exception as e:
             print(f"   ❌ Test failed: {e}")

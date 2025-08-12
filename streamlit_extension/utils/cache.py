@@ -106,7 +106,13 @@ class AdvancedCache:
         if isinstance(key, str):
             return key
         elif isinstance(key, (tuple, list)):
-            return hashlib.md5(str(sorted(key)).encode()).hexdigest()
+            # Convert all elements to strings before sorting for consistent comparison
+            try:
+                str_elements = [str(item) for item in key]
+                return hashlib.md5(str(sorted(str_elements)).encode()).hexdigest()
+            except TypeError:
+                # If sorting fails, just use the original order
+                return hashlib.md5(str(key).encode()).hexdigest()
         elif isinstance(key, dict):
             sorted_items = sorted(key.items())
             return hashlib.md5(str(sorted_items).encode()).hexdigest()

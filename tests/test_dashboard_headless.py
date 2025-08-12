@@ -57,8 +57,7 @@ class TestDashboardHeadless:
         """Testa estrutura de dados de notificação."""
         if not COMPONENTS_AVAILABLE:
             print("⚠️ SKIP: Components not available")
-            return True
-        
+            
         print("\n🧪 Testing NotificationData structure...")
         
         # Create notification
@@ -76,14 +75,12 @@ class TestDashboardHeadless:
         assert isinstance(notif.timestamp, datetime)
         
         print("   ✅ NotificationData structure valid")
-        return True
     
     def test_dashboard_widgets_without_streamlit(self):
         """Testa widgets do dashboard sem Streamlit."""
         if not COMPONENTS_AVAILABLE:
             print("⚠️ SKIP: Components not available")
-            return True
-        
+            
         print("\n🧪 Testing dashboard widgets without Streamlit...")
         
         # Mock streamlit for widgets
@@ -115,14 +112,12 @@ class TestDashboardHeadless:
                     print(f"   ❌ SparklineChart failed: {e}")
                     return False
         
-        return True
     
     def test_database_queries_edge_cases(self):
         """Testa edge cases nas queries do database."""
         if not DATABASE_AVAILABLE:
             print("⚠️ SKIP: Database not available")
-            return True
-        
+            
         print("\n🧪 Testing database edge cases...")
         
         try:
@@ -155,14 +150,12 @@ class TestDashboardHeadless:
             print(f"   ❌ Database edge case failed: {e}")
             return False
         
-        return True
     
     def test_dashboard_app_headless_mode(self):
         """Testa app do dashboard em modo headless."""
         if not DASHBOARD_APP_AVAILABLE:
             print("⚠️ SKIP: Dashboard app not available")
-            return True
-        
+            
         print("\n🧪 Testing dashboard app headless mode...")
         
         # Mock streamlit as unavailable
@@ -175,8 +168,7 @@ class TestDashboardHeadless:
                 result = main()  # Should return early with print message
                 
                 print("   ✅ Dashboard app handles headless mode gracefully")
-                return True
-                
+                        
             except SystemExit:
                 print("   ❌ Dashboard app still has sys.exit() calls")
                 return False
@@ -188,8 +180,7 @@ class TestDashboardHeadless:
         """Testa scenarios com dados vazios."""
         if not DATABASE_AVAILABLE:
             print("⚠️ SKIP: Database not available")
-            return True
-        
+            
         print("\n🧪 Testing empty data scenarios...")
         
         try:
@@ -224,14 +215,12 @@ class TestDashboardHeadless:
             print(f"   ❌ Empty data scenario failed: {e}")
             return False
         
-        return True
     
     def test_widget_data_validation(self):
         """Testa validação de dados dos widgets."""
         if not COMPONENTS_AVAILABLE:
             print("⚠️ SKIP: Components not available")
-            return True
-        
+            
         print("\n🧪 Testing widget data validation...")
         
         # Mock streamlit to test validation logic
@@ -265,7 +254,6 @@ class TestDashboardHeadless:
                     print(f"   ❌ ProductivityHeatmap empty data failed: {e}")
                     return False
         
-        return True
 
 
 def test_dashboard_headless():
@@ -289,9 +277,8 @@ def test_dashboard_headless():
     
     for test_func in tests:
         try:
-            result = test_func()
-            if result is not False:
-                passed += 1
+            test_func()  # Test methods now use assertions instead of return values
+            passed += 1
         except Exception as e:
             print(f"   ❌ Test failed with exception: {e}")
     
@@ -300,7 +287,6 @@ def test_dashboard_headless():
     
     if passed >= total * 0.8:  # 80% pass rate acceptable
         print("✅ DASHBOARD HEADLESS TESTS MOSTLY PASSED")
-        return True
     else:
         print("⚠️ Too many failures - needs investigation")
         return False
