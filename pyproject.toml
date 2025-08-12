@@ -25,7 +25,8 @@ classifiers = [
     "Framework :: Pytest",
 ]
 packages = [
-    {include = "tdah_tools"}
+    {include = "tdah_tools"},
+    {include = "streamlit_extension"}
 ]
 include = [
     "README.md",
@@ -55,6 +56,15 @@ jupyter = {version = "^1.0.0", optional = true}
 # HTTP requests (optional)
 requests = {version = "^2.31.0", optional = true}
 httpx = {version = "^0.24.0", optional = true}
+
+# Streamlit extension dependencies (optional)
+streamlit = {version = "^1.30.0", optional = true}
+sqlalchemy = {version = "^2.0.0", optional = true}
+python-dotenv = {version = "^1.0.0", optional = true}
+gql = {version = "^3.4.0", optional = true}
+# streamlit-dnd = {version = "^0.2.0", optional = true}  # Package not available
+aiohttp = {version = "^3.8.0", optional = true}
+pytz = {version = "^2023.3", optional = true}
 
 [tool.poetry.group.dev.dependencies]
 # Testing
@@ -101,7 +111,8 @@ matplotlib = "^3.7.0"
 # Optional feature sets
 analytics = ["pandas", "numpy", "plotly", "jupyter"]
 web = ["requests", "httpx"]
-all = ["pandas", "numpy", "plotly", "jupyter", "requests", "httpx"]
+streamlit = ["streamlit", "sqlalchemy", "python-dotenv", "gql", "aiohttp", "pytz", "pandas", "plotly", "numpy", "requests"]
+all = ["pandas", "numpy", "plotly", "jupyter", "requests", "httpx", "streamlit", "sqlalchemy", "python-dotenv", "gql", "aiohttp", "pytz"]
 
 [tool.poetry.scripts]
 # CLI commands
@@ -110,6 +121,10 @@ epic-validator = "scripts.validate_epic:main"
 tdd-converter = "scripts.convert_to_tdd:main"
 diagram-generator = "scripts.visualization.tdd_diagram_generator:main"
 analytics-engine = "tdah_tools.analytics_engine:main"
+
+# Streamlit extension commands
+streamlit-run = "streamlit_extension.manage:run_streamlit"
+manage = "streamlit_extension.manage:main"
 
 [build-system]
 requires = ["poetry-core"]
@@ -142,8 +157,8 @@ extend-exclude = '''
 profile = "black"
 multi_line_output = 3
 line_length = 88
-known_first_party = ["src", "tests", "tdah_tools", "scripts"]
-known_third_party = ["pytest", "click", "pydantic", "rich", "typer"]
+known_first_party = ["src", "tests", "tdah_tools", "scripts", "streamlit_extension"]
+known_third_party = ["pytest", "click", "pydantic", "rich", "typer", "streamlit", "sqlalchemy", "gql", "aiohttp"]
 skip = [".venv", "venv", "env", ".env"]
 sections = ["FUTURE", "STDLIB", "THIRDPARTY", "FIRSTPARTY", "LOCALFOLDER"]
 
@@ -172,7 +187,10 @@ module = [
     "numpy.*",
     "jupyter.*",
     "seaborn.*",
-    "matplotlib.*"
+    "matplotlib.*",
+    "streamlit.*",
+    "sqlalchemy.*",
+    "gql.*"
 ]
 ignore_missing_imports = true
 
@@ -187,6 +205,7 @@ addopts = [
     "--cov=src",
     "--cov=tdah_tools", 
     "--cov=scripts",
+    "--cov=streamlit_extension",
     "--cov-report=term-missing",
     "--cov-report=html:htmlcov",
     "--cov-report=xml",
@@ -215,6 +234,11 @@ markers = [
     "analytics: Tests for analytics features",
     "timer: Tests for TDAH timer functionality",
     "visualization: Tests for diagram generation",
+    
+    # Streamlit specific
+    "streamlit: Tests for Streamlit interface",
+    "ui: UI and interaction tests",
+    "integration_streamlit: Streamlit integration tests",
 ]
 filterwarnings = [
     "error",
@@ -224,7 +248,7 @@ filterwarnings = [
 
 # Coverage configuration
 [tool.coverage.run]
-source = ["src", "tdah_tools", "scripts"]
+source = ["src", "tdah_tools", "scripts", "streamlit_extension"]
 branch = true
 omit = [
     "*/tests/*",

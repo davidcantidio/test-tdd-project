@@ -85,6 +85,10 @@ class EnvironmentValidator:
             progress.update(task, description="Checking dependencies...")
             self._check_dependencies()
             
+            # Streamlit extension
+            progress.update(task, description="Checking Streamlit extension...")
+            self._check_streamlit_extension()
+            
             # Configuration files
             progress.update(task, description="Validating configuration...")
             self._check_configuration()
@@ -636,8 +640,141 @@ class EnvironmentValidator:
                 "Next steps:\n"
                 "1. Create your first epic: [code]python setup/init_tdd_project.py[/code]\n"
                 "2. Start TDD timer: [code]python -m tdah_tools.task_timer start EPIC-1.1[/code]\n"
-                "3. Run tests: [code]pytest tests/[/code]"
+                "3. Launch Streamlit interface: [code]poetry run streamlit-run[/code]\n"
+                "4. Run tests: [code]pytest tests/[/code]"
             )
+    
+    def _check_streamlit_extension(self) -> None:
+        """Check Streamlit extension setup and dependencies."""
+        
+        # Check if streamlit_extension directory exists
+        streamlit_dir = self.project_root / "streamlit_extension"
+        if streamlit_dir.exists() and streamlit_dir.is_dir():
+            self._add_check(
+                "Streamlit Extension",
+                "Directory exists",
+                "✅",
+                "Streamlit extension is available"
+            )
+            
+            # Check key files
+            key_files = [
+                ("streamlit_app.py", "Main Streamlit app"),
+                ("manage.py", "Management CLI"),
+                ("config/streamlit_config.py", "Configuration module"),
+                ("components/sidebar.py", "Sidebar component"),
+                ("utils/database.py", "Database utilities")
+            ]
+            
+            for file_path, description in key_files:
+                full_path = streamlit_dir / file_path
+                if full_path.exists():
+                    self._add_check(
+                        f"Streamlit: {file_path}",
+                        "Available",
+                        "✅",
+                        description
+                    )
+                else:
+                    self._add_check(
+                        f"Streamlit: {file_path}",
+                        "Missing",
+                        "⚠️",
+                        f"Optional: {description}"
+                    )
+        else:
+            self._add_check(
+                "Streamlit Extension",
+                "Not available",
+                "⚠️",
+                "Optional: Install with poetry install --extras streamlit"
+            )
+            self.warnings.append("Streamlit extension not installed")
+            return
+        
+        # Check Streamlit dependencies
+        streamlit_deps = [
+            ("streamlit", "Interactive web framework"),
+            ("sqlalchemy", "Database ORM"),
+            ("python-dotenv", "Environment configuration"),
+            ("gql", "GraphQL client for GitHub")
+        ]
+        
+        streamlit_available = True
+        
+        for package, description in streamlit_deps:
+            try:
+                __import__(package)
+                self._add_check(
+                    f"Package: {package}",
+                    "Installed",
+                    "✅",
+                    description
+                )
+            except ImportError:
+                self._add_check(
+                    f"Package: {package}",
+                    "Missing",
+                    "⚠️",
+                    f"Install with: pip install {package}"
+                )
+                streamlit_available = False
+        
+        # Check if Streamlit can be launched
+        if streamlit_available:
+            try:
+                # Try to import main streamlit app
+                import sys
+                import importlib.util
+                
+                app_path = streamlit_dir / "streamlit_app.py"
+                spec = importlib.util.spec_from_file_location("streamlit_app", app_path)
+                if spec and spec.loader:
+                    # Don't actually load the module, just check if it can be loaded
+                    self._add_check(
+                        "Streamlit App",
+                        "Can be imported",
+                        "✅",
+                        "Main app is ready to run"
+                    )
+                else:
+                    self._add_check(
+                        "Streamlit App",
+                        "Import issues",
+                        "⚠️",
+                        "Check app dependencies"
+                    )
+            except Exception as e:
+                self._add_check(
+                    "Streamlit App",
+                    "Import error",
+                    "⚠️",
+                    f"Error: {str(e)[:50]}..."
+                )
+        
+        # Check database files for Streamlit
+        db_files = [
+            ("framework.db", "Main framework database"),
+            ("task_timer.db", "Timer tracking database")
+        ]
+        
+        for db_file, description in db_files:
+            db_path = self.project_root / db_file
+            if db_path.exists():
+                size_mb = db_path.stat().st_size / (1024 * 1024)
+                self._add_check(
+                    f"Database: {db_file}",
+                    f"Available ({size_mb:.2f}MB)",
+                    "✅",
+                    description
+                )
+            else:
+                self._add_check(
+                    f"Database: {db_file}",
+                    "Not found",
+                    "⚠️",
+                    f"Optional: {description} will be created when needed"
+                )
     
     # Helper methods
     

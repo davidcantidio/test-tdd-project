@@ -1,0 +1,21 @@
+[server]
+port = 8501
+address = "localhost"
+maxUploadSize = 200
+enableCORS = false
+enableXsrfProtection = true
+
+[theme]
+base = "dark"
+primaryColor = "#FF6B6B"
+backgroundColor = "#0E1117"
+secondaryBackgroundColor = "#262730"
+textColor = "#FFFFFF"
+
+[client]
+showSidebarNavigation = true
+toolbarMode = "auto"
+
+[runner]
+magicEnabled = true
+fastReruns = true
