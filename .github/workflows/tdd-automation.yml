@@ -35,7 +35,7 @@ on:
       github_repo:
         description: 'GitHub Repository (owner/repo)'
         required: false
-        default: '${{ github.repository }}'
+        default: 'davidcantidio/test-tdd-project'
         type: string
       output_dir:
         description: 'Output directory for .mmd files'
