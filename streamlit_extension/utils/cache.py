@@ -1,0 +1,600 @@
+"""
+🔄 Advanced Caching System for Streamlit Extension
+
+Intelligent caching with TTL, invalidation, and performance optimization:
+- Multi-level caching (memory + disk)
+- TTL-based expiration
+- Smart cache invalidation
+- Database query caching
+- Session-aware caching
+"""
+
+import sys
+import os
+import pickle
+import hashlib
+import time
+from pathlib import Path
+from typing import Any, Optional, Dict, Callable, Union
+from datetime import datetime, timedelta
+from functools import wraps
+from threading import Lock
+import json
+
+# Graceful imports
+try:
+    import streamlit as st
+    STREAMLIT_AVAILABLE = True
+except ImportError:
+    STREAMLIT_AVAILABLE = False
+    st = None
+
+
+class CacheEntry:
+    """Represents a single cache entry with metadata."""
+    
+    def __init__(self, value: Any, ttl_seconds: int = 300):
+        self.value = value
+        self.created_at = datetime.now()
+        self.expires_at = self.created_at + timedelta(seconds=ttl_seconds)
+        self.access_count = 0
+        self.last_accessed = self.created_at
+    
+    def is_expired(self) -> bool:
+        """Check if cache entry has expired."""
+        return datetime.now() > self.expires_at
+    
+    def is_valid(self) -> bool:
+        """Check if cache entry is valid (not expired)."""
+        return not self.is_expired()
+    
+    def access(self) -> Any:
+        """Access the cached value and update metadata."""
+        self.access_count += 1
+        self.last_accessed = datetime.now()
+        return self.value
+    
+    def refresh(self, ttl_seconds: int = None):
+        """Refresh the expiration time."""
+        if ttl_seconds:
+            self.expires_at = datetime.now() + timedelta(seconds=ttl_seconds)
+        else:
+            # Extend by original TTL
+            original_ttl = (self.expires_at - self.created_at).seconds
+            self.expires_at = datetime.now() + timedelta(seconds=original_ttl)
+
+
+class AdvancedCache:
+    """Advanced caching system with multiple levels and smart invalidation."""
+    
+    def __init__(self, default_ttl: int = 300, max_size: int = 1000, enable_disk_cache: bool = True):
+        self.default_ttl = default_ttl
+        self.max_size = max_size
+        self.enable_disk_cache = enable_disk_cache
+        
+        # Memory cache
+        self._memory_cache: Dict[str, CacheEntry] = {}
+        self._access_order = []  # For LRU eviction
+        self._lock = Lock()
+        
+        # Disk cache directory
+        if enable_disk_cache:
+            self.cache_dir = Path.cwd() / ".streamlit_cache"
+            self.cache_dir.mkdir(exist_ok=True)
+        else:
+            self.cache_dir = None
+        
+        # Cache statistics
+        self.stats = {
+            "hits": 0,
+            "misses": 0,
+            "evictions": 0,
+            "disk_hits": 0,
+            "disk_writes": 0
+        }
+        
+        # Invalidation tracking
+        self._invalidation_patterns = set()
+        self._invalidation_callbacks = {}
+    
+    def _generate_key(self, key: Union[str, tuple, dict]) -> str:
+        """Generate a consistent cache key from various input types."""
+        if isinstance(key, str):
+            return key
+        elif isinstance(key, (tuple, list)):
+            return hashlib.md5(str(sorted(key)).encode()).hexdigest()
+        elif isinstance(key, dict):
+            sorted_items = sorted(key.items())
+            return hashlib.md5(str(sorted_items).encode()).hexdigest()
+        else:
+            return hashlib.md5(str(key).encode()).hexdigest()
+    
+    def get(self, key: Union[str, tuple, dict], default: Any = None) -> Any:
+        """Get value from cache with fallback chain: memory -> disk -> default."""
+        cache_key = self._generate_key(key)
+        
+        with self._lock:
+            # Check memory cache first
+            if cache_key in self._memory_cache:
+                entry = self._memory_cache[cache_key]
+                
+                if entry.is_valid():
+                    self.stats["hits"] += 1
+                    # Update access order for LRU
+                    if cache_key in self._access_order:
+                        self._access_order.remove(cache_key)
+                    self._access_order.append(cache_key)
+                    
+                    return entry.access()
+                else:
+                    # Entry expired, remove from memory
+                    del self._memory_cache[cache_key]
+                    if cache_key in self._access_order:
+                        self._access_order.remove(cache_key)
+            
+            # Try disk cache if enabled
+            if self.enable_disk_cache:
+                disk_value = self._get_from_disk(cache_key)
+                if disk_value is not None:
+                    self.stats["disk_hits"] += 1
+                    # Store in memory cache for faster access
+                    self._memory_cache[cache_key] = CacheEntry(disk_value, self.default_ttl)
+                    self._access_order.append(cache_key)
+                    return disk_value
+            
+            # Cache miss
+            self.stats["misses"] += 1
+            return default
+    
+    def set(self, key: Union[str, tuple, dict], value: Any, ttl: int = None) -> None:
+        """Set value in cache with optional TTL."""
+        cache_key = self._generate_key(key)
+        ttl = ttl or self.default_ttl
+        
+        with self._lock:
+            # Create cache entry
+            entry = CacheEntry(value, ttl)
+            
+            # Check if we need to evict entries
+            self._maybe_evict()
+            
+            # Store in memory cache
+            self._memory_cache[cache_key] = entry
+            
+            # Update access order
+            if cache_key in self._access_order:
+                self._access_order.remove(cache_key)
+            self._access_order.append(cache_key)
+            
+            # Store in disk cache if enabled
+            if self.enable_disk_cache:
+                self._set_to_disk(cache_key, value, ttl)
+    
+    def delete(self, key: Union[str, tuple, dict]) -> bool:
+        """Delete key from cache."""
+        cache_key = self._generate_key(key)
+        
+        with self._lock:
+            deleted = False
+            
+            # Remove from memory cache
+            if cache_key in self._memory_cache:
+                del self._memory_cache[cache_key]
+                deleted = True
+            
+            # Remove from access order
+            if cache_key in self._access_order:
+                self._access_order.remove(cache_key)
+            
+            # Remove from disk cache
+            if self.enable_disk_cache:
+                disk_deleted = self._delete_from_disk(cache_key)
+                deleted = deleted or disk_deleted
+            
+            return deleted
+    
+    def clear(self) -> None:
+        """Clear all cache entries."""
+        with self._lock:
+            self._memory_cache.clear()
+            self._access_order.clear()
+            
+            if self.enable_disk_cache and self.cache_dir:
+                # Clear disk cache
+                for cache_file in self.cache_dir.glob("*.cache"):
+                    try:
+                        cache_file.unlink()
+                    except OSError:
+                        pass
+    
+    def invalidate_pattern(self, pattern: str) -> int:
+        """Invalidate all cache entries matching a pattern."""
+        count = 0
+        
+        with self._lock:
+            keys_to_remove = []
+            
+            for key in self._memory_cache.keys():
+                if pattern in key:
+                    keys_to_remove.append(key)
+            
+            for key in keys_to_remove:
+                self.delete(key)
+                count += 1
+        
+        return count
+    
+    def get_stats(self) -> Dict[str, Any]:
+        """Get cache statistics."""
+        with self._lock:
+            hit_rate = self.stats["hits"] / (self.stats["hits"] + self.stats["misses"]) if (self.stats["hits"] + self.stats["misses"]) > 0 else 0
+            
+            return {
+                **self.stats.copy(),
+                "hit_rate": hit_rate,
+                "memory_entries": len(self._memory_cache),
+                "memory_size_kb": sys.getsizeof(self._memory_cache) // 1024,
+                "disk_cache_enabled": self.enable_disk_cache,
+                "max_size": self.max_size
+            }
+    
+    def _maybe_evict(self) -> None:
+        """Evict entries if cache is full (LRU eviction)."""
+        while len(self._memory_cache) >= self.max_size:
+            if not self._access_order:
+                break
+            
+            # Remove least recently used entry
+            lru_key = self._access_order.pop(0)
+            if lru_key in self._memory_cache:
+                del self._memory_cache[lru_key]
+                self.stats["evictions"] += 1
+    
+    def _get_from_disk(self, cache_key: str) -> Optional[Any]:
+        """Get value from disk cache."""
+        if not self.cache_dir:
+            return None
+        
+        cache_file = self.cache_dir / f"{cache_key}.cache"
+        
+        try:
+            if cache_file.exists():
+                with open(cache_file, 'rb') as f:
+                    cache_data = pickle.load(f)
+                
+                # Check expiration
+                if datetime.now() <= cache_data['expires_at']:
+                    return cache_data['value']
+                else:
+                    # Expired, remove file
+                    cache_file.unlink()
+                    
+        except (pickle.PickleError, KeyError, OSError):
+            # Corrupted cache file, remove it
+            try:
+                cache_file.unlink()
+            except OSError:
+                pass
+        
+        return None
+    
+    def _set_to_disk(self, cache_key: str, value: Any, ttl: int) -> None:
+        """Set value to disk cache."""
+        if not self.cache_dir:
+            return
+        
+        cache_file = self.cache_dir / f"{cache_key}.cache"
+        
+        try:
+            cache_data = {
+                'value': value,
+                'created_at': datetime.now(),
+                'expires_at': datetime.now() + timedelta(seconds=ttl)
+            }
+            
+            with open(cache_file, 'wb') as f:
+                pickle.dump(cache_data, f)
+            
+            self.stats["disk_writes"] += 1
+            
+        except (pickle.PickleError, OSError):
+            # Failed to write to disk, continue without disk cache
+            pass
+    
+    def _delete_from_disk(self, cache_key: str) -> bool:
+        """Delete value from disk cache."""
+        if not self.cache_dir:
+            return False
+        
+        cache_file = self.cache_dir / f"{cache_key}.cache"
+        
+        try:
+            if cache_file.exists():
+                cache_file.unlink()
+                return True
+        except OSError:
+            pass
+        
+        return False
+
+
+# Global cache instance
+_global_cache = None
+_cache_lock = Lock()
+
+
+def get_cache() -> AdvancedCache:
+    """Get global cache instance (singleton)."""
+    global _global_cache
+    
+    if _global_cache is None:
+        with _cache_lock:
+            if _global_cache is None:
+                # Get TTL from config if available
+                try:
+                    from ..config import get_config
+                    config = get_config()
+                    ttl = config.cache_ttl_seconds
+                except:
+                    ttl = 300  # Default 5 minutes
+                
+                _global_cache = AdvancedCache(default_ttl=ttl, max_size=1000)
+    
+    return _global_cache
+
+
+def cached(ttl: int = None, key_func: Callable = None, invalidate_on: list = None):
+    """
+    Decorator for caching function results.
+    
+    Args:
+        ttl: Time to live in seconds
+        key_func: Function to generate cache key from args/kwargs
+        invalidate_on: List of patterns that should invalidate this cache
+    """
+    def decorator(func: Callable) -> Callable:
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            cache = get_cache()
+            
+            # Generate cache key
+            if key_func:
+                cache_key = key_func(*args, **kwargs)
+            else:
+                # Default key generation
+                key_parts = [func.__name__, args, tuple(sorted(kwargs.items()))]
+                cache_key = cache._generate_key(tuple(key_parts))
+            
+            # Try to get from cache
+            cached_result = cache.get(cache_key)
+            if cached_result is not None:
+                return cached_result
+            
+            # Execute function and cache result
+            result = func(*args, **kwargs)
+            cache.set(cache_key, result, ttl or cache.default_ttl)
+            
+            return result
+        
+        # Store metadata for cache management
+        wrapper._cache_ttl = ttl
+        wrapper._cache_key_func = key_func
+        wrapper._cache_invalidate_on = invalidate_on or []
+        
+        return wrapper
+    
+    return decorator
+
+
+def streamlit_cached(ttl: int = 300, key: str = None, show_spinner: bool = True):
+    """
+    Streamlit-optimized cache decorator that integrates with st.cache_data.
+    """
+    def decorator(func: Callable) -> Callable:
+        if STREAMLIT_AVAILABLE:
+            # Use Streamlit's native caching with our enhancements
+            @st.cache_data(ttl=ttl, show_spinner=show_spinner)
+            @wraps(func)
+            def streamlit_wrapper(*args, **kwargs):
+                return func(*args, **kwargs)
+            
+            return streamlit_wrapper
+        else:
+            # Fallback to our custom caching
+            return cached(ttl=ttl)(func)
+    
+    return decorator
+
+
+def cache_database_query(query_name: str, ttl: int = 600):
+    """
+    Special decorator for database queries with intelligent invalidation.
+    """
+    def decorator(func: Callable) -> Callable:
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            cache = get_cache()
+            
+            # Create cache key with query name and parameters
+            cache_key = f"db_query:{query_name}:{cache._generate_key((args, kwargs))}"
+            
+            # Check cache first
+            cached_result = cache.get(cache_key)
+            if cached_result is not None:
+                return cached_result
+            
+            # Execute query and cache result
+            result = func(*args, **kwargs)
+            cache.set(cache_key, result, ttl)
+            
+            return result
+        
+        # Add method to invalidate this query's cache
+        wrapper.invalidate_cache = lambda: get_cache().invalidate_pattern(f"db_query:{query_name}:")
+        
+        return wrapper
+    
+    return decorator
+
+
+def invalidate_cache_on_change(*patterns: str):
+    """
+    Decorator to invalidate cache patterns when a function is called.
+    Useful for functions that modify data.
+    """
+    def decorator(func: Callable) -> Callable:
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            # Execute the function first
+            result = func(*args, **kwargs)
+            
+            # Then invalidate related cache entries
+            cache = get_cache()
+            for pattern in patterns:
+                cache.invalidate_pattern(pattern)
+            
+            return result
+        
+        return wrapper
+    
+    return decorator
+
+
+# Session-aware caching for Streamlit
+def get_session_cache() -> Dict[str, Any]:
+    """Get session-specific cache storage."""
+    if STREAMLIT_AVAILABLE and hasattr(st, 'session_state'):
+        if '_streamlit_cache' not in st.session_state:
+            st.session_state._streamlit_cache = {}
+        return st.session_state._streamlit_cache
+    else:
+        # Fallback to global dictionary
+        if not hasattr(get_session_cache, '_fallback_cache'):
+            get_session_cache._fallback_cache = {}
+        return get_session_cache._fallback_cache
+
+
+def session_cached(key: str, ttl: int = 300):
+    """Cache data in Streamlit session state with TTL."""
+    def decorator(func: Callable) -> Callable:
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            session_cache = get_session_cache()
+            cache_key = f"{key}:{func.__name__}"
+            
+            # Check if cached and not expired
+            if cache_key in session_cache:
+                cached_entry = session_cache[cache_key]
+                if isinstance(cached_entry, dict) and 'expires_at' in cached_entry:
+                    if datetime.now() <= cached_entry['expires_at']:
+                        return cached_entry['value']
+                    else:
+                        # Expired, remove from cache
+                        del session_cache[cache_key]
+            
+            # Execute function and cache result
+            result = func(*args, **kwargs)
+            session_cache[cache_key] = {
+                'value': result,
+                'created_at': datetime.now(),
+                'expires_at': datetime.now() + timedelta(seconds=ttl)
+            }
+            
+            return result
+        
+        return wrapper
+    
+    return decorator
+
+
+# Cache warming utilities
+def warm_cache():
+    """Pre-load frequently used data into cache."""
+    pass  # Implementation would depend on specific use cases
+
+
+def get_cache_statistics() -> Dict[str, Any]:
+    """Get comprehensive cache statistics."""
+    cache = get_cache()
+    stats = cache.get_stats()
+    
+    # Add session cache stats if available
+    session_cache = get_session_cache()
+    stats['session_cache_entries'] = len(session_cache)
+    
+    return stats
+
+
+# Cache management utilities
+def clear_all_caches():
+    """Clear all caches (memory, disk, session)."""
+    # Clear global cache
+    cache = get_cache()
+    cache.clear()
+    
+    # Clear session cache
+    session_cache = get_session_cache()
+    session_cache.clear()
+    
+    # Clear Streamlit cache if available
+    if STREAMLIT_AVAILABLE:
+        try:
+            st.cache_data.clear()
+        except AttributeError:
+            pass
+
+
+def cleanup_expired_cache():
+    """Remove expired entries from all caches."""
+    cache = get_cache()
+    
+    with cache._lock:
+        expired_keys = []
+        for key, entry in cache._memory_cache.items():
+            if entry.is_expired():
+                expired_keys.append(key)
+        
+        for key in expired_keys:
+            cache.delete(key)
+    
+    # Clean session cache
+    session_cache = get_session_cache()
+    expired_session_keys = []
+    
+    for key, value in session_cache.items():
+        if isinstance(value, dict) and 'expires_at' in value:
+            if datetime.now() > value['expires_at']:
+                expired_session_keys.append(key)
+    
+    for key in expired_session_keys:
+        del session_cache[key]
+
+
+# Example usage and testing
+if __name__ == "__main__":
+    # Test the caching system
+    cache = AdvancedCache(default_ttl=10, max_size=100)
+    
+    # Test basic operations
+    cache.set("test_key", "test_value", 5)
+    print(f"Cache get: {cache.get('test_key')}")
+    
+    # Test decorator
+    @cached(ttl=10)
+    def expensive_function(x, y):
+        time.sleep(0.1)  # Simulate expensive operation
+        return x + y
+    
+    # First call - should be slow
+    start = time.time()
+    result1 = expensive_function(1, 2)
+    time1 = time.time() - start
+    
+    # Second call - should be fast (cached)
+    start = time.time()
+    result2 = expensive_function(1, 2)
+    time2 = time.time() - start
+    
+    print(f"First call: {result1} in {time1:.3f}s")
+    print(f"Second call: {result2} in {time2:.3f}s")
+    print(f"Cache stats: {cache.get_stats()}")

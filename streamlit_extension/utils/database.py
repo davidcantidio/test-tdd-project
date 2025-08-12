@@ -51,6 +51,14 @@ except ImportError:
     format_datetime_user_tz = None
     format_time_ago_user_tz = None
 
+# Import caching system
+try:
+    from .cache import cache_database_query, invalidate_cache_on_change, get_cache
+    CACHE_AVAILABLE = True
+except ImportError:
+    CACHE_AVAILABLE = False
+    cache_database_query = invalidate_cache_on_change = get_cache = None
+
 
 class DatabaseManager:
     """Streamlit-optimized database manager."""
@@ -117,8 +125,9 @@ class DatabaseManager:
             finally:
                 conn.close()
     
+    @cache_database_query("get_epics", ttl=300) if CACHE_AVAILABLE else lambda f: f
     def get_epics(self) -> List[Dict[str, Any]]:
-        """Get all epics with caching."""
+        """Get all epics with intelligent caching."""
         try:
             with self.get_connection("framework") as conn:
                 if SQLALCHEMY_AVAILABLE:
@@ -146,8 +155,9 @@ class DatabaseManager:
             print(f"Error loading epics: {e}")
             return []
     
+    @cache_database_query("get_tasks", ttl=300) if CACHE_AVAILABLE else lambda f: f
     def get_tasks(self, epic_id: Optional[int] = None) -> List[Dict[str, Any]]:
-        """Get tasks, optionally filtered by epic."""
+        """Get tasks with intelligent caching, optionally filtered by epic."""
         try:
             with self.get_connection("framework") as conn:
                 query = """
@@ -178,8 +188,9 @@ class DatabaseManager:
             print(f"Error loading tasks: {e}")
             return []
     
+    @cache_database_query("get_timer_sessions", ttl=60) if CACHE_AVAILABLE else lambda f: f
     def get_timer_sessions(self, days: int = 30) -> List[Dict[str, Any]]:
-        """Get recent timer sessions."""
+        """Get recent timer sessions with short-term caching."""
         if not self.timer_db_path.exists():
             return []
         
@@ -298,8 +309,9 @@ class DatabaseManager:
             print(f"Error loading achievements: {e}")
             return []
     
+    @invalidate_cache_on_change("db_query:get_tasks:", "db_query:get_epics:") if CACHE_AVAILABLE else lambda f: f
     def update_task_status(self, task_id: int, status: str, tdd_phase: Optional[str] = None) -> bool:
-        """Update task status and TDD phase."""
+        """Update task status and TDD phase with cache invalidation."""
         try:
             with self.get_connection("framework") as conn:
                 if SQLALCHEMY_AVAILABLE:
@@ -342,11 +354,12 @@ class DatabaseManager:
             print(f"Error updating task status: {e}")
             return False
     
+    @invalidate_cache_on_change("db_query:get_timer_sessions:") if CACHE_AVAILABLE else lambda f: f
     def create_timer_session(self, task_id: Optional[int], duration_minutes: int, 
                            focus_rating: Optional[int] = None, interruptions: int = 0,
                            actual_duration_minutes: Optional[int] = None,
                            ended_at: Optional[str] = None, notes: Optional[str] = None) -> bool:
-        """Create a new timer session record with full TDAH support."""
+        """Create a new timer session record with cache invalidation."""
         if not self.timer_db_path.exists():
             return False
         
@@ -550,3 +563,21 @@ class DatabaseManager:
                 session['created_at_ago'] = self.format_database_datetime(session['created_at'], "ago")
         
         return sessions
+    
+    def clear_cache(self):
+        """Clear all database query caches."""
+        if CACHE_AVAILABLE:
+            cache = get_cache()
+            # Clear all database query caches
+            cache.invalidate_pattern("db_query:")
+            print("Database cache cleared")
+        else:
+            print("Cache not available")
+    
+    def get_cache_stats(self) -> Dict[str, Any]:
+        """Get database cache statistics."""
+        if CACHE_AVAILABLE:
+            from .cache import get_cache_statistics
+            return get_cache_statistics()
+        else:
+            return {"cache_available": False}

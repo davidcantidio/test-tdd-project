@@ -390,11 +390,8 @@ class EnvironmentValidator:
                     f"Origin: {remote_url}"
                 )
             except subprocess.CalledProcessError as e:
-                handle_error(
-                    ProcessError("Git remote check failed"),
-                    severity=ErrorSeverity.DEBUG,
-                    context={"command": "git remote get-url origin"}
-                )
+                # Git remote check failed - this is expected if no remote is configured
+                pass
                 self._add_check(
                     "Git Remote",
                     "None",
@@ -429,12 +426,8 @@ class EnvironmentValidator:
                     "GitHub integration available"
                 )
             except subprocess.CalledProcessError as e:
-                handle_error(
-                    ProcessError("GitHub CLI authentication check failed",
-                               user_action="Run: gh auth login"),
-                    severity=ErrorSeverity.WARNING,
-                    context={"command": "gh auth status"}
-                )
+                # GitHub CLI authentication check failed - user needs to run: gh auth login
+                pass
                 self._add_check(
                     "GitHub CLI",
                     "Not authenticated",
@@ -640,7 +633,7 @@ class EnvironmentValidator:
                 "Next steps:\n"
                 "1. Create your first epic: [code]python setup/init_tdd_project.py[/code]\n"
                 "2. Start TDD timer: [code]python -m tdah_tools.task_timer start EPIC-1.1[/code]\n"
-                "3. Launch Streamlit interface: [code]poetry run streamlit-run[/code]\n"
+                "3. Launch Streamlit interface: [code]streamlit run streamlit_extension/streamlit_app.py[/code]\n"
                 "4. Run tests: [code]pytest tests/[/code]"
             )
     
@@ -650,9 +643,10 @@ class EnvironmentValidator:
         # Check if streamlit_extension directory exists
         streamlit_dir = self.project_root / "streamlit_extension"
         if streamlit_dir.exists() and streamlit_dir.is_dir():
+            file_count = len(list(streamlit_dir.rglob("*.py")))
             self._add_check(
                 "Streamlit Extension",
-                "Directory exists",
+                f"Available ({file_count} Python files)",
                 "✅",
                 "Streamlit extension is available"
             )
@@ -697,7 +691,9 @@ class EnvironmentValidator:
             ("streamlit", "Interactive web framework"),
             ("sqlalchemy", "Database ORM"),
             ("python-dotenv", "Environment configuration"),
-            ("gql", "GraphQL client for GitHub")
+            ("gql", "GraphQL client for GitHub"),
+            ("pytz", "Timezone support for TDAH features"),
+            ("aiohttp", "Async HTTP client")
         ]
         
         streamlit_available = True
@@ -720,33 +716,46 @@ class EnvironmentValidator:
                 )
                 streamlit_available = False
         
-        # Check if Streamlit can be launched
+        # Check if Streamlit configuration is available
+        streamlit_config_dir = self.project_root / ".streamlit"
+        if streamlit_config_dir.exists():
+            config_files = list(streamlit_config_dir.glob("*.toml"))
+            if config_files:
+                self._add_check(
+                    "Streamlit Config",
+                    f"{len(config_files)} config files",
+                    "✅",
+                    "Streamlit configuration available"
+                )
+            else:
+                self._add_check(
+                    "Streamlit Config",
+                    "No config files",
+                    "⚠️",
+                    "Optional: Create .streamlit/config.toml"
+                )
+        else:
+            self._add_check(
+                "Streamlit Config",
+                "Not configured",
+                "⚠️",
+                "Optional: Create .streamlit/ directory"
+            )
+            
+        # Test basic Streamlit functionality if available
         if streamlit_available:
             try:
-                # Try to import main streamlit app
-                import sys
-                import importlib.util
-                
-                app_path = streamlit_dir / "streamlit_app.py"
-                spec = importlib.util.spec_from_file_location("streamlit_app", app_path)
-                if spec and spec.loader:
-                    # Don't actually load the module, just check if it can be loaded
-                    self._add_check(
-                        "Streamlit App",
-                        "Can be imported",
-                        "✅",
-                        "Main app is ready to run"
-                    )
-                else:
-                    self._add_check(
-                        "Streamlit App",
-                        "Import issues",
-                        "⚠️",
-                        "Check app dependencies"
-                    )
+                # Test if we can create a simple streamlit config
+                import streamlit as st
+                self._add_check(
+                    "Streamlit Runtime",
+                    "Available",
+                    "✅",
+                    "Streamlit can be imported and run"
+                )
             except Exception as e:
                 self._add_check(
-                    "Streamlit App",
+                    "Streamlit Runtime",
                     "Import error",
                     "⚠️",
                     f"Error: {str(e)[:50]}..."
@@ -775,6 +784,68 @@ class EnvironmentValidator:
                     "⚠️",
                     f"Optional: {description} will be created when needed"
                 )
+        
+        # Check integration with existing framework components
+        integration_components = [
+            ("tdah_tools/analytics_engine.py", "Analytics engine integration"),
+            ("gantt_tracker.py", "Gantt chart functionality")
+        ]
+        
+        for component_path, description in integration_components:
+            comp_path = self.project_root / component_path
+            if comp_path.exists():
+                self._add_check(
+                    f"Integration: {component_path}",
+                    "Available",
+                    "✅",
+                    description
+                )
+            else:
+                self._add_check(
+                    f"Integration: {component_path}",
+                    "Not found",
+                    "⚠️",
+                    f"Optional: {description}"
+                )
+        
+        # Check CLI command integration
+        if (self.project_root / "pyproject.toml").exists():
+            try:
+                import toml
+                with open(self.project_root / "pyproject.toml", "r") as f:
+                    pyproject_data = toml.load(f)
+                
+                scripts = pyproject_data.get("tool", {}).get("poetry", {}).get("scripts", {})
+                streamlit_scripts = [
+                    "streamlit-run",
+                    "manage"
+                ]
+                
+                available_scripts = [s for s in streamlit_scripts if s in scripts]
+                
+                if available_scripts:
+                    self._add_check(
+                        "Streamlit CLI Commands",
+                        f"{len(available_scripts)} available",
+                        "✅",
+                        f"Commands: {', '.join(available_scripts)}"
+                    )
+                else:
+                    self._add_check(
+                        "Streamlit CLI Commands",
+                        "Not configured",
+                        "⚠️",
+                        "Optional: streamlit-run, manage commands"
+                    )
+            except ImportError:
+                self._add_check(
+                    "Streamlit CLI Commands",
+                    "Cannot check",
+                    "⚠️",
+                    "Install toml package to check CLI commands"
+                )
+            except Exception:
+                pass
     
     # Helper methods
     
