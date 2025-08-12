@@ -25,6 +25,24 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+        
+      - name: Install Python dependencies
+        run: |
+          pip install --upgrade pip
+          pip install plotly pandas
+          echo "✅ Python dependencies installed"
+        
+      - name: Generate Interactive Gantt Chart
+        run: |
+          echo "🎯 Generating interactive Gantt chart with Plotly..."
+          python3 gantt_tracker.py --output docs/gantt_progress.html --no-open
+          echo "✅ Interactive Gantt chart generated"
+        
       - name: Setup Ruby
         uses: ruby/setup-ruby@v1
         with:
