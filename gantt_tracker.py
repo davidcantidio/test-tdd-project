@@ -513,7 +513,7 @@ def create_gantt_chart(timeline_tasks: List[Dict[str, Any]]) -> 'go.Figure':
     )
     
     # Update y-axis to show full task names
-    fig.update_yaxis(
+    fig.update_yaxes(
         tickmode='linear',
         automargin=True
     )
