@@ -51,6 +51,16 @@ except ImportError:
     format_datetime_user_tz = None
     format_time_ago_user_tz = None
 
+# Import duration system for FASE 2.3 extension
+try:
+    from duration_system.duration_calculator import DurationCalculator
+    from duration_system.duration_formatter import DurationFormatter
+    DURATION_SYSTEM_AVAILABLE = True
+except ImportError:
+    DurationCalculator = None
+    DurationFormatter = None
+    DURATION_SYSTEM_AVAILABLE = False
+
 # Import caching system
 try:
     from .cache import cache_database_query, invalidate_cache_on_change, get_cache
@@ -1202,3 +1212,317 @@ class DatabaseManager:
         except Exception as e:
             print(f"Error getting task statistics: {e}")
             return {"todo": 0, "in_progress": 0, "completed": 0, "total": 0}
+    
+    # ==================================================================================
+    # DURATION SYSTEM EXTENSION METHODS (FASE 2.3)
+    # ==================================================================================
+    
+    @cache_database_query("calculate_epic_duration", ttl=300) if CACHE_AVAILABLE else lambda f: f
+    def calculate_epic_duration(self, epic_id: int) -> float:
+        """Calculate total duration for an epic based on task dates.
+        
+        Args:
+            epic_id: ID of the epic to calculate duration for
+            
+        Returns:
+            Duration in days (float), or 0.0 if calculation fails
+        """
+        if not DURATION_SYSTEM_AVAILABLE:
+            print("Duration system not available - install duration_system package")
+            return 0.0
+        
+        try:
+            with self.get_connection("framework") as conn:
+                # Get epic with date fields
+                if SQLALCHEMY_AVAILABLE:
+                    result = conn.execute(text("""
+                        SELECT planned_start_date, planned_end_date, 
+                               actual_start_date, actual_end_date,
+                               calculated_duration_days
+                        FROM framework_epics 
+                        WHERE id = :epic_id AND deleted_at IS NULL
+                    """), {"epic_id": epic_id})
+                    epic_row = result.fetchone()
+                else:
+                    cursor = conn.cursor()
+                    cursor.execute("""
+                        SELECT planned_start_date, planned_end_date,
+                               actual_start_date, actual_end_date,
+                               calculated_duration_days
+                        FROM framework_epics 
+                        WHERE id = ? AND deleted_at IS NULL
+                    """, (epic_id,))
+                    epic_row = cursor.fetchone()
+                
+                if not epic_row:
+                    return 0.0
+                
+                calculator = DurationCalculator()
+                
+                # Try to use existing calculated duration first
+                if epic_row[4] is not None:  # calculated_duration_days
+                    return float(epic_row[4])
+                
+                # Calculate from actual dates if available
+                if epic_row[2] and epic_row[3]:  # actual_start_date, actual_end_date
+                    return calculator.calculate_duration_days(epic_row[2], epic_row[3])
+                
+                # Fall back to planned dates
+                if epic_row[0] and epic_row[1]:  # planned_start_date, planned_end_date
+                    return calculator.calculate_duration_days(epic_row[0], epic_row[1])
+                
+                # If no dates available, sum task durations
+                return self._calculate_epic_duration_from_tasks(epic_id)
+                
+        except Exception as e:
+            print(f"Error calculating epic duration for {epic_id}: {e}")
+            return 0.0
+    
+    @invalidate_cache_on_change("db_query:get_epics:", "db_query:calculate_epic_duration:") if CACHE_AVAILABLE else lambda f: f
+    def update_duration_description(self, epic_id: int, description: str) -> bool:
+        """Update the duration description for an epic.
+        
+        Args:
+            epic_id: ID of the epic to update
+            description: New duration description (e.g., "1.5 dias", "1 semana")
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        if not DURATION_SYSTEM_AVAILABLE:
+            print("Duration system not available")
+            return False
+        
+        try:
+            # Parse and validate duration description
+            calculator = DurationCalculator()
+            duration_days = calculator.parse_and_convert_to_days(description)
+            
+            with self.get_connection("framework") as conn:
+                if SQLALCHEMY_AVAILABLE:
+                    conn.execute(text("""
+                        UPDATE framework_epics 
+                        SET duration_description = :description,
+                            calculated_duration_days = :duration_days,
+                            updated_at = CURRENT_TIMESTAMP
+                        WHERE id = :epic_id
+                    """), {
+                        "description": description,
+                        "duration_days": duration_days,
+                        "epic_id": epic_id
+                    })
+                    conn.commit()
+                else:
+                    cursor = conn.cursor()
+                    cursor.execute("""
+                        UPDATE framework_epics 
+                        SET duration_description = ?, calculated_duration_days = ?, 
+                            updated_at = CURRENT_TIMESTAMP
+                        WHERE id = ?
+                    """, (description, duration_days, epic_id))
+                    conn.commit()
+                
+                return True
+                
+        except Exception as e:
+            print(f"Error updating duration description for epic {epic_id}: {e}")
+            return False
+    
+    @cache_database_query("get_epic_timeline", ttl=180) if CACHE_AVAILABLE else lambda f: f
+    def get_epic_timeline(self, epic_id: int) -> Dict[str, Any]:
+        """Get comprehensive timeline information for an epic.
+        
+        Args:
+            epic_id: ID of the epic to get timeline for
+            
+        Returns:
+            Dictionary with timeline data including dates, durations, and validation
+        """
+        if not DURATION_SYSTEM_AVAILABLE:
+            return {"error": "Duration system not available"}
+        
+        try:
+            with self.get_connection("framework") as conn:
+                # Get epic timeline data
+                if SQLALCHEMY_AVAILABLE:
+                    result = conn.execute(text("""
+                        SELECT id, epic_key, name, status,
+                               planned_start_date, planned_end_date,
+                               actual_start_date, actual_end_date,
+                               calculated_duration_days, duration_description,
+                               created_at, updated_at, completed_at
+                        FROM framework_epics 
+                        WHERE id = :epic_id AND deleted_at IS NULL
+                    """), {"epic_id": epic_id})
+                    epic_data = dict(result.fetchone()._mapping) if result.rowcount > 0 else None
+                else:
+                    cursor = conn.cursor()
+                    cursor.execute("""
+                        SELECT id, epic_key, name, status,
+                               planned_start_date, planned_end_date,
+                               actual_start_date, actual_end_date,
+                               calculated_duration_days, duration_description,
+                               created_at, updated_at, completed_at
+                        FROM framework_epics 
+                        WHERE id = ? AND deleted_at IS NULL
+                    """, (epic_id,))
+                    row = cursor.fetchone()
+                    if row:
+                        epic_data = dict(zip([col[0] for col in cursor.description], row))
+                    else:
+                        epic_data = None
+                
+                if not epic_data:
+                    return {"error": f"Epic {epic_id} not found"}
+                
+                calculator = DurationCalculator()
+                formatter = DurationFormatter()
+                
+                # Calculate durations and validate consistency
+                validation = calculator.validate_date_consistency(
+                    planned_start=epic_data.get('planned_start_date'),
+                    planned_end=epic_data.get('planned_end_date'),
+                    actual_start=epic_data.get('actual_start_date'),
+                    actual_end=epic_data.get('actual_end_date'),
+                    duration_days=epic_data.get('calculated_duration_days')
+                )
+                
+                # Format duration descriptions
+                timeline_data = {
+                    "epic": epic_data,
+                    "validation": validation,
+                    "duration_info": {
+                        "calculated_days": epic_data.get('calculated_duration_days', 0),
+                        "description": epic_data.get('duration_description', ''),
+                        "formatted": formatter.format(epic_data.get('calculated_duration_days', 0)) if epic_data.get('calculated_duration_days') else '',
+                    },
+                    "dates": {
+                        "planned_start": epic_data.get('planned_start_date'),
+                        "planned_end": epic_data.get('planned_end_date'),
+                        "actual_start": epic_data.get('actual_start_date'),
+                        "actual_end": epic_data.get('actual_end_date'),
+                    },
+                    "status_info": {
+                        "status": epic_data.get('status', 'unknown'),
+                        "is_completed": epic_data.get('status') == 'completed',
+                        "completion_date": epic_data.get('completed_at'),
+                    }
+                }
+                
+                # Add task timeline if needed
+                timeline_data["tasks"] = self._get_epic_task_timeline(epic_id)
+                
+                return timeline_data
+                
+        except Exception as e:
+            print(f"Error getting epic timeline for {epic_id}: {e}")
+            return {"error": str(e)}
+    
+    def validate_date_consistency(self, epic_id: int) -> bool:
+        """Validate date consistency for an epic.
+        
+        Args:
+            epic_id: ID of the epic to validate
+            
+        Returns:
+            True if dates are consistent, False otherwise
+        """
+        if not DURATION_SYSTEM_AVAILABLE:
+            return False
+        
+        try:
+            with self.get_connection("framework") as conn:
+                if SQLALCHEMY_AVAILABLE:
+                    result = conn.execute(text("""
+                        SELECT planned_start_date, planned_end_date,
+                               actual_start_date, actual_end_date,
+                               calculated_duration_days
+                        FROM framework_epics 
+                        WHERE id = :epic_id AND deleted_at IS NULL
+                    """), {"epic_id": epic_id})
+                    row = result.fetchone()
+                else:
+                    cursor = conn.cursor()
+                    cursor.execute("""
+                        SELECT planned_start_date, planned_end_date,
+                               actual_start_date, actual_end_date,
+                               calculated_duration_days
+                        FROM framework_epics 
+                        WHERE id = ? AND deleted_at IS NULL
+                    """, (epic_id,))
+                    row = cursor.fetchone()
+                
+                if not row:
+                    return False
+                
+                calculator = DurationCalculator()
+                validation = calculator.validate_date_consistency(
+                    planned_start=row[0],
+                    planned_end=row[1],
+                    actual_start=row[2],
+                    actual_end=row[3],
+                    duration_days=row[4]
+                )
+                
+                return validation["is_valid"]
+                
+        except Exception as e:
+            print(f"Error validating date consistency for epic {epic_id}: {e}")
+            return False
+    
+    # Helper methods for duration system
+    
+    def _calculate_epic_duration_from_tasks(self, epic_id: int) -> float:
+        """Calculate epic duration by summing task durations."""
+        try:
+            with self.get_connection("framework") as conn:
+                if SQLALCHEMY_AVAILABLE:
+                    result = conn.execute(text("""
+                        SELECT SUM(estimate_minutes) 
+                        FROM framework_tasks 
+                        WHERE epic_id = :epic_id AND deleted_at IS NULL
+                    """), {"epic_id": epic_id})
+                    total_minutes = result.scalar() or 0
+                else:
+                    cursor = conn.cursor()
+                    cursor.execute("""
+                        SELECT SUM(estimate_minutes) 
+                        FROM framework_tasks 
+                        WHERE epic_id = ? AND deleted_at IS NULL
+                    """, (epic_id,))
+                    total_minutes = cursor.fetchone()[0] or 0
+                
+                # Convert minutes to days (8 hours = 1 work day)
+                return round(total_minutes / (8 * 60), 2)
+                
+        except Exception:
+            return 0.0
+    
+    def _get_epic_task_timeline(self, epic_id: int) -> List[Dict[str, Any]]:
+        """Get timeline information for tasks within an epic."""
+        try:
+            with self.get_connection("framework") as conn:
+                if SQLALCHEMY_AVAILABLE:
+                    result = conn.execute(text("""
+                        SELECT id, title, status, tdd_phase, estimate_minutes,
+                               created_at, updated_at, completed_at, priority
+                        FROM framework_tasks 
+                        WHERE epic_id = :epic_id AND deleted_at IS NULL
+                        ORDER BY priority ASC, created_at ASC
+                    """), {"epic_id": epic_id})
+                    return [dict(row._mapping) for row in result]
+                else:
+                    cursor = conn.cursor()
+                    cursor.execute("""
+                        SELECT id, title, status, tdd_phase, estimate_minutes,
+                               created_at, updated_at, completed_at, priority
+                        FROM framework_tasks 
+                        WHERE epic_id = ? AND deleted_at IS NULL
+                        ORDER BY priority ASC, created_at ASC
+                    """, (epic_id,))
+                    
+                    return [dict(zip([col[0] for col in cursor.description], row)) 
+                           for row in cursor.fetchall()]
+                           
+        except Exception:
+            return []

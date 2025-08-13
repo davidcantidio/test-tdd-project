@@ -291,7 +291,12 @@ def render_enhanced_epic_cards():
             with col4:
                 # Difficulty indicator
                 difficulty = epic.get("difficulty_level", 1)
-                difficulty_stars = "⭐" * min(5, difficulty)
+                # Convert to int if it's a string
+                try:
+                    difficulty_value = int(difficulty) if difficulty else 1
+                except (ValueError, TypeError):
+                    difficulty_value = 1
+                difficulty_stars = "⭐" * min(5, difficulty_value)
                 st.markdown(f"**Difficulty**")
                 st.markdown(difficulty_stars)
             
