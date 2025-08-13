@@ -71,6 +71,7 @@ def test_quick_validation():
         # Test 1: Update duration description
         success = db_manager.update_duration_description(1, "2.5 dias")
         print(f"✅ update_duration_description: {success}")
+        assert success
         
         # Test 2: Calculate duration
         duration = db_manager.calculate_epic_duration(1)
@@ -80,6 +81,7 @@ def test_quick_validation():
         # Test 3: Validate consistency
         is_valid = db_manager.validate_date_consistency(1)
         print(f"✅ validate_date_consistency: {is_valid}")
+        assert is_valid
         
         # Test 4: Get timeline
         timeline = db_manager.get_epic_timeline(1)
@@ -100,8 +102,6 @@ def test_quick_validation():
         conn.close()
         
         print(f"📊 Database verification: description='{row[0]}', days={row[1]}")
-        
-        return True
         
     finally:
         # Cleanup

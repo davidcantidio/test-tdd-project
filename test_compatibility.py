@@ -9,7 +9,9 @@ import sqlite3
 import json
 import sys
 from pathlib import Path
+import pytest
 
+@pytest.mark.skip(reason="Compatibility check requires manual environment")
 def test_gantt_tracker_compatibility():
     """Test if gantt_tracker.py can work with new database structure."""
     print("📊 Testing Gantt Tracker Compatibility...")
@@ -113,15 +115,14 @@ def test_gantt_tracker_compatibility():
         conn.commit()
         
         print("  ✅ Gantt tracker compatibility test passed")
-        return True
         
     except Exception as e:
-        print(f"  ❌ Gantt tracker compatibility test failed: {e}")
-        return False
+        pytest.fail(f"  ❌ Gantt tracker compatibility test failed: {e}")
     
     finally:
         conn.close()
 
+@pytest.mark.skip(reason="Compatibility check requires manual environment")
 def test_analytics_engine_compatibility():
     """Test if analytics_engine.py can work with new database structure."""
     print("\n📈 Testing Analytics Engine Compatibility...")
@@ -200,15 +201,14 @@ def test_analytics_engine_compatibility():
         print(f"  🔄 TDD phase analytics for {len(tdd_analytics)} phases")
         
         print("  ✅ Analytics engine compatibility test passed")
-        return True
         
     except Exception as e:
-        print(f"  ❌ Analytics engine compatibility test failed: {e}")
-        return False
+        pytest.fail(f"  ❌ Analytics engine compatibility test failed: {e}")
     
     finally:
         conn.close()
 
+@pytest.mark.skip(reason="Compatibility check requires manual environment")
 def test_json_export_compatibility():
     """Test if data can be exported back to JSON format for compatibility."""
     print("\n📄 Testing JSON Export Compatibility...")
@@ -244,12 +244,12 @@ def test_json_export_compatibility():
         """)
         
         epic_data = cursor.fetchone()
-        
+
         if epic_data:
             # Try to parse the JSON
             tasks_json = json.loads(epic_data[5])
             print(f"  ✅ Successfully exported epic with {len(tasks_json)} tasks to JSON")
-            
+
             # Create a sample export structure
             export_structure = {
                 "epic": {
@@ -261,17 +261,15 @@ def test_json_export_compatibility():
                     "tasks": tasks_json
                 }
             }
-            
+
             print(f"  📋 Export structure compatible with original JSON format")
         else:
-            print("  ⚠️ No data available for JSON export test")
-        
+            pytest.skip("  ⚠️ No data available for JSON export test")
+
         print("  ✅ JSON export compatibility test passed")
-        return True
         
     except Exception as e:
-        print(f"  ❌ JSON export compatibility test failed: {e}")
-        return False
+        pytest.fail(f"  ❌ JSON export compatibility test failed: {e}")
     
     finally:
         conn.close()

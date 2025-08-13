@@ -5,6 +5,7 @@ Script para testar a validade do token do GitHub
 
 import os
 import sys
+import pytest
 
 # Tenta importar bibliotecas, se não estiverem disponíveis usa método alternativo
 try:
@@ -44,10 +45,9 @@ def test_github_token():
     
     # Obtém o token
     token = os.getenv('GITHUB_TOKEN')
-    
+
     if not token:
-        print("❌ Token do GitHub não encontrado no arquivo .env")
-        return False
+        pytest.skip("GITHUB_TOKEN não encontrado no arquivo .env")
     
     # Testa o token fazendo uma requisição para a API do GitHub
     headers = {
@@ -98,19 +98,20 @@ def test_github_token():
                 print(f"\n📊 Rate Limit:")
                 print(f"   Limite: {core_limit['limit']} requisições/hora")
                 print(f"   Restante: {core_limit['remaining']} requisições")
-            
-            return True
+
+            assert True
         elif status_code == 401:
-            print("❌ Token inválido ou expirado")
-            return False
+            pytest.fail("Token inválido ou expirado")
         else:
-            print(f"❌ Erro ao validar token: HTTP {status_code}")
-            return False
+            pytest.fail(f"Erro ao validar token: HTTP {status_code}")
             
     except Exception as e:
-        print(f"❌ Erro de conexão: {e}")
-        return False
+        pytest.fail(f"Erro de conexão: {e}")
 
 if __name__ == "__main__":
-    success = test_github_token()
-    sys.exit(0 if success else 1)
+    success = False
+    try:
+        test_github_token()
+        success = True
+    finally:
+        sys.exit(0 if success else 1)
