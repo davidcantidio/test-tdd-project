@@ -599,14 +599,22 @@ class ArchitectureAuditor:
     
     def _calculate_grade(self, score: float) -> str:
         """Calculate letter grade based on score."""
-        if score >= 95: return 'A+'
-        elif score >= 90: return 'A'
-        elif score >= 87: return 'B+'
-        elif score >= 83: return 'B'
-        elif score >= 80: return 'C+'
-        elif score >= 75: return 'C'
-        elif score >= 70: return 'D'
-        else: return 'F'
+        if score >= 95:
+            return 'A+'
+        elif score >= 90:
+            return 'A'
+        elif score >= 87:
+            return 'B+'
+        elif score >= 83:
+            return 'B'
+        elif score >= 80:
+            return 'C+'
+        elif score >= 75:
+            return 'C'
+        elif score >= 70:
+            return 'D'
+        else:
+            return 'F'
     
     def _generate_recommendations(self) -> List[str]:
         """Generate actionable recommendations based on findings."""
