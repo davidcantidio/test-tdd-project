@@ -1,15 +1,20 @@
 """
-🔧 Cache System Fixes for KeyboardInterrupt Issue
+🔧 Cache System Fixes for Security and Interrupt Issues
 
-This module contains fixes for the critical cache system issues identified 
-in the Codex audit, specifically addressing the KeyboardInterrupt problem
-at streamlit_extension/utils/cache.py:187.
+This module contains fixes for critical cache system issues identified 
+in the Codex audit, addressing both KeyboardInterrupt and security vulnerabilities.
 
 Key fixes:
 1. Timeout protection for lock operations
 2. Non-blocking disk I/O with proper error handling
 3. Interrupt-safe cache operations
 4. Resource cleanup on interruption
+
+Security enhancements (SEC-001 fix):
+5. SHA-256 replaces MD5 for cache key generation (prevents collision attacks)
+6. Cryptographic salt per cache instance (prevents rainbow table attacks)
+7. Secure key derivation for all cache operations
+8. OWASP-compliant hashing algorithm selection
 """
 
 import sys
@@ -18,6 +23,7 @@ import pickle
 import hashlib
 import time
 import signal
+import secrets
 from pathlib import Path
 from typing import Any, Optional, Dict, Callable, Union
 from datetime import datetime, timedelta
@@ -51,6 +57,10 @@ class InterruptSafeCache:
         # Timeout configurations
         self.lock_timeout = lock_timeout
         self.disk_timeout = disk_timeout
+        
+        # Cryptographic salt for secure key generation
+        # Generate a unique salt per cache instance for security
+        self._cache_salt = secrets.token_bytes(32)  # 256-bit salt
         
         # Memory cache with RLock for better interrupt handling
         self._memory_cache: Dict[str, Any] = {}
@@ -137,23 +147,51 @@ class InterruptSafeCache:
             pass
     
     def _generate_key(self, key: Union[str, tuple, dict]) -> str:
-        """Generate a consistent cache key from various input types."""
+        """
+        Generate a cryptographically secure cache key from various input types.
+        
+        Uses SHA-256 with salt to prevent collision attacks and key guessing.
+        Each cache instance has a unique salt for additional security.
+        
+        Security improvements:
+        - SHA-256 instead of MD5 (prevents collision attacks)
+        - Unique salt per cache instance (prevents rainbow table attacks)
+        - Deterministic key generation for cache consistency
+        """
+        # Create hasher with salt
+        hasher = hashlib.sha256()
+        hasher.update(self._cache_salt)
+        
         if isinstance(key, str):
-            return key
+            # For string keys, still hash them for security and length consistency
+            hasher.update(key.encode('utf-8'))
+            return hasher.hexdigest()
         elif isinstance(key, (tuple, list)):
             try:
+                # Convert elements to strings and sort for consistency
                 str_elements = [str(item) for item in key]
-                return hashlib.md5(str(sorted(str_elements)).encode()).hexdigest()
+                sorted_str = str(sorted(str_elements))
+                hasher.update(sorted_str.encode('utf-8'))
+                return hasher.hexdigest()
             except (TypeError, Exception):
-                return hashlib.md5(str(key).encode()).hexdigest()
+                # Fallback to string representation
+                hasher.update(str(key).encode('utf-8'))
+                return hasher.hexdigest()
         elif isinstance(key, dict):
             try:
+                # Sort dictionary items for consistent hashing
                 sorted_items = sorted(key.items())
-                return hashlib.md5(str(sorted_items).encode()).hexdigest()
+                sorted_str = str(sorted_items)
+                hasher.update(sorted_str.encode('utf-8'))
+                return hasher.hexdigest()
             except (TypeError, Exception):
-                return hashlib.md5(str(key).encode()).hexdigest()
+                # Fallback to string representation
+                hasher.update(str(key).encode('utf-8'))
+                return hasher.hexdigest()
         else:
-            return hashlib.md5(str(key).encode()).hexdigest()
+            # For any other type, convert to string and hash
+            hasher.update(str(key).encode('utf-8'))
+            return hasher.hexdigest()
     
     def get(self, key: Union[str, tuple, dict], default: Any = None) -> Any:
         """Get value from cache with interrupt safety."""
