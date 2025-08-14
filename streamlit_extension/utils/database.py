@@ -459,7 +459,7 @@ class DatabaseManager:
                     if not task_row:
                         tasks = {"total_tasks": 0, "completed_tasks": 0, "in_progress_tasks": 0}
                     else:
-                        tasks = dict(task_row._mapping)
+                        tasks = {k: (v or 0) for k, v in dict(task_row._mapping).items()}
                     
                 else:
                     cursor = conn.cursor()
@@ -486,7 +486,7 @@ class DatabaseManager:
                     if not task_row:
                         tasks = {"total_tasks": 0, "completed_tasks": 0, "in_progress_tasks": 0}
                     else:
-                        tasks = dict(task_row)
+                        tasks = {k: (v or 0) for k, v in dict(task_row).items()}
                 
                 # Calculate progress
                 total = tasks.get("total_tasks") or 0
@@ -497,7 +497,7 @@ class DatabaseManager:
                     **epic,
                     **tasks,
                     "progress_percentage": round(progress_pct, 1),
-                    "points_earned": epic.get("points_earned", 0)
+                    "points_earned": epic.get("points_earned") or 0
                 }
                 
         except Exception as e:
