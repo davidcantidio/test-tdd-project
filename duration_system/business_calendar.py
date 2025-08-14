@@ -139,7 +139,7 @@ class BusinessCalendar:
                 import logging
                 logger = logging.getLogger(__name__)
                 logger.debug(f"Failed to load holidays for year {year}: {e}")
-                pass
+                # Continue without holidays - graceful degradation
         
         # Add custom holidays for this year
         for custom_holiday in self.custom_holidays:

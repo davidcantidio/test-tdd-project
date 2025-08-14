@@ -317,14 +317,14 @@ class SecureDatabaseManager:
                         
                         # Copy data - Note: table names cannot be parameterized in SQL
                         # but table_name is validated as coming from sqlite_master
-                        rows = source_conn.execute(f"SELECT * FROM {table_name}").fetchall()
+                        rows = source_conn.execute(f"SELECT * FROM {table_name}").fetchall()  # nosec B608: table_name validated via _validate_table_name() from sqlite_master query
                         if rows:
                             # Get column count for placeholder string
-                            columns = source_conn.execute(f"PRAGMA table_info({table_name})").fetchall()
+                            columns = source_conn.execute(f"PRAGMA table_info({table_name})").fetchall()  # nosec B608: table_name validated via _validate_table_name() from sqlite_master query
                             placeholders = ','.join(['?' for _ in columns])
                             
                             target_conn.executemany(
-                                f"INSERT INTO {table_name} VALUES ({placeholders})",
+                                f"INSERT INTO {table_name} VALUES ({placeholders})",  # nosec B608: table_name validated via _validate_table_name() from sqlite_master query
                                 rows
                             )
                 
@@ -380,11 +380,11 @@ class SecureDatabaseManager:
                     # Compare record counts - Note: table names cannot be parameterized
                     # but table_name is validated as coming from sqlite_master  
                     source_count = source_conn.execute(
-                        f"SELECT COUNT(*) FROM {table_name}"
+                        f"SELECT COUNT(*) FROM {table_name}"  # nosec B608: table_name validated via _validate_table_name() from sqlite_master query
                     ).fetchone()[0]
                     
                     target_count = target_conn.execute(
-                        f"SELECT COUNT(*) FROM {table_name}"
+                        f"SELECT COUNT(*) FROM {table_name}"  # nosec B608: table_name validated via _validate_table_name() from sqlite_master query
                     ).fetchone()[0]
                     
                     if source_count != target_count:
@@ -446,7 +446,7 @@ class SecureDatabaseManager:
                     ).fetchone()
                     
                     if schema:
-                        source_conn.execute(f"CREATE TABLE temp_db.{table_name} AS SELECT * FROM {table_name}")
+                        source_conn.execute(f"CREATE TABLE temp_db.{table_name} AS SELECT * FROM {table_name}")  # nosec B608: table_name validated via _validate_table_name() from sqlite_master query
                 
                 source_conn.execute("DETACH DATABASE temp_db")
             

@@ -122,8 +122,9 @@ class InterruptSafeCache:
         if self._original_sigint_handler and callable(self._original_sigint_handler):
             try:
                 self._original_sigint_handler(signum, frame)
-            except:
-                pass
+            except Exception:
+                # Original signal handler failed - continue with graceful shutdown
+                pass  # nosec B110: Acceptable in signal handler cleanup context
     
     def _safe_lock_acquire(self, timeout: float = None) -> bool:
         """Safely acquire lock with timeout protection."""
@@ -144,7 +145,8 @@ class InterruptSafeCache:
         try:
             self._lock.release()
         except Exception:
-            pass
+            # Lock release failed - acceptable in cleanup contexts
+            pass  # nosec B110: Safe to ignore lock release failures
     
     def _generate_key(self, key: Union[str, tuple, dict]) -> str:
         """
@@ -413,8 +415,9 @@ class InterruptSafeCache:
             try:
                 if temp_file.exists():
                     temp_file.unlink()
-            except:
-                pass
+            except Exception:
+                # Temporary file cleanup failed - not critical
+                pass  # nosec B110: Acceptable failure in cleanup context
             self.stats["disk_failures"] += 1
     
     def _delete_from_disk_safe(self, cache_key: str):
@@ -450,13 +453,16 @@ class InterruptSafeCache:
                             try:
                                 cache_file.unlink()
                             except OSError:
-                                pass
+                                # File deletion failed - acceptable in cleanup
+                                pass  # nosec B110: Cleanup operation failure is acceptable
                     except Exception:
-                        pass
+                        # Disk cleanup failed - acceptable
+                        pass  # nosec B110: Cleanup operation failure is acceptable
                 
                 self._disk_executor.submit(clear_disk)
         except Exception:
-            pass
+            # Disk executor shutdown failed - acceptable during cleanup
+            pass  # nosec B110: Executor shutdown failure is acceptable
         finally:
             self._safe_lock_release()
     
@@ -488,7 +494,8 @@ class InterruptSafeCache:
         try:
             self._disk_executor.shutdown(wait=False)
         except Exception:
-            pass
+            # Executor shutdown failed - acceptable during cleanup
+            pass  # nosec B110: Executor shutdown failure is acceptable
         
         # Restore original signal handler
         if self._original_sigint_handler:

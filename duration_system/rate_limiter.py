@@ -598,7 +598,8 @@ if __name__ == "__main__":
             print(f"Request {i+1}: {'ALLOWED' if allowed else 'BLOCKED'}")
             
             if i >= 3:  # Should be blocked after 3 requests
-                assert not allowed, "Should be rate limited"
+                if allowed:  # nosec B101: Test validation - replaced assert for production safety
+                    raise RuntimeError("Should be rate limited")
             
             time.sleep(0.1)
         

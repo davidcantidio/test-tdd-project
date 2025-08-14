@@ -483,8 +483,10 @@ def migrate_pickle_to_secure(pickle_file: Union[str, Path],
     import warnings
     
     warnings.warn(
-        "migrate_pickle_to_secure uses pickle for migration. "
-        "Only use with trusted pickle files.",
+        "SECURITY WARNING: migrate_pickle_to_secure uses pickle.load() for migration. "
+        "This function should ONLY be used with trusted pickle files from known sources. "
+        "Never use with untrusted or user-provided pickle files as this can lead to "
+        "arbitrary code execution vulnerabilities.",
         SecurityWarning
     )
     
@@ -498,7 +500,7 @@ def migrate_pickle_to_secure(pickle_file: Union[str, Path],
     try:
         # Read and deserialize pickle data
         with open(pickle_path, 'rb') as f:
-            data = pickle.load(f)
+            data = pickle.load(f)  # nosec B301: Controlled migration context with security warnings - only for trusted pickle files
         
         security_logger.warning(f"Loaded pickle data for migration: {pickle_path}")
         

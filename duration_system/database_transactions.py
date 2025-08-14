@@ -116,8 +116,9 @@ class DatabaseConnectionPool:
                         self._connections.remove(conn)
                         try:
                             conn.close()
-                        except:
-                            pass
+                        except Exception:
+                            # Connection close failed during cleanup - acceptable
+                            pass  # nosec B110: Cleanup failure is acceptable
             
             # Create new connection if under limit
             if len(self._connections) < self.max_connections:
@@ -159,8 +160,9 @@ class DatabaseConnectionPool:
                 try:
                     connection.close()
                     self.stats["connections_closed"] += 1
-                except:
-                    pass
+                except Exception:
+                    # Connection close failed - acceptable during cleanup
+                    pass  # nosec B110: Cleanup failure is acceptable
     
     def _create_connection(self) -> sqlite3.Connection:
         """Create a new database connection with proper settings."""
@@ -193,8 +195,9 @@ class DatabaseConnectionPool:
                 try:
                     conn.close()
                     self.stats["connections_closed"] += 1
-                except:
-                    pass
+                except Exception:
+                    # Connection close failed - acceptable during cleanup
+                    pass  # nosec B110: Cleanup failure is acceptable
             
             self._connections.clear()
             self._in_use.clear()
@@ -289,8 +292,9 @@ class TransactionalDatabaseManager:
                                 # Rollback on any error
                                 try:
                                     conn.rollback()
-                                except:
-                                    pass
+                                except Exception:
+                                    # Rollback failed - acceptable during error handling
+                                    pass  # nosec B110: Rollback failure is acceptable
                                 raise e
                                 
                     except sqlite3.OperationalError as e:
@@ -399,8 +403,9 @@ class TransactionalDatabaseManager:
                         # Rollback on any error
                         try:
                             conn.rollback()
-                        except:
-                            pass
+                        except Exception:
+                            # Rollback failed - acceptable during error handling
+                            pass  # nosec B110: Rollback failure is acceptable
                         raise e
                         
             except sqlite3.OperationalError as e:
@@ -498,8 +503,9 @@ class TransactionalDatabaseManager:
                 except Exception as e:
                     try:
                         conn.rollback()
-                    except:
-                        pass
+                    except Exception:
+                        # Rollback failed - acceptable during error handling
+                        pass  # nosec B110: Rollback failure is acceptable
                     raise e
                     
         except Exception as e:
@@ -567,8 +573,9 @@ class TransactionalDatabaseManager:
                 except Exception as e:
                     try:
                         conn.rollback()
-                    except:
-                        pass
+                    except Exception:
+                        # Rollback failed - acceptable during error handling
+                        pass  # nosec B110: Rollback failure is acceptable
                     raise e
                     
         except Exception as e:
