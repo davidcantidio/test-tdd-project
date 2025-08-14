@@ -14,6 +14,7 @@ from typing import Optional, Dict, Any, List, Union
 from contextlib import contextmanager
 from datetime import datetime
 import json
+import logging
 
 # Graceful imports
 try:
@@ -68,6 +69,8 @@ try:
 except ImportError:
     CACHE_AVAILABLE = False
     cache_database_query = invalidate_cache_on_change = get_cache = None
+
+logger = logging.getLogger(__name__)
 
 
 class DatabaseManager:
@@ -1228,7 +1231,7 @@ class DatabaseManager:
             Duration in days (float), or 0.0 if calculation fails
         """
         if not DURATION_SYSTEM_AVAILABLE:
-            print("Duration system not available - install duration_system package")
+            logger.warning("Duration system not available - install duration_system package")
             return 0.0
         
         try:
@@ -1275,7 +1278,7 @@ class DatabaseManager:
                 return self._calculate_epic_duration_from_tasks(epic_id)
                 
         except Exception as e:
-            print(f"Error calculating epic duration for {epic_id}: {e}")
+            logger.error("Error calculating epic duration for %s: %s", epic_id, e)
             return 0.0
     
     @invalidate_cache_on_change("db_query:get_epics:", "db_query:calculate_epic_duration:") if CACHE_AVAILABLE else lambda f: f
@@ -1290,42 +1293,46 @@ class DatabaseManager:
             True if successful, False otherwise
         """
         if not DURATION_SYSTEM_AVAILABLE:
-            print("Duration system not available")
+            logger.warning("Duration system not available")
             return False
         
         try:
             # Parse and validate duration description
             calculator = DurationCalculator()
             duration_days = calculator.parse_and_convert_to_days(description)
-            
+
             with self.get_connection("framework") as conn:
-                if SQLALCHEMY_AVAILABLE:
-                    conn.execute(text("""
-                        UPDATE framework_epics 
-                        SET duration_description = :description,
-                            calculated_duration_days = :duration_days,
-                            updated_at = CURRENT_TIMESTAMP
-                        WHERE id = :epic_id
-                    """), {
-                        "description": description,
-                        "duration_days": duration_days,
-                        "epic_id": epic_id
-                    })
-                    conn.commit()
-                else:
-                    cursor = conn.cursor()
-                    cursor.execute("""
-                        UPDATE framework_epics 
-                        SET duration_description = ?, calculated_duration_days = ?, 
-                            updated_at = CURRENT_TIMESTAMP
-                        WHERE id = ?
-                    """, (description, duration_days, epic_id))
-                    conn.commit()
-                
-                return True
-                
+                try:
+                    if SQLALCHEMY_AVAILABLE:
+                        conn.execute(text("""
+                            UPDATE framework_epics
+                            SET duration_description = :description,
+                                calculated_duration_days = :duration_days,
+                                updated_at = CURRENT_TIMESTAMP
+                            WHERE id = :epic_id
+                        """), {
+                            "description": description,
+                            "duration_days": duration_days,
+                            "epic_id": epic_id
+                        })
+                        conn.commit()
+                    else:
+                        cursor = conn.cursor()
+                        cursor.execute("""
+                            UPDATE framework_epics
+                            SET duration_description = ?, calculated_duration_days = ?,
+                                updated_at = CURRENT_TIMESTAMP
+                            WHERE id = ?
+                        """, (description, duration_days, epic_id))
+                        conn.commit()
+                except Exception:
+                    conn.rollback()
+                    raise
+
+            return True
+
         except Exception as e:
-            print(f"Error updating duration description for epic {epic_id}: {e}")
+            logger.error("Error updating duration description for epic %s: %s", epic_id, e)
             return False
     
     @cache_database_query("get_epic_timeline", ttl=180) if CACHE_AVAILABLE else lambda f: f

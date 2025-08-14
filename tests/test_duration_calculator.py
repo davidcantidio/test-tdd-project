@@ -221,7 +221,8 @@ class TestDurationCalculator:
     def test_duration_to_days_months_unit(self):
         """Test converting months unit to days"""
         days = self.calculator.duration_to_days(1.0, DurationUnit.MONTHS)
-        assert days == 30.0
+        # Uses average Gregorian month length (~30.4375 days)
+        assert days == pytest.approx(30.4375)
     
     def test_parse_and_convert_to_days_real_epic_formats(self):
         """Test parsing and converting real epic duration formats"""

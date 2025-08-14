@@ -15,6 +15,9 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+# Average number of days per month in Gregorian calendar
+AVERAGE_DAYS_PER_MONTH = 365.25 / 12  # ≈30.4375 days
+
 
 class DurationUnit(Enum):
     """Supported duration units from real epic data"""
@@ -186,7 +189,8 @@ class DurationCalculator:
         elif unit == DurationUnit.WEEKS:
             return value * 7.0
         elif unit == DurationUnit.MONTHS:
-            return value * 30.0  # Approximate 30 days per month
+            # Use average Gregorian month length for better accuracy
+            return value * AVERAGE_DAYS_PER_MONTH
         else:
             raise DurationCalculationError(f"Unknown unit: {unit}")
     

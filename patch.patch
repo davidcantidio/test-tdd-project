@@ -1,545 +1,449 @@
  (cd "$(git rev-parse --show-toplevel)" && git apply --3way <<'EOF' 
-diff --git a/test_compatibility.py b/test_compatibility.py
-index e7bba966f2612f7bddca1d696052fdc0354efee8..d95fe2199a7c437255061929727a714063096f20 100644
---- a/test_compatibility.py
-+++ b/test_compatibility.py
-@@ -1,37 +1,39 @@
- #!/usr/bin/env python3
+diff --git a/duration_system/duration_calculator.py b/duration_system/duration_calculator.py
+index d5548e1d4f2de6af6658eb3473b12aa7e99c4f52..08255db1ae81193de3af73acc949eb46c1af34d6 100644
+--- a/duration_system/duration_calculator.py
++++ b/duration_system/duration_calculator.py
+@@ -1,42 +1,45 @@
  """
- 🔗 Compatibility Test Suite
+ Duration Calculator Engine for Epic Timeline Management
  
- Tests compatibility with existing systems (gantt_tracker.py, analytics_engine.py).
+ This module provides automatic duration calculation between dates with support
+ for business days, calendar days, and various time units used in real epic data.
+ 
+ Focus: Duration System Implementation - Core calculation logic
+ """
+ 
+ from datetime import datetime, date, timedelta
+ from typing import Optional, Tuple, Union, Dict, Any
+ from enum import Enum
+ import re
+ import logging
+ 
+ logger = logging.getLogger(__name__)
+ 
++# Average number of days per month in Gregorian calendar
++AVERAGE_DAYS_PER_MONTH = 365.25 / 12  # ≈30.4375 days
++
+ 
+ class DurationUnit(Enum):
+     """Supported duration units from real epic data"""
+     DAYS = "dias"
+     WEEKS = "semanas"
+     MONTHS = "meses"
+ 
+ 
+ class DateCalculationMode(Enum):
+     """Date calculation modes"""
+     CALENDAR_DAYS = "calendar"
+     BUSINESS_DAYS = "business"
+ 
+ 
+ class DurationCalculationError(Exception):
+     """Custom exception for duration calculation errors"""
+     pass
+ 
+ 
+ class DurationCalculator:
+     """
+     Core engine for automatic duration calculation between dates.
+     
+     Supports:
+     - Calendar days vs business days calculation
+@@ -164,51 +167,52 @@ class DurationCalculator:
+         elif unit_normalized in ['semana', 'semanas']:
+             unit = DurationUnit.WEEKS
+         elif unit_normalized in ['mes', 'meses', 'mês']:
+             unit = DurationUnit.MONTHS
+         else:
+             raise DurationCalculationError(f"Unsupported unit: {unit_str}")
+         
+         return value, unit
+     
+     def duration_to_days(self, value: float, unit: DurationUnit) -> float:
+         """
+         Convert duration value to days based on unit.
+         
+         Args:
+             value: Numeric value 
+             unit: Duration unit
+             
+         Returns:
+             Duration converted to days
+         """
+         if unit == DurationUnit.DAYS:
+             return value
+         elif unit == DurationUnit.WEEKS:
+             return value * 7.0
+         elif unit == DurationUnit.MONTHS:
+-            return value * 30.0  # Approximate 30 days per month
++            # Use average Gregorian month length for better accuracy
++            return value * AVERAGE_DAYS_PER_MONTH
+         else:
+             raise DurationCalculationError(f"Unknown unit: {unit}")
+     
+     def parse_and_convert_to_days(self, duration_str: str) -> float:
+         """
+         Parse duration string and convert to days in one step.
+         
+         Args:
+             duration_str: Duration string from epic data
+             
+         Returns:
+             Duration in days (float)
+         """
+         value, unit = self.parse_duration_string(duration_str)
+         return self.duration_to_days(value, unit)
+     
+     def validate_date_consistency(
+         self, 
+         planned_start: Optional[Union[date, str]] = None,
+         planned_end: Optional[Union[date, str]] = None,
+         actual_start: Optional[Union[date, str]] = None,
+         actual_end: Optional[Union[date, str]] = None,
+         duration_days: Optional[float] = None
+     ) -> Dict[str, Any]:
+         """
+diff --git a/streamlit_extension/utils/database.py b/streamlit_extension/utils/database.py
+index 341dc76cc393ca9b25a2952f936b2e53ac9bedf3..9d5b0734513c6a638b2c52cc8b2b6be6f2fcc904 100644
+--- a/streamlit_extension/utils/database.py
++++ b/streamlit_extension/utils/database.py
+@@ -1,41 +1,42 @@
+ """
+ 🗄️ Database Management Utilities
+ 
+ Streamlit-optimized database operations with:
+ - Connection pooling
+ - Caching strategies
+ - SQLAlchemy integration
+ - Error handling
  """
  
  import sqlite3
- import json
- import sys
  from pathlib import Path
-+import pytest
+ from typing import Optional, Dict, Any, List, Union
+ from contextlib import contextmanager
+ from datetime import datetime
+ import json
++import logging
  
-+@pytest.mark.skip(reason="Compatibility check requires manual environment")
- def test_gantt_tracker_compatibility():
-     """Test if gantt_tracker.py can work with new database structure."""
-     print("📊 Testing Gantt Tracker Compatibility...")
+ # Graceful imports
+ try:
+     import sqlalchemy as sa
+     from sqlalchemy import create_engine, text
+     from sqlalchemy.pool import StaticPool
+     SQLALCHEMY_AVAILABLE = True
+ except ImportError:
+     sa = None
+     create_engine = None
+     text = None
+     StaticPool = None
+     SQLALCHEMY_AVAILABLE = False
+ 
+ try:
+     import pandas as pd
+     PANDAS_AVAILABLE = True
+ except ImportError:
+     pd = None
+     PANDAS_AVAILABLE = False
+ 
+ try:
+     import streamlit as st
+     STREAMLIT_AVAILABLE = True
+ except ImportError:
+@@ -47,50 +48,52 @@ try:
+     from ..config.streamlit_config import format_datetime_user_tz, format_time_ago_user_tz
+     TIMEZONE_UTILS_AVAILABLE = True
+ except ImportError:
+     TIMEZONE_UTILS_AVAILABLE = False
+     format_datetime_user_tz = None
+     format_time_ago_user_tz = None
+ 
+ # Import duration system for FASE 2.3 extension
+ try:
+     from duration_system.duration_calculator import DurationCalculator
+     from duration_system.duration_formatter import DurationFormatter
+     DURATION_SYSTEM_AVAILABLE = True
+ except ImportError:
+     DurationCalculator = None
+     DurationFormatter = None
+     DURATION_SYSTEM_AVAILABLE = False
+ 
+ # Import caching system
+ try:
+     from .cache import cache_database_query, invalidate_cache_on_change, get_cache
+     CACHE_AVAILABLE = True
+ except ImportError:
+     CACHE_AVAILABLE = False
+     cache_database_query = invalidate_cache_on_change = get_cache = None
+ 
++logger = logging.getLogger(__name__)
++
+ 
+ class DatabaseManager:
+     """Streamlit-optimized database manager."""
      
-     conn = sqlite3.connect('framework.db')
-     cursor = conn.cursor()
-     
-     # Test if we can simulate gantt_tracker data requirements
-     try:
-         # Create sample epic and tasks for testing
-         cursor.execute("""
-             INSERT INTO framework_epics (epic_key, name, description, status, duration_days, created_by, assigned_to)
-             VALUES ('COMPAT_TEST', 'Compatibility Test Epic', 'Testing compatibility with gantt tracker', 'in_progress', 5, 1, 1)
-         """)
-         epic_id = cursor.lastrowid
+     def __init__(self, framework_db_path: str = "framework.db", timer_db_path: str = "task_timer.db"):
+         self.framework_db_path = Path(framework_db_path)
+         self.timer_db_path = Path(timer_db_path)
+         self.engines = {}
          
-         # Create sample tasks
-         tasks_data = [
-             ('CT_1', 'Analysis Task', 'analysis', 'completed', 60, 45, 2),
-             ('CT_2', 'Red Test Task', 'red', 'completed', 30, 35, 1),
-             ('CT_3', 'Green Implementation', 'green', 'in_progress', 90, 0, 3),
-             ('CT_4', 'Refactor Task', 'refactor', 'pending', 45, 0, 2)
+         if SQLALCHEMY_AVAILABLE:
+             self._initialize_engines()
+     
+     def _initialize_engines(self):
+         """Initialize SQLAlchemy engines with optimized settings."""
+         if not SQLALCHEMY_AVAILABLE:
+             return
+         
+         # Framework database engine
+         if self.framework_db_path.exists():
+             framework_url = f"sqlite:///{self.framework_db_path}"
+             self.engines["framework"] = create_engine(
+                 framework_url,
+                 poolclass=StaticPool,
+                 connect_args={
+                     "check_same_thread": False,
+@@ -1206,148 +1209,152 @@ class DatabaseManager:
+                             stats[status] = count
+                         total += count
+                     stats["total"] = total
+                     
+                     return stats
+                     
+         except Exception as e:
+             print(f"Error getting task statistics: {e}")
+             return {"todo": 0, "in_progress": 0, "completed": 0, "total": 0}
+     
+     # ==================================================================================
+     # DURATION SYSTEM EXTENSION METHODS (FASE 2.3)
+     # ==================================================================================
+     
+     @cache_database_query("calculate_epic_duration", ttl=300) if CACHE_AVAILABLE else lambda f: f
+     def calculate_epic_duration(self, epic_id: int) -> float:
+         """Calculate total duration for an epic based on task dates.
+         
+         Args:
+             epic_id: ID of the epic to calculate duration for
+             
+         Returns:
+             Duration in days (float), or 0.0 if calculation fails
+         """
+         if not DURATION_SYSTEM_AVAILABLE:
+-            print("Duration system not available - install duration_system package")
++            logger.warning("Duration system not available - install duration_system package")
+             return 0.0
+         
+         try:
+             with self.get_connection("framework") as conn:
+                 # Get epic with date fields
+                 if SQLALCHEMY_AVAILABLE:
+                     result = conn.execute(text("""
+                         SELECT planned_start_date, planned_end_date, 
+                                actual_start_date, actual_end_date,
+                                calculated_duration_days
+                         FROM framework_epics 
+                         WHERE id = :epic_id AND deleted_at IS NULL
+                     """), {"epic_id": epic_id})
+                     epic_row = result.fetchone()
+                 else:
+                     cursor = conn.cursor()
+                     cursor.execute("""
+                         SELECT planned_start_date, planned_end_date,
+                                actual_start_date, actual_end_date,
+                                calculated_duration_days
+                         FROM framework_epics 
+                         WHERE id = ? AND deleted_at IS NULL
+                     """, (epic_id,))
+                     epic_row = cursor.fetchone()
+                 
+                 if not epic_row:
+                     return 0.0
+                 
+                 calculator = DurationCalculator()
+                 
+                 # Try to use existing calculated duration first
+                 if epic_row[4] is not None:  # calculated_duration_days
+                     return float(epic_row[4])
+                 
+                 # Calculate from actual dates if available
+                 if epic_row[2] and epic_row[3]:  # actual_start_date, actual_end_date
+                     return calculator.calculate_duration_days(epic_row[2], epic_row[3])
+                 
+                 # Fall back to planned dates
+                 if epic_row[0] and epic_row[1]:  # planned_start_date, planned_end_date
+                     return calculator.calculate_duration_days(epic_row[0], epic_row[1])
+                 
+                 # If no dates available, sum task durations
+                 return self._calculate_epic_duration_from_tasks(epic_id)
+                 
+         except Exception as e:
+-            print(f"Error calculating epic duration for {epic_id}: {e}")
++            logger.error("Error calculating epic duration for %s: %s", epic_id, e)
+             return 0.0
+     
+     @invalidate_cache_on_change("db_query:get_epics:", "db_query:calculate_epic_duration:") if CACHE_AVAILABLE else lambda f: f
+     def update_duration_description(self, epic_id: int, description: str) -> bool:
+         """Update the duration description for an epic.
+         
+         Args:
+             epic_id: ID of the epic to update
+             description: New duration description (e.g., "1.5 dias", "1 semana")
+             
+         Returns:
+             True if successful, False otherwise
+         """
+         if not DURATION_SYSTEM_AVAILABLE:
+-            print("Duration system not available")
++            logger.warning("Duration system not available")
+             return False
+         
+         try:
+             # Parse and validate duration description
+             calculator = DurationCalculator()
+             duration_days = calculator.parse_and_convert_to_days(description)
+-            
++
+             with self.get_connection("framework") as conn:
+-                if SQLALCHEMY_AVAILABLE:
+-                    conn.execute(text("""
+-                        UPDATE framework_epics 
+-                        SET duration_description = :description,
+-                            calculated_duration_days = :duration_days,
+-                            updated_at = CURRENT_TIMESTAMP
+-                        WHERE id = :epic_id
+-                    """), {
+-                        "description": description,
+-                        "duration_days": duration_days,
+-                        "epic_id": epic_id
+-                    })
+-                    conn.commit()
+-                else:
+-                    cursor = conn.cursor()
+-                    cursor.execute("""
+-                        UPDATE framework_epics 
+-                        SET duration_description = ?, calculated_duration_days = ?, 
+-                            updated_at = CURRENT_TIMESTAMP
+-                        WHERE id = ?
+-                    """, (description, duration_days, epic_id))
+-                    conn.commit()
+-                
+-                return True
+-                
++                try:
++                    if SQLALCHEMY_AVAILABLE:
++                        conn.execute(text("""
++                            UPDATE framework_epics
++                            SET duration_description = :description,
++                                calculated_duration_days = :duration_days,
++                                updated_at = CURRENT_TIMESTAMP
++                            WHERE id = :epic_id
++                        """), {
++                            "description": description,
++                            "duration_days": duration_days,
++                            "epic_id": epic_id
++                        })
++                        conn.commit()
++                    else:
++                        cursor = conn.cursor()
++                        cursor.execute("""
++                            UPDATE framework_epics
++                            SET duration_description = ?, calculated_duration_days = ?,
++                                updated_at = CURRENT_TIMESTAMP
++                            WHERE id = ?
++                        """, (description, duration_days, epic_id))
++                        conn.commit()
++                except Exception:
++                    conn.rollback()
++                    raise
++
++            return True
++
+         except Exception as e:
+-            print(f"Error updating duration description for epic {epic_id}: {e}")
++            logger.error("Error updating duration description for epic %s: %s", epic_id, e)
+             return False
+     
+     @cache_database_query("get_epic_timeline", ttl=180) if CACHE_AVAILABLE else lambda f: f
+     def get_epic_timeline(self, epic_id: int) -> Dict[str, Any]:
+         """Get comprehensive timeline information for an epic.
+         
+         Args:
+             epic_id: ID of the epic to get timeline for
+             
+         Returns:
+             Dictionary with timeline data including dates, durations, and validation
+         """
+         if not DURATION_SYSTEM_AVAILABLE:
+             return {"error": "Duration system not available"}
+         
+         try:
+             with self.get_connection("framework") as conn:
+                 # Get epic timeline data
+                 if SQLALCHEMY_AVAILABLE:
+                     result = conn.execute(text("""
+                         SELECT id, epic_key, name, status,
+                                planned_start_date, planned_end_date,
+                                actual_start_date, actual_end_date,
+                                calculated_duration_days, duration_description,
+                                created_at, updated_at, completed_at
+diff --git a/tests/test_duration_calculator.py b/tests/test_duration_calculator.py
+index 05c86e7370a98f2940d6fc47569137c04e946938..e7059bd460cd3ec35d954b9934c7c3ab9fd9cd12 100644
+--- a/tests/test_duration_calculator.py
++++ b/tests/test_duration_calculator.py
+@@ -199,51 +199,52 @@ class TestDurationCalculator:
+     def test_parse_duration_string_unsupported_unit(self):
+         """Test error with unsupported unit"""
+         # This should not happen with current regex, but test for robustness
+         with pytest.raises(DurationCalculationError):
+             # Patch the regex to allow invalid unit for testing
+             self.calculator._duration_pattern = __import__('re').compile(r'^(\d+(?:\.\d+)?)\s*(invalid)$')
+             self.calculator.parse_duration_string("1 invalid")
+     
+     # ==================================================================================
+     # DURATION CONVERSION TESTS
+     # ==================================================================================
+     
+     def test_duration_to_days_days_unit(self):
+         """Test converting days unit to days"""
+         days = self.calculator.duration_to_days(3.5, DurationUnit.DAYS)
+         assert days == 3.5
+     
+     def test_duration_to_days_weeks_unit(self):
+         """Test converting weeks unit to days"""
+         days = self.calculator.duration_to_days(2.0, DurationUnit.WEEKS)
+         assert days == 14.0
+     
+     def test_duration_to_days_months_unit(self):
+         """Test converting months unit to days"""
+         days = self.calculator.duration_to_days(1.0, DurationUnit.MONTHS)
+-        assert days == 30.0
++        # Uses average Gregorian month length (~30.4375 days)
++        assert days == pytest.approx(30.4375)
+     
+     def test_parse_and_convert_to_days_real_epic_formats(self):
+         """Test parsing and converting real epic duration formats"""
+         # Test formats from real epic data
+         test_cases = [
+             ("1.5 dias", 1.5),
+             ("2 dias", 2.0),
+             ("5 dias", 5.0),
+             ("1 semana", 7.0),
+             ("4 dias", 4.0)
          ]
          
-         for task_key, title, tdd_phase, status, estimate, actual, story_points in tasks_data:
-@@ -91,59 +93,58 @@ def test_gantt_tracker_compatibility():
-         time_data = cursor.fetchall()
-         print(f"  ⏱️ Time tracking data for {len(time_data)} completed tasks")
-         
-         # Test progress calculation
-         cursor.execute("""
-             SELECT 
-                 COUNT(*) as total_tasks,
-                 COUNT(CASE WHEN status = 'completed' THEN 1 END) as completed_tasks,
-                 ROUND(
-                     COUNT(CASE WHEN status = 'completed' THEN 1 END) * 100.0 / 
-                     COUNT(*), 1
-                 ) as completion_percentage
-             FROM framework_tasks
-             WHERE epic_id = ?
-         """, (epic_id,))
-         
-         progress = cursor.fetchone()
-         print(f"  📈 Progress calculation: {progress[1]}/{progress[0]} tasks ({progress[2]}%)")
-         
-         # Cleanup test data
-         cursor.execute("DELETE FROM framework_tasks WHERE epic_id = ?", (epic_id,))
-         cursor.execute("DELETE FROM framework_epics WHERE id = ?", (epic_id,))
-         conn.commit()
-         
-         print("  ✅ Gantt tracker compatibility test passed")
--        return True
-         
-     except Exception as e:
--        print(f"  ❌ Gantt tracker compatibility test failed: {e}")
--        return False
-+        pytest.fail(f"  ❌ Gantt tracker compatibility test failed: {e}")
+         for duration_str, expected_days in test_cases:
+             days = self.calculator.parse_and_convert_to_days(duration_str)
+             assert days == expected_days
      
-     finally:
-         conn.close()
- 
-+@pytest.mark.skip(reason="Compatibility check requires manual environment")
- def test_analytics_engine_compatibility():
-     """Test if analytics_engine.py can work with new database structure."""
-     print("\n📈 Testing Analytics Engine Compatibility...")
+     # ==================================================================================
+     # DATE CONSISTENCY VALIDATION TESTS
+     # ==================================================================================
      
-     conn = sqlite3.connect('framework.db')
-     cursor = conn.cursor()
-     
-     try:
-         # Test user productivity analytics
-         cursor.execute("""
-             SELECT 
-                 u.username,
-                 u.total_points,
-                 COUNT(t.id) as total_tasks,
-                 COUNT(CASE WHEN t.status = 'completed' THEN 1 END) as completed_tasks,
-                 AVG(CASE WHEN t.status = 'completed' AND t.estimate_minutes > 0 
-                     THEN (t.actual_minutes * 100.0) / t.estimate_minutes 
-                     END) as avg_efficiency,
-                 SUM(t.story_points) as total_story_points
-             FROM framework_users u
-             LEFT JOIN framework_tasks t ON u.id = t.assigned_to
-             WHERE u.is_active = TRUE
-             GROUP BY u.id, u.username, u.total_points
-         """)
-         
-@@ -178,143 +179,140 @@ def test_analytics_engine_compatibility():
-             LEFT JOIN user_achievements ua ON at.id = ua.achievement_id
-             GROUP BY at.category, at.rarity
-             ORDER BY unlock_count DESC
-         """)
-         
-         achievement_analytics = cursor.fetchall()
-         print(f"  🏆 Achievement analytics data for {len(achievement_analytics)} categories")
-         
-         # Test TDD phase distribution
-         cursor.execute("""
-             SELECT 
-                 tdd_phase,
-                 COUNT(*) as task_count,
-                 AVG(actual_minutes) as avg_time,
-                 AVG(story_points) as avg_story_points
-             FROM framework_tasks
-             WHERE tdd_phase IS NOT NULL
-             GROUP BY tdd_phase
-             ORDER BY task_count DESC
-         """)
-         
-         tdd_analytics = cursor.fetchall()
-         print(f"  🔄 TDD phase analytics for {len(tdd_analytics)} phases")
-         
-         print("  ✅ Analytics engine compatibility test passed")
--        return True
-         
-     except Exception as e:
--        print(f"  ❌ Analytics engine compatibility test failed: {e}")
--        return False
-+        pytest.fail(f"  ❌ Analytics engine compatibility test failed: {e}")
-     
-     finally:
-         conn.close()
- 
-+@pytest.mark.skip(reason="Compatibility check requires manual environment")
- def test_json_export_compatibility():
-     """Test if data can be exported back to JSON format for compatibility."""
-     print("\n📄 Testing JSON Export Compatibility...")
-     
-     conn = sqlite3.connect('framework.db')
-     cursor = conn.cursor()
-     
-     try:
-         # Test exporting epic data to JSON format
-         cursor.execute("""
-             SELECT 
-                 e.epic_key as id,
-                 e.name,
-                 e.description,
-                 e.status,
-                 e.duration_days as duration,
-                 json_group_array(
-                     json_object(
-                         'id', t.task_key,
-                         'title', t.title,
-                         'tdd_phase', t.tdd_phase,
-                         'status', t.status,
-                         'estimate_minutes', t.estimate_minutes,
-                         'actual_minutes', t.actual_minutes,
-                         'story_points', t.story_points
-                     )
-                 ) as tasks
-             FROM framework_epics e
-             LEFT JOIN framework_tasks t ON e.id = t.epic_id
-             WHERE e.epic_key NOT LIKE 'TEST_%'
-             GROUP BY e.id, e.epic_key, e.name, e.description, e.status, e.duration_days
-             LIMIT 1
-         """)
-         
-         epic_data = cursor.fetchone()
--        
-+
-         if epic_data:
-             # Try to parse the JSON
-             tasks_json = json.loads(epic_data[5])
-             print(f"  ✅ Successfully exported epic with {len(tasks_json)} tasks to JSON")
--            
-+
-             # Create a sample export structure
-             export_structure = {
-                 "epic": {
-                     "id": epic_data[0],
-                     "name": epic_data[1],
-                     "description": epic_data[2],
-                     "status": epic_data[3],
-                     "duration": epic_data[4],
-                     "tasks": tasks_json
-                 }
-             }
--            
-+
-             print(f"  📋 Export structure compatible with original JSON format")
-         else:
--            print("  ⚠️ No data available for JSON export test")
--        
-+            pytest.skip("  ⚠️ No data available for JSON export test")
-+
-         print("  ✅ JSON export compatibility test passed")
--        return True
-         
-     except Exception as e:
--        print(f"  ❌ JSON export compatibility test failed: {e}")
--        return False
-+        pytest.fail(f"  ❌ JSON export compatibility test failed: {e}")
-     
-     finally:
-         conn.close()
- 
- def run_compatibility_tests():
-     """Run all compatibility tests."""
-     print("🔗 Framework Database Compatibility Test Suite")
-     print("=" * 60)
-     
-     tests = [
-         test_gantt_tracker_compatibility,
-         test_analytics_engine_compatibility,
-         test_json_export_compatibility
-     ]
-     
-     passed = 0
-     failed = 0
-     
-     for test in tests:
-         try:
-             if test():
-                 passed += 1
-             else:
-                 failed += 1
-         except Exception as e:
-             print(f"❌ Test {test.__name__} crashed: {e}")
-             failed += 1
-     
-     # Summary
-     print("\n" + "=" * 60)
-     print("🏁 Compatibility Test Results")
-     print("=" * 60)
-     print(f"✅ Tests Passed: {passed}")
-     print(f"❌ Tests Failed: {failed}")
-     print(f"📊 Success Rate: {(passed / (passed + failed) * 100):.1f}%")
-     
-     if failed == 0:
-         print("\n🎉 All compatibility tests passed! Systems are compatible.")
-         return True
-     else:
-         print(f"\n💥 {failed} compatibility test(s) failed!")
-         return False
- 
- if __name__ == "__main__":
-     success = run_compatibility_tests()
--    sys.exit(0 if success else 1)
-\ No newline at end of file
-+    sys.exit(0 if success else 1)
-diff --git a/test_dashboard.py b/test_dashboard.py
-index dd264be7034ebe004a68995d6af429afe0e651a2..68c0bea6c1d6fb132b86f7ba232b03fd9babcde1 100644
---- a/test_dashboard.py
-+++ b/test_dashboard.py
-@@ -1,36 +1,38 @@
- #!/usr/bin/env python3
- """
- Test script for enhanced dashboard components
- """
- 
- import sys
- from pathlib import Path
-+import pytest
- 
- # Add path for imports
- sys.path.append(str(Path(__file__).parent))
- 
-+@pytest.mark.skip(reason="Dashboard integration requires manual verification")
- def test_dashboard_components():
-     """Test all dashboard components."""
-     
-     print("🧪 Testing Enhanced Dashboard Components...")
-     print("=" * 60)
-     
-     # Test 1: Dashboard widgets
-     print("\n1. Testing dashboard widgets...")
-     try:
-         from streamlit_extension.components.dashboard_widgets import (
-             WelcomeHeader, DailyStats, ProductivityHeatmap,
-             ProgressRing, SparklineChart, AchievementCard,
-             NotificationToast, NotificationData, QuickActionButton
-         )
-         print("   ✅ All dashboard widgets imported successfully")
-     except ImportError as e:
-         print(f"   ❌ Dashboard widgets import failed: {e}")
-         return False
-     
-     # Test 2: Database extensions
-     print("\n2. Testing database extensions...")
-     try:
-         from streamlit_extension.utils.database import DatabaseManager
-         
-         db = DatabaseManager()
-@@ -113,26 +115,26 @@ def test_dashboard_components():
-     print("   • Dynamic welcome header with time-based greetings")
-     print("   • Productivity heatmap and metrics")
-     print("   • Enhanced epic progress cards")
-     print("   • Real-time notifications system")
-     print("   • Gamification widgets")
-     print("   • Quick action buttons")
-     print("   • Recent activity feed")
-     
-     return True
- 
- 
- def main():
-     """Run dashboard tests."""
-     success = test_dashboard_components()
-     
-     if success:
-         print("\n🚀 Dashboard is ready to run with:")
-         print("   streamlit run streamlit_extension/streamlit_app.py")
-     else:
-         print("\n⚠️ Some issues found. Please check the errors above.")
-     
-     return 0 if success else 1
- 
- 
- if __name__ == "__main__":
--    exit(main())
-\ No newline at end of file
-+    exit(main())
-diff --git a/test_database_extension_quick.py b/test_database_extension_quick.py
-index 0417241ff712417111eed07bc7b34ac121d918da..428a19addacd4743d9dc58e1bd4b472e9e33349a 100644
---- a/test_database_extension_quick.py
-+++ b/test_database_extension_quick.py
-@@ -49,64 +49,64 @@ def test_quick_validation():
-             epic_id INTEGER,
-             title VARCHAR(200),
-             estimate_minutes INTEGER DEFAULT 0,
-             deleted_at TIMESTAMP
-         )
-     """)
-     
-     # Insert test epic
-     cursor.execute("""
-         INSERT INTO framework_epics (id, epic_key, name) 
-         VALUES (1, 'TEST_1', 'Test Epic')
-     """)
-     
-     conn.commit()
-     conn.close()
-     
-     try:
-         # Initialize DatabaseManager
-         db_manager = DatabaseManager(framework_db_path=db_path)
-         
-         print("✅ DatabaseManager initialized with duration extension")
-         
-         # Test 1: Update duration description
-         success = db_manager.update_duration_description(1, "2.5 dias")
-         print(f"✅ update_duration_description: {success}")
-+        assert success
-         
-         # Test 2: Calculate duration
-         duration = db_manager.calculate_epic_duration(1)
-         print(f"✅ calculate_epic_duration: {duration} days")
-         assert duration == 2.5
-         
-         # Test 3: Validate consistency
-         is_valid = db_manager.validate_date_consistency(1)
-         print(f"✅ validate_date_consistency: {is_valid}")
-+        assert is_valid
-         
-         # Test 4: Get timeline
-         timeline = db_manager.get_epic_timeline(1)
-         print(f"✅ get_epic_timeline: {timeline}")
-         if "error" in timeline:
-             print(f"⚠️  Timeline has error: {timeline['error']}")
-         else:
-             assert "epic" in timeline
-             assert "duration_info" in timeline
-         
-         print("\n🎉 All core DatabaseManager extension methods work correctly!")
-         
-         # Verify in database
-         conn = sqlite3.connect(db_path)
-         cursor = conn.cursor()
-         cursor.execute("SELECT duration_description, calculated_duration_days FROM framework_epics WHERE id = 1")
-         row = cursor.fetchone()
-         conn.close()
-         
-         print(f"📊 Database verification: description='{row[0]}', days={row[1]}")
-         
--        return True
--        
-     finally:
-         # Cleanup
-         if os.path.exists(db_path):
-             os.unlink(db_path)
- 
- if __name__ == "__main__":
--    test_quick_validation()
-\ No newline at end of file
-+    test_quick_validation()
-diff --git a/test_github_token.py b/test_github_token.py
-index 4894cc9c866eabc6d81d35a4e03d53bb5080603e..0597dbcd9118116e4630c8d66a90928e8630cb71 100644
---- a/test_github_token.py
-+++ b/test_github_token.py
-@@ -1,116 +1,117 @@
- #!/usr/bin/env python3
- """
- Script para testar a validade do token do GitHub
- """
- 
- import os
- import sys
-+import pytest
- 
- # Tenta importar bibliotecas, se não estiverem disponíveis usa método alternativo
- try:
-     import requests
- except ImportError:
-     print("⚠️  Biblioteca 'requests' não encontrada. Usando urllib como fallback.")
-     import urllib.request
-     import json
-     requests = None
- 
- try:
-     from dotenv import load_dotenv
-     HAS_DOTENV = True
- except ImportError:
-     HAS_DOTENV = False
- 
- def load_env_manually():
-     """Carrega .env manualmente se python-dotenv não estiver disponível"""
-     env_path = '.env'
-     if os.path.exists(env_path):
-         with open(env_path, 'r') as f:
-             for line in f:
-                 line = line.strip()
-                 if line and not line.startswith('#') and '=' in line:
-                     key, value = line.split('=', 1)
-                     os.environ[key.strip()] = value.strip()
- 
- def test_github_token():
-     """Testa se o token do GitHub está funcionando"""
-     
-     # Carrega variáveis de ambiente
-     if HAS_DOTENV:
-         from dotenv import load_dotenv
-         load_dotenv()
-     else:
-         load_env_manually()
-     
-     # Obtém o token
-     token = os.getenv('GITHUB_TOKEN')
--    
-+
-     if not token:
--        print("❌ Token do GitHub não encontrado no arquivo .env")
--        return False
-+        pytest.skip("GITHUB_TOKEN não encontrado no arquivo .env")
-     
-     # Testa o token fazendo uma requisição para a API do GitHub
-     headers = {
-         'Authorization': f'token {token}',
-         'Accept': 'application/vnd.github.v3+json'
-     }
-     
-     try:
-         if requests:
-             # Usa requests se disponível
-             response = requests.get('https://api.github.com/user', headers=headers)
-             status_code = response.status_code
-             if status_code == 200:
-                 user_data = response.json()
-             else:
-                 user_data = None
-         else:
-             # Usa urllib como fallback
-             req = urllib.request.Request('https://api.github.com/user', headers=headers)
-             try:
-                 with urllib.request.urlopen(req) as response:
-                     status_code = response.status
-                     user_data = json.loads(response.read().decode())
-             except urllib.error.HTTPError as e:
-                 status_code = e.code
-                 user_data = None
-         
-         if status_code == 200 and user_data:
-             print(f"✅ Token válido! Autenticado como: {user_data.get('login', 'Unknown')}")
-             print(f"   Nome: {user_data.get('name', 'N/A')}")
-             print(f"   Email: {user_data.get('email', 'N/A')}")
-             
-             # Verifica rate limit
-             if requests:
-                 rate_response = requests.get('https://api.github.com/rate_limit', headers=headers)
-                 if rate_response.status_code == 200:
-                     rate_data = rate_response.json()
-             else:
-                 req = urllib.request.Request('https://api.github.com/rate_limit', headers=headers)
-                 try:
-                     with urllib.request.urlopen(req) as response:
-                         rate_data = json.loads(response.read().decode())
-                 except:
-                     rate_data = None
-             
-             if rate_data:
-                 core_limit = rate_data['rate']
-                 print(f"\n📊 Rate Limit:")
-                 print(f"   Limite: {core_limit['limit']} requisições/hora")
-                 print(f"   Restante: {core_limit['remaining']} requisições")
--            
--            return True
-+
-+            assert True
-         elif status_code == 401:
--            print("❌ Token inválido ou expirado")
--            return False
-+            pytest.fail("Token inválido ou expirado")
-         else:
--            print(f"❌ Erro ao validar token: HTTP {status_code}")
--            return False
-+            pytest.fail(f"Erro ao validar token: HTTP {status_code}")
-             
-     except Exception as e:
--        print(f"❌ Erro de conexão: {e}")
--        return False
-+        pytest.fail(f"Erro de conexão: {e}")
- 
- if __name__ == "__main__":
--    success = test_github_token()
--    sys.exit(0 if success else 1)
-\ No newline at end of file
-+    success = False
-+    try:
-+        test_github_token()
-+        success = True
-+    finally:
-+        sys.exit(0 if success else 1)
+     def test_validate_date_consistency_valid_planned_dates(self):
+         """Test validation with valid planned dates"""
+         result = self.calculator.validate_date_consistency(
+             planned_start="2025-01-01",
+             planned_end="2025-01-08",
  
 EOF
 )
