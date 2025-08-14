@@ -147,7 +147,7 @@ class DatabaseManager:
                     result = conn.execute(text("""
                         SELECT id, epic_key, name, description, status, 
                                created_at, updated_at, completed_at,
-                               points_earned, difficulty_level
+                               points_earned, difficulty_level, project_id
                         FROM framework_epics 
                         WHERE deleted_at IS NULL
                         ORDER BY created_at DESC
@@ -158,7 +158,7 @@ class DatabaseManager:
                     cursor.execute("""
                         SELECT id, epic_key, name, description, status,
                                created_at, updated_at, completed_at,
-                               points_earned, difficulty_level
+                               points_earned, difficulty_level, project_id
                         FROM framework_epics 
                         WHERE deleted_at IS NULL
                         ORDER BY created_at DESC
@@ -1543,3 +1543,545 @@ class DatabaseManager:
                            
         except Exception:
             return []
+    
+    # ==================================================================================
+    # HIERARCHY SYSTEM METHODS (CLIENT → PROJECT → EPIC → TASK) - SCHEMA V6
+    # ==================================================================================
+    
+    @cache_database_query("get_clients", ttl=300) if CACHE_AVAILABLE else lambda f: f
+    def get_clients(self, include_inactive: bool = True) -> List[Dict[str, Any]]:
+        """Get all clients with caching support.
+        
+        Args:
+            include_inactive: If True, include inactive/archived clients
+            
+        Returns:
+            List of client dictionaries
+        """
+        try:
+            with self.get_connection("framework") as conn:
+                query = """
+                    SELECT id, client_key, name, description, industry, company_size,
+                           primary_contact_name, primary_contact_email, 
+                           timezone, currency, preferred_language,
+                           hourly_rate, contract_type, status, client_tier,
+                           priority_level, account_manager_id, technical_lead_id,
+                           created_at, updated_at, last_contact_date
+                    FROM framework_clients 
+                    WHERE deleted_at IS NULL
+                """
+                
+                params = []
+                if not include_inactive:
+                    query += " AND status = ?"
+                    params.append("active")
+                
+                query += " ORDER BY priority_level DESC, name ASC"
+                
+                # Use sqlite3 for this method to avoid parameter issues
+                if False:  # Temporarily disable SQLAlchemy
+                    if params:
+                        result = conn.execute(text(query), {"status": params[0]})
+                    else:
+                        result = conn.execute(text(query))
+                    return [dict(row._mapping) for row in result]
+                else:
+                    cursor = conn.cursor()
+                    cursor.execute(query, params)
+                    return [dict(row) for row in cursor.fetchall()]
+        except Exception as e:
+            logger.error(f"Error loading clients: {e}")
+            if STREAMLIT_AVAILABLE and st:
+                st.error(f"❌ Error loading clients: {e}")
+            return []
+    
+    @cache_database_query("get_projects", ttl=300) if CACHE_AVAILABLE else lambda f: f
+    def get_projects(self, client_id: Optional[int] = None, include_inactive: bool = False) -> List[Dict[str, Any]]:
+        """Get projects with caching support.
+        
+        Args:
+            client_id: Filter by specific client ID (optional)
+            include_inactive: If True, include inactive/archived projects
+            
+        Returns:
+            List of project dictionaries with client information
+        """
+        try:
+            with self.get_connection("framework") as conn:
+                query = """
+                    SELECT p.id, p.client_id, p.project_key, p.name, p.description,
+                           p.summary, p.project_type, p.methodology, p.status,
+                           p.priority, p.health_status, p.completion_percentage,
+                           p.planned_start_date, p.planned_end_date,
+                           p.actual_start_date, p.actual_end_date,
+                           p.estimated_hours, p.actual_hours,
+                           p.budget_amount, p.budget_currency, p.hourly_rate,
+                           p.project_manager_id, p.technical_lead_id,
+                           p.repository_url, p.deployment_url, p.documentation_url,
+                           p.created_at, p.updated_at,
+                           c.name as client_name, c.client_key as client_key,
+                           c.status as client_status, c.client_tier
+                    FROM framework_projects p
+                    INNER JOIN framework_clients c ON p.client_id = c.id AND c.deleted_at IS NULL
+                    WHERE p.deleted_at IS NULL
+                """
+                
+                params = []
+                if client_id:
+                    query += " AND p.client_id = ?"
+                    params.append(client_id)
+                
+                if not include_inactive:
+                    query += " AND p.status NOT IN ('cancelled', 'archived')"
+                
+                query += " ORDER BY p.priority DESC, p.name ASC"
+                
+                # Use sqlite3 for this method to avoid parameter issues  
+                if False:  # Temporarily disable SQLAlchemy
+                    if client_id:
+                        result = conn.execute(text(query), {"client_id": client_id})
+                    else:
+                        result = conn.execute(text(query))
+                    return [dict(row._mapping) for row in result]
+                else:
+                    cursor = conn.cursor()
+                    cursor.execute(query, params)
+                    return [dict(row) for row in cursor.fetchall()]
+        except Exception as e:
+            logger.error(f"Error loading projects: {e}")
+            if STREAMLIT_AVAILABLE and st:
+                st.error(f"❌ Error loading projects: {e}")
+            return []
+    
+    @cache_database_query("get_epics_with_hierarchy", ttl=300) if CACHE_AVAILABLE else lambda f: f
+    def get_epics_with_hierarchy(self, project_id: Optional[int] = None, client_id: Optional[int] = None) -> List[Dict[str, Any]]:
+        """Get epics with complete hierarchy information (client → project → epic).
+        
+        Args:
+            project_id: Filter by specific project ID (optional)
+            client_id: Filter by specific client ID (optional)
+            
+        Returns:
+            List of epic dictionaries with client and project information
+        """
+        try:
+            with self.get_connection("framework") as conn:
+                query = """
+                    SELECT e.id, e.epic_key, e.name, e.description, e.summary,
+                           e.status, e.priority, e.duration_days,
+                           e.points_earned, e.difficulty_level,
+                           e.planned_start_date, e.planned_end_date,
+                           e.actual_start_date, e.actual_end_date,
+                           e.calculated_duration_days, e.duration_description,
+                           e.created_at, e.updated_at, e.completed_at,
+                           e.project_id,
+                           p.name as project_name, p.project_key, p.status as project_status,
+                           p.health_status as project_health, p.client_id,
+                           c.name as client_name, c.client_key, c.status as client_status,
+                           c.client_tier, c.hourly_rate as client_hourly_rate
+                    FROM framework_epics e
+                    LEFT JOIN framework_projects p ON e.project_id = p.id AND p.deleted_at IS NULL
+                    LEFT JOIN framework_clients c ON p.client_id = c.id AND c.deleted_at IS NULL
+                    WHERE e.deleted_at IS NULL
+                """
+                
+                params = []
+                if project_id:
+                    query += " AND e.project_id = ?"
+                    params.append(project_id)
+                elif client_id:
+                    query += " AND p.client_id = ?"
+                    params.append(client_id)
+                
+                query += " ORDER BY c.priority_level DESC, p.priority DESC, e.created_at DESC"
+                
+                if SQLALCHEMY_AVAILABLE:
+                    result = conn.execute(text(query), params)
+                    return [dict(row._mapping) for row in result]
+                else:
+                    cursor = conn.cursor()
+                    cursor.execute(query, params)
+                    return [dict(row) for row in cursor.fetchall()]
+        except Exception as e:
+            logger.error(f"Error loading epics with hierarchy: {e}")
+            if STREAMLIT_AVAILABLE and st:
+                st.error(f"❌ Error loading epics with hierarchy: {e}")
+            return []
+    
+    @cache_database_query("get_hierarchy_overview", ttl=180) if CACHE_AVAILABLE else lambda f: f
+    def get_hierarchy_overview(self, client_id: Optional[int] = None) -> List[Dict[str, Any]]:
+        """Get complete hierarchy overview using the database view.
+        
+        Args:
+            client_id: Filter by specific client ID (optional)
+            
+        Returns:
+            List of hierarchy records with aggregated task counts
+        """
+        try:
+            with self.get_connection("framework") as conn:
+                query = """
+                    SELECT client_id, client_key, client_name, client_status, client_tier,
+                           project_id, project_key, project_name, project_status, project_health,
+                           project_completion, epic_id, epic_key, epic_name, epic_status,
+                           calculated_duration_days, total_tasks, completed_tasks,
+                           epic_completion_percentage, planned_start_date, planned_end_date,
+                           epic_planned_start, epic_planned_end
+                    FROM hierarchy_overview
+                    WHERE 1=1
+                """
+                
+                params = []
+                if client_id:
+                    query += " AND client_id = ?"
+                    params.append(client_id)
+                
+                query += " ORDER BY client_name, project_name, epic_key"
+                
+                if SQLALCHEMY_AVAILABLE:
+                    result = conn.execute(text(query), params)
+                    return [dict(row._mapping) for row in result]
+                else:
+                    cursor = conn.cursor()
+                    cursor.execute(query, params)
+                    return [dict(row) for row in cursor.fetchall()]
+        except Exception as e:
+            logger.error(f"Error loading hierarchy overview: {e}")
+            return []
+    
+    @cache_database_query("get_client_dashboard", ttl=180) if CACHE_AVAILABLE else lambda f: f
+    def get_client_dashboard(self, client_id: Optional[int] = None) -> List[Dict[str, Any]]:
+        """Get client dashboard data using the database view.
+        
+        Args:
+            client_id: Get data for specific client (optional)
+            
+        Returns:
+            List of client dashboard records with aggregated metrics
+        """
+        try:
+            with self.get_connection("framework") as conn:
+                query = """
+                    SELECT client_id, client_key, client_name, client_status, client_tier,
+                           hourly_rate, total_projects, active_projects, completed_projects,
+                           total_epics, active_epics, completed_epics,
+                           total_tasks, completed_tasks, in_progress_tasks,
+                           total_hours_logged, total_budget, total_points_earned,
+                           earliest_project_start, latest_project_end,
+                           projects_at_risk, avg_project_completion
+                    FROM client_dashboard
+                    WHERE 1=1
+                """
+                
+                params = []
+                if client_id:
+                    query += " AND client_id = ?"
+                    params.append(client_id)
+                
+                query += " ORDER BY client_name"
+                
+                if SQLALCHEMY_AVAILABLE:
+                    result = conn.execute(text(query), params)
+                    return [dict(row._mapping) for row in result]
+                else:
+                    cursor = conn.cursor()
+                    cursor.execute(query, params)
+                    return [dict(row) for row in cursor.fetchall()]
+        except Exception as e:
+            logger.error(f"Error loading client dashboard: {e}")
+            return []
+    
+    @cache_database_query("get_project_dashboard", ttl=180) if CACHE_AVAILABLE else lambda f: f  
+    def get_project_dashboard(self, project_id: Optional[int] = None, client_id: Optional[int] = None) -> List[Dict[str, Any]]:
+        """Get project dashboard data using the database view.
+        
+        Args:
+            project_id: Get data for specific project (optional)
+            client_id: Get data for projects of specific client (optional)
+            
+        Returns:
+            List of project dashboard records with aggregated metrics
+        """
+        try:
+            with self.get_connection("framework") as conn:
+                query = """
+                    SELECT project_id, project_key, project_name, project_status, health_status,
+                           completion_percentage, client_id, client_name, client_tier,
+                           total_epics, completed_epics, active_epics,
+                           total_tasks, completed_tasks, in_progress_tasks,
+                           estimated_hours, actual_hours, estimated_task_hours, actual_task_hours,
+                           budget_amount, hourly_rate, planned_start_date, planned_end_date,
+                           actual_start_date, actual_end_date, calculated_completion_percentage,
+                           total_points_earned, complexity_score, quality_score
+                    FROM project_dashboard
+                    WHERE 1=1
+                """
+                
+                params = []
+                if project_id:
+                    query += " AND project_id = ?"
+                    params.append(project_id)
+                elif client_id:
+                    query += " AND client_id = ?"
+                    params.append(client_id)
+                
+                query += " ORDER BY client_name, project_name"
+                
+                if SQLALCHEMY_AVAILABLE:
+                    result = conn.execute(text(query), params)
+                    return [dict(row._mapping) for row in result]
+                else:
+                    cursor = conn.cursor()
+                    cursor.execute(query, params)
+                    return [dict(row) for row in cursor.fetchall()]
+        except Exception as e:
+            logger.error(f"Error loading project dashboard: {e}")
+            return []
+    
+    # ==================================================================================
+    # HIERARCHY CRUD OPERATIONS
+    # ==================================================================================
+    
+    @invalidate_cache_on_change("db_query:get_clients:") if CACHE_AVAILABLE else lambda f: f
+    def create_client(self, client_key: str, name: str, description: str = "", 
+                     industry: str = "", company_size: str = "startup",
+                     primary_contact_name: str = "", primary_contact_email: str = "",
+                     hourly_rate: float = 0.0, **kwargs) -> Optional[int]:
+        """Create a new client.
+        
+        Args:
+            client_key: Unique client identifier
+            name: Client company name
+            description: Client description
+            industry: Industry sector
+            company_size: Company size category
+            primary_contact_name: Main contact person
+            primary_contact_email: Main contact email
+            hourly_rate: Default hourly rate for this client
+            **kwargs: Additional client fields
+            
+        Returns:
+            Client ID if successful, None otherwise
+        """
+        try:
+            client_data = {
+                'client_key': client_key,
+                'name': name,
+                'description': description,
+                'industry': industry,
+                'company_size': company_size,
+                'primary_contact_name': primary_contact_name,
+                'primary_contact_email': primary_contact_email,
+                'hourly_rate': hourly_rate,
+                'status': kwargs.get('status', 'active'),
+                'client_tier': kwargs.get('client_tier', 'standard'),
+                'priority_level': kwargs.get('priority_level', 5),
+                'timezone': kwargs.get('timezone', 'America/Sao_Paulo'),
+                'currency': kwargs.get('currency', 'BRL'),
+                'preferred_language': kwargs.get('preferred_language', 'pt-BR'),
+                'contract_type': kwargs.get('contract_type', 'time_and_materials'),
+                'created_by': kwargs.get('created_by', 1)
+            }
+            
+            with self.get_connection("framework") as conn:
+                placeholders = ', '.join(['?' for _ in client_data])
+                columns = ', '.join(client_data.keys())
+                
+                if SQLALCHEMY_AVAILABLE:
+                    # Convert to named parameters for SQLAlchemy
+                    named_placeholders = ', '.join([f':{key}' for key in client_data.keys()])
+                    result = conn.execute(
+                        text(f"INSERT INTO framework_clients ({columns}) VALUES ({named_placeholders})"),
+                        client_data
+                    )
+                    conn.commit()
+                    return result.lastrowid
+                else:
+                    cursor = conn.cursor()
+                    cursor.execute(
+                        f"INSERT INTO framework_clients ({columns}) VALUES ({placeholders})",
+                        list(client_data.values())
+                    )
+                    conn.commit()
+                    return cursor.lastrowid
+                    
+        except Exception as e:
+            logger.error(f"Error creating client: {e}")
+            if STREAMLIT_AVAILABLE and st:
+                st.error(f"❌ Error creating client: {e}")
+            return None
+    
+    @invalidate_cache_on_change("db_query:get_projects:", "db_query:get_hierarchy_overview:") if CACHE_AVAILABLE else lambda f: f
+    def create_project(self, client_id: int, project_key: str, name: str,
+                      description: str = "", project_type: str = "development",
+                      methodology: str = "agile", **kwargs) -> Optional[int]:
+        """Create a new project.
+        
+        Args:
+            client_id: ID of the client who owns this project
+            project_key: Unique project identifier within client
+            name: Project name
+            description: Project description
+            project_type: Type of project (development, maintenance, etc.)
+            methodology: Development methodology (agile, waterfall, etc.)
+            **kwargs: Additional project fields
+            
+        Returns:
+            Project ID if successful, None otherwise
+        """
+        try:
+            project_data = {
+                'client_id': client_id,
+                'project_key': project_key,
+                'name': name,
+                'description': description,
+                'project_type': project_type,
+                'methodology': methodology,
+                'status': kwargs.get('status', 'planning'),
+                'priority': kwargs.get('priority', 5),
+                'health_status': kwargs.get('health_status', 'green'),
+                'completion_percentage': kwargs.get('completion_percentage', 0),
+                'planned_start_date': kwargs.get('planned_start_date'),
+                'planned_end_date': kwargs.get('planned_end_date'),
+                'estimated_hours': kwargs.get('estimated_hours', 0),
+                'budget_amount': kwargs.get('budget_amount', 0),
+                'budget_currency': kwargs.get('budget_currency', 'BRL'),
+                'hourly_rate': kwargs.get('hourly_rate'),
+                'project_manager_id': kwargs.get('project_manager_id', 1),
+                'technical_lead_id': kwargs.get('technical_lead_id', 1),
+                'repository_url': kwargs.get('repository_url', ''),
+                'visibility': kwargs.get('visibility', 'client'),
+                'access_level': kwargs.get('access_level', 'standard'),
+                'complexity_score': kwargs.get('complexity_score', 5.0),
+                'quality_score': kwargs.get('quality_score', 8.0),
+                'created_by': kwargs.get('created_by', 1)
+            }
+            
+            with self.get_connection("framework") as conn:
+                # Remove None values
+                project_data = {k: v for k, v in project_data.items() if v is not None}
+                
+                placeholders = ', '.join(['?' for _ in project_data])
+                columns = ', '.join(project_data.keys())
+                
+                if SQLALCHEMY_AVAILABLE:
+                    named_placeholders = ', '.join([f':{key}' for key in project_data.keys()])
+                    result = conn.execute(
+                        text(f"INSERT INTO framework_projects ({columns}) VALUES ({named_placeholders})"),
+                        project_data
+                    )
+                    conn.commit()
+                    return result.lastrowid
+                else:
+                    cursor = conn.cursor()
+                    cursor.execute(
+                        f"INSERT INTO framework_projects ({columns}) VALUES ({placeholders})",
+                        list(project_data.values())
+                    )
+                    conn.commit()
+                    return cursor.lastrowid
+                    
+        except Exception as e:
+            logger.error(f"Error creating project: {e}")
+            if STREAMLIT_AVAILABLE and st:
+                st.error(f"❌ Error creating project: {e}")
+            return None
+    
+    @invalidate_cache_on_change("db_query:get_epics:", "db_query:get_epics_with_hierarchy:") if CACHE_AVAILABLE else lambda f: f
+    def update_epic_project(self, epic_id: int, project_id: int) -> bool:
+        """Update the project assignment for an epic.
+        
+        Args:
+            epic_id: ID of the epic to update
+            project_id: ID of the new project
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            with self.get_connection("framework") as conn:
+                if SQLALCHEMY_AVAILABLE:
+                    conn.execute(text("""
+                        UPDATE framework_epics 
+                        SET project_id = :project_id, updated_at = CURRENT_TIMESTAMP
+                        WHERE id = :epic_id
+                    """), {"project_id": project_id, "epic_id": epic_id})
+                    conn.commit()
+                else:
+                    cursor = conn.cursor()
+                    cursor.execute("""
+                        UPDATE framework_epics 
+                        SET project_id = ?, updated_at = CURRENT_TIMESTAMP
+                        WHERE id = ?
+                    """, (project_id, epic_id))
+                    conn.commit()
+                
+                return True
+                
+        except Exception as e:
+            logger.error(f"Error updating epic project: {e}")
+            return False
+    
+    def get_client_by_key(self, client_key: str) -> Optional[Dict[str, Any]]:
+        """Get client by client_key.
+        
+        Args:
+            client_key: Client key to search for
+            
+        Returns:
+            Client dictionary if found, None otherwise
+        """
+        try:
+            with self.get_connection("framework") as conn:
+                if SQLALCHEMY_AVAILABLE:
+                    result = conn.execute(text("""
+                        SELECT * FROM framework_clients 
+                        WHERE client_key = :client_key AND deleted_at IS NULL
+                    """), {"client_key": client_key})
+                    row = result.fetchone()
+                    return dict(row._mapping) if row else None
+                else:
+                    cursor = conn.cursor()
+                    cursor.execute("""
+                        SELECT * FROM framework_clients 
+                        WHERE client_key = ? AND deleted_at IS NULL
+                    """, (client_key,))
+                    row = cursor.fetchone()
+                    return dict(row) if row else None
+                    
+        except Exception as e:
+            logger.error(f"Error getting client by key: {e}")
+            return None
+    
+    def get_project_by_key(self, client_id: int, project_key: str) -> Optional[Dict[str, Any]]:
+        """Get project by client_id and project_key.
+        
+        Args:
+            client_id: Client ID
+            project_key: Project key to search for
+            
+        Returns:
+            Project dictionary if found, None otherwise
+        """
+        try:
+            with self.get_connection("framework") as conn:
+                if SQLALCHEMY_AVAILABLE:
+                    result = conn.execute(text("""
+                        SELECT * FROM framework_projects 
+                        WHERE client_id = :client_id AND project_key = :project_key 
+                        AND deleted_at IS NULL
+                    """), {"client_id": client_id, "project_key": project_key})
+                    row = result.fetchone()
+                    return dict(row._mapping) if row else None
+                else:
+                    cursor = conn.cursor()
+                    cursor.execute("""
+                        SELECT * FROM framework_projects 
+                        WHERE client_id = ? AND project_key = ? AND deleted_at IS NULL
+                    """, (client_id, project_key))
+                    row = cursor.fetchone()
+                    return dict(row) if row else None
+                    
+        except Exception as e:
+            logger.error(f"Error getting project by key: {e}")
+            return None
