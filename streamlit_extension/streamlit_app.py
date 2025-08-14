@@ -283,6 +283,17 @@ def render_enhanced_epic_cards():
                 with st.expander(f"**{epic['name']}** - Epic {epic.get('epic_key', 'N/A')}", expanded=False):
                     # Progress metrics
                     progress = db_manager.get_epic_progress(epic['id'])
+                    
+                    # SAFEGUARD: Ensure progress is never None
+                    if progress is None:
+                        progress = {
+                            "progress_percentage": 0,
+                            "total_tasks": 0,
+                            "completed_tasks": 0,
+                            "in_progress_tasks": 0,
+                            "points_earned": 0
+                        }
+                    
                     progress_pct = progress.get("progress_percentage", 0) / 100
                     
                     col1, col2, col3, col4 = st.columns([2, 1, 1, 1])
