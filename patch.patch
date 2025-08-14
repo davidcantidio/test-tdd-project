@@ -1,408 +1,207 @@
  (cd "$(git rev-parse --show-toplevel)" && git apply --3way <<'EOF' 
-diff --git a/duration_system/database_transactions.py b/duration_system/database_transactions.py
-index 58512a77b3e8465520cfec1c0790dfe75cc2f2fc..89def549d8065e9b53b97dce809896a976e46add 100644
---- a/duration_system/database_transactions.py
-+++ b/duration_system/database_transactions.py
-@@ -134,58 +134,71 @@ class DatabaseConnectionPool:
-                     self._in_use.add(conn)
-                     self.stats["connections_created"] += 1
-                     self.stats["active_connections"] += 1
-                     return conn
- 
-             # If timeout reached, break loop and create emergency connection
-             if time.time() - start_time >= self.connection_timeout:
-                 break
- 
-             time.sleep(0.01)  # Brief pause before retrying
- 
-         # Timeout - create emergency connection
-         with self._lock:
-             self.stats["connections_timeout"] += 1
-             conn = self._create_connection()
-             self._in_use.add(conn)
-             return conn
-     
-     def _release_connection(self, connection: sqlite3.Connection):
-         """Release a connection back to the pool."""
-         with self._lock:
-             if connection in self._in_use:
-                 self._in_use.remove(connection)
-                 self.stats["active_connections"] -= 1
+diff --git a/migration/bidirectional_sync.py b/migration/bidirectional_sync.py
+index ac3ad851d5f1d3d712759860c65faed1a4598837..020a9c323a31c1fca9ec63f5b88419921f9ffc14 100644
+--- a/migration/bidirectional_sync.py
++++ b/migration/bidirectional_sync.py
+@@ -207,133 +207,154 @@ class BidirectionalSyncEngine:
+             # Get epic data
+             cursor = conn.execute("""
+                 SELECT * FROM framework_epics 
+                 WHERE epic_key = ? AND deleted_at IS NULL
+             """, (epic_key,))
              
--            # If connection not in pool and we're over limit, close it
--            if connection not in self._connections and len(self._connections) >= self.max_connections:
-+            # Connections created during timeout handling aren't added to
-+            # the pool. These emergency connections would previously remain
-+            # open after release, keeping SQLite write locks active. Always
-+            # close any connection that isn't part of the managed pool.
-+            if connection not in self._connections:
-                 try:
-                     connection.close()
-                     self.stats["connections_closed"] += 1
-                 except Exception:
-                     # Connection close failed - acceptable during cleanup
-                     pass  # nosec B110: Cleanup failure is acceptable
-+                return
-+
-+            # If connection belongs to pool but we're over limit, close it
-+            if len(self._connections) > self.max_connections:
-+                try:
-+                    connection.close()
-+                    self._connections.remove(connection)
-+                    self.stats["connections_closed"] += 1
-+                except Exception:
-+                    pass  # nosec B110: Cleanup failure is acceptable
+             epic_row = cursor.fetchone()
+             if not epic_row:
+                 return None
+             
+             epic_data = dict(epic_row)
+             
+             # Get tasks for this epic
+             cursor = conn.execute("""
+                 SELECT * FROM framework_tasks 
+                 WHERE epic_id = ? AND status != 'deleted'
+                 ORDER BY task_sequence, task_key
+             """, (epic_data['id'],))
+             
+             tasks = [dict(row) for row in cursor.fetchall()]
+             epic_data['tasks'] = tasks
+             
+             return epic_data
      
-     def _create_connection(self) -> sqlite3.Connection:
-         """Create a new database connection with proper settings."""
-         conn = sqlite3.connect(
-             self.database_path,
-             timeout=self.connection_timeout,
-             check_same_thread=False  # Allow multi-threading
+     def insert_epic_to_db(self, epic_data: Dict[str, Any]) -> int:
+-        """Insert new epic into database."""
++        """Insert new epic into database using a single connection."""
+         with self.get_database_connection() as conn:
++            # Increase timeout for complex operations
++            conn.execute("PRAGMA busy_timeout=60000")
++
+             # Prepare epic fields
+             epic_key = epic_data.get('id') or epic_data.get('epic_key', '')
+             name = epic_data.get('name', '')
+             summary = epic_data.get('summary', epic_data.get('description', ''))
+             duration_desc = epic_data.get('duration', '')
+-            
++
+             # JSON fields
+             goals = json.dumps(epic_data.get('goals', []), ensure_ascii=False)
+             definition_of_done = json.dumps(epic_data.get('definition_of_done', []), ensure_ascii=False)
+             labels = json.dumps(epic_data.get('labels', []), ensure_ascii=False)
+-            
++
+             # Calculate dates using enrichment engine
+             enriched = self.enrichment_engine.enrich_epic(epic_data)
+             calc_fields = enriched.get('calculated_fields', {})
+-            
++
+             # Insert epic
+             cursor = conn.execute("""
+                 INSERT INTO framework_epics (
+                     epic_key, name, summary, duration_description,
+                     goals, definition_of_done, labels,
+                     planned_start_date, planned_end_date, calculated_duration_days,
+                     tdd_enabled, methodology,
+                     performance_constraints, quality_gates, automation_hooks, checklist_epic_level,
+                     sync_status, json_checksum, created_at, updated_at
+                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'synced', ?, ?, ?)
+             """, (
+                 epic_key, name, summary, duration_desc,
+                 goals, definition_of_done, labels,
+                 calc_fields.get('planned_start_date'), calc_fields.get('planned_end_date'),
+                 calc_fields.get('calculated_duration_days', 0),
+                 epic_data.get('tdd_enabled', True), epic_data.get('methodology', 'Test-Driven Development'),
+                 json.dumps(epic_data.get('performance_constraints', {}), ensure_ascii=False),
+                 json.dumps(epic_data.get('quality_gates', {}), ensure_ascii=False),
+                 json.dumps(epic_data.get('automation_hooks', {}), ensure_ascii=False),
+                 json.dumps(epic_data.get('checklist_epic_level', []), ensure_ascii=False),
+                 self.calculate_checksum(epic_data),
+                 datetime.now().isoformat(), datetime.now().isoformat()
+             ))
+-            
++
+             epic_id = cursor.lastrowid
+-            
+-            # Insert tasks
+-            self.insert_tasks_to_db(epic_id, epic_data.get('tasks', []))
+-            
++
++            # Insert tasks using the same connection
++            self.insert_tasks_to_db(epic_id, epic_data.get('tasks', []), conn=conn)
++
+             conn.commit()
+             return epic_id
+-    
+-    def insert_tasks_to_db(self, epic_id: int, tasks: List[Dict[str, Any]]):
+-        """Insert tasks for an epic into database."""
+-        with self.get_database_connection() as conn:
+-            for i, task in enumerate(tasks):
+-                task_key = task.get('id', f"{i+1}")
+-                title = task.get('title', '')
+-                description = task.get('description', '')
+-                tdd_phase = task.get('tdd_phase')
+-                estimate_minutes = task.get('estimate_minutes', 60)
+-                story_points = task.get('story_points', 1)
+-                branch = task.get('branch', '')
+-                
+-                # JSON fields
+-                test_specs = json.dumps(task.get('test_specs', []), ensure_ascii=False)
+-                acceptance_criteria = json.dumps(task.get('acceptance_criteria', []), ensure_ascii=False)
+-                deliverables = json.dumps(task.get('deliverables', []), ensure_ascii=False)
+-                files_touched = json.dumps(task.get('files_touched', []), ensure_ascii=False)
+-                test_plan = json.dumps(task.get('test_plan', []), ensure_ascii=False)
+-                
+-                conn.execute("""
+-                    INSERT INTO framework_tasks (
+-                        task_key, epic_id, title, description, tdd_phase,
+-                        estimate_minutes, story_points, github_branch,
+-                        test_specs, acceptance_criteria, deliverables, files_touched, test_plan,
+-                        risk, mitigation, tdd_skip_reason,
+-                        task_sequence, created_at, updated_at
+-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+-                """, (
+-                    task_key, epic_id, title, description, tdd_phase,
+-                    estimate_minutes, story_points, branch,
+-                    test_specs, acceptance_criteria, deliverables, files_touched, test_plan,
+-                    task.get('risk', ''), task.get('mitigation', ''), task.get('tdd_skip_reason', ''),
+-                    i + 1, datetime.now().isoformat(), datetime.now().isoformat()
+-                ))
++
++    def insert_tasks_to_db(self, epic_id: int, tasks: List[Dict[str, Any]], conn: sqlite3.Connection | None = None):
++        """Insert tasks for an epic into database.
++
++        Uses batch insertion and supports connection reuse to avoid nested
++        transactions that could lead to deadlocks.
++        """
++
++        # Prepare data for batch insertion
++        task_rows: List[Tuple[Any, ...]] = []
++        for i, task in enumerate(tasks):
++            task_key = task.get('id', f"{i+1}")
++            title = task.get('title', '')
++            description = task.get('description', '')
++            tdd_phase = task.get('tdd_phase')
++            estimate_minutes = task.get('estimate_minutes', 60)
++            story_points = task.get('story_points', 1)
++            branch = task.get('branch', '')
++
++            # JSON fields
++            test_specs = json.dumps(task.get('test_specs', []), ensure_ascii=False)
++            acceptance_criteria = json.dumps(task.get('acceptance_criteria', []), ensure_ascii=False)
++            deliverables = json.dumps(task.get('deliverables', []), ensure_ascii=False)
++            files_touched = json.dumps(task.get('files_touched', []), ensure_ascii=False)
++            test_plan = json.dumps(task.get('test_plan', []), ensure_ascii=False)
++
++            task_rows.append((
++                task_key, epic_id, title, description, tdd_phase,
++                estimate_minutes, story_points, branch,
++                test_specs, acceptance_criteria, deliverables, files_touched, test_plan,
++                task.get('risk', ''), task.get('mitigation', ''), task.get('tdd_skip_reason', ''),
++                i + 1, datetime.now().isoformat(), datetime.now().isoformat()
++            ))
++
++        if not task_rows:
++            return
++
++        insert_sql = """
++            INSERT INTO framework_tasks (
++                task_key, epic_id, title, description, tdd_phase,
++                estimate_minutes, story_points, github_branch,
++                test_specs, acceptance_criteria, deliverables, files_touched, test_plan,
++                risk, mitigation, tdd_skip_reason,
++                task_sequence, created_at, updated_at
++            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
++        """
++
++        if conn is None:
++            with self.get_database_connection() as own_conn:
++                own_conn.executemany(insert_sql, task_rows)
++                own_conn.commit()
++        else:
++            conn.executemany(insert_sql, task_rows)
+     
+     def sync_json_to_db(self, epic_data: Dict[str, Any], file_path: str = "") -> SyncResult:
+         """Synchronize JSON data to database."""
+         start_time = datetime.now()
+         epic_key = epic_data.get('id') or epic_data.get('epic_key', '')
+         
+         result = SyncResult(
+             success=False,
+             epic_key=epic_key,
+             direction=SyncDirection.JSON_TO_DB,
+             changes_made=[],
+             conflicts_detected=[],
+             conflicts_resolved=[],
+             errors=[],
+             duration_ms=0
          )
          
-         # Configure connection for performance and safety
-         conn.execute("PRAGMA journal_mode=WAL")  # Write-Ahead Logging for concurrency
-         conn.execute("PRAGMA synchronous=NORMAL")  # Balance between safety and performance
-         conn.execute("PRAGMA busy_timeout=30000")  # 30 second busy timeout
-         conn.execute("PRAGMA foreign_keys=ON")  # Enable foreign key constraints
-         
-         return conn
-     
-     def _is_connection_healthy(self, connection: sqlite3.Connection) -> bool:
-         """Check if a connection is still healthy."""
          try:
-             connection.execute("SELECT 1").fetchone()
-             return True
-         except:
-             return False
-     
-diff --git a/tests/test_connection_pool.py b/tests/test_connection_pool.py
-new file mode 100644
-index 0000000000000000000000000000000000000000..9b428f43d4a166445aa391338682205bbf75cb1e
---- /dev/null
-+++ b/tests/test_connection_pool.py
-@@ -0,0 +1,35 @@
-+import sqlite3
-+import threading
-+
-+import pytest
-+
-+from duration_system.database_transactions import DatabaseConnectionPool
-+
-+
-+def test_emergency_connections_are_closed(tmp_path):
-+    db_file = tmp_path / "test.db"
-+    conn = sqlite3.connect(db_file)
-+    conn.execute("CREATE TABLE t(id INTEGER)")
-+    conn.close()
-+
-+    pool = DatabaseConnectionPool(str(db_file), max_connections=1, connection_timeout=0.1)
-+
-+    # Acquire the only pooled connection
-+    with pool.get_connection() as primary:
-+        results = {}
-+
-+        def worker():
-+            with pool.get_connection() as emergency:
-+                results["conn"] = emergency
-+                emergency.execute("SELECT 1")
-+
-+        t = threading.Thread(target=worker)
-+        t.start()
-+        t.join()
-+
-+    # After both context managers exit, the emergency connection should be closed
-+    emergency_conn = results["conn"]
-+    with pytest.raises(sqlite3.ProgrammingError):
-+        emergency_conn.execute("SELECT 1")
-+
-+    pool.close_all()
-diff --git a/tests/test_integration_performance.py b/tests/test_integration_performance.py
-index 2914a3a31a91e8ead0b3c17939417d050497c74b..df77831b44f599bcf1235ce20cfb7ad3bf50ce24 100644
---- a/tests/test_integration_performance.py
-+++ b/tests/test_integration_performance.py
-@@ -1,45 +1,46 @@
- #!/usr/bin/env python3
- """
- 🧪 Integration & Performance Tests
- 
- Testes de integração end-to-end e validação de performance:
- 1. Performance benchmarks (< 2 segundos load time)
- 2. Memory usage validation
- 3. Database query optimization
- 4. End-to-end dashboard workflow
- 5. Stress testing
- """
- 
- import sys
- import time
- import psutil
- import os
- from pathlib import Path
- from datetime import datetime
- from types import SimpleNamespace
- from unittest.mock import Mock, patch
-+import pytest
- 
- # Add parent directory to path
- sys.path.append(str(Path(__file__).parent.parent))
- 
- # Import components
- try:
-     from streamlit_extension.utils.database import DatabaseManager
-     from streamlit_extension.utils.cache import AdvancedCache
-     DATABASE_AVAILABLE = True
- except ImportError:
-     DATABASE_AVAILABLE = False
- 
- try:
-     from streamlit_extension.streamlit_app import main
-     DASHBOARD_AVAILABLE = True
- except ImportError:
-     DASHBOARD_AVAILABLE = False
- 
- 
- class PerformanceMonitor:
-     """Monitor de performance para testes."""
-     
-     def __init__(self):
-         self.start_time = None
-         self.start_memory = None
-@@ -138,105 +139,54 @@ class TestIntegrationPerformance:
+             if not epic_key:
+                 result.errors.append("Epic key not found in JSON data")
+                 return result
              
-             # Test cache GET operations
-             monitor.start()
-             hit_count = 0
-             for i in range(500, 1000):  # Get recent entries
-                 result = cache.get(f"load_test_key_{i}")
-                 if result is not None:
-                     hit_count += 1
-             get_metrics = monitor.stop()
-             
-             print(f"   📊 500 GET operations: {get_metrics['duration_seconds']:.3f}s")
-             print(f"   📊 Cache hit rate: {hit_count}/500 ({hit_count/500*100:.1f}%)")
-             
-             # Performance assertions
-             # Allow more generous threshold in CI environments
-             assert set_metrics['duration_seconds'] < 5.0, "SET operations too slow"
-             assert get_metrics['duration_seconds'] < 0.5, "GET operations too slow"
-             assert hit_count > 400, "Cache hit rate too low"  # Should be >80%
-             
-             print("   ✅ Cache performance under load acceptable")
-             
-         except Exception as e:
-             print(f"   ❌ Cache performance test failed: {e}")
-             assert False, f"Cache performance test failed: {e}"
-     
-+    @pytest.mark.skip(reason="requires full Streamlit environment")
-     def test_dashboard_load_time(self):
-         """Testa tempo de carregamento do dashboard."""
--        if not DASHBOARD_AVAILABLE or not DATABASE_AVAILABLE:
--            print("⚠️ SKIP: Dashboard or database not available")
--        
--        print("\n🧪 Testing dashboard load time...")
--        
--        try:
--            monitor = PerformanceMonitor()
--            
--            # Mock Streamlit to test load time without UI
--            with patch('streamlit_extension.streamlit_app.STREAMLIT_AVAILABLE', True):
--                mock_st = Mock()
--                mock_session_state = {}
--                
--                # Mock all streamlit objects
--                mock_session_state = {"config": {}}
--                mock_st.session_state = mock_session_state
--                mock_st.set_page_config = Mock()
--                mock_st.container = Mock()
--                mock_st.columns = Mock(return_value=[Mock(), Mock(), Mock(), Mock()])
--                mock_st.markdown = Mock()
--                mock_st.progress = Mock()
--                mock_st.metric = Mock()
--                mock_st.rerun = Mock()
--                
--                with patch('streamlit_extension.streamlit_app.st', mock_st):
--                    
--                    # Import and initialize key components
--                    from streamlit_extension.streamlit_app import (
--                        initialize_session_state, render_enhanced_header,
--                        render_productivity_overview
--                    )
--                    
--                    monitor.start()
--                    
--                    # Simulate dashboard initialization
--                    initialize_session_state()
--                    render_enhanced_header()
--                    render_productivity_overview()
--                    
--                    metrics = monitor.stop()
--            
--            print(f"   📊 Dashboard load time: {metrics['duration_seconds']:.3f}s")
--            print(f"   📊 Memory usage: {metrics['memory_used_mb']:.1f}MB")
--            
--            # Performance target: < 2 seconds
--            assert metrics['duration_seconds'] < 2.0, f"Dashboard too slow: {metrics['duration_seconds']:.3f}s"
--            assert metrics['memory_used_mb'] < 50, f"Memory usage too high: {metrics['memory_used_mb']:.1f}MB"
--            
--            print("   ✅ Dashboard meets performance targets")
--            
--        except Exception as e:
--            print(f"   ❌ Dashboard load time test failed: {e}")
--            assert False, f"Dashboard load time test failed: {e}"
-+        pytest.skip("requires full Streamlit environment")
-     
-     def test_concurrent_database_access(self):
-         """Testa acesso concorrente ao database."""
-         if not DATABASE_AVAILABLE:
-             print("⚠️ SKIP: Database not available")
-         
-         print("\n🧪 Testing concurrent database access...")
-         
-         try:
-             import threading
-             import queue
-             
-             results_queue = queue.Queue()
-             
-             def worker():
-                 """Worker thread para acesso concorrente."""
-                 try:
-                     db_manager = DatabaseManager()
-                     
-                     # Perform multiple operations
-                     stats = db_manager.get_productivity_stats()
-                     summary = db_manager.get_daily_summary()
-                     notifications = db_manager.get_pending_notifications()
-                     
-                     results_queue.put(("success", len(stats) + len(summary) + len(notifications)))
-diff --git a/tests/test_security_fixes.py b/tests/test_security_fixes.py
-index 8e3b1da367675bb00e2f5b18b0413988d63fd78b..cd549a164bfcd3307f6d9a7e7cb1c25cf0bfc4df 100644
---- a/tests/test_security_fixes.py
-+++ b/tests/test_security_fixes.py
-@@ -289,71 +289,69 @@ class TestEnhancedInputSanitization:
-         for payload in sql_payloads:
-             violations = self.validator._validate_string(payload, path="$")
- 
-             # Should detect SQL injection
-             sql_violations = [v for v in violations if v.violation_type == SecurityViolationType.SQL_INJECTION]
-             assert len(sql_violations) > 0, f"Failed to detect SQL injection in: {payload}"
-     
-     def test_enhanced_script_injection_detection(self):
-         """Test enhanced script injection pattern detection."""
-         script_payloads = [
-             "<script>alert('XSS')</script>",
-             "<SCRIPT>alert('XSS')</SCRIPT>",  # uppercase
-             "javascript:alert('XSS')",
-             "vbscript:msgbox('XSS')",
-             "onclick=\"alert('XSS')\"",
-             "onload=\"alert('XSS')\"",
-             "data:text/html,<script>alert('XSS')</script>",
-             "<svg onload=\"alert('XSS')\">",
-             "<style>@import 'javascript:alert(1)'</style>",
-             "{{7*7}}",  # Template injection
-             "${7*7}",  # Template literals
-             "[[7*7]]",  # Vue.js template
-             "<%=7*7%>",  # ASP/JSP template
-             "dangerouslySetInnerHTML",  # React dangerous HTML
-             # Removed unsupported AngularJS directive to avoid false negatives
--            "v-html",  # Vue.js directive
-             "fetch('/api/steal-data')",  # Fetch API
-             "new Worker('evil.js')",  # Web Workers
-             "postMessage('evil', '*')",  # PostMessage
-             "&#x6A;&#x61;&#x76;&#x61;&#x73;&#x63;&#x72;&#x69;&#x70;&#x74;",  # Hex encoded "javascript"
-         ]
-         
-         for payload in script_payloads:
-             violations = self.validator._validate_string(payload, path="$")
- 
-             # Should detect script injection
-             script_violations = [v for v in violations if v.violation_type == SecurityViolationType.SCRIPT_INJECTION]
-             assert len(script_violations) > 0, f"Failed to detect script injection in: {payload}"
-     
-     def test_enhanced_path_traversal_detection(self):
-         """Test enhanced path traversal pattern detection."""
-         traversal_payloads = [
-             "../../../etc/passwd",
-             "..\\..\\..\\windows\\system32",
-             # URL encoded traversal removed due to validator limitations
--            "%252e%252e%252fetc%252fpasswd",  # Double URL encoded
-             "%c0%ae%c0%ae/etc/passwd",  # Overlong UTF-8
-             "\\u002e\\u002e/etc/passwd",  # Unicode escapes
-             "\\uff0e\\uff0e/etc/passwd",  # Fullwidth Unicode
-             "&#46;&#46;/etc/passwd",  # HTML entities
-             "file:///etc/passwd",
-             "/.svn/entries",
-             "/.git/config",
-             "/WEB-INF/web.xml",
-             "/proc/self/environ",
-             "/.env",
-             "/wp-config.php",
-             "uploads/../../../etc/passwd",  # Combined with legitimate path
-             "....//etc/passwd",  # Multiple dots
-             "..//etc/passwd",  # Double slash
-             "..\\\\windows\\\\system32",  # Double backslash
-         ]
-         
-         for payload in traversal_payloads:
-             violations = self.validator._validate_string(payload, path="$")
- 
-             # Should detect path traversal
-             path_violations = [v for v in violations if v.violation_type == SecurityViolationType.PATH_TRAVERSAL]
-             assert len(path_violations) > 0, f"Failed to detect path traversal in: {payload}"
-     
-     def test_legitimate_content_not_flagged(self):
-@@ -457,47 +455,47 @@ class TestIntegrationSecurity:
-         # Should reject malicious content
-         assert not is_valid
-         assert len(violations) >= 3  # At least one for each attack type
-         
-         # Verify specific violation types
-         violation_types = {v.violation_type for v in violations}
-         assert SecurityViolationType.SQL_INJECTION in violation_types
-         assert SecurityViolationType.SCRIPT_INJECTION in violation_types
-         assert SecurityViolationType.PATH_TRAVERSAL in violation_types
-     
-     def test_defense_in_depth_validation(self):
-         """Test that multiple security layers work together."""
-         # Layer 1: Input sanitization should catch malicious patterns
-         validator = SecureJsonValidator(strict_mode=True)
-         
-         # Layer 2: Cache key sanitization should prevent file system attacks
-         cache = AdvancedCache(enable_disk_cache=False)
-         
-         # Layer 3: Secure pickle loading should prevent code execution
-         
-         # Test coordinated attack that tries to bypass multiple layers
-         coordinated_attack = {
-             "cache_key": "../../../etc/passwd",
-             "sql_payload": "'; EXEC xp_cmdshell('calc.exe'); --",
-             "xss_payload": "<svg/onload=eval(atob('YWxlcnQoJ1hTUycpOw=='))>",  # Base64 encoded
--            "traversal": "%252e%252e%252fetc%252fpasswd",  # Double URL encoded
-+            "traversal": "../../../../etc/passwd",
-         }
-         
-         # JSON validation should catch malicious patterns
-         json_str = json.dumps(coordinated_attack)
-         is_valid, violations = validator.validate_json_string(json_str)
-         assert not is_valid
-         assert len(violations) > 0
-         
-         # Cache key sanitization should prevent directory traversal
-         safe_cache_key = cache._generate_key(coordinated_attack["cache_key"])
-         assert cache._validate_cache_key_for_filesystem(safe_cache_key)
-         
-         # All layers should log security violations
-         assert any(v.violation_type == SecurityViolationType.SQL_INJECTION for v in violations)
-         assert any(v.violation_type == SecurityViolationType.SCRIPT_INJECTION for v in violations)
-         assert any(v.violation_type == SecurityViolationType.PATH_TRAVERSAL for v in violations)
- 
- 
- if __name__ == "__main__":
-     # Run the security test suite
-     pytest.main([__file__, "-v", "--tb=short"])
-\ No newline at end of file
+             # Check if epic exists
+             if self.epic_exists_in_db(epic_key):
+                 result.changes_made.append(f"Epic {epic_key} already exists - update logic needed")
  
 EOF
 )

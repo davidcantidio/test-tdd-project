@@ -183,7 +183,26 @@ class BidirectionalSyncEngine:
     def get_database_connection(self):
         """Get database connection using fixed connection pool."""
         if self.connection_pool:
-            return self.connection_pool.get_connection()
+            # Connection pool connections may not have row_factory set
+            class ConnectionWrapper:
+                def __init__(self, pool_conn):
+                    self.conn = pool_conn.__enter__()
+                    self.conn.row_factory = sqlite3.Row
+                    self.pool_conn = pool_conn
+                
+                def __enter__(self):
+                    return self.conn
+                
+                def __exit__(self, *args):
+                    self.pool_conn.__exit__(*args)
+                    
+                def execute(self, *args, **kwargs):
+                    return self.conn.execute(*args, **kwargs)
+                    
+                def commit(self):
+                    return self.conn.commit()
+            
+            return ConnectionWrapper(self.connection_pool.get_connection())
         else:
             # Fallback to direct connection with improved settings
             conn = sqlite3.connect(self.db_path, timeout=30.0)
@@ -229,23 +248,26 @@ class BidirectionalSyncEngine:
             return epic_data
     
     def insert_epic_to_db(self, epic_data: Dict[str, Any]) -> int:
-        """Insert new epic into database."""
+        """Insert new epic into database using a single connection."""
         with self.get_database_connection() as conn:
+            # Increase timeout for complex operations
+            conn.execute("PRAGMA busy_timeout=60000")
+
             # Prepare epic fields
             epic_key = epic_data.get('id') or epic_data.get('epic_key', '')
             name = epic_data.get('name', '')
             summary = epic_data.get('summary', epic_data.get('description', ''))
             duration_desc = epic_data.get('duration', '')
-            
+
             # JSON fields
             goals = json.dumps(epic_data.get('goals', []), ensure_ascii=False)
             definition_of_done = json.dumps(epic_data.get('definition_of_done', []), ensure_ascii=False)
             labels = json.dumps(epic_data.get('labels', []), ensure_ascii=False)
-            
+
             # Calculate dates using enrichment engine
             enriched = self.enrichment_engine.enrich_epic(epic_data)
             calc_fields = enriched.get('calculated_fields', {})
-            
+
             # Insert epic
             cursor = conn.execute("""
                 INSERT INTO framework_epics (
@@ -269,49 +291,67 @@ class BidirectionalSyncEngine:
                 self.calculate_checksum(epic_data),
                 datetime.now().isoformat(), datetime.now().isoformat()
             ))
-            
+
             epic_id = cursor.lastrowid
-            
-            # Insert tasks
-            self.insert_tasks_to_db(epic_id, epic_data.get('tasks', []))
-            
+
+            # Insert tasks using the same connection
+            self.insert_tasks_to_db(epic_id, epic_data.get('tasks', []), conn=conn)
+
             conn.commit()
             return epic_id
-    
-    def insert_tasks_to_db(self, epic_id: int, tasks: List[Dict[str, Any]]):
-        """Insert tasks for an epic into database."""
-        with self.get_database_connection() as conn:
-            for i, task in enumerate(tasks):
-                task_key = task.get('id', f"{i+1}")
-                title = task.get('title', '')
-                description = task.get('description', '')
-                tdd_phase = task.get('tdd_phase')
-                estimate_minutes = task.get('estimate_minutes', 60)
-                story_points = task.get('story_points', 1)
-                branch = task.get('branch', '')
-                
-                # JSON fields
-                test_specs = json.dumps(task.get('test_specs', []), ensure_ascii=False)
-                acceptance_criteria = json.dumps(task.get('acceptance_criteria', []), ensure_ascii=False)
-                deliverables = json.dumps(task.get('deliverables', []), ensure_ascii=False)
-                files_touched = json.dumps(task.get('files_touched', []), ensure_ascii=False)
-                test_plan = json.dumps(task.get('test_plan', []), ensure_ascii=False)
-                
-                conn.execute("""
-                    INSERT INTO framework_tasks (
-                        task_key, epic_id, title, description, tdd_phase,
-                        estimate_minutes, story_points, github_branch,
-                        test_specs, acceptance_criteria, deliverables, files_touched, test_plan,
-                        risk, mitigation, tdd_skip_reason,
-                        task_sequence, created_at, updated_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """, (
-                    task_key, epic_id, title, description, tdd_phase,
-                    estimate_minutes, story_points, branch,
-                    test_specs, acceptance_criteria, deliverables, files_touched, test_plan,
-                    task.get('risk', ''), task.get('mitigation', ''), task.get('tdd_skip_reason', ''),
-                    i + 1, datetime.now().isoformat(), datetime.now().isoformat()
-                ))
+
+    def insert_tasks_to_db(self, epic_id: int, tasks: List[Dict[str, Any]], conn: sqlite3.Connection | None = None):
+        """Insert tasks for an epic into database.
+
+        Uses batch insertion and supports connection reuse to avoid nested
+        transactions that could lead to deadlocks.
+        """
+
+        # Prepare data for batch insertion
+        task_rows: List[Tuple[Any, ...]] = []
+        for i, task in enumerate(tasks):
+            task_key = task.get('id', f"{i+1}")
+            title = task.get('title', '')
+            description = task.get('description', '')
+            tdd_phase = task.get('tdd_phase')
+            estimate_minutes = task.get('estimate_minutes', 60)
+            story_points = task.get('story_points', 1)
+            branch = task.get('branch', '')
+
+            # JSON fields
+            test_specs = json.dumps(task.get('test_specs', []), ensure_ascii=False)
+            acceptance_criteria = json.dumps(task.get('acceptance_criteria', []), ensure_ascii=False)
+            deliverables = json.dumps(task.get('deliverables', []), ensure_ascii=False)
+            files_touched = json.dumps(task.get('files_touched', []), ensure_ascii=False)
+            test_plan = json.dumps(task.get('test_plan', []), ensure_ascii=False)
+
+            task_rows.append((
+                task_key, epic_id, title, description, tdd_phase,
+                estimate_minutes, story_points, branch,
+                test_specs, acceptance_criteria, deliverables, files_touched, test_plan,
+                task.get('risk', ''), task.get('mitigation', ''), task.get('tdd_skip_reason', ''),
+                i + 1, datetime.now().isoformat(), datetime.now().isoformat()
+            ))
+
+        if not task_rows:
+            return
+
+        insert_sql = """
+            INSERT INTO framework_tasks (
+                task_key, epic_id, title, description, tdd_phase,
+                estimate_minutes, story_points, github_branch,
+                test_specs, acceptance_criteria, deliverables, files_touched, test_plan,
+                risk, mitigation, tdd_skip_reason,
+                task_sequence, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """
+
+        if conn is None:
+            with self.get_database_connection() as own_conn:
+                own_conn.executemany(insert_sql, task_rows)
+                own_conn.commit()
+        else:
+            conn.executemany(insert_sql, task_rows)
     
     def sync_json_to_db(self, epic_data: Dict[str, Any], file_path: str = "") -> SyncResult:
         """Synchronize JSON data to database."""
