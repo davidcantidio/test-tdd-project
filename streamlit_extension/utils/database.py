@@ -122,6 +122,8 @@ class DatabaseManager:
             # Use SQLAlchemy engine
             conn = self.engines[db_name].connect()
             try:
+                # Ensure foreign keys are enforced
+                conn.execute(text("PRAGMA foreign_keys = ON"))
                 yield conn
             finally:
                 conn.close()
@@ -130,9 +132,11 @@ class DatabaseManager:
             db_path = self.framework_db_path if db_name == "framework" else self.timer_db_path
             if not db_path.exists():
                 raise FileNotFoundError(f"Database not found: {db_path}")
-            
+
             conn = sqlite3.connect(str(db_path), timeout=20)
             conn.row_factory = sqlite3.Row
+            # Enforce foreign keys for sqlite connections
+            conn.execute("PRAGMA foreign_keys = ON")
             try:
                 yield conn
             finally:
@@ -183,10 +187,15 @@ class DatabaseManager:
                     WHERE 1=1
                 """
                 
-                params = []
+                params: Dict[str, Any] = {}
+                sqlite_params = []
                 if epic_id:
-                    query += " AND t.epic_id = ?"
-                    params.append(epic_id)
+                    if SQLALCHEMY_AVAILABLE:
+                        query += " AND t.epic_id = :epic_id"
+                        params["epic_id"] = epic_id
+                    else:
+                        query += " AND t.epic_id = ?"
+                        sqlite_params.append(epic_id)
                 
                 query += " ORDER BY t.position ASC, t.created_at DESC"
                 
@@ -195,7 +204,7 @@ class DatabaseManager:
                     return [dict(row._mapping) for row in result]
                 else:
                     cursor = conn.cursor()
-                    cursor.execute(query, params)
+                    cursor.execute(query, sqlite_params)
                     return [dict(row) for row in cursor.fetchall()]
         except Exception as e:
             logger.error(f"Error loading tasks: {e}")
@@ -1562,28 +1571,24 @@ class DatabaseManager:
             with self.get_connection("framework") as conn:
                 query = """
                     SELECT id, client_key, name, description, industry, company_size,
-                           primary_contact_name, primary_contact_email, 
+                           primary_contact_name, primary_contact_email,
                            timezone, currency, preferred_language,
                            hourly_rate, contract_type, status, client_tier,
                            priority_level, account_manager_id, technical_lead_id,
                            created_at, updated_at, last_contact_date
-                    FROM framework_clients 
+                    FROM framework_clients
                     WHERE deleted_at IS NULL
                 """
-                
-                params = []
+
+                params: Dict[str, Any] = {}
                 if not include_inactive:
-                    query += " AND status = ?"
-                    params.append("active")
-                
+                    query += " AND status = :status"
+                    params["status"] = "active"
+
                 query += " ORDER BY priority_level DESC, name ASC"
-                
-                # Use sqlite3 for this method to avoid parameter issues
-                if False:  # Temporarily disable SQLAlchemy
-                    if params:
-                        result = conn.execute(text(query), {"status": params[0]})
-                    else:
-                        result = conn.execute(text(query))
+
+                if SQLALCHEMY_AVAILABLE:
+                    result = conn.execute(text(query), params)
                     return [dict(row._mapping) for row in result]
                 else:
                     cursor = conn.cursor()
@@ -1625,23 +1630,19 @@ class DatabaseManager:
                     INNER JOIN framework_clients c ON p.client_id = c.id AND c.deleted_at IS NULL
                     WHERE p.deleted_at IS NULL
                 """
-                
-                params = []
+
+                params: Dict[str, Any] = {}
                 if client_id:
-                    query += " AND p.client_id = ?"
-                    params.append(client_id)
-                
+                    query += " AND p.client_id = :client_id"
+                    params["client_id"] = client_id
+
                 if not include_inactive:
                     query += " AND p.status NOT IN ('cancelled', 'archived')"
-                
+
                 query += " ORDER BY p.priority DESC, p.name ASC"
-                
-                # Use sqlite3 for this method to avoid parameter issues  
-                if False:  # Temporarily disable SQLAlchemy
-                    if client_id:
-                        result = conn.execute(text(query), {"client_id": client_id})
-                    else:
-                        result = conn.execute(text(query))
+
+                if SQLALCHEMY_AVAILABLE:
+                    result = conn.execute(text(query), params)
                     return [dict(row._mapping) for row in result]
                 else:
                     cursor = conn.cursor()
@@ -1685,13 +1686,22 @@ class DatabaseManager:
                     WHERE e.deleted_at IS NULL
                 """
                 
-                params = []
+                params: Dict[str, Any] = {}
+                sqlite_params = []
                 if project_id:
-                    query += " AND e.project_id = ?"
-                    params.append(project_id)
+                    if SQLALCHEMY_AVAILABLE:
+                        query += " AND e.project_id = :project_id"
+                        params["project_id"] = project_id
+                    else:
+                        query += " AND e.project_id = ?"
+                        sqlite_params.append(project_id)
                 elif client_id:
-                    query += " AND p.client_id = ?"
-                    params.append(client_id)
+                    if SQLALCHEMY_AVAILABLE:
+                        query += " AND p.client_id = :client_id"
+                        params["client_id"] = client_id
+                    else:
+                        query += " AND p.client_id = ?"
+                        sqlite_params.append(client_id)
                 
                 query += " ORDER BY c.priority_level DESC, p.priority DESC, e.created_at DESC"
                 
@@ -1700,7 +1710,7 @@ class DatabaseManager:
                     return [dict(row._mapping) for row in result]
                 else:
                     cursor = conn.cursor()
-                    cursor.execute(query, params)
+                    cursor.execute(query, sqlite_params)
                     return [dict(row) for row in cursor.fetchall()]
         except Exception as e:
             logger.error(f"Error loading epics with hierarchy: {e}")
@@ -1842,7 +1852,7 @@ class DatabaseManager:
     # HIERARCHY CRUD OPERATIONS
     # ==================================================================================
     
-    @invalidate_cache_on_change("db_query:get_clients:") if CACHE_AVAILABLE else lambda f: f
+    @invalidate_cache_on_change("db_query:get_clients:", "db_query:get_client_dashboard:") if CACHE_AVAILABLE else lambda f: f
     def create_client(self, client_key: str, name: str, description: str = "", 
                      industry: str = "", company_size: str = "startup",
                      primary_contact_name: str = "", primary_contact_email: str = "",
@@ -1911,7 +1921,12 @@ class DatabaseManager:
                 st.error(f"❌ Error creating client: {e}")
             return None
     
-    @invalidate_cache_on_change("db_query:get_projects:", "db_query:get_hierarchy_overview:") if CACHE_AVAILABLE else lambda f: f
+    @invalidate_cache_on_change(
+        "db_query:get_projects:",
+        "db_query:get_hierarchy_overview:",
+        "db_query:get_client_dashboard:",
+        "db_query:get_project_dashboard:"
+    ) if CACHE_AVAILABLE else lambda f: f
     def create_project(self, client_id: int, project_key: str, name: str,
                       description: str = "", project_type: str = "development",
                       methodology: str = "agile", **kwargs) -> Optional[int]:

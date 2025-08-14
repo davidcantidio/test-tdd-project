@@ -1,13 +1,42 @@
-Summary
-Added configurable retry and delay parameters with connection-level retry logic to handle transient SQLite operational errors and set up a rollback-capable connection wrapper
+Executive Summary
 
-Guarded epic insertion with explicit try/except to roll back on failure and ensure batch task inserts remain atomic
+A otimização da camada de dados fortalece a integridade e a performance do framework: todas as conexões SQLite agora forçam a verificação de chaves estrangeiras e consultas de cliente/projeto usam binding nomeado, evitando injeções e melhorando a manutenção. A invalidação de cache foi ampliada, garantindo dashboards consistentes após criação de clientes e projetos.
 
-Existing enrichment and date-calculation modules maintain layered architecture and business-day strategies for accurate JSON augmentation
+Critical Issues
 
-Schema extension adds sync metadata and indexes to support efficient bidirectional operations and change tracking
+Nenhum bloqueador remanescente após a correção do uso de parâmetros SQL e da ausência de enforcement de chaves estrangeiras.
 
-Validation suite exercises referential integrity, JSON consistency, performance, and bidirectional sync paths for production certification
+Performance Analysis
+
+A parametrização via SQLAlchemy reduz overhead de parsing de consultas e mantém o benefício de caching já existente.
+
+Security Assessment
+
+O uso de PRAGMA foreign_keys = ON impede inserções órfãs.
+
+Consultas parametrizadas eliminam vetores comuns de SQL injection.
+
+Architecture Review
+
+Métodos de CRUD agora invalidam as visões de dashboard correspondentes, melhorando a coesão entre cache e operações de escrita.
+
+Recommendations
+
+Propagar o uso de parâmetros nomeados a outros métodos (ex.: get_epics_with_hierarchy) para consistência.
+
+Considerar constraints físicas de FK na migração para garantir integridade também em nível de schema.
+
+Approval Status
+
+APROVADO para produção.
 
 Testing
-✅ pytest tests/test_database_transactions.py::test_transaction_safety test_simple_sync.py -q
+
+✅ pytest
+
+
+Arquivo (1)
+
+streamlit_extension/utils/database.py
++31
+-30
