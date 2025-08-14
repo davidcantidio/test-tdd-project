@@ -22,7 +22,7 @@ sys.path.append(str(Path(__file__).parent.parent))
 from duration_system.cache_fix import (
     InterruptSafeCache, 
     create_interrupt_safe_cache_decorator,
-    test_interrupt_safety
+    validate_interrupt_safety
 )
 
 
@@ -316,7 +316,7 @@ class TestInterruptSafetyIntegration:
     
     def test_interrupt_safety_function(self):
         """Test the built-in interrupt safety test function."""
-        results = test_interrupt_safety()
+        results = validate_interrupt_safety()
         
         assert isinstance(results, dict)
         assert "success_count" in results

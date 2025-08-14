@@ -545,8 +545,8 @@ def create_interrupt_safe_cache_decorator(ttl: int = 300):
 
 
 # Test utilities for validation
-def test_interrupt_safety():
-    """Test the interrupt safety of the cache system."""
+def validate_interrupt_safety():
+    """Validate the interrupt safety of the cache system."""
     cache = InterruptSafeCache(default_ttl=10, max_size=100)
     
     # Test basic operations

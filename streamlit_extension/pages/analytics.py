@@ -83,7 +83,7 @@ class AnalyticsCache:
             return None
 
         key_data = str(args) + str(sorted(kwargs.items()))
-        return hashlib.md5(key_data.encode()).hexdigest()
+        return hashlib.sha256(key_data.encode()).hexdigest()
 
     def get(self, key, ttl=None):
         """Get cached data if still valid."""

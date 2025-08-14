@@ -556,8 +556,11 @@ class AnalyticsExporter:
                             chart_html = chart_fig.to_html(include_plotlyjs='cdn', div_id=f"chart_{chart_name}")
                             html_content += f'<h3>{chart_name.replace("_", " ").title()}</h3>'
                             html_content += chart_html
-                        except:
-                            pass
+                        except Exception as e:
+                            # Log chart rendering failure but continue with other charts
+                            import logging
+                            logging.getLogger(__name__).warning(f"Failed to render chart {chart_name}: {e}")
+                            html_content += f'<p>Chart {chart_name} could not be rendered</p>'
             
             # Close HTML
             html_content += """

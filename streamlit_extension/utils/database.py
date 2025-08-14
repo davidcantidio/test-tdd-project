@@ -496,8 +496,11 @@ class DatabaseManager:
                 else:
                     conn.execute("SELECT 1")
                 health["framework_db_connected"] = True
-        except:
-            pass
+        except Exception as e:
+            # Log database connection failure for debugging
+            import logging
+            logging.getLogger(__name__).debug(f"Framework DB connection failed: {e}")
+            health["framework_db_connected"] = False
         
         # Test timer DB connection
         if self.timer_db_path.exists():
@@ -508,8 +511,11 @@ class DatabaseManager:
                     else:
                         conn.execute("SELECT 1")
                     health["timer_db_connected"] = True
-            except:
-                pass
+            except Exception as e:
+                # Log timer database connection failure for debugging
+                import logging
+                logging.getLogger(__name__).debug(f"Timer DB connection failed: {e}")
+                health["timer_db_connected"] = False
         
         return health
     
@@ -1056,7 +1062,8 @@ class DatabaseManager:
                 return True  # Nothing to update
                 
             updates.append("updated_at = datetime('now')")
-            query = f"UPDATE framework_tasks SET {', '.join(updates)} WHERE id = :task_id"
+            # Security: Column names are hardcoded in this function, safe from SQL injection
+            query = f"UPDATE framework_tasks SET {', '.join(updates)} WHERE id = :task_id"  # nosec B608
             
             with self.get_connection("framework") as conn:
                 if SQLALCHEMY_AVAILABLE:

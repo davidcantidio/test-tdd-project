@@ -12,7 +12,7 @@ Command-line interface for managing the Streamlit extension with:
 
 import sys
 import os
-import subprocess
+import subprocess  # nosec B404 - Used for launching Streamlit with validated arguments
 import json
 from pathlib import Path
 from typing import Optional, List, Dict, Any
@@ -258,7 +258,11 @@ if TYPER_AVAILABLE:
         ]
         
         try:
-            subprocess.run(cmd, check=True)
+            # Security: Safe subprocess usage - all arguments are validated/hardcoded
+            # sys.executable: Python interpreter path (trusted)
+            # app_path: Validated file path existence above
+            # port/host: Validated above with proper type conversion
+            subprocess.run(cmd, check=True)  # nosec B603
         except KeyboardInterrupt:
             console.print("\n👋 Streamlit stopped")
         except subprocess.CalledProcessError as e:
@@ -507,7 +511,10 @@ else:
         cmd = [sys.executable, "-m", "streamlit", "run", str(app_path)]
         
         try:
-            subprocess.run(cmd, check=True)
+            # Security: Safe subprocess usage - all arguments are validated/hardcoded
+            # sys.executable: Python interpreter path (trusted)
+            # app_path: Validated file path existence above (lines 505-507)
+            subprocess.run(cmd, check=True)  # nosec B603
         except KeyboardInterrupt:
             print("\n👋 Streamlit stopped")
         except subprocess.CalledProcessError as e:

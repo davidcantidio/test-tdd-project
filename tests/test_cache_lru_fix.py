@@ -135,10 +135,14 @@ class TestCacheLRUFix:
         assert removed_count == 1, f"Expected 1 removed file, got {removed_count}"
         
         # Verify legitimate files still exist
-        key1_file = self.temp_dir / "key1.cache"
-        key2_file = self.temp_dir / "key2.cache"
-        assert key1_file.exists(), "key1.cache should still exist"
-        assert key2_file.exists(), "key2.cache should still exist"
+        # Note: Keys are hashed for security, so we need to calculate the expected hashes
+        import hashlib
+        key1_hash = hashlib.sha256("key1".encode('utf-8')).hexdigest()
+        key2_hash = hashlib.sha256("key2".encode('utf-8')).hexdigest()
+        key1_file = self.temp_dir / f"{key1_hash}.cache"
+        key2_file = self.temp_dir / f"{key2_hash}.cache"
+        assert key1_file.exists(), f"Hashed key1 file ({key1_hash}.cache) should still exist"
+        assert key2_file.exists(), f"Hashed key2 file ({key2_hash}.cache) should still exist"
         
         print("   ✅ Orphaned files cleanup works correctly")
     
@@ -198,7 +202,7 @@ class TestCacheLRUFix:
         print("   ✅ Performance benchmarks passed")
 
 
-def test_cache_lru_fixes():
+def validate_cache_lru_fixes():
     """Run all cache LRU fix tests."""
     print("🔧 CACHE LRU FIXES TEST SUITE")
     print("=" * 50)
@@ -242,5 +246,5 @@ def test_cache_lru_fixes():
 
 
 if __name__ == "__main__":
-    success = test_cache_lru_fixes()
+    success = validate_cache_lru_fixes()
     exit(0 if success else 1)

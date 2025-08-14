@@ -602,9 +602,11 @@ class AdvancedCache:
                         # File might have been deleted already
                         continue
         
-        except Exception:
-            # If directory doesn't exist or other error, return 0
-            pass
+        except Exception as e:
+            # If directory doesn't exist or other error, log and return 0
+            import logging
+            logging.getLogger(__name__).debug(f"Cache directory cleanup failed: {e}")
+            # Return 0 as no files were removed due to the error
         
         return removed_count
 

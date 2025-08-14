@@ -253,8 +253,11 @@ class ConfigurationBackupManager:
                                 config_file = Path.cwd() / f"{name.replace('db_config_', 'config_')}"
                                 with open(config_file, 'wb') as f:
                                     f.write(config_data)
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        # Log configuration restore failure but continue
+                        import logging
+                        logging.getLogger(__name__).warning(f"Failed to restore configuration files: {e}")
+                        # Continue processing other backup components
                 
                 return True
                 
@@ -457,8 +460,11 @@ class ConfigurationBackupManager:
             with open(self.index_file, 'w') as f:
                 json.dump(index_data, f, indent=2)
                 
-        except Exception:
-            pass  # Fail silently
+        except Exception as e:
+            # Log backup index save failure - this is important for backup integrity
+            import logging
+            logging.getLogger(__name__).error(f"Failed to save backup index: {e}")
+            # Don't raise, as this is a background operation
 
 
 # Global backup manager instance
@@ -704,8 +710,11 @@ def render_backup_restore_ui() -> None:
                 # Cleanup temp file
                 try:
                     tmp_path.unlink()
-                except:
-                    pass
+                except Exception as e:
+                    # Log temp file cleanup failure but don't fail the operation
+                    import logging
+                    logging.getLogger(__name__).debug(f"Failed to cleanup temp file {tmp_path}: {e}")
+                    # Temp file cleanup failure is not critical
 
 
 # Export for convenience
