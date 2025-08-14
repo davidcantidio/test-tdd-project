@@ -210,32 +210,51 @@ def render_timer_and_current_task():
         
         # Get current task if any
         db_manager = st.session_state.db_manager
-        tasks = db_manager.get_tasks()
-        in_progress = [t for t in tasks if t.get("status") == "in_progress"]
-        
-        if in_progress:
-            current_task = in_progress[0]
-            st.info(f"**{current_task['title']}**")
-            st.caption(f"Epic: {current_task.get('epic_name', 'None')}")
+        try:
+            tasks = db_manager.get_tasks()
+            in_progress = [t for t in tasks if t.get("status") == "in_progress"]
             
-            # TDD phase indicator
-            tdd_phase = current_task.get("tdd_phase", "")
-            if tdd_phase:
-                phase_colors = {"red": "🔴", "green": "🟢", "refactor": "🔵"}
-                st.markdown(f"TDD Phase: {phase_colors.get(tdd_phase, '⚪')} **{tdd_phase.title()}**")
-        else:
-            st.info("No task in progress. Start a new task to begin tracking!")
-            
-            # Quick task selector
-            all_tasks = [t for t in tasks if t.get("status") == "todo"][:5]
-            if all_tasks:
-                task_options = ["Select a task..."] + [t["title"] for t in all_tasks]
-                selected = st.selectbox("Quick start:", task_options)
+            if in_progress:
+                current_task = in_progress[0]
+                st.info(f"**{current_task['title']}**")
+                st.caption(f"Epic: {current_task.get('epic_name', 'None')}")
                 
-                if selected != "Select a task...":
-                    if st.button("▶️ Start Task"):
-                        st.success(f"Started: {selected}")
-                        st.rerun()
+                # TDD phase indicator
+                tdd_phase = current_task.get("tdd_phase", "")
+                if tdd_phase:
+                    phase_colors = {"red": "🔴", "green": "🟢", "refactor": "🔵"}
+                    st.markdown(f"TDD Phase: {phase_colors.get(tdd_phase, '⚪')} **{tdd_phase.title()}**")
+            else:
+                st.info("No task in progress. Start a new task to begin tracking!")
+                
+                # Quick task selector with epic grouping
+                available_tasks = [t for t in tasks if t.get("status") in ["todo", "pending"]][:10]
+                if available_tasks:
+                    # Group tasks by epic for better UX
+                    task_options = ["Select a task..."]
+                    for task in available_tasks:
+                        epic_name = task.get('epic_name', 'No Epic')
+                        task_display = f"{task['title']} ({epic_name})"
+                        task_options.append(task_display)
+                    
+                    selected = st.selectbox("Quick start:", task_options)
+                    
+                    if selected != "Select a task...":
+                        if st.button("▶️ Start Task"):
+                            # Find the selected task and update its status
+                            for task in available_tasks:
+                                epic_name = task.get('epic_name', 'No Epic')
+                                task_display = f"{task['title']} ({epic_name})"
+                                if task_display == selected:
+                                    # Here you would update the task status in the database
+                                    st.success(f"Started: {task['title']}")
+                                    st.rerun()
+                                    break
+                else:
+                    st.warning("📝 No available tasks found. Create tasks in the Kanban board to start tracking!")
+        except Exception as e:
+            st.error(f"❌ Error loading tasks: {e}")
+            st.info("Please check database connection or refresh the page.")
 
 
 def render_enhanced_epic_cards():
@@ -244,72 +263,79 @@ def render_enhanced_epic_cards():
     st.markdown("### 🎯 Epic Progress")
     
     db_manager = st.session_state.db_manager
-    epics = db_manager.get_epics()
     
-    if not epics:
-        st.info("📝 No epics found. Create your first epic to get started!")
-        return
-    
-    # Show top 3 active epics
-    active_epics = [e for e in epics if e.get("status") != "completed"][:3]
-    
-    for epic in active_epics:
-        with st.expander(f"**{epic['name']}** - {epic['epic_key']}", expanded=True):
-            # Progress metrics
-            progress = db_manager.get_epic_progress(epic['id'])
-            progress_pct = progress.get("progress_percentage", 0) / 100
-            
-            col1, col2, col3, col4 = st.columns([2, 1, 1, 1])
-            
-            with col1:
-                st.markdown(f"**Description:** {epic.get('description', 'No description')}")
+    try:
+        epics = db_manager.get_epics()
+        
+        if not epics:
+            st.info("📝 No epics found. Create your first epic to get started!")
+            return
+        
+        # Show top 6 active epics for better overview
+        active_epics = [e for e in epics if e.get("status") not in ["completed", "archived"]][:6]
+        
+        if not active_epics:
+            st.info("✅ All epics completed! Great work!")
+            return
+        
+        for epic in active_epics:
+            try:
+                with st.expander(f"**{epic['name']}** - Epic {epic.get('epic_key', 'N/A')}", expanded=False):
+                    # Progress metrics
+                    progress = db_manager.get_epic_progress(epic['id'])
+                    progress_pct = progress.get("progress_percentage", 0) / 100
+                    
+                    col1, col2, col3, col4 = st.columns([2, 1, 1, 1])
+                    
+                    with col1:
+                        # Epic description and progress
+                        summary = epic.get('summary', epic.get('description', 'No description available'))
+                        st.markdown(f"**Summary:** {summary[:100]}{'...' if len(summary) > 100 else ''}")
+                        
+                        # Progress bar with custom styling
+                        st.progress(progress_pct)
+                        st.caption(f"Progress: {progress_pct*100:.1f}% • Status: {epic.get('status', 'Unknown').title()}")
+                    
+                    with col2:
+                        # Tasks breakdown
+                        total_tasks = progress.get("total_tasks", 0)
+                        completed_tasks = progress.get("completed_tasks", 0)
+                        in_progress_tasks = progress.get("in_progress_tasks", 0)
+                        
+                        st.metric(
+                            label="Tasks Progress",
+                            value=f"{completed_tasks}/{total_tasks}",
+                            delta=f"{in_progress_tasks} in progress" if in_progress_tasks > 0 else "Ready to start"
+                        )
+                    
+                    with col3:
+                        # Duration and timing
+                        duration = epic.get('duration_description', 'Not set')
+                        st.metric(
+                            label="Duration",
+                            value=duration if duration else "TBD",
+                            delta="Estimated"
+                        )
+                    
+                    with col4:
+                        # Epic stats and actions
+                        points = progress.get("points_earned", 0)
+                        st.metric(
+                            label="Points",
+                            value=points,
+                            delta="Earned!" if points > 0 else "Pending"
+                        )
+                        
+                        # Quick action button
+                        if st.button(f"View Epic {epic.get('epic_key', 'N/A')}", key=f"view_epic_{epic['id']}"):
+                            st.info(f"Navigate to epic {epic['name']} details")
+                        
+            except Exception as e:
+                st.error(f"❌ Error loading epic {epic.get('name', 'Unknown')}: {e}")
                 
-                # Progress bar with custom styling
-                st.progress(progress_pct)
-                st.caption(f"Progress: {progress_pct*100:.1f}%")
-            
-            with col2:
-                # Tasks breakdown
-                total_tasks = progress.get("total_tasks", 0)
-                completed_tasks = progress.get("completed_tasks", 0)
-                
-                st.metric(
-                    label="Tasks",
-                    value=f"{completed_tasks}/{total_tasks}",
-                    delta=f"{total_tasks - completed_tasks} remaining"
-                )
-            
-            with col3:
-                # Points earned
-                points = epic.get("points_earned", 0)
-                st.metric(
-                    label="Points",
-                    value=points,
-                    delta="+10" if points > 0 else None
-                )
-            
-            with col4:
-                # Difficulty indicator
-                difficulty = epic.get("difficulty_level", 1)
-                # Convert to int if it's a string
-                try:
-                    difficulty_value = int(difficulty) if difficulty else 1
-                except (ValueError, TypeError):
-                    difficulty_value = 1
-                difficulty_stars = "⭐" * min(5, difficulty_value)
-                st.markdown(f"**Difficulty**")
-                st.markdown(difficulty_stars)
-            
-            # Mini burndown chart (simplified)
-            if progress.get("daily_progress"):
-                st.markdown("**Burndown Trend**")
-                burndown_data = [100, 85, 70, 60, 45, 30, (1-progress_pct)*100]
-                SparklineChart.render(
-                    data=burndown_data,
-                    color="#4CAF50",
-                    show_points=False,
-                    height=60
-                )
+    except Exception as e:
+        st.error(f"❌ Error loading epics: {e}")
+        st.info("Please check database connection or refresh the page.")
 
 
 def render_notifications_panel():

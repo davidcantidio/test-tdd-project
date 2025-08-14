@@ -175,12 +175,12 @@ class DatabaseManager:
             with self.get_connection("framework") as conn:
                 query = """
                     SELECT t.id, t.epic_id, t.title, t.description, t.status,
-                           t.estimate_minutes, t.tdd_phase, t.priority,
+                           t.estimate_minutes, t.tdd_phase, t.position,
                            t.created_at, t.updated_at, t.completed_at,
-                           e.name as epic_name, e.epic_key
+                           e.name as epic_name, e.epic_key, t.task_key
                     FROM framework_tasks t
                     JOIN framework_epics e ON t.epic_id = e.id
-                    WHERE t.deleted_at IS NULL
+                    WHERE 1=1
                 """
                 
                 params = []
@@ -188,7 +188,7 @@ class DatabaseManager:
                     query += " AND t.epic_id = ?"
                     params.append(epic_id)
                 
-                query += " ORDER BY t.priority DESC, t.created_at DESC"
+                query += " ORDER BY t.position ASC, t.created_at DESC"
                 
                 if SQLALCHEMY_AVAILABLE:
                     result = conn.execute(text(query), params)
@@ -198,6 +198,9 @@ class DatabaseManager:
                     cursor.execute(query, params)
                     return [dict(row) for row in cursor.fetchall()]
         except Exception as e:
+            logger.error(f"Error loading tasks: {e}")
+            if STREAMLIT_AVAILABLE and st:
+                st.error(f"❌ Error loading tasks: {e}")
             print(f"Error loading tasks: {e}")
             return []
     
@@ -428,8 +431,8 @@ class DatabaseManager:
                     # Get epic info
                     epic_result = conn.execute(text("""
                         SELECT id, epic_key, name, status, points_earned
-                        FROM framework_epics WHERE id = ?
-                    """), [epic_id])
+                        FROM framework_epics WHERE id = :epic_id
+                    """), {"epic_id": epic_id})
                     epic = dict(epic_result.fetchone()._mapping)
                     
                     # Get task counts
@@ -438,8 +441,8 @@ class DatabaseManager:
                             COUNT(*) as total_tasks,
                             SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed_tasks,
                             SUM(CASE WHEN status = 'in_progress' THEN 1 ELSE 0 END) as in_progress_tasks
-                        FROM framework_tasks WHERE epic_id = ? AND deleted_at IS NULL
-                    """), [epic_id])
+                        FROM framework_tasks WHERE epic_id = :epic_id
+                    """), {"epic_id": epic_id})
                     tasks = dict(task_result.fetchone()._mapping)
                     
                 else:

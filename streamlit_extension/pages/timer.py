@@ -171,31 +171,39 @@ def _render_main_timer(timer_component, db_manager: DatabaseManager, config):
     
     st.markdown("### 🎯 Current Session")
     
-    # Task selection
-    tasks = db_manager.get_tasks()
-    active_tasks = [t for t in tasks if t.get("status") in ["todo", "in_progress"]]
-    
-    if active_tasks:
-        task_options = ["No specific task"] + [f"{t['title']} ({t['epic_name']})" for t in active_tasks]
-        selected_task_option = st.selectbox("Working on:", task_options)
+    # Task selection with error handling
+    try:
+        tasks = db_manager.get_tasks()
+        active_tasks = [t for t in tasks if t.get("status") in ["todo", "pending", "in_progress"]]
         
-        if selected_task_option != "No specific task":
-            # Find selected task
-            selected_task = None
-            for task in active_tasks:
-                if f"{task['title']} ({task['epic_name']})" == selected_task_option:
-                    selected_task = task
-                    break
+        if active_tasks:
+            task_options = ["No specific task"] + [f"{t['title']} ({t.get('epic_name', 'No Epic')})" for t in active_tasks]
+            selected_task_option = st.selectbox("Working on:", task_options)
             
-            if selected_task:
-                st.session_state.current_task = selected_task
-                st.info(f"🎯 **Task:** {selected_task['title']}")
-                if selected_task.get('description'):
-                    st.caption(f"Description: {selected_task['description']}")
+            if selected_task_option != "No specific task":
+                # Find selected task
+                selected_task = None
+                for task in active_tasks:
+                    task_display = f"{task['title']} ({task.get('epic_name', 'No Epic')})"
+                    if task_display == selected_task_option:
+                        selected_task = task
+                        break
+                
+                if selected_task:
+                    st.session_state.current_task = selected_task
+                    st.info(f"🎯 **Task:** {selected_task['title']}")
+                    if selected_task.get('description'):
+                        st.caption(f"Description: {selected_task['description']}")
+                    # Show epic info
+                    if selected_task.get('epic_name'):
+                        st.caption(f"📊 Epic: {selected_task['epic_name']}")
+            else:
+                st.session_state.current_task = None
         else:
+            st.info("📝 No active tasks found. Create tasks in the Kanban board to start tracking!")
             st.session_state.current_task = None
-    else:
-        st.info("📝 No active tasks. Create tasks to track focused work.")
+    except Exception as e:
+        st.error(f"❌ Error loading tasks for timer: {e}")
         st.session_state.current_task = None
     
     # Main timer display

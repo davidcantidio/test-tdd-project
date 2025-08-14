@@ -31,6 +31,7 @@ from dataclasses import dataclass, asdict
 from enum import Enum
 import sys
 import traceback
+import time
 
 # Add migration to path
 sys.path.append(str(Path(__file__).parent))
@@ -157,10 +158,14 @@ class BidirectionalSyncEngine:
     - Rollback automático em caso de erro
     """
     
-    def __init__(self, db_path: str = "framework.db", 
-                 conflict_resolution: ConflictResolution = ConflictResolution.TIMESTAMP_WINS):
+    def __init__(self, db_path: str = "framework.db",
+                 conflict_resolution: ConflictResolution = ConflictResolution.TIMESTAMP_WINS,
+                 max_retries: int = 3,
+                 retry_delay: float = 0.1):
         self.db_path = db_path
         self.conflict_resolution = conflict_resolution
+        self.max_retries = max_retries
+        self.retry_delay = retry_delay
         
         # Initialize components
         self.enrichment_engine = JSONEnrichmentEngine(DateBaseStrategy.NEXT_MONDAY)
@@ -201,15 +206,26 @@ class BidirectionalSyncEngine:
                     
                 def commit(self):
                     return self.conn.commit()
-            
+
+                def rollback(self):
+                    return self.conn.rollback()
+
             return ConnectionWrapper(self.connection_pool.get_connection())
         else:
-            # Fallback to direct connection with improved settings
-            conn = sqlite3.connect(self.db_path, timeout=30.0)
-            conn.row_factory = sqlite3.Row  # Enable column access by name
-            conn.execute("PRAGMA journal_mode=WAL")  # Enable WAL mode for better concurrency
-            conn.execute("PRAGMA busy_timeout=30000")  # 30 second timeout
-            return conn
+            # Fallback to direct connection with retry logic
+            attempts = 0
+            while True:
+                try:
+                    conn = sqlite3.connect(self.db_path, timeout=30.0)
+                    conn.row_factory = sqlite3.Row  # Enable column access by name
+                    conn.execute("PRAGMA journal_mode=WAL")  # Enable WAL mode for better concurrency
+                    conn.execute("PRAGMA busy_timeout=30000")  # 30 second timeout
+                    return conn
+                except sqlite3.OperationalError:
+                    if attempts >= self.max_retries:
+                        raise
+                    attempts += 1
+                    time.sleep(self.retry_delay)
     
     def epic_exists_in_db(self, epic_key: str) -> bool:
         """Check if epic exists in database."""
@@ -250,55 +266,59 @@ class BidirectionalSyncEngine:
     def insert_epic_to_db(self, epic_data: Dict[str, Any]) -> int:
         """Insert new epic into database using a single connection."""
         with self.get_database_connection() as conn:
-            # Increase timeout for complex operations
-            conn.execute("PRAGMA busy_timeout=60000")
+            try:
+                # Increase timeout for complex operations
+                conn.execute("PRAGMA busy_timeout=60000")
 
-            # Prepare epic fields
-            epic_key = epic_data.get('id') or epic_data.get('epic_key', '')
-            name = epic_data.get('name', '')
-            summary = epic_data.get('summary', epic_data.get('description', ''))
-            duration_desc = epic_data.get('duration', '')
+                # Prepare epic fields
+                epic_key = epic_data.get('id') or epic_data.get('epic_key', '')
+                name = epic_data.get('name', '')
+                summary = epic_data.get('summary', epic_data.get('description', ''))
+                duration_desc = epic_data.get('duration', '')
 
-            # JSON fields
-            goals = json.dumps(epic_data.get('goals', []), ensure_ascii=False)
-            definition_of_done = json.dumps(epic_data.get('definition_of_done', []), ensure_ascii=False)
-            labels = json.dumps(epic_data.get('labels', []), ensure_ascii=False)
+                # JSON fields
+                goals = json.dumps(epic_data.get('goals', []), ensure_ascii=False)
+                definition_of_done = json.dumps(epic_data.get('definition_of_done', []), ensure_ascii=False)
+                labels = json.dumps(epic_data.get('labels', []), ensure_ascii=False)
 
-            # Calculate dates using enrichment engine
-            enriched = self.enrichment_engine.enrich_epic(epic_data)
-            calc_fields = enriched.get('calculated_fields', {})
+                # Calculate dates using enrichment engine
+                enriched = self.enrichment_engine.enrich_epic(epic_data)
+                calc_fields = enriched.get('calculated_fields', {})
 
-            # Insert epic
-            cursor = conn.execute("""
-                INSERT INTO framework_epics (
-                    epic_key, name, summary, duration_description,
+                # Insert epic
+                cursor = conn.execute("""
+                    INSERT INTO framework_epics (
+                        epic_key, name, summary, duration_description,
+                        goals, definition_of_done, labels,
+                        planned_start_date, planned_end_date, calculated_duration_days,
+                        tdd_enabled, methodology,
+                        performance_constraints, quality_gates, automation_hooks, checklist_epic_level,
+                        sync_status, json_checksum, created_at, updated_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'synced', ?, ?, ?)
+                """, (
+                    epic_key, name, summary, duration_desc,
                     goals, definition_of_done, labels,
-                    planned_start_date, planned_end_date, calculated_duration_days,
-                    tdd_enabled, methodology,
-                    performance_constraints, quality_gates, automation_hooks, checklist_epic_level,
-                    sync_status, json_checksum, created_at, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'synced', ?, ?, ?)
-            """, (
-                epic_key, name, summary, duration_desc,
-                goals, definition_of_done, labels,
-                calc_fields.get('planned_start_date'), calc_fields.get('planned_end_date'),
-                calc_fields.get('calculated_duration_days', 0),
-                epic_data.get('tdd_enabled', True), epic_data.get('methodology', 'Test-Driven Development'),
-                json.dumps(epic_data.get('performance_constraints', {}), ensure_ascii=False),
-                json.dumps(epic_data.get('quality_gates', {}), ensure_ascii=False),
-                json.dumps(epic_data.get('automation_hooks', {}), ensure_ascii=False),
-                json.dumps(epic_data.get('checklist_epic_level', []), ensure_ascii=False),
-                self.calculate_checksum(epic_data),
-                datetime.now().isoformat(), datetime.now().isoformat()
-            ))
+                    calc_fields.get('planned_start_date'), calc_fields.get('planned_end_date'),
+                    calc_fields.get('calculated_duration_days', 0),
+                    epic_data.get('tdd_enabled', True), epic_data.get('methodology', 'Test-Driven Development'),
+                    json.dumps(epic_data.get('performance_constraints', {}), ensure_ascii=False),
+                    json.dumps(epic_data.get('quality_gates', {}), ensure_ascii=False),
+                    json.dumps(epic_data.get('automation_hooks', {}), ensure_ascii=False),
+                    json.dumps(epic_data.get('checklist_epic_level', []), ensure_ascii=False),
+                    self.calculate_checksum(epic_data),
+                    datetime.now().isoformat(), datetime.now().isoformat()
+                ))
 
-            epic_id = cursor.lastrowid
+                epic_id = cursor.lastrowid
 
-            # Insert tasks using the same connection
-            self.insert_tasks_to_db(epic_id, epic_data.get('tasks', []), conn=conn)
+                # Insert tasks using the same connection
+                self.insert_tasks_to_db(epic_id, epic_data.get('tasks', []), conn=conn)
 
-            conn.commit()
-            return epic_id
+                conn.commit()
+                return epic_id
+            except Exception:
+                conn.rollback()
+                raise
 
     def insert_tasks_to_db(self, epic_id: int, tasks: List[Dict[str, Any]], conn: sqlite3.Connection | None = None):
         """Insert tasks for an epic into database.
