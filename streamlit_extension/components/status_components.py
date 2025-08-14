@@ -10,6 +10,7 @@ Reusable status indicators, badges, and metric display components:
 from typing import Optional, Dict, Any, Union, List
 from dataclasses import dataclass
 from datetime import datetime
+from contextlib import nullcontext
 
 # Graceful imports
 try:
@@ -180,11 +181,22 @@ class ProgressCard:
         }
         
         color = colors.get(color_scheme, colors["blue"])
-        
-        # Create card container
-        with st.container():
+
+        # Create card container, handling mocked Streamlit gracefully
+        container_func = getattr(st, "container", None)
+        if container_func:
+            try:
+                ctx = container_func()
+                if not hasattr(ctx, "__enter__") or not hasattr(ctx, "__exit__"):
+                    ctx = nullcontext()
+            except Exception:
+                ctx = nullcontext()
+        else:
+            ctx = nullcontext()
+
+        with ctx:
             st.markdown(f"**{self.title}**")
-            
+
             if self.description:
                 st.markdown(f"*{self.description}*")
             
@@ -212,13 +224,19 @@ class ProgressCard:
             # Numbers and percentage
             if show_numbers or self.show_percentage:
                 col1, col2 = st.columns(2)
-                
+
                 if show_numbers:
-                    with col1:
+                    if hasattr(col1, "__enter__") and hasattr(col1, "__exit__"):
+                        with col1:
+                            st.markdown(f"**{self.current:,}** / {self.total:,}")
+                    else:
                         st.markdown(f"**{self.current:,}** / {self.total:,}")
-                
+
                 if self.show_percentage:
-                    with col2:
+                    if hasattr(col2, "__enter__") and hasattr(col2, "__exit__"):
+                        with col2:
+                            st.markdown(f"**{self.percentage:.1f}%**")
+                    else:
                         st.markdown(f"**{self.percentage:.1f}%**")
     
     def render_mini(self, width: int = 100) -> None:
@@ -309,58 +327,97 @@ class MetricCard:
         formatted_value = f"{self.prefix}{self.value}{self.unit}{self.suffix}"
         
         col1, col2, col3 = st.columns([3, 2, 1])
-        
-        with col1:
+
+        if hasattr(col1, "__enter__") and hasattr(col1, "__exit__"):
+            with col1:
+                st.markdown(f"**{self.title}**")
+        else:
             st.markdown(f"**{self.title}**")
-        
-        with col2:
+
+        if hasattr(col2, "__enter__") and hasattr(col2, "__exit__"):
+            with col2:
+                st.markdown(f"**{formatted_value}**")
+        else:
             st.markdown(f"**{formatted_value}**")
-        
-        with col3:
+
+        col3_ctx = col3 if hasattr(col3, "__enter__") and hasattr(col3, "__exit__") else nullcontext()
+        with col3_ctx:
             if self.delta is not None:
                 color = "green" if self.delta >= 0 else "red"
                 icon = "📈" if self.delta >= 0 else "📉"
-                st.markdown(f"<span style='color: {color}'>{icon} {self.delta:+}</span>", 
-                           unsafe_allow_html=True)
+                st.markdown(
+                    f"<span style='color: {color}'>{icon} {self.delta:+}</span>",
+                    unsafe_allow_html=True
+                )
     
     def _render_detailed(self, show_chart: bool = False, 
                         chart_data: Optional[List[Union[int, float]]] = None) -> None:
         """Render detailed card with optional sparkline chart."""
         formatted_value = f"{self.prefix}{self.value}{self.unit}{self.suffix}"
         
-        # Create bordered container
-        with st.container():
-            st.markdown(f"""
+        # Create bordered container safely
+        container_func = getattr(st, "container", None)
+        if container_func:
+            try:
+                ctx = container_func()
+                if not hasattr(ctx, "__enter__") or not hasattr(ctx, "__exit__"):
+                    ctx = nullcontext()
+            except Exception:
+                ctx = nullcontext()
+        else:
+            ctx = nullcontext()
+
+        with ctx:
+            st.markdown(
+                f"""
             <div style="
                 border: 1px solid #e0e0e0;
                 border-radius: 8px;
                 padding: 16px;
                 margin: 8px 0;
             ">
-            """, unsafe_allow_html=True)
-            
+            """,
+                unsafe_allow_html=True,
+            )
+
             col1, col2 = st.columns([2, 1])
-            
-            with col1:
+
+            if hasattr(col1, "__enter__") and hasattr(col1, "__exit__"):
+                with col1:
+                    st.markdown(f"### {self.title}")
+                    st.markdown(f"# {formatted_value}")
+
+                    if self.delta is not None:
+                        color = "green" if self.delta >= 0 else "red"
+                        icon = "▲" if self.delta >= 0 else "▼"
+                        st.markdown(
+                            f"<span style='color: {color}; font-size: 16px;'>{icon} {self.delta:+}{self.unit}</span>",
+                            unsafe_allow_html=True,
+                        )
+            else:
                 st.markdown(f"### {self.title}")
                 st.markdown(f"# {formatted_value}")
-                
                 if self.delta is not None:
                     color = "green" if self.delta >= 0 else "red"
                     icon = "▲" if self.delta >= 0 else "▼"
-                    st.markdown(f"<span style='color: {color}; font-size: 16px;'>{icon} {self.delta:+}{self.unit}</span>", 
-                               unsafe_allow_html=True)
-            
-            with col2:
-                if show_chart and chart_data and PLOTLY_AVAILABLE:
+                    st.markdown(
+                        f"<span style='color: {color}; font-size: 16px;'>{icon} {self.delta:+}{self.unit}</span>",
+                        unsafe_allow_html=True,
+                    )
+
+            col2_ctx = col2 if hasattr(col2, "__enter__") and hasattr(col2, "__exit__") else nullcontext()
+            with col2_ctx:
+                if show_chart and chart_data and PLOTLY_AVAILABLE and go is not None:
                     # Create mini sparkline
                     fig = go.Figure()
-                    fig.add_trace(go.Scatter(
-                        y=chart_data,
-                        mode='lines',
-                        line=dict(color='#1f77b4', width=2),
-                        showlegend=False
-                    ))
+                    fig.add_trace(
+                        go.Scatter(
+                            y=chart_data,
+                            mode='lines',
+                            line=dict(color='#1f77b4', width=2),
+                            showlegend=False,
+                        )
+                    )
                     fig.update_layout(
                         height=80,
                         margin=dict(l=0, r=0, t=0, b=0),
@@ -369,7 +426,7 @@ class MetricCard:
                         plot_bgcolor='rgba(0,0,0,0)'
                     )
                     st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
-            
+
             st.markdown("</div>", unsafe_allow_html=True)
     
     @staticmethod
@@ -381,9 +438,13 @@ class MetricCard:
             return
         
         cols = st.columns(columns)
-        
+
         for i, metric in enumerate(metrics):
-            with cols[i % columns]:
+            col = cols[i % columns]
+            if hasattr(col, "__enter__") and hasattr(col, "__exit__"):
+                with col:
+                    metric.render()
+            else:
                 metric.render()
 
 

@@ -31,6 +31,12 @@ except ImportError:
     st = None
 
 
+def get_config():
+    """Safely retrieve extension configuration."""
+    from ..config import get_config as _get_config
+    return _get_config()
+
+
 class CacheEntry:
     """Represents a single cache entry with metadata."""
     
@@ -75,11 +81,15 @@ class AdvancedCache:
         self.enable_disk_cache = enable_disk_cache
         self.max_disk_cache_mb = max_disk_cache_mb
         self.max_disk_cache_bytes = max_disk_cache_mb * 1024 * 1024  # Convert MB to bytes
-        
+
         # Memory cache
         self._memory_cache: Dict[str, CacheEntry] = {}
         self._access_order = []  # For LRU eviction
         self._lock = Lock()
+
+        # Mapping of hashed cache keys to their original representations
+        # Used for pattern-based invalidation after enforcing hashed keys for security
+        self._key_map: Dict[str, str] = {}
         
         # Disk cache directory
         if enable_disk_cache:
@@ -222,7 +232,8 @@ class AdvancedCache:
     def set(self, key: Union[str, tuple, dict], value: Any, ttl: int = None) -> None:
         """Set value in cache with optional TTL."""
         cache_key = self._generate_key(key)
-        ttl = ttl or self.default_ttl
+        if ttl is None:
+            ttl = self.default_ttl
         
         with self._lock:
             # Create cache entry
@@ -233,6 +244,7 @@ class AdvancedCache:
             
             # Store in memory cache
             self._memory_cache[cache_key] = entry
+            self._key_map[cache_key] = str(key)
             
             # Update access order
             if cache_key in self._access_order:
@@ -245,15 +257,20 @@ class AdvancedCache:
     
     def delete(self, key: Union[str, tuple, dict]) -> bool:
         """Delete key from cache."""
-        cache_key = self._generate_key(key)
+        if isinstance(key, str) and self._validate_cache_key_for_filesystem(key):
+            cache_key = key
+        else:
+            cache_key = self._generate_key(key)
         
         with self._lock:
             deleted = False
             
-            # Remove from memory cache
+            # Remove from memory cache and key mapping
             if cache_key in self._memory_cache:
                 del self._memory_cache[cache_key]
                 deleted = True
+            if cache_key in self._key_map:
+                del self._key_map[cache_key]
             
             # Remove from access order
             if cache_key in self._access_order:
@@ -271,6 +288,7 @@ class AdvancedCache:
         with self._lock:
             self._memory_cache.clear()
             self._access_order.clear()
+            self._key_map.clear()
             
             if self.enable_disk_cache and self.cache_dir:
                 # Clear disk cache
@@ -283,18 +301,18 @@ class AdvancedCache:
     def invalidate_pattern(self, pattern: str) -> int:
         """Invalidate all cache entries matching a pattern."""
         count = 0
-        
+
         with self._lock:
-            keys_to_remove = []
-            
-            for key in self._memory_cache.keys():
-                if pattern in key:
-                    keys_to_remove.append(key)
-            
-            for key in keys_to_remove:
-                self.delete(key)
+            keys_to_remove = [
+                original_key
+                for original_key in self._key_map.values()
+                if pattern in original_key
+            ]
+
+        for original_key in keys_to_remove:
+            if self.delete(original_key):
                 count += 1
-        
+
         return count
     
     def cleanup_disk_cache_manual(self) -> Dict[str, int]:
@@ -620,25 +638,26 @@ def get_cache() -> AdvancedCache:
     """Get global cache instance (singleton)."""
     global _global_cache
     
-    if _global_cache is None:
-        with _cache_lock:
-            if _global_cache is None:
-                # Get configuration from config if available
-                try:
-                    from ..config import get_config
-                    config = get_config()
-                    ttl = config.cache_ttl_seconds
-                    disk_cache_mb = getattr(config, 'max_disk_cache_mb', 100)
-                except:
-                    ttl = 300  # Default 5 minutes
-                    disk_cache_mb = 100  # Default 100 MB
-                
-                _global_cache = AdvancedCache(
-                    default_ttl=ttl, 
-                    max_size=1000, 
-                    max_disk_cache_mb=disk_cache_mb
-                )
-    
+    with _cache_lock:
+        # Get configuration from config if available
+        try:
+            config = get_config()
+            ttl = config.cache_ttl_seconds
+            disk_cache_mb = getattr(config, 'max_disk_cache_mb', 100)
+        except Exception:
+            ttl = 300  # Default 5 minutes
+            disk_cache_mb = 100  # Default 100 MB
+
+        if _global_cache is None:
+            _global_cache = AdvancedCache(
+                default_ttl=ttl,
+                max_size=1000,
+                max_disk_cache_mb=disk_cache_mb
+            )
+        else:
+            _global_cache.default_ttl = ttl
+            _global_cache.max_disk_cache_mb = disk_cache_mb
+
     return _global_cache
 
 
@@ -846,15 +865,16 @@ def clear_all_caches():
 def cleanup_expired_cache():
     """Remove expired entries from all caches."""
     cache = get_cache()
-    
+
     with cache._lock:
-        expired_keys = []
-        for key, entry in cache._memory_cache.items():
-            if entry.is_expired():
-                expired_keys.append(key)
-        
-        for key in expired_keys:
-            cache.delete(key)
+        expired_keys = [
+            key
+            for key, entry in cache._memory_cache.items()
+            if entry.is_expired() or entry.expires_at <= entry.created_at
+        ]
+
+    for key in expired_keys:
+        cache.delete(key)
     
     # Clean session cache
     session_cache = get_session_cache()

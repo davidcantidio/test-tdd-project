@@ -9,7 +9,7 @@ Reusable layout containers and structural components:
 
 from typing import Optional, Dict, Any, Union, List, Callable
 from dataclasses import dataclass
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 
 # Graceful imports
 try:
@@ -130,15 +130,21 @@ class CardContainer:
             return
         
         cols = st.columns(columns)
-        
+
         for i, card_data in enumerate(cards):
-            with cols[i % columns]:
+            col = cols[i % columns]
+            if hasattr(col, "__enter__") and hasattr(col, "__exit__"):
+                col_ctx = col
+            else:
+                col_ctx = nullcontext()
+
+            with col_ctx:
                 style = card_data.get('style', 'default')
                 title = card_data.get('title')
                 subtitle = card_data.get('subtitle')
-                
+
                 card = CardContainer(style=style, title=title, subtitle=subtitle)
-                
+
                 with card.render():
                     if 'content_func' in card_data:
                         card_data['content_func']()
@@ -330,11 +336,17 @@ def create_two_column_layout(left_content: Callable[[], None],
         return
     
     col1, col2 = st.columns(ratio)
-    
-    with col1:
+
+    if hasattr(col1, "__enter__") and hasattr(col1, "__exit__"):
+        with col1:
+            left_content()
+    else:
         left_content()
-    
-    with col2:
+
+    if hasattr(col2, "__enter__") and hasattr(col2, "__exit__"):
+        with col2:
+            right_content()
+    else:
         right_content()
 
 
@@ -353,15 +365,16 @@ def create_three_column_layout(left_content: Callable[[], None],
         return
     
     col1, col2, col3 = st.columns(ratio)
-    
-    with col1:
-        left_content()
-    
-    with col2:
-        center_content()
-    
-    with col3:
-        right_content()
+
+    cols = [col1, col2, col3]
+    contents = [left_content, center_content, right_content]
+
+    for col, content in zip(cols, contents):
+        if hasattr(col, "__enter__") and hasattr(col, "__exit__"):
+            with col:
+                content()
+        else:
+            content()
 
 
 def create_sidebar_main_layout(sidebar_content: Callable[[], None],
@@ -375,9 +388,10 @@ def create_sidebar_main_layout(sidebar_content: Callable[[], None],
         return
     
     # Render sidebar content
-    with st.sidebar:
+    sidebar_ctx = st.sidebar if hasattr(st.sidebar, "__enter__") and hasattr(st.sidebar, "__exit__") else nullcontext()
+    with sidebar_ctx:
         sidebar_content()
-    
+
     # Render main content
     main_content()
 

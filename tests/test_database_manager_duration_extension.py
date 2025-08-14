@@ -486,7 +486,7 @@ class TestDatabaseManagerDurationExtension:
         ]
         
         for i, (duration_desc, expected_days) in enumerate(epic_patterns, 1):
-            self._insert_test_epic(epic_id=i, name=f"Epic {i}")
+            self._insert_test_epic(epic_id=i, epic_key=f"TEST_{i}", name=f"Epic {i}")
             
             # Update duration description
             success = self.db_manager.update_duration_description(i, duration_desc)

@@ -1,429 +1,1260 @@
  (cd "$(git rev-parse --show-toplevel)" && git apply --3way <<'EOF' 
-diff --git a/duration_system/duration_calculator.py b/duration_system/duration_calculator.py
-index d5548e1d4f2de6af6658eb3473b12aa7e99c4f52..08255db1ae81193de3af73acc949eb46c1af34d6 100644
---- a/duration_system/duration_calculator.py
-+++ b/duration_system/duration_calculator.py
-@@ -1,42 +1,45 @@
+diff --git a/streamlit_extension/components/layout_components.py b/streamlit_extension/components/layout_components.py
+index 0fb665adb292e0fdac574355388df0d329ff58ab..7a4991ed30c28502355ee56a9c63e663e34a4bad 100644
+--- a/streamlit_extension/components/layout_components.py
++++ b/streamlit_extension/components/layout_components.py
+@@ -1,37 +1,37 @@
  """
- Duration Calculator Engine for Epic Timeline Management
+ 🎨 Layout Components for Streamlit Extension
  
- This module provides automatic duration calculation between dates with support
- for business days, calendar days, and various time units used in real epic data.
- 
- Focus: Duration System Implementation - Core calculation logic
- """
- 
- from datetime import datetime, date, timedelta
- from typing import Optional, Tuple, Union, Dict, Any
- from enum import Enum
- import re
- import logging
- 
- logger = logging.getLogger(__name__)
- 
-+# Average number of days per month in Gregorian calendar
-+AVERAGE_DAYS_PER_MONTH = 365.25 / 12  # ≈30.4375 days
-+
- 
- class DurationUnit(Enum):
-     """Supported duration units from real epic data"""
-     DAYS = "dias"
-     WEEKS = "semanas"
-     MONTHS = "meses"
- 
- 
- class DateCalculationMode(Enum):
-     """Date calculation modes"""
-     CALENDAR_DAYS = "calendar"
-     BUSINESS_DAYS = "business"
- 
- 
- class DurationCalculationError(Exception):
-     """Custom exception for duration calculation errors"""
-     pass
- 
- 
- class DurationCalculator:
-     """
-     Core engine for automatic duration calculation between dates.
-     
-     Supports:
-     - Calendar days vs business days calculation
-@@ -164,51 +167,52 @@ class DurationCalculator:
-         elif unit_normalized in ['semana', 'semanas']:
-             unit = DurationUnit.WEEKS
-         elif unit_normalized in ['mes', 'meses', 'mês']:
-             unit = DurationUnit.MONTHS
-         else:
-             raise DurationCalculationError(f"Unsupported unit: {unit_str}")
-         
-         return value, unit
-     
-     def duration_to_days(self, value: float, unit: DurationUnit) -> float:
-         """
-         Convert duration value to days based on unit.
-         
-         Args:
-             value: Numeric value 
-             unit: Duration unit
-             
-         Returns:
-             Duration converted to days
-         """
-         if unit == DurationUnit.DAYS:
-             return value
-         elif unit == DurationUnit.WEEKS:
-             return value * 7.0
-         elif unit == DurationUnit.MONTHS:
--            return value * 30.0  # Approximate 30 days per month
-+            # Use average Gregorian month length for better accuracy
-+            return value * AVERAGE_DAYS_PER_MONTH
-         else:
-             raise DurationCalculationError(f"Unknown unit: {unit}")
-     
-     def parse_and_convert_to_days(self, duration_str: str) -> float:
-         """
-         Parse duration string and convert to days in one step.
-         
-         Args:
-             duration_str: Duration string from epic data
-             
-         Returns:
-             Duration in days (float)
-         """
-         value, unit = self.parse_duration_string(duration_str)
-         return self.duration_to_days(value, unit)
-     
-     def validate_date_consistency(
-         self, 
-         planned_start: Optional[Union[date, str]] = None,
-         planned_end: Optional[Union[date, str]] = None,
-         actual_start: Optional[Union[date, str]] = None,
-         actual_end: Optional[Union[date, str]] = None,
-         duration_days: Optional[float] = None
-     ) -> Dict[str, Any]:
-         """
-diff --git a/streamlit_extension/utils/database.py b/streamlit_extension/utils/database.py
-index 341dc76cc393ca9b25a2952f936b2e53ac9bedf3..9d5b0734513c6a638b2c52cc8b2b6be6f2fcc904 100644
---- a/streamlit_extension/utils/database.py
-+++ b/streamlit_extension/utils/database.py
-@@ -1,41 +1,42 @@
- """
- 🗄️ Database Management Utilities
- 
- Streamlit-optimized database operations with:
- - Connection pooling
- - Caching strategies
- - SQLAlchemy integration
- - Error handling
+ Reusable layout containers and structural components:
+ - CardContainer: Styled card containers with borders and padding
+ - SidebarSection: Organized sidebar sections with collapsible content
+ - ExpandableSection: Expandable content sections with icons and state management
  """
  
- import sqlite3
- from pathlib import Path
- from typing import Optional, Dict, Any, List, Union
- from contextlib import contextmanager
- from datetime import datetime
- import json
-+import logging
+ from typing import Optional, Dict, Any, Union, List, Callable
+ from dataclasses import dataclass
+-from contextlib import contextmanager
++from contextlib import contextmanager, nullcontext
  
  # Graceful imports
- try:
-     import sqlalchemy as sa
-     from sqlalchemy import create_engine, text
-     from sqlalchemy.pool import StaticPool
-     SQLALCHEMY_AVAILABLE = True
- except ImportError:
-     sa = None
-     create_engine = None
-     text = None
-     StaticPool = None
-     SQLALCHEMY_AVAILABLE = False
- 
- try:
-     import pandas as pd
-     PANDAS_AVAILABLE = True
- except ImportError:
-     pd = None
-     PANDAS_AVAILABLE = False
- 
  try:
      import streamlit as st
      STREAMLIT_AVAILABLE = True
  except ImportError:
-@@ -47,50 +48,52 @@ try:
-     from ..config.streamlit_config import format_datetime_user_tz, format_time_ago_user_tz
-     TIMEZONE_UTILS_AVAILABLE = True
- except ImportError:
-     TIMEZONE_UTILS_AVAILABLE = False
-     format_datetime_user_tz = None
-     format_time_ago_user_tz = None
+     st = None
+     STREAMLIT_AVAILABLE = False
  
- # Import duration system for FASE 2.3 extension
- try:
-     from duration_system.duration_calculator import DurationCalculator
-     from duration_system.duration_formatter import DurationFormatter
-     DURATION_SYSTEM_AVAILABLE = True
- except ImportError:
-     DurationCalculator = None
-     DurationFormatter = None
-     DURATION_SYSTEM_AVAILABLE = False
  
- # Import caching system
- try:
-     from .cache import cache_database_query, invalidate_cache_on_change, get_cache
-     CACHE_AVAILABLE = True
- except ImportError:
-     CACHE_AVAILABLE = False
-     cache_database_query = invalidate_cache_on_change = get_cache = None
+ @dataclass
+ class CardStyle:
+     """Styling configuration for card containers."""
+     border_color: str = "#e0e0e0"
+     background_color: str = "#ffffff"
+     border_radius: str = "8px"
+     padding: str = "16px"
+     margin: str = "8px 0"
+     shadow: bool = False
+     hover_effect: bool = False
  
-+logger = logging.getLogger(__name__)
-+
  
- class DatabaseManager:
-     """Streamlit-optimized database manager."""
-     
-     def __init__(self, framework_db_path: str = "framework.db", timer_db_path: str = "task_timer.db"):
-         self.framework_db_path = Path(framework_db_path)
-         self.timer_db_path = Path(timer_db_path)
-         self.engines = {}
+ # Predefined card styles
+ CARD_STYLES = {
+     "default": CardStyle(),
+@@ -108,59 +108,65 @@ class CardContainer:
+             st.divider()
          
-         if SQLALCHEMY_AVAILABLE:
-             self._initialize_engines()
+         # Yield control to the content
+         yield
+         
+         # Close card container
+         st.markdown('</div>', unsafe_allow_html=True)
      
-     def _initialize_engines(self):
-         """Initialize SQLAlchemy engines with optimized settings."""
-         if not SQLALCHEMY_AVAILABLE:
+     def render_content(self, content_func: Callable[[], None]) -> None:
+         """Render content using a function instead of context manager."""
+         with self.render():
+             content_func()
+     
+     @staticmethod
+     def render_grid(cards: List[Dict[str, Any]], columns: int = 2) -> None:
+         """Render multiple cards in a grid layout."""
+         if not STREAMLIT_AVAILABLE:
+             for card_data in cards:
+                 print(f"=== {card_data.get('title', 'Card')} ===")
+                 if 'content' in card_data:
+                     print(card_data['content'])
+                 print()
              return
          
-         # Framework database engine
-         if self.framework_db_path.exists():
-             framework_url = f"sqlite:///{self.framework_db_path}"
-             self.engines["framework"] = create_engine(
-                 framework_url,
-                 poolclass=StaticPool,
-                 connect_args={
-                     "check_same_thread": False,
-@@ -1206,148 +1209,152 @@ class DatabaseManager:
-                             stats[status] = count
-                         total += count
-                     stats["total"] = total
-                     
-                     return stats
-                     
-         except Exception as e:
-             print(f"Error getting task statistics: {e}")
-             return {"todo": 0, "in_progress": 0, "completed": 0, "total": 0}
+         cols = st.columns(columns)
+-        
++
+         for i, card_data in enumerate(cards):
+-            with cols[i % columns]:
++            col = cols[i % columns]
++            if hasattr(col, "__enter__") and hasattr(col, "__exit__"):
++                col_ctx = col
++            else:
++                col_ctx = nullcontext()
++
++            with col_ctx:
+                 style = card_data.get('style', 'default')
+                 title = card_data.get('title')
+                 subtitle = card_data.get('subtitle')
+-                
++
+                 card = CardContainer(style=style, title=title, subtitle=subtitle)
+-                
++
+                 with card.render():
+                     if 'content_func' in card_data:
+                         card_data['content_func']()
+                     elif 'content' in card_data:
+                         st.markdown(card_data['content'])
+ 
+ 
+ class SidebarSection:
+     """Organized sidebar section with collapsible content and consistent styling."""
      
-     # ==================================================================================
-     # DURATION SYSTEM EXTENSION METHODS (FASE 2.3)
-     # ==================================================================================
+     def __init__(self, title: str, icon: str = "", collapsible: bool = False, 
+                  expanded: bool = True, help_text: str = None):
+         self.title = title
+         self.icon = icon
+         self.collapsible = collapsible
+         self.expanded = expanded
+         self.help_text = help_text
+         self._section_key = f"sidebar_section_{title.lower().replace(' ', '_')}"
      
-     @cache_database_query("calculate_epic_duration", ttl=300) if CACHE_AVAILABLE else lambda f: f
-     def calculate_epic_duration(self, epic_id: int) -> float:
-         """Calculate total duration for an epic based on task dates.
+     @contextmanager
+     def render(self):
+         """Context manager for rendering sidebar section content."""
+         if not STREAMLIT_AVAILABLE:
+             icon_part = f"{self.icon} " if self.icon else ""
+             print(f"[SIDEBAR] {icon_part}{self.title}")
+@@ -308,83 +314,91 @@ class TabContainer:
+     def render_tab_content(self, tab_index: int):
+         """Context manager for rendering content in a specific tab."""
+         tab_objects = self.render()
          
-         Args:
-             epic_id: ID of the epic to calculate duration for
-             
-         Returns:
-             Duration in days (float), or 0.0 if calculation fails
-         """
-         if not DURATION_SYSTEM_AVAILABLE:
--            print("Duration system not available - install duration_system package")
-+            logger.warning("Duration system not available - install duration_system package")
-             return 0.0
-         
-         try:
-             with self.get_connection("framework") as conn:
-                 # Get epic with date fields
-                 if SQLALCHEMY_AVAILABLE:
-                     result = conn.execute(text("""
-                         SELECT planned_start_date, planned_end_date, 
-                                actual_start_date, actual_end_date,
-                                calculated_duration_days
-                         FROM framework_epics 
-                         WHERE id = :epic_id AND deleted_at IS NULL
-                     """), {"epic_id": epic_id})
-                     epic_row = result.fetchone()
-                 else:
-                     cursor = conn.cursor()
-                     cursor.execute("""
-                         SELECT planned_start_date, planned_end_date,
-                                actual_start_date, actual_end_date,
-                                calculated_duration_days
-                         FROM framework_epics 
-                         WHERE id = ? AND deleted_at IS NULL
-                     """, (epic_id,))
-                     epic_row = cursor.fetchone()
-                 
-                 if not epic_row:
-                     return 0.0
-                 
-                 calculator = DurationCalculator()
-                 
-                 # Try to use existing calculated duration first
-                 if epic_row[4] is not None:  # calculated_duration_days
-                     return float(epic_row[4])
-                 
-                 # Calculate from actual dates if available
-                 if epic_row[2] and epic_row[3]:  # actual_start_date, actual_end_date
-                     return calculator.calculate_duration_days(epic_row[2], epic_row[3])
-                 
-                 # Fall back to planned dates
-                 if epic_row[0] and epic_row[1]:  # planned_start_date, planned_end_date
-                     return calculator.calculate_duration_days(epic_row[0], epic_row[1])
-                 
-                 # If no dates available, sum task durations
-                 return self._calculate_epic_duration_from_tasks(epic_id)
-                 
-         except Exception as e:
--            print(f"Error calculating epic duration for {epic_id}: {e}")
-+            logger.error("Error calculating epic duration for %s: %s", epic_id, e)
-             return 0.0
+         if STREAMLIT_AVAILABLE:
+             with tab_objects[tab_index]:
+                 yield
+         else:
+             print(f"[TAB {tab_index}] {self.tabs[tab_index]}")
+             yield
+ 
+ 
+ # Layout utility functions
+ def create_two_column_layout(left_content: Callable[[], None], 
+                            right_content: Callable[[], None],
+                            ratio: List[int] = [1, 1]) -> None:
+     """Create a simple two-column layout."""
+     if not STREAMLIT_AVAILABLE:
+         print("[LEFT COLUMN]")
+         left_content()
+         print("[RIGHT COLUMN]")
+         right_content()
+         return
      
-     @invalidate_cache_on_change("db_query:get_epics:", "db_query:calculate_epic_duration:") if CACHE_AVAILABLE else lambda f: f
-     def update_duration_description(self, epic_id: int, description: str) -> bool:
-         """Update the duration description for an epic.
+     col1, col2 = st.columns(ratio)
+-    
+-    with col1:
++
++    if hasattr(col1, "__enter__") and hasattr(col1, "__exit__"):
++        with col1:
++            left_content()
++    else:
+         left_content()
+-    
+-    with col2:
++
++    if hasattr(col2, "__enter__") and hasattr(col2, "__exit__"):
++        with col2:
++            right_content()
++    else:
+         right_content()
+ 
+ 
+ def create_three_column_layout(left_content: Callable[[], None],
+                              center_content: Callable[[], None], 
+                              right_content: Callable[[], None],
+                              ratio: List[int] = [1, 1, 1]) -> None:
+     """Create a three-column layout."""
+     if not STREAMLIT_AVAILABLE:
+         print("[LEFT COLUMN]")
+         left_content()
+         print("[CENTER COLUMN]") 
+         center_content()
+         print("[RIGHT COLUMN]")
+         right_content()
+         return
+     
+     col1, col2, col3 = st.columns(ratio)
+-    
+-    with col1:
+-        left_content()
+-    
+-    with col2:
+-        center_content()
+-    
+-    with col3:
+-        right_content()
++
++    cols = [col1, col2, col3]
++    contents = [left_content, center_content, right_content]
++
++    for col, content in zip(cols, contents):
++        if hasattr(col, "__enter__") and hasattr(col, "__exit__"):
++            with col:
++                content()
++        else:
++            content()
+ 
+ 
+ def create_sidebar_main_layout(sidebar_content: Callable[[], None],
+                              main_content: Callable[[], None]) -> None:
+     """Create sidebar + main content layout."""
+     if not STREAMLIT_AVAILABLE:
+         print("[SIDEBAR]")
+         sidebar_content()
+         print("[MAIN CONTENT]")
+         main_content()
+         return
+     
+     # Render sidebar content
+-    with st.sidebar:
++    sidebar_ctx = st.sidebar if hasattr(st.sidebar, "__enter__") and hasattr(st.sidebar, "__exit__") else nullcontext()
++    with sidebar_ctx:
+         sidebar_content()
+-    
++
+     # Render main content
+     main_content()
+ 
+ 
+ # Export for convenience  
+ __all__ = [
+     "CardContainer", "SidebarSection", "ExpandableSection", "TabContainer",
+     "CardStyle", "CARD_STYLES",
+     "create_two_column_layout", "create_three_column_layout", "create_sidebar_main_layout"
+ ]
+\ No newline at end of file
+diff --git a/streamlit_extension/components/status_components.py b/streamlit_extension/components/status_components.py
+index fbe92cfe4b8ea8090c60b34b495532f80eba2177..0a83c069e9f6f6adee17f1ae2c859a8260c93ada 100644
+--- a/streamlit_extension/components/status_components.py
++++ b/streamlit_extension/components/status_components.py
+@@ -1,37 +1,38 @@
+ """
+ 📊 Status Components for Streamlit Extension
+ 
+ Reusable status indicators, badges, and metric display components:
+ - StatusBadge: Colored status indicators with icons
+ - ProgressCard: Progress bars with contextual information
+ - MetricCard: Key performance indicators with deltas and trends
+ """
+ 
+ from typing import Optional, Dict, Any, Union, List
+ from dataclasses import dataclass
+ from datetime import datetime
++from contextlib import nullcontext
+ 
+ # Graceful imports
+ try:
+     import streamlit as st
+     STREAMLIT_AVAILABLE = True
+ except ImportError:
+     st = None
+     STREAMLIT_AVAILABLE = False
+ 
+ try:
+     import plotly.express as px
+     import plotly.graph_objects as go
+     PLOTLY_AVAILABLE = True
+ except ImportError:
+     px = go = None
+     PLOTLY_AVAILABLE = False
+ 
+ 
+ @dataclass
+ class StatusConfig:
+     """Configuration for status badges."""
+     color: str
+     icon: str
+     text_color: str = "black"
+     background_alpha: float = 0.1
+@@ -158,89 +159,106 @@ class ProgressCard:
+         self.total = total
+         self.description = description
+         self.show_percentage = show_percentage
+         self.percentage = (current / total * 100) if total > 0 else 0
+     
+     def render(self, color_scheme: str = "blue", show_numbers: bool = True,
+               height: int = 20) -> None:
+         """Render the progress card."""
+         if not STREAMLIT_AVAILABLE:
+             print(f"{self.title}: {self.current}/{self.total} ({self.percentage:.1f}%)")
+             if self.description:
+                 print(f"  {self.description}")
+             return
          
-         Args:
-             epic_id: ID of the epic to update
-             description: New duration description (e.g., "1.5 dias", "1 semana")
-             
-         Returns:
-             True if successful, False otherwise
-         """
-         if not DURATION_SYSTEM_AVAILABLE:
--            print("Duration system not available")
-+            logger.warning("Duration system not available")
-             return False
+         # Color schemes
+         colors = {
+             "blue": "#1f77b4",
+             "green": "#2ca02c", 
+             "red": "#d62728",
+             "orange": "#ff7f0e",
+             "purple": "#9467bd",
+             "gray": "#7f7f7f"
+         }
          
-         try:
-             # Parse and validate duration description
-             calculator = DurationCalculator()
-             duration_days = calculator.parse_and_convert_to_days(description)
+         color = colors.get(color_scheme, colors["blue"])
+-        
+-        # Create card container
+-        with st.container():
++
++        # Create card container, handling mocked Streamlit gracefully
++        container_func = getattr(st, "container", None)
++        if container_func:
++            try:
++                ctx = container_func()
++                if not hasattr(ctx, "__enter__") or not hasattr(ctx, "__exit__"):
++                    ctx = nullcontext()
++            except Exception:
++                ctx = nullcontext()
++        else:
++            ctx = nullcontext()
++
++        with ctx:
+             st.markdown(f"**{self.title}**")
 -            
 +
-             with self.get_connection("framework") as conn:
--                if SQLALCHEMY_AVAILABLE:
--                    conn.execute(text("""
--                        UPDATE framework_epics 
--                        SET duration_description = :description,
--                            calculated_duration_days = :duration_days,
--                            updated_at = CURRENT_TIMESTAMP
--                        WHERE id = :epic_id
--                    """), {
--                        "description": description,
--                        "duration_days": duration_days,
--                        "epic_id": epic_id
--                    })
--                    conn.commit()
--                else:
--                    cursor = conn.cursor()
--                    cursor.execute("""
--                        UPDATE framework_epics 
--                        SET duration_description = ?, calculated_duration_days = ?, 
--                            updated_at = CURRENT_TIMESTAMP
--                        WHERE id = ?
--                    """, (description, duration_days, epic_id))
--                    conn.commit()
--                
--                return True
--                
-+                try:
-+                    if SQLALCHEMY_AVAILABLE:
-+                        conn.execute(text("""
-+                            UPDATE framework_epics
-+                            SET duration_description = :description,
-+                                calculated_duration_days = :duration_days,
-+                                updated_at = CURRENT_TIMESTAMP
-+                            WHERE id = :epic_id
-+                        """), {
-+                            "description": description,
-+                            "duration_days": duration_days,
-+                            "epic_id": epic_id
-+                        })
-+                        conn.commit()
-+                    else:
-+                        cursor = conn.cursor()
-+                        cursor.execute("""
-+                            UPDATE framework_epics
-+                            SET duration_description = ?, calculated_duration_days = ?,
-+                                updated_at = CURRENT_TIMESTAMP
-+                            WHERE id = ?
-+                        """, (description, duration_days, epic_id))
-+                        conn.commit()
-+                except Exception:
-+                    conn.rollback()
-+                    raise
-+
-+            return True
-+
-         except Exception as e:
--            print(f"Error updating duration description for epic {epic_id}: {e}")
-+            logger.error("Error updating duration description for epic %s: %s", epic_id, e)
-             return False
-     
-     @cache_database_query("get_epic_timeline", ttl=180) if CACHE_AVAILABLE else lambda f: f
-     def get_epic_timeline(self, epic_id: int) -> Dict[str, Any]:
-         """Get comprehensive timeline information for an epic.
-         
-         Args:
-             epic_id: ID of the epic to get timeline for
+             if self.description:
+                 st.markdown(f"*{self.description}*")
              
-         Returns:
-             Dictionary with timeline data including dates, durations, and validation
-         """
-         if not DURATION_SYSTEM_AVAILABLE:
-             return {"error": "Duration system not available"}
+             # Progress bar
+             progress_html = f"""
+             <div style="
+                 width: 100%;
+                 background-color: #f0f0f0;
+                 border-radius: 10px;
+                 overflow: hidden;
+                 height: {height}px;
+                 margin: 8px 0;
+             ">
+                 <div style="
+                     width: {self.percentage}%;
+                     background-color: {color};
+                     height: 100%;
+                     transition: width 0.3s ease-in-out;
+                 "></div>
+             </div>
+             """
+             
+             st.markdown(progress_html, unsafe_allow_html=True)
+             
+             # Numbers and percentage
+             if show_numbers or self.show_percentage:
+                 col1, col2 = st.columns(2)
+-                
++
+                 if show_numbers:
+-                    with col1:
++                    if hasattr(col1, "__enter__") and hasattr(col1, "__exit__"):
++                        with col1:
++                            st.markdown(f"**{self.current:,}** / {self.total:,}")
++                    else:
+                         st.markdown(f"**{self.current:,}** / {self.total:,}")
+-                
++
+                 if self.show_percentage:
+-                    with col2:
++                    if hasattr(col2, "__enter__") and hasattr(col2, "__exit__"):
++                        with col2:
++                            st.markdown(f"**{self.percentage:.1f}%**")
++                    else:
+                         st.markdown(f"**{self.percentage:.1f}%**")
+     
+     def render_mini(self, width: int = 100) -> None:
+         """Render a compact version of the progress card."""
+         if not STREAMLIT_AVAILABLE:
+             print(f"{self.title}: {self.percentage:.1f}%")
+             return
+         
+         progress_html = f"""
+         <div style="display: inline-block; margin: 4px;">
+             <div style="font-size: 12px; margin-bottom: 2px;">{self.title}</div>
+             <div style="
+                 width: {width}px;
+                 background-color: #f0f0f0;
+                 border-radius: 8px;
+                 overflow: hidden;
+                 height: 8px;
+             ">
+                 <div style="
+                     width: {self.percentage}%;
+                     background-color: #1f77b4;
+                     height: 100%;
+                 "></div>
+             </div>
+             <div style="font-size: 10px; color: #666;">{self.percentage:.0f}%</div>
+@@ -287,125 +305,168 @@ class MetricCard:
+         
+         delta_value = None
+         delta_color = "normal"
+         
+         if self.delta is not None:
+             delta_value = f"{self.delta:+}{self.unit}"
+             if self.delta_color:
+                 delta_color = self.delta_color
+             elif self.delta > 0:
+                 delta_color = "normal"
+             elif self.delta < 0:
+                 delta_color = "inverse"
+         
+         st.metric(
+             label=self.title,
+             value=formatted_value,
+             delta=delta_value,
+             delta_color=delta_color
+         )
+     
+     def _render_compact(self) -> None:
+         """Render compact horizontal layout."""
+         formatted_value = f"{self.prefix}{self.value}{self.unit}{self.suffix}"
+         
+         col1, col2, col3 = st.columns([3, 2, 1])
+-        
+-        with col1:
++
++        if hasattr(col1, "__enter__") and hasattr(col1, "__exit__"):
++            with col1:
++                st.markdown(f"**{self.title}**")
++        else:
+             st.markdown(f"**{self.title}**")
+-        
+-        with col2:
++
++        if hasattr(col2, "__enter__") and hasattr(col2, "__exit__"):
++            with col2:
++                st.markdown(f"**{formatted_value}**")
++        else:
+             st.markdown(f"**{formatted_value}**")
+-        
+-        with col3:
++
++        col3_ctx = col3 if hasattr(col3, "__enter__") and hasattr(col3, "__exit__") else nullcontext()
++        with col3_ctx:
+             if self.delta is not None:
+                 color = "green" if self.delta >= 0 else "red"
+                 icon = "📈" if self.delta >= 0 else "📉"
+-                st.markdown(f"<span style='color: {color}'>{icon} {self.delta:+}</span>", 
+-                           unsafe_allow_html=True)
++                st.markdown(
++                    f"<span style='color: {color}'>{icon} {self.delta:+}</span>",
++                    unsafe_allow_html=True
++                )
+     
+     def _render_detailed(self, show_chart: bool = False, 
+                         chart_data: Optional[List[Union[int, float]]] = None) -> None:
+         """Render detailed card with optional sparkline chart."""
+         formatted_value = f"{self.prefix}{self.value}{self.unit}{self.suffix}"
+         
+-        # Create bordered container
+-        with st.container():
+-            st.markdown(f"""
++        # Create bordered container safely
++        container_func = getattr(st, "container", None)
++        if container_func:
++            try:
++                ctx = container_func()
++                if not hasattr(ctx, "__enter__") or not hasattr(ctx, "__exit__"):
++                    ctx = nullcontext()
++            except Exception:
++                ctx = nullcontext()
++        else:
++            ctx = nullcontext()
++
++        with ctx:
++            st.markdown(
++                f"""
+             <div style="
+                 border: 1px solid #e0e0e0;
+                 border-radius: 8px;
+                 padding: 16px;
+                 margin: 8px 0;
+             ">
+-            """, unsafe_allow_html=True)
+-            
++            """,
++                unsafe_allow_html=True,
++            )
++
+             col1, col2 = st.columns([2, 1])
+-            
+-            with col1:
++
++            if hasattr(col1, "__enter__") and hasattr(col1, "__exit__"):
++                with col1:
++                    st.markdown(f"### {self.title}")
++                    st.markdown(f"# {formatted_value}")
++
++                    if self.delta is not None:
++                        color = "green" if self.delta >= 0 else "red"
++                        icon = "▲" if self.delta >= 0 else "▼"
++                        st.markdown(
++                            f"<span style='color: {color}; font-size: 16px;'>{icon} {self.delta:+}{self.unit}</span>",
++                            unsafe_allow_html=True,
++                        )
++            else:
+                 st.markdown(f"### {self.title}")
+                 st.markdown(f"# {formatted_value}")
+-                
+                 if self.delta is not None:
+                     color = "green" if self.delta >= 0 else "red"
+                     icon = "▲" if self.delta >= 0 else "▼"
+-                    st.markdown(f"<span style='color: {color}; font-size: 16px;'>{icon} {self.delta:+}{self.unit}</span>", 
+-                               unsafe_allow_html=True)
+-            
+-            with col2:
+-                if show_chart and chart_data and PLOTLY_AVAILABLE:
++                    st.markdown(
++                        f"<span style='color: {color}; font-size: 16px;'>{icon} {self.delta:+}{self.unit}</span>",
++                        unsafe_allow_html=True,
++                    )
++
++            col2_ctx = col2 if hasattr(col2, "__enter__") and hasattr(col2, "__exit__") else nullcontext()
++            with col2_ctx:
++                if show_chart and chart_data and PLOTLY_AVAILABLE and go is not None:
+                     # Create mini sparkline
+                     fig = go.Figure()
+-                    fig.add_trace(go.Scatter(
+-                        y=chart_data,
+-                        mode='lines',
+-                        line=dict(color='#1f77b4', width=2),
+-                        showlegend=False
+-                    ))
++                    fig.add_trace(
++                        go.Scatter(
++                            y=chart_data,
++                            mode='lines',
++                            line=dict(color='#1f77b4', width=2),
++                            showlegend=False,
++                        )
++                    )
+                     fig.update_layout(
+                         height=80,
+                         margin=dict(l=0, r=0, t=0, b=0),
+                         xaxis=dict(visible=False),
+                         yaxis=dict(visible=False),
+                         plot_bgcolor='rgba(0,0,0,0)'
+                     )
+                     st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
+-            
++
+             st.markdown("</div>", unsafe_allow_html=True)
+     
+     @staticmethod
+     def render_grid(metrics: List['MetricCard'], columns: int = 3) -> None:
+         """Render multiple metrics in a grid layout."""
+         if not STREAMLIT_AVAILABLE:
+             for metric in metrics:
+                 metric.render()
+             return
+         
+         cols = st.columns(columns)
+-        
++
+         for i, metric in enumerate(metrics):
+-            with cols[i % columns]:
++            col = cols[i % columns]
++            if hasattr(col, "__enter__") and hasattr(col, "__exit__"):
++                with col:
++                    metric.render()
++            else:
+                 metric.render()
+ 
+ 
+ # Utility functions for quick metric creation
+ def create_percentage_metric(title: str, current: Union[int, float], total: Union[int, float]) -> MetricCard:
+     """Create a percentage-based metric."""
+     percentage = (current / total * 100) if total > 0 else 0
+     return MetricCard(title, f"{percentage:.1f}", unit="%")
+ 
+ def create_count_metric(title: str, count: int, delta: Optional[int] = None) -> MetricCard:
+     """Create a simple count metric."""
+     return MetricCard(title, f"{count:,}", delta=delta)
+ 
+ def create_time_metric(title: str, minutes: Union[int, float], delta: Optional[Union[int, float]] = None) -> MetricCard:
+     """Create a time-based metric."""
+     if minutes >= 60:
+         hours = minutes / 60
+         return MetricCard(title, f"{hours:.1f}", delta=delta/60 if delta else None, unit="h")
+     else:
+         return MetricCard(title, f"{minutes:.0f}", delta=delta, unit="m")
+ 
+ def create_score_metric(title: str, score: Union[int, float], max_score: Union[int, float] = 10) -> MetricCard:
+     """Create a score metric with rating context."""
+     return MetricCard(title, f"{score:.1f}", unit=f"/{max_score}")
+ 
+diff --git a/streamlit_extension/config/themes.py b/streamlit_extension/config/themes.py
+index 20b96c9a215f876bdfdb8ba657415a578368444c..d00df51a37ba4d8f6707b787f8041db3b69c5fff 100644
+--- a/streamlit_extension/config/themes.py
++++ b/streamlit_extension/config/themes.py
+@@ -495,51 +495,53 @@ class ThemeManager:
+             return {}
          
          try:
-             with self.get_connection("framework") as conn:
-                 # Get epic timeline data
-                 if SQLALCHEMY_AVAILABLE:
-                     result = conn.execute(text("""
-                         SELECT id, epic_key, name, status,
-                                planned_start_date, planned_end_date,
-                                actual_start_date, actual_end_date,
-                                calculated_duration_days, duration_description,
-                                created_at, updated_at, completed_at
-diff --git a/tests/test_duration_calculator.py b/tests/test_duration_calculator.py
-index 05c86e7370a98f2940d6fc47569137c04e946938..e7059bd460cd3ec35d954b9934c7c3ab9fd9cd12 100644
---- a/tests/test_duration_calculator.py
-+++ b/tests/test_duration_calculator.py
-@@ -199,51 +199,52 @@ class TestDurationCalculator:
-     def test_parse_duration_string_unsupported_unit(self):
-         """Test error with unsupported unit"""
-         # This should not happen with current regex, but test for robustness
-         with pytest.raises(DurationCalculationError):
-             # Patch the regex to allow invalid unit for testing
-             self.calculator._duration_pattern = __import__('re').compile(r'^(\d+(?:\.\d+)?)\s*(invalid)$')
-             self.calculator.parse_duration_string("1 invalid")
+             with open(self.themes_file, 'r') as f:
+                 themes_data = json.load(f)
+             
+             custom_themes = {}
+             for name, theme_dict in themes_data.items():
+                 # Reconstruct ColorScheme
+                 colors_dict = theme_dict.pop("colors", {})
+                 colors = ColorScheme(**colors_dict)
+                 
+                 # Reconstruct Theme
+                 theme_dict["colors"] = colors
+                 custom_themes[name] = Theme(**theme_dict)
+             
+             return custom_themes
+             
+         except (json.JSONDecodeError, KeyError, TypeError):
+             return {}
      
-     # ==================================================================================
-     # DURATION CONVERSION TESTS
-     # ==================================================================================
+     def _save_custom_themes(self) -> None:
+         """Save custom themes to file."""
+         themes_data = {}
+         for name, theme in self.custom_themes.items():
+-            themes_data[name] = asdict(theme)
++            data = asdict(theme)
++            data["mode"] = theme.mode.value
++            themes_data[name] = data
+         
+         try:
+             with open(self.themes_file, 'w') as f:
+                 json.dump(themes_data, f, indent=2)
+         except OSError:
+             pass  # Fail silently
      
-     def test_duration_to_days_days_unit(self):
-         """Test converting days unit to days"""
-         days = self.calculator.duration_to_days(3.5, DurationUnit.DAYS)
-         assert days == 3.5
+     def _load_current_theme(self) -> Optional[str]:
+         """Load current theme selection."""
+         if not self.current_theme_file.exists():
+             return None
+         
+         try:
+             with open(self.current_theme_file, 'r') as f:
+                 return f.read().strip()
+         except OSError:
+             return None
      
-     def test_duration_to_days_weeks_unit(self):
-         """Test converting weeks unit to days"""
-         days = self.calculator.duration_to_days(2.0, DurationUnit.WEEKS)
-         assert days == 14.0
+     def _save_current_theme(self) -> None:
+         """Save current theme selection."""
+         try:
+             with open(self.current_theme_file, 'w') as f:
+                 f.write(self._current_theme or "light")
+         except OSError:
+             pass
+diff --git a/streamlit_extension/utils/cache.py b/streamlit_extension/utils/cache.py
+index 11104942c1bdae7700fde247461b68b48505a76c..fccf63c47a7c8b1434d746b61635073ea998129a 100644
+--- a/streamlit_extension/utils/cache.py
++++ b/streamlit_extension/utils/cache.py
+@@ -9,99 +9,109 @@ Intelligent caching with TTL, invalidation, and performance optimization:
+ - Session-aware caching
+ """
+ 
+ import sys
+ import os
+ import msgpack
+ import hashlib
+ import time
+ from pathlib import Path
+ from typing import Any, Optional, Dict, Callable, Union
+ from datetime import datetime, timedelta
+ from functools import wraps
+ from threading import Lock
+ import json
+ import logging
+ 
+ # Graceful imports
+ try:
+     import streamlit as st
+     STREAMLIT_AVAILABLE = True
+ except ImportError:
+     STREAMLIT_AVAILABLE = False
+     st = None
+ 
+ 
++def get_config():
++    """Safely retrieve extension configuration."""
++    from ..config import get_config as _get_config
++    return _get_config()
++
++
+ class CacheEntry:
+     """Represents a single cache entry with metadata."""
      
-     def test_duration_to_days_months_unit(self):
-         """Test converting months unit to days"""
-         days = self.calculator.duration_to_days(1.0, DurationUnit.MONTHS)
--        assert days == 30.0
-+        # Uses average Gregorian month length (~30.4375 days)
-+        assert days == pytest.approx(30.4375)
+     def __init__(self, value: Any, ttl_seconds: int = 300):
+         self.value = value
+         self.created_at = datetime.now()
+         self.expires_at = self.created_at + timedelta(seconds=ttl_seconds)
+         self.access_count = 0
+         self.last_accessed = self.created_at
      
-     def test_parse_and_convert_to_days_real_epic_formats(self):
-         """Test parsing and converting real epic duration formats"""
-         # Test formats from real epic data
-         test_cases = [
+     def is_expired(self) -> bool:
+         """Check if cache entry has expired."""
+         return datetime.now() > self.expires_at
+     
+     def is_valid(self) -> bool:
+         """Check if cache entry is valid (not expired)."""
+         return not self.is_expired()
+     
+     def access(self) -> Any:
+         """Access the cached value and update metadata."""
+         self.access_count += 1
+         self.last_accessed = datetime.now()
+         return self.value
+     
+     def refresh(self, ttl_seconds: int = None):
+         """Refresh the expiration time."""
+         if ttl_seconds:
+             self.expires_at = datetime.now() + timedelta(seconds=ttl_seconds)
+         else:
+             # Extend by original TTL
+             original_ttl = (self.expires_at - self.created_at).seconds
+             self.expires_at = datetime.now() + timedelta(seconds=original_ttl)
+ 
+ 
+ class AdvancedCache:
+     """Advanced caching system with multiple levels and smart invalidation."""
+     
+     def __init__(self, default_ttl: int = 300, max_size: int = 1000, enable_disk_cache: bool = True, 
+                  max_disk_cache_mb: int = 100):
+         self.default_ttl = default_ttl
+         self.max_size = max_size
+         self.enable_disk_cache = enable_disk_cache
+         self.max_disk_cache_mb = max_disk_cache_mb
+         self.max_disk_cache_bytes = max_disk_cache_mb * 1024 * 1024  # Convert MB to bytes
+-        
++
+         # Memory cache
+         self._memory_cache: Dict[str, CacheEntry] = {}
+         self._access_order = []  # For LRU eviction
+         self._lock = Lock()
++
++        # Mapping of hashed cache keys to their original representations
++        # Used for pattern-based invalidation after enforcing hashed keys for security
++        self._key_map: Dict[str, str] = {}
+         
+         # Disk cache directory
+         if enable_disk_cache:
+             self.cache_dir = Path.cwd() / ".streamlit_cache"
+             self.cache_dir.mkdir(exist_ok=True)
+         else:
+             self.cache_dir = None
+         
+         # Cache statistics
+         self.stats = {
+             "hits": 0,
+             "misses": 0,
+             "evictions": 0,
+             "disk_hits": 0,
+             "disk_writes": 0,
+             "disk_evictions": 0
+         }
+         
+         # Invalidation tracking
+         self._invalidation_patterns = set()
+         self._invalidation_callbacks = {}
+     
+     def _generate_key(self, key: Union[str, tuple, dict]) -> str:
+         """Generate a consistent cache key from various input types."""
+         # SECURITY FIX: Always hash keys to prevent path traversal attacks
+@@ -200,123 +210,131 @@ class AdvancedCache:
+                     
+                     return entry.access()
+                 else:
+                     # Entry expired, remove from memory
+                     del self._memory_cache[cache_key]
+                     if cache_key in self._access_order:
+                         self._access_order.remove(cache_key)
+             
+             # Try disk cache if enabled
+             if self.enable_disk_cache:
+                 disk_value = self._get_from_disk(cache_key)
+                 if disk_value is not None:
+                     self.stats["disk_hits"] += 1
+                     # Store in memory cache for faster access
+                     self._memory_cache[cache_key] = CacheEntry(disk_value, self.default_ttl)
+                     self._access_order.append(cache_key)
+                     return disk_value
+             
+             # Cache miss
+             self.stats["misses"] += 1
+             return default
+     
+     def set(self, key: Union[str, tuple, dict], value: Any, ttl: int = None) -> None:
+         """Set value in cache with optional TTL."""
+         cache_key = self._generate_key(key)
+-        ttl = ttl or self.default_ttl
++        if ttl is None:
++            ttl = self.default_ttl
+         
+         with self._lock:
+             # Create cache entry
+             entry = CacheEntry(value, ttl)
+             
+             # Check if we need to evict entries
+             self._maybe_evict()
+             
+             # Store in memory cache
+             self._memory_cache[cache_key] = entry
++            self._key_map[cache_key] = str(key)
+             
+             # Update access order
+             if cache_key in self._access_order:
+                 self._access_order.remove(cache_key)
+             self._access_order.append(cache_key)
+             
+             # Store in disk cache if enabled
+             if self.enable_disk_cache:
+                 self._set_to_disk(cache_key, value, ttl)
+     
+     def delete(self, key: Union[str, tuple, dict]) -> bool:
+         """Delete key from cache."""
+-        cache_key = self._generate_key(key)
++        if isinstance(key, str) and self._validate_cache_key_for_filesystem(key):
++            cache_key = key
++        else:
++            cache_key = self._generate_key(key)
+         
+         with self._lock:
+             deleted = False
+             
+-            # Remove from memory cache
++            # Remove from memory cache and key mapping
+             if cache_key in self._memory_cache:
+                 del self._memory_cache[cache_key]
+                 deleted = True
++            if cache_key in self._key_map:
++                del self._key_map[cache_key]
+             
+             # Remove from access order
+             if cache_key in self._access_order:
+                 self._access_order.remove(cache_key)
+             
+             # Remove from disk cache
+             if self.enable_disk_cache:
+                 disk_deleted = self._delete_from_disk(cache_key)
+                 deleted = deleted or disk_deleted
+             
+             return deleted
+     
+     def clear(self) -> None:
+         """Clear all cache entries."""
+         with self._lock:
+             self._memory_cache.clear()
+             self._access_order.clear()
++            self._key_map.clear()
+             
+             if self.enable_disk_cache and self.cache_dir:
+                 # Clear disk cache
+                 for cache_file in self.cache_dir.glob("*.cache"):
+                     try:
+                         cache_file.unlink()
+                     except OSError:
+                         pass
+     
+     def invalidate_pattern(self, pattern: str) -> int:
+         """Invalidate all cache entries matching a pattern."""
+         count = 0
+-        
++
+         with self._lock:
+-            keys_to_remove = []
+-            
+-            for key in self._memory_cache.keys():
+-                if pattern in key:
+-                    keys_to_remove.append(key)
+-            
+-            for key in keys_to_remove:
+-                self.delete(key)
++            keys_to_remove = [
++                original_key
++                for original_key in self._key_map.values()
++                if pattern in original_key
++            ]
++
++        for original_key in keys_to_remove:
++            if self.delete(original_key):
+                 count += 1
+-        
++
+         return count
+     
+     def cleanup_disk_cache_manual(self) -> Dict[str, int]:
+         """Manually trigger disk cache cleanup and return statistics."""
+         if not self.enable_disk_cache or not self.cache_dir:
+             return {"files_removed": 0, "bytes_freed": 0, "error": "Disk cache not enabled"}
+         
+         initial_size = self._get_disk_cache_size()
+         initial_evictions = self.stats["disk_evictions"]
+         
+         self._cleanup_disk_cache()
+         
+         final_size = self._get_disk_cache_size()
+         final_evictions = self.stats["disk_evictions"]
+         
+         return {
+             "files_removed": final_evictions - initial_evictions,
+             "bytes_freed": initial_size - final_size,
+             "size_before_mb": round(initial_size / (1024 * 1024), 2),
+             "size_after_mb": round(final_size / (1024 * 1024), 2)
+         }
+     
+     def get_stats(self) -> Dict[str, Any]:
+         """Get cache statistics."""
+         with self._lock:
+@@ -598,69 +616,70 @@ class AdvancedCache:
+                         cache_file.unlink()
+                         removed_count += 1
+                         self.stats["disk_evictions"] += 1
+                     except OSError:
+                         # File might have been deleted already
+                         continue
+         
+         except Exception as e:
+             # If directory doesn't exist or other error, log and return 0
+             import logging
+             logging.getLogger(__name__).debug(f"Cache directory cleanup failed: {e}")
+             # Return 0 as no files were removed due to the error
+         
+         return removed_count
+ 
+ 
+ # Global cache instance
+ _global_cache = None
+ _cache_lock = Lock()
+ 
+ 
+ def get_cache() -> AdvancedCache:
+     """Get global cache instance (singleton)."""
+     global _global_cache
+     
+-    if _global_cache is None:
+-        with _cache_lock:
+-            if _global_cache is None:
+-                # Get configuration from config if available
+-                try:
+-                    from ..config import get_config
+-                    config = get_config()
+-                    ttl = config.cache_ttl_seconds
+-                    disk_cache_mb = getattr(config, 'max_disk_cache_mb', 100)
+-                except:
+-                    ttl = 300  # Default 5 minutes
+-                    disk_cache_mb = 100  # Default 100 MB
+-                
+-                _global_cache = AdvancedCache(
+-                    default_ttl=ttl, 
+-                    max_size=1000, 
+-                    max_disk_cache_mb=disk_cache_mb
+-                )
+-    
++    with _cache_lock:
++        # Get configuration from config if available
++        try:
++            config = get_config()
++            ttl = config.cache_ttl_seconds
++            disk_cache_mb = getattr(config, 'max_disk_cache_mb', 100)
++        except Exception:
++            ttl = 300  # Default 5 minutes
++            disk_cache_mb = 100  # Default 100 MB
++
++        if _global_cache is None:
++            _global_cache = AdvancedCache(
++                default_ttl=ttl,
++                max_size=1000,
++                max_disk_cache_mb=disk_cache_mb
++            )
++        else:
++            _global_cache.default_ttl = ttl
++            _global_cache.max_disk_cache_mb = disk_cache_mb
++
+     return _global_cache
+ 
+ 
+ def cached(ttl: int = None, key_func: Callable = None, invalidate_on: list = None):
+     """
+     Decorator for caching function results.
+     
+     Args:
+         ttl: Time to live in seconds
+         key_func: Function to generate cache key from args/kwargs
+         invalidate_on: List of patterns that should invalidate this cache
+     """
+     def decorator(func: Callable) -> Callable:
+         @wraps(func)
+         def wrapper(*args, **kwargs):
+             cache = get_cache()
+             
+             # Generate cache key
+             if key_func:
+                 cache_key = key_func(*args, **kwargs)
+             else:
+                 # Default key generation
+                 key_parts = [func.__name__, args, tuple(sorted(kwargs.items()))]
+                 cache_key = cache._generate_key(tuple(key_parts))
+             
+@@ -824,59 +843,60 @@ def get_cache_statistics() -> Dict[str, Any]:
+     return stats
+ 
+ 
+ # Cache management utilities
+ def clear_all_caches():
+     """Clear all caches (memory, disk, session)."""
+     # Clear global cache
+     cache = get_cache()
+     cache.clear()
+     
+     # Clear session cache
+     session_cache = get_session_cache()
+     session_cache.clear()
+     
+     # Clear Streamlit cache if available
+     if STREAMLIT_AVAILABLE:
+         try:
+             st.cache_data.clear()
+         except AttributeError:
+             pass
+ 
+ 
+ def cleanup_expired_cache():
+     """Remove expired entries from all caches."""
+     cache = get_cache()
+-    
++
+     with cache._lock:
+-        expired_keys = []
+-        for key, entry in cache._memory_cache.items():
+-            if entry.is_expired():
+-                expired_keys.append(key)
+-        
+-        for key in expired_keys:
+-            cache.delete(key)
++        expired_keys = [
++            key
++            for key, entry in cache._memory_cache.items()
++            if entry.is_expired() or entry.expires_at <= entry.created_at
++        ]
++
++    for key in expired_keys:
++        cache.delete(key)
+     
+     # Clean session cache
+     session_cache = get_session_cache()
+     expired_session_keys = []
+     
+     for key, value in session_cache.items():
+         if isinstance(value, dict) and 'expires_at' in value:
+             if datetime.now() > value['expires_at']:
+                 expired_session_keys.append(key)
+     
+     for key in expired_session_keys:
+         del session_cache[key]
+     
+     # Also trigger disk cache cleanup
+     cache._cleanup_disk_cache()
+ 
+ 
+ # Example usage and testing
+ if __name__ == "__main__":
+     # Test the caching system
+     cache = AdvancedCache(default_ttl=10, max_size=100)
+     
+     # Test basic operations
+     cache.set("test_key", "test_value", 5)
+     print(f"Cache get: {cache.get('test_key')}")
+diff --git a/tests/integration/test_theme_system.py b/tests/integration/test_theme_system.py
+index 4bf9ca343b6ad03b0c24617232386b18a2757a97..8bff68c8497e354dfbe39fe78bc3fc9294e7e3c6 100644
+--- a/tests/integration/test_theme_system.py
++++ b/tests/integration/test_theme_system.py
+@@ -125,59 +125,60 @@ class TestPredefinedThemes:
+         """Test light theme specific properties."""
+         light_theme = PREDEFINED_THEMES["light"]
+         
+         assert light_theme.mode == ThemeMode.LIGHT
+         assert light_theme.colors.background == "#ffffff"
+         assert light_theme.colors.text_primary == "#212529"
+     
+     def test_dark_theme_properties(self):
+         """Test dark theme specific properties.""" 
+         dark_theme = PREDEFINED_THEMES["dark"]
+         
+         assert dark_theme.mode == ThemeMode.DARK
+         assert dark_theme.colors.background == "#1a1a1a"
+         assert dark_theme.colors.text_primary == "#ffffff"
+     
+     def test_tdah_theme_properties(self):
+         """Test TDAH-specific theme properties."""
+         tdah_theme = PREDEFINED_THEMES["tdah"]
+         
+         assert tdah_theme.mode == ThemeMode.LIGHT
+         assert "focus-friendly" in tdah_theme.description.lower()
+         # Should use calming colors
+         assert tdah_theme.colors.primary == "#6366f1"  # Indigo
+ 
+ 
++@pytest.fixture
++def temp_config_dir():
++    """Create temporary config directory for testing."""
++    with tempfile.TemporaryDirectory() as temp_dir:
++        yield Path(temp_dir)
++
++
+ class TestThemeManager:
+     """Test ThemeManager functionality."""
+-    
+-    @pytest.fixture
+-    def temp_config_dir(self):
+-        """Create temporary config directory for testing."""
+-        with tempfile.TemporaryDirectory() as temp_dir:
+-            yield Path(temp_dir)
+-    
++
+     @pytest.fixture
+     def theme_manager(self, temp_config_dir):
+         """Create ThemeManager for testing."""
+         return ThemeManager(config_dir=temp_config_dir)
+     
+     def test_theme_manager_initialization(self, theme_manager, temp_config_dir):
+         """Test ThemeManager initialization."""
+         assert theme_manager.config_dir == temp_config_dir
+         assert theme_manager.config_dir.exists()
+         assert theme_manager.themes_file.parent == temp_config_dir
+         assert theme_manager.current_theme_file.parent == temp_config_dir
+     
+     def test_get_available_themes(self, theme_manager):
+         """Test getting available themes."""
+         themes = theme_manager.get_available_themes()
+         
+         # Should include all predefined themes
+         for theme_name in PREDEFINED_THEMES:
+             assert theme_name in themes
+         
+         # All themes should be Theme instances
+         for theme in themes.values():
+             assert isinstance(theme, Theme)
+     
+     def test_get_theme(self, theme_manager):
+diff --git a/tests/integration/test_ui_components.py b/tests/integration/test_ui_components.py
+index 28c81cb6f1698ca5d9ac419c80fcfcbf1b9d0b21..1cbe6a8ff5470a4a4c9379fd7047234fc860c04d 100644
+--- a/tests/integration/test_ui_components.py
++++ b/tests/integration/test_ui_components.py
+@@ -428,68 +428,83 @@ class TestLayoutComponents:
+             assert "Card content" in result
+             
+             # Test SidebarSection fallback
+             section = SidebarSection("Fallback Section", icon="🧪")
+             
+             with capture_output() as output:
+                 with section.render():
+                     print("Section content")
+             
+             result = output.getvalue()
+             assert "[SIDEBAR] 🧪 Fallback Section" in result
+             assert "Section content" in result
+ 
+ 
+ class TestComponentIntegration:
+     """Test component integration and interoperability."""
+     
+     @pytest.mark.skipif(not (STATUS_COMPONENTS_AVAILABLE and LAYOUT_COMPONENTS_AVAILABLE), 
+                        reason="Both component types not available")
+     def test_components_in_card_layout(self, mock_streamlit=None):
+         """Test using status components within card layouts."""
+         if mock_streamlit is None:
+             with patch('streamlit_extension.components.layout_components.st') as mock_st:
+                 mock_st.markdown = Mock()
+                 mock_streamlit = mock_st
+-        
+-        with patch('streamlit_extension.components.layout_components.STREAMLIT_AVAILABLE', True):
+-            with patch('streamlit_extension.components.status_components.STREAMLIT_AVAILABLE', True):
+-                
+-                card = CardContainer(title="Status Dashboard", style="info")
+-                
+-                def card_content():
+-                    # Use status components inside card
+-                    badge = StatusBadge("success")
+-                    badge.render("System Online")
+-                    
+-                    metric = MetricCard("CPU Usage", 85.2, delta=1.5, unit="%")
+-                    metric.render()
+-                
+-                card.render_content(card_content)
+-                
+-                # Both components should have been called
+-                mock_streamlit.markdown.assert_called()
++
++                with patch('streamlit_extension.components.status_components.st', mock_st):
++                    with patch('streamlit_extension.components.layout_components.STREAMLIT_AVAILABLE', True):
++                        with patch('streamlit_extension.components.status_components.STREAMLIT_AVAILABLE', True):
++
++                            card = CardContainer(title="Status Dashboard", style="info")
++
++                            def card_content():
++                                # Use status components inside card
++                                badge = StatusBadge("success")
++                                badge.render("System Online")
++
++                                metric = MetricCard("CPU Usage", 85.2, delta=1.5, unit="%")
++                                metric.render()
++
++                            card.render_content(card_content)
++
++                            # Both components should have been called
++                            mock_streamlit.markdown.assert_called()
++        else:
++            with patch('streamlit_extension.components.layout_components.STREAMLIT_AVAILABLE', True):
++                with patch('streamlit_extension.components.status_components.STREAMLIT_AVAILABLE', True):
++
++                    card = CardContainer(title="Status Dashboard", style="info")
++
++                    def card_content():
++                        badge = StatusBadge("success")
++                        badge.render("System Online")
++                        metric = MetricCard("CPU Usage", 85.2, delta=1.5, unit="%")
++                        metric.render()
++
++                    card.render_content(card_content)
++                    mock_streamlit.markdown.assert_called()
+     
+     @pytest.mark.skipif(not (STATUS_COMPONENTS_AVAILABLE and LAYOUT_COMPONENTS_AVAILABLE),
+                        reason="Both component types not available")  
+     def test_components_responsive_behavior(self):
+         """Test components behave correctly in different screen sizes."""
+         # This would test responsive behavior
+         # For now, we verify components can handle different parameters
+         
+         # Test status badge with different sizes
+         badge = StatusBadge("info")
+         
+         # Should handle different size parameters
+         with patch('streamlit_extension.components.status_components.STREAMLIT_AVAILABLE', True):
+             with patch('streamlit_extension.components.status_components.st') as mock_st:
+                 mock_st.markdown = Mock()
+                 
+                 badge.render("Test", size="small")
+                 badge.render("Test", size="normal") 
+                 badge.render("Test", size="large")
+                 
+                 assert mock_st.markdown.call_count == 3
+         
+         # Test progress card with different widths
+         progress = ProgressCard("Test Progress", 50, 100)
+         
+diff --git a/tests/test_database_manager_duration_extension.py b/tests/test_database_manager_duration_extension.py
+index d2997eb7110fd7e5871a4b3978a2ef128113484b..5ac481c468a284d4efd94e98783a6da90591bc1a 100644
+--- a/tests/test_database_manager_duration_extension.py
++++ b/tests/test_database_manager_duration_extension.py
+@@ -464,51 +464,51 @@ class TestDatabaseManagerDurationExtension:
+         """, ("2025-08-13", "2025-08-25", 1))  # ~12 days
+         conn.commit()
+         conn.close()
+         
+         # 5. Get timeline (should show duration mismatch warning)
+         timeline = self.db_manager.get_epic_timeline(1)
+         assert timeline["duration_info"]["calculated_days"] == 10.5
+         assert len(timeline["validation"]["warnings"]) > 0  # Duration mismatch
+         
+         # 6. Validate consistency (should be valid but with warnings)
+         is_valid = self.db_manager.validate_date_consistency(1)
+         assert is_valid is True
+     
+     def test_real_epic_data_compatibility(self):
+         """Test compatibility with real epic data patterns"""
+         # Test patterns from actual epic files
+         epic_patterns = [
              ("1.5 dias", 1.5),
              ("2 dias", 2.0),
              ("5 dias", 5.0),
@@ -431,19 +1262,34 @@ index 05c86e7370a98f2940d6fc47569137c04e946938..e7059bd460cd3ec35d954b9934c7c3ab
              ("4 dias", 4.0)
          ]
          
-         for duration_str, expected_days in test_cases:
-             days = self.calculator.parse_and_convert_to_days(duration_str)
-             assert days == expected_days
+         for i, (duration_desc, expected_days) in enumerate(epic_patterns, 1):
+-            self._insert_test_epic(epic_id=i, name=f"Epic {i}")
++            self._insert_test_epic(epic_id=i, epic_key=f"TEST_{i}", name=f"Epic {i}")
+             
+             # Update duration description
+             success = self.db_manager.update_duration_description(i, duration_desc)
+             assert success is True
+             
+             # Verify calculation
+             calculated = self.db_manager.calculate_epic_duration(i)
+             assert calculated == expected_days, f"Failed for pattern: {duration_desc}"
+             
+             # Verify timeline
+             timeline = self.db_manager.get_epic_timeline(i)
+             assert timeline["duration_info"]["calculated_days"] == expected_days
      
      # ==================================================================================
-     # DATE CONSISTENCY VALIDATION TESTS
+     # ERROR HANDLING TESTS
      # ==================================================================================
      
-     def test_validate_date_consistency_valid_planned_dates(self):
-         """Test validation with valid planned dates"""
-         result = self.calculator.validate_date_consistency(
-             planned_start="2025-01-01",
-             planned_end="2025-01-08",
+     def test_database_connection_error_handling(self):
+         """Test graceful error handling with database connection issues"""
+         # Use invalid database path
+         bad_manager = DatabaseManager(
+             framework_db_path="/nonexistent/path.db",
+             timer_db_path="/nonexistent/timer.db"
+         )
+         
  
 EOF
 )

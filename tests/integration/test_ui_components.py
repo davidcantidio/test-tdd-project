@@ -450,24 +450,39 @@ class TestComponentIntegration:
             with patch('streamlit_extension.components.layout_components.st') as mock_st:
                 mock_st.markdown = Mock()
                 mock_streamlit = mock_st
-        
-        with patch('streamlit_extension.components.layout_components.STREAMLIT_AVAILABLE', True):
-            with patch('streamlit_extension.components.status_components.STREAMLIT_AVAILABLE', True):
-                
-                card = CardContainer(title="Status Dashboard", style="info")
-                
-                def card_content():
-                    # Use status components inside card
-                    badge = StatusBadge("success")
-                    badge.render("System Online")
-                    
-                    metric = MetricCard("CPU Usage", 85.2, delta=1.5, unit="%")
-                    metric.render()
-                
-                card.render_content(card_content)
-                
-                # Both components should have been called
-                mock_streamlit.markdown.assert_called()
+
+                with patch('streamlit_extension.components.status_components.st', mock_st):
+                    with patch('streamlit_extension.components.layout_components.STREAMLIT_AVAILABLE', True):
+                        with patch('streamlit_extension.components.status_components.STREAMLIT_AVAILABLE', True):
+
+                            card = CardContainer(title="Status Dashboard", style="info")
+
+                            def card_content():
+                                # Use status components inside card
+                                badge = StatusBadge("success")
+                                badge.render("System Online")
+
+                                metric = MetricCard("CPU Usage", 85.2, delta=1.5, unit="%")
+                                metric.render()
+
+                            card.render_content(card_content)
+
+                            # Both components should have been called
+                            mock_streamlit.markdown.assert_called()
+        else:
+            with patch('streamlit_extension.components.layout_components.STREAMLIT_AVAILABLE', True):
+                with patch('streamlit_extension.components.status_components.STREAMLIT_AVAILABLE', True):
+
+                    card = CardContainer(title="Status Dashboard", style="info")
+
+                    def card_content():
+                        badge = StatusBadge("success")
+                        badge.render("System Online")
+                        metric = MetricCard("CPU Usage", 85.2, delta=1.5, unit="%")
+                        metric.render()
+
+                    card.render_content(card_content)
+                    mock_streamlit.markdown.assert_called()
     
     @pytest.mark.skipif(not (STATUS_COMPONENTS_AVAILABLE and LAYOUT_COMPONENTS_AVAILABLE),
                        reason="Both component types not available")  

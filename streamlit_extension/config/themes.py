@@ -517,7 +517,9 @@ class ThemeManager:
         """Save custom themes to file."""
         themes_data = {}
         for name, theme in self.custom_themes.items():
-            themes_data[name] = asdict(theme)
+            data = asdict(theme)
+            data["mode"] = theme.mode.value
+            themes_data[name] = data
         
         try:
             with open(self.themes_file, 'w') as f:

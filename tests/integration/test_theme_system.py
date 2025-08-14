@@ -147,15 +147,16 @@ class TestPredefinedThemes:
         assert tdah_theme.colors.primary == "#6366f1"  # Indigo
 
 
+@pytest.fixture
+def temp_config_dir():
+    """Create temporary config directory for testing."""
+    with tempfile.TemporaryDirectory() as temp_dir:
+        yield Path(temp_dir)
+
+
 class TestThemeManager:
     """Test ThemeManager functionality."""
-    
-    @pytest.fixture
-    def temp_config_dir(self):
-        """Create temporary config directory for testing."""
-        with tempfile.TemporaryDirectory() as temp_dir:
-            yield Path(temp_dir)
-    
+
     @pytest.fixture
     def theme_manager(self, temp_config_dir):
         """Create ThemeManager for testing."""
