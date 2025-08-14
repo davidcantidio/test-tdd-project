@@ -133,8 +133,12 @@ class BusinessCalendar:
                         holidays_set.add(holiday_date)
                     elif hasattr(holiday_date, 'date'):
                         holidays_set.add(holiday_date.date())
-            except Exception:
+            except Exception as e:
                 # Graceful fallback - no holidays this year
+                # Log the error for debugging but continue without holidays
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.debug(f"Failed to load holidays for year {year}: {e}")
                 pass
         
         # Add custom holidays for this year

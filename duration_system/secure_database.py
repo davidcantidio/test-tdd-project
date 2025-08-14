@@ -27,6 +27,7 @@ import threading
 import queue
 from contextlib import contextmanager
 import logging
+import re
 
 try:
     import pysqlcipher3.dbapi2 as sqlite
@@ -35,6 +36,32 @@ except ImportError:
     import sqlite3 as sqlite
     SQLCIPHER_AVAILABLE = False
     logging.warning("SQLCipher not available - falling back to standard SQLite")
+
+
+def _validate_table_name(table_name: str) -> bool:
+    """
+    Validate table name to prevent SQL injection.
+    
+    Args:
+        table_name: Table name to validate
+        
+    Returns:
+        True if table name is safe
+    """
+    # Only allow alphanumeric characters, underscores, and starts with letter/underscore
+    if not re.match(r'^[a-zA-Z_][a-zA-Z0-9_]*$', table_name):
+        return False
+    
+    # Reject SQL keywords
+    sql_keywords = {
+        'SELECT', 'INSERT', 'UPDATE', 'DELETE', 'DROP', 'CREATE', 'ALTER',
+        'TRUNCATE', 'EXEC', 'EXECUTE', 'UNION', 'AND', 'OR', 'WHERE'
+    }
+    
+    if table_name.upper() in sql_keywords:
+        return False
+    
+    return True
 
 
 class SecureDatabaseManager:
@@ -271,18 +298,25 @@ class SecureDatabaseManager:
                     if table_name.startswith('sqlite_'):
                         continue
                     
+                    # Validate table name for security
+                    if not _validate_table_name(table_name):
+                        logging.error(f"Invalid table name detected: {table_name}")
+                        continue
+                    
                     logging.info(f"Migrating table: {table_name}")
                     
-                    # Get table schema
+                    # Get table schema using parameterized query
                     schema = source_conn.execute(
-                        f"SELECT sql FROM sqlite_master WHERE name='{table_name}'"
+                        "SELECT sql FROM sqlite_master WHERE name=?",
+                        (table_name,)
                     ).fetchone()
                     
                     if schema:
                         # Create table in encrypted database
                         target_conn.execute(schema[0])
                         
-                        # Copy data
+                        # Copy data - Note: table names cannot be parameterized in SQL
+                        # but table_name is validated as coming from sqlite_master
                         rows = source_conn.execute(f"SELECT * FROM {table_name}").fetchall()
                         if rows:
                             # Get column count for placeholder string
@@ -338,7 +372,13 @@ class SecureDatabaseManager:
                     if table_name.startswith('sqlite_'):
                         continue
                     
-                    # Compare record counts
+                    # Validate table name for security
+                    if not _validate_table_name(table_name):
+                        logging.error(f"Invalid table name detected during verification: {table_name}")
+                        continue
+                    
+                    # Compare record counts - Note: table names cannot be parameterized
+                    # but table_name is validated as coming from sqlite_master  
                     source_count = source_conn.execute(
                         f"SELECT COUNT(*) FROM {table_name}"
                     ).fetchone()[0]
@@ -394,9 +434,15 @@ class SecureDatabaseManager:
                     if table_name.startswith('sqlite_'):
                         continue
                     
-                    # Get schema and copy to new database
+                    # Validate table name for security
+                    if not _validate_table_name(table_name):
+                        logging.error(f"Invalid table name detected during key rotation: {table_name}")
+                        continue
+                    
+                    # Get schema and copy to new database using parameterized query
                     schema = source_conn.execute(
-                        f"SELECT sql FROM sqlite_master WHERE name='{table_name}'"
+                        "SELECT sql FROM sqlite_master WHERE name=?",
+                        (table_name,)
                     ).fetchone()
                     
                     if schema:
