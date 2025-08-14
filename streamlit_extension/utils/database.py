@@ -255,49 +255,52 @@ class DatabaseManager:
                     # Tasks completed
                     result = conn.execute(text("""
                         SELECT COUNT(*) as completed_tasks
-                        FROM framework_tasks 
+                        FROM framework_tasks
                         WHERE status = 'completed' AND deleted_at IS NULL
                     """))
-                    stats["completed_tasks"] = result.scalar()
+                    stats["completed_tasks"] = result.scalar() or 0
                     
                     # Total points
                     result = conn.execute(text("""
                         SELECT COALESCE(SUM(points_earned), 0) as total_points
                         FROM framework_epics WHERE deleted_at IS NULL
                     """))
-                    stats["total_points"] = result.scalar()
+                    stats["total_points"] = result.scalar() or 0
                     
                     # Active streaks
                     result = conn.execute(text("""
                         SELECT COUNT(*) as active_streaks
-                        FROM user_streaks 
+                        FROM user_streaks
                         WHERE user_id = ? AND current_count > 0
                     """), [user_id])
-                    stats["active_streaks"] = result.scalar()
+                    stats["active_streaks"] = result.scalar() or 0
                     
                 else:
                     cursor = conn.cursor()
                     
                     # Tasks completed
                     cursor.execute("""
-                        SELECT COUNT(*) FROM framework_tasks 
+                        SELECT COUNT(*) FROM framework_tasks
                         WHERE status = 'completed' AND deleted_at IS NULL
                     """)
-                    stats["completed_tasks"] = cursor.fetchone()[0]
+                    row = cursor.fetchone()
+                    stats["completed_tasks"] = row[0] if row and row[0] is not None else 0
                     
                     # Total points
                     cursor.execute("""
-                        SELECT COALESCE(SUM(points_earned), 0) 
+                        SELECT COALESCE(SUM(points_earned), 0)
                         FROM framework_epics WHERE deleted_at IS NULL
                     """)
-                    stats["total_points"] = cursor.fetchone()[0]
+                    row = cursor.fetchone()
+                    stats["total_points"] = row[0] if row and row[0] is not None else 0
                     
                     # Active streaks
                     cursor.execute("""
-                        SELECT COUNT(*) FROM user_streaks 
+                        SELECT COUNT(*) FROM user_streaks
                         WHERE user_id = ? AND current_count > 0
                     """, [user_id])
-                    stats["active_streaks"] = cursor.fetchone()[0]
+                    row = cursor.fetchone()
+                    stats["active_streaks"] = row[0] if row and row[0] is not None else 0
                 
                 return stats
                 
@@ -807,21 +810,24 @@ class DatabaseManager:
                         SELECT COUNT(*) FROM framework_tasks
                         WHERE DATE(updated_at) = ? AND status = 'completed'
                     """, (today,))
-                    summary["tasks_completed"] = cursor.fetchone()[0] or 0
+                    row = cursor.fetchone()
+                    summary["tasks_completed"] = row[0] if row and row[0] is not None else 0
                     
                     # Tasks in progress
                     cursor.execute("""
                         SELECT COUNT(*) FROM framework_tasks
                         WHERE status = 'in_progress'
                     """)
-                    summary["tasks_in_progress"] = cursor.fetchone()[0] or 0
+                    row = cursor.fetchone()
+                    summary["tasks_in_progress"] = row[0] if row and row[0] is not None else 0
                     
                     # Tasks created today
                     cursor.execute("""
                         SELECT COUNT(*) FROM framework_tasks
                         WHERE DATE(created_at) = ?
                     """, (today,))
-                    summary["tasks_created"] = cursor.fetchone()[0] or 0
+                    row = cursor.fetchone()
+                    summary["tasks_created"] = row[0] if row and row[0] is not None else 0
             
             # Get timer data if available
             if self.timer_db_path.exists():
@@ -1409,7 +1415,8 @@ class DatabaseManager:
                         FROM framework_epics 
                         WHERE id = :epic_id AND deleted_at IS NULL
                     """), {"epic_id": epic_id})
-                    epic_data = dict(result.fetchone()._mapping) if result.rowcount > 0 else None
+                    row = result.fetchone()
+                    epic_data = dict(row._mapping) if row else None
                 else:
                     cursor = conn.cursor()
                     cursor.execute("""
@@ -1541,11 +1548,12 @@ class DatabaseManager:
                 else:
                     cursor = conn.cursor()
                     cursor.execute("""
-                        SELECT SUM(estimate_minutes) 
-                        FROM framework_tasks 
+                        SELECT SUM(estimate_minutes)
+                        FROM framework_tasks
                         WHERE epic_id = ? AND deleted_at IS NULL
                     """, (epic_id,))
-                    total_minutes = cursor.fetchone()[0] or 0
+                    row = cursor.fetchone()
+                    total_minutes = row[0] if row and row[0] is not None else 0
                 
                 # Convert minutes to days (8 hours = 1 work day)
                 return round(total_minutes / (8 * 60), 2)

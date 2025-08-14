@@ -13,6 +13,7 @@ Advanced configuration management with backup, restore, and migration capabiliti
 import os
 import shutil
 import json
+import logging
 from pathlib import Path
 from typing import Dict, Any, Optional, List, Union
 from datetime import datetime, timedelta
@@ -42,6 +43,9 @@ try:
 except ImportError:
     ThemeManager = get_theme_manager = None
     THEMES_AVAILABLE = False
+
+
+logger = logging.getLogger(__name__)
 
 
 class BackupType(Enum):
@@ -219,8 +223,8 @@ class ConfigurationBackupManager:
                         if CONFIG_AVAILABLE:
                             # Apply configuration (this would need implementation in streamlit_config.py)
                             self._restore_streamlit_config(config_data)
-                    except (KeyError, json.JSONDecodeError):
-                        pass
+                    except (KeyError, json.JSONDecodeError) as e:
+                        logger.warning("Failed to restore streamlit config: %s", e)
                 
                 # Restore themes
                 if "themes" in components and backup_info.includes_themes:
@@ -228,8 +232,8 @@ class ConfigurationBackupManager:
                         theme_data = json.loads(zipf.read("themes.json"))
                         if THEMES_AVAILABLE:
                             self._restore_themes(theme_data)
-                    except (KeyError, json.JSONDecodeError):
-                        pass
+                    except (KeyError, json.JSONDecodeError) as e:
+                        logger.warning("Failed to restore themes: %s", e)
                 
                 # Restore cache settings
                 if "cache_settings" in components and backup_info.includes_cache_settings:
