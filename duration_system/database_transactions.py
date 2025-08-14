@@ -101,48 +101,49 @@ class DatabaseConnectionPool:
                 self._release_connection(connection)
     
     def _acquire_connection(self) -> sqlite3.Connection:
-        """Acquire a connection from the pool."""
-        with self._lock:
-            # Try to reuse existing connection
-            for conn in self._connections:
-                if conn not in self._in_use:
-                    if self._is_connection_healthy(conn):
-                        self._in_use.add(conn)
-                        self.stats["connections_reused"] += 1
-                        self.stats["active_connections"] += 1
-                        return conn
-                    else:
-                        # Remove unhealthy connection
-                        self._connections.remove(conn)
-                        try:
-                            conn.close()
-                        except Exception:
-                            # Connection close failed during cleanup - acceptable
-                            pass  # nosec B110: Cleanup failure is acceptable
-            
-            # Create new connection if under limit
-            if len(self._connections) < self.max_connections:
-                conn = self._create_connection()
-                self._connections.append(conn)
-                self._in_use.add(conn)
-                self.stats["connections_created"] += 1
-                self.stats["active_connections"] += 1
-                return conn
-            
-            # Wait for available connection (simplified - could use queue)
-            start_time = time.time()
-            while time.time() - start_time < self.connection_timeout:
-                for conn in self._connections:
+        """Acquire a connection from the pool.
+
+        Previous implementation held the pool lock while waiting for a
+        connection to become available. This prevented threads from
+        releasing connections, leading to deadlocks under high
+        concurrency. The new version releases the lock while waiting so
+        other threads can return connections to the pool.
+        """
+        start_time = time.time()
+        while True:
+            with self._lock:
+                # Try to reuse existing connection
+                for conn in list(self._connections):
                     if conn not in self._in_use:
                         if self._is_connection_healthy(conn):
                             self._in_use.add(conn)
                             self.stats["connections_reused"] += 1
                             self.stats["active_connections"] += 1
                             return conn
-                
-                time.sleep(0.01)  # Brief pause
-            
-            # Timeout - create emergency connection
+                        # Remove unhealthy connection outside pool
+                        self._connections.remove(conn)
+                        try:
+                            conn.close()
+                        except Exception:
+                            pass  # nosec B110: Cleanup failure is acceptable
+
+                # Create new connection if under limit
+                if len(self._connections) < self.max_connections:
+                    conn = self._create_connection()
+                    self._connections.append(conn)
+                    self._in_use.add(conn)
+                    self.stats["connections_created"] += 1
+                    self.stats["active_connections"] += 1
+                    return conn
+
+            # If timeout reached, break loop and create emergency connection
+            if time.time() - start_time >= self.connection_timeout:
+                break
+
+            time.sleep(0.01)  # Brief pause before retrying
+
+        # Timeout - create emergency connection
+        with self._lock:
             self.stats["connections_timeout"] += 1
             conn = self._create_connection()
             self._in_use.add(conn)
