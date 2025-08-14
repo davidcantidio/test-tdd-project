@@ -98,41 +98,394 @@ class SecureJsonValidator:
     ]
     
     SCRIPT_INJECTION_PATTERNS = [
-        r"<script[^>]*>.*?</script>",  # Script tags
-        r"javascript:\s*",  # JavaScript protocol
-        r"on\w+\s*=\s*[\"']",  # Event handlers
-        r"eval\s*\(",  # Eval calls
-        r"setTimeout\s*\(",  # SetTimeout
-        r"setInterval\s*\(",  # SetInterval
-        r"Function\s*\(",  # Function constructor
-        r"\.innerHTML\s*=",  # innerHTML assignment
-        r"\.outerHTML\s*=",  # outerHTML assignment
-        r"document\.\w+",  # Document manipulation
-        r"window\.\w+",  # Window manipulation
+        # Basic script injection
+        r"<script[^>]*>.*?</script>",         # Script tags
+        r"<SCRIPT[^>]*>.*?</SCRIPT>",         # Script tags (uppercase)
+        r"javascript:\s*",                    # JavaScript protocol
+        r"JAVASCRIPT:\s*",                    # JavaScript protocol (uppercase)
+        r"vbscript:\s*",                      # VBScript protocol
+        r"VBSCRIPT:\s*",                      # VBScript protocol (uppercase)
+        
+        # Event handlers
+        r"on\w+\s*=\s*[\"']",                 # Event handlers
+        r"ON\w+\s*=\s*[\"']",                 # Event handlers (uppercase)
+        r"onclick\s*=",                       # Specific onclick
+        r"onload\s*=",                        # Specific onload
+        r"onerror\s*=",                       # Specific onerror
+        r"onmouseover\s*=",                   # Specific onmouseover
+        r"onfocus\s*=",                       # Specific onfocus
+        r"onblur\s*=",                        # Specific onblur
+        r"onkeydown\s*=",                     # Specific onkeydown
+        r"onsubmit\s*=",                      # Specific onsubmit
+        
+        # JavaScript functions
+        r"eval\s*\(",                         # Eval calls
+        r"EVAL\s*\(",                         # Eval calls (uppercase)
+        r"setTimeout\s*\(",                   # SetTimeout
+        r"setInterval\s*\(",                  # SetInterval
+        r"Function\s*\(",                     # Function constructor
+        r"FUNCTION\s*\(",                     # Function constructor (uppercase)
+        r"execScript\s*\(",                   # IE execScript
+        r"setImmediate\s*\(",                 # setImmediate
+        
+        # DOM manipulation
+        r"\.innerHTML\s*=",                   # innerHTML assignment
+        r"\.outerHTML\s*=",                   # outerHTML assignment
+        r"\.innerText\s*=",                   # innerText assignment
+        r"\.textContent\s*=",                 # textContent assignment
+        r"\.src\s*=",                         # src assignment
+        r"\.href\s*=",                        # href assignment
+        r"\.action\s*=",                      # form action assignment
+        r"document\.\w+",                     # Document manipulation
+        r"window\.\w+",                       # Window manipulation
+        r"parent\.\w+",                       # Parent frame access
+        r"top\.\w+",                          # Top frame access
+        r"self\.\w+",                         # Self reference
+        
+        # Data URIs and encoding
+        r"data:\s*text/html",                 # Data URI HTML
+        r"data:\s*image/svg\+xml",            # Data URI SVG
+        r"data:\s*application/javascript",    # Data URI JavaScript
+        r"data:.*base64",                     # Data URI base64
+        
+        # SVG injection
+        r"<svg[^>]*>.*?</svg>",               # SVG tags
+        r"<SVG[^>]*>.*?</SVG>",               # SVG tags (uppercase)
+        r"<svg[^>]*onload",                   # SVG onload
+        r"<animateTransform[^>]*>",           # SVG animation
+        r"<animate[^>]*>",                    # SVG animate
+        r"<set[^>]*>",                        # SVG set
+        
+        # CSS injection
+        r"<style[^>]*>.*?</style>",           # Style tags
+        r"<STYLE[^>]*>.*?</STYLE>",           # Style tags (uppercase)
+        r"@import\s*[\"']javascript:",        # CSS @import with JavaScript
+        r"expression\s*\(",                   # IE CSS expressions
+        r"behavior\s*:",                      # IE CSS behavior
+        r"background\s*:\s*url\s*\(\s*javascript:", # CSS background JavaScript
+        r"background-image\s*:\s*url\s*\(\s*javascript:", # CSS background-image JavaScript
+        
+        # Template injection (popular frameworks)
+        r"\{\{.*?\}\}",                       # Angular/Handlebars template
+        r"\{\%.*?\%\}",                       # Jinja2/Django template
+        r"\[\[.*?\]\]",                       # Vue.js template
+        r"\$\{.*?\}",                         # Template literals
+        r"<%.*?%>",                           # ASP/JSP template
+        r"<\?.*?\?>",                         # PHP template
+        
+        # Modern JavaScript features
+        r"import\s*\(",                       # Dynamic imports
+        r"import\s+.*\s+from",                # ES6 imports
+        r"require\s*\(",                      # CommonJS require
+        r"fetch\s*\(",                        # Fetch API
+        r"XMLHttpRequest\s*\(",               # XHR
+        r"WebSocket\s*\(",                    # WebSocket
+        r"Worker\s*\(",                       # Web Workers
+        r"SharedWorker\s*\(",                 # Shared Workers
+        r"ServiceWorker\s*\(",                # Service Workers
+        
+        # Framework-specific injections
+        r"ng-.*=",                            # AngularJS directives
+        r"v-.*=",                             # Vue.js directives
+        r"@.*=",                              # Vue.js events
+        r"dangerouslySetInnerHTML",           # React dangerous HTML
+        r"\[innerHTML\]",                     # Angular property binding
+        r"\(click\)",                         # Angular event binding
+        
+        # Encoded variations
+        r"&#x[0-9a-fA-F]+;",                  # Hex entities
+        r"&#\d+;",                            # Decimal entities
+        r"%[0-9a-fA-F]{2}",                   # URL encoding
+        r"\\u[0-9a-fA-F]{4}",                 # Unicode escapes
+        r"\\x[0-9a-fA-F]{2}",                 # Hex escapes
+        
+        # Alternative script execution
+        r"<object[^>]*>.*?</object>",         # Object tags
+        r"<embed[^>]*>",                      # Embed tags
+        r"<applet[^>]*>.*?</applet>",         # Applet tags
+        r"<iframe[^>]*>.*?</iframe>",         # Iframe tags
+        r"<frame[^>]*>",                      # Frame tags
+        r"<frameset[^>]*>",                   # Frameset tags
+        r"<meta[^>]*http-equiv.*refresh",     # Meta refresh
+        r"<link[^>]*rel.*import",             # HTML imports
+        
+        # HTML5 specific
+        r"<audio[^>]*>.*?</audio>",           # Audio tags
+        r"<video[^>]*>.*?</video>",           # Video tags
+        r"<source[^>]*>",                     # Source tags
+        r"<track[^>]*>",                      # Track tags
+        r"formaction\s*=",                    # Form action override
+        r"autofocus\s*=",                     # Autofocus attribute
+        
+        # WebRTC and modern APIs
+        r"getUserMedia\s*\(",                 # Media access
+        r"navigator\.\w+",                    # Navigator object
+        r"location\.\w+",                     # Location object
+        r"history\.\w+",                      # History object
+        r"localStorage\.\w+",                 # Local storage
+        r"sessionStorage\.\w+",               # Session storage
+        r"indexedDB\.\w+",                    # IndexedDB
+        
+        # PostMessage and origin bypass
+        r"postMessage\s*\(",                  # Post message
+        r"addEventListener\s*\(",             # Event listeners
+        r"removeEventListener\s*\(",          # Remove event listeners
+        r"dispatchEvent\s*\(",                # Dispatch events
+        r"createEvent\s*\(",                  # Create events
     ]
     
     SQL_INJECTION_PATTERNS = [
+        # Classic injection patterns
         r"'\s*OR\s+'?\d+'\s*=\s*'?\d+'",  # OR 1=1
-        r";\s*DROP\s+TABLE",  # DROP TABLE
-        r";\s*DELETE\s+FROM",  # DELETE FROM
-        r";\s*INSERT\s+INTO",  # INSERT INTO
-        r";\s*UPDATE\s+\w+\s+SET",  # UPDATE SET
-        r"UNION\s+SELECT",  # UNION SELECT
-        r"--\s*$",  # SQL comment
-        r"/\*.*\*/",  # Multi-line comment
-        r"xp_cmdshell",  # SQL Server command execution
-        r"sp_executesql",  # SQL Server dynamic SQL
+        r"'\s*or\s+'?\d+'\s*=\s*'?\d+'",  # or 1=1 (lowercase)
+        r"'\s*OR\s+'.+?'\s*=\s*'.+?'",   # OR 'x'='x'
+        r"'\s*AND\s+'?\d+'\s*=\s*'?\d+'", # AND 1=1
+        r"'\s*and\s+'?\d+'\s*=\s*'?\d+'", # and 1=1 (lowercase)
+        
+        # Command injection patterns
+        r";\s*DROP\s+TABLE",              # DROP TABLE
+        r";\s*drop\s+table",              # drop table (lowercase)
+        r";\s*DELETE\s+FROM",             # DELETE FROM
+        r";\s*delete\s+from",             # delete from (lowercase)
+        r";\s*INSERT\s+INTO",             # INSERT INTO
+        r";\s*insert\s+into",             # insert into (lowercase)
+        r";\s*UPDATE\s+\w+\s+SET",        # UPDATE SET
+        r";\s*update\s+\w+\s+set",        # update set (lowercase)
+        r";\s*TRUNCATE\s+TABLE",          # TRUNCATE TABLE
+        r";\s*truncate\s+table",          # truncate table (lowercase)
+        r";\s*ALTER\s+TABLE",             # ALTER TABLE
+        r";\s*alter\s+table",             # alter table (lowercase)
+        
+        # Union-based injection
+        r"UNION\s+SELECT",                # UNION SELECT
+        r"union\s+select",                # union select (lowercase)
+        r"UNION\s+ALL\s+SELECT",          # UNION ALL SELECT
+        r"union\s+all\s+select",          # union all select (lowercase)
+        
+        # Nested queries
+        r"SELECT\s*\(\s*SELECT",          # SELECT (SELECT
+        r"select\s*\(\s*select",          # select (select (lowercase)
+        r"\(\s*SELECT\s+.*\s+FROM",       # (SELECT ... FROM
+        r"\(\s*select\s+.*\s+from",       # (select ... from (lowercase)
+        
+        # Time-based attacks
+        r"WAITFOR\s+DELAY",               # SQL Server time delay
+        r"waitfor\s+delay",               # waitfor delay (lowercase)
+        r"BENCHMARK\s*\(",                # MySQL benchmark
+        r"benchmark\s*\(",                # benchmark (lowercase)
+        r"SLEEP\s*\(",                    # MySQL sleep
+        r"sleep\s*\(",                    # sleep (lowercase)
+        r"pg_sleep\s*\(",                 # PostgreSQL sleep
+        
+        # Hex-encoded payloads
+        r"0x[0-9A-Fa-f]{8,}",            # Hex strings (8+ chars)
+        r"CHAR\s*\(\s*\d+",               # CHAR(numeric) conversion
+        r"char\s*\(\s*\d+",               # char(numeric) conversion (lowercase)
+        r"CHR\s*\(\s*\d+",                # Oracle CHR function
+        r"chr\s*\(\s*\d+",                # chr function (lowercase)
+        r"ASCII\s*\(",                    # ASCII function
+        r"ascii\s*\(",                    # ascii function (lowercase)
+        
+        # Comment patterns
+        r"--\s*",                         # SQL line comment
+        r"/\*.*?\*/",                     # Multi-line comment
+        r"#.*$",                          # MySQL comment
+        
+        # Database-specific functions
+        r"xp_cmdshell",                   # SQL Server command execution
+        r"sp_executesql",                 # SQL Server dynamic SQL
+        r"load_file\s*\(",                # MySQL file reading
+        r"into\s+outfile",                # MySQL file writing
+        r"into\s+dumpfile",               # MySQL binary file writing
+        
+        # Information gathering
+        r"information_schema",            # Information schema access
+        r"sys\.",                         # System tables
+        r"sysobjects",                    # SQL Server system objects
+        r"syscolumns",                    # SQL Server system columns
+        r"version\s*\(\s*\)",             # Version function
+        r"@@version",                     # SQL Server version
+        r"user\s*\(\s*\)",                # Current user function
+        r"current_user",                  # Current user
+        r"database\s*\(\s*\)",            # Database function
+        
+        # Blind injection indicators
+        r"AND\s+\d+\s*=\s*\d+",          # AND 1=1
+        r"and\s+\d+\s*=\s*\d+",          # and 1=1 (lowercase)
+        r"OR\s+\d+\s*=\s*\d+",           # OR 1=1
+        r"or\s+\d+\s*=\s*\d+",           # or 1=1 (lowercase)
+        r"AND\s+\d+\s*>\s*\d+",          # AND 1>0
+        r"and\s+\d+\s*>\s*\d+",          # and 1>0 (lowercase)
+        
+        # Error-based injection
+        r"EXTRACTVALUE\s*\(",             # MySQL error-based
+        r"extractvalue\s*\(",             # extractvalue (lowercase)
+        r"UPDATEXML\s*\(",                # MySQL error-based
+        r"updatexml\s*\(",                # updatexml (lowercase)
+        r"CONVERT\s*\(",                  # Type conversion
+        r"convert\s*\(",                  # convert (lowercase)
+        r"CAST\s*\(",                     # Type casting
+        r"cast\s*\(",                     # cast (lowercase)
+        
+        # Boolean-based blind injection
+        r"AND\s+.*\s+LIKE\s+",            # AND ... LIKE
+        r"and\s+.*\s+like\s+",            # and ... like (lowercase)
+        r"OR\s+.*\s+LIKE\s+",             # OR ... LIKE
+        r"or\s+.*\s+like\s+",             # or ... like (lowercase)
+        r"RLIKE\s+",                      # MySQL RLIKE
+        r"rlike\s+",                      # rlike (lowercase)
+        
+        # Stacked queries
+        r";\s*EXEC\s*\(",                 # Execute stored procedure
+        r";\s*exec\s*\(",                 # exec (lowercase)
+        r";\s*EXECUTE\s+",                # Execute command
+        r";\s*execute\s+",                # execute (lowercase)
+        
+        # Advanced evasion techniques
+        r"\/\*\!\d+.*?\*\/",              # MySQL version-specific comments
+        r"CONCAT\s*\(",                   # String concatenation
+        r"concat\s*\(",                   # concat (lowercase)
+        r"GROUP_CONCAT\s*\(",             # MySQL group concatenation
+        r"group_concat\s*\(",             # group_concat (lowercase)
+        r"STRING_AGG\s*\(",               # SQL Server string aggregation
+        r"string_agg\s*\(",               # string_agg (lowercase)
     ]
     
     PATH_TRAVERSAL_PATTERNS = [
-        r"\.\./",  # Unix path traversal
-        r"\.\.\\",  # Windows path traversal
-        r"%2e%2e[/\\]",  # URL encoded traversal
-        r"\.\./\.\./",  # Multiple traversals
-        r"(?:^|/)etc/passwd",  # Unix password file
-        r"(?:^|\\)windows\\system32",  # Windows system
-        r"file://",  # File protocol
-        r"\\\\",  # UNC paths
+        # Basic path traversal
+        r"\.\./",                             # Unix path traversal
+        r"\.\.\\",                            # Windows path traversal
+        r"\.\.\./",                           # Double-dot traversal
+        r"\.\.\.\./",                         # Triple-dot traversal
+        r"\./\.\./",                          # Relative path traversal
+        r"\.\\\.\.\\",                        # Windows double traversal
+        r"\.\./\.\./",                        # Multiple Unix traversals
+        r"\.\.\\\.\.\\",                      # Multiple Windows traversals
+        
+        # URL encoded variants
+        r"%2e%2e[/\\]",                       # URL encoded ../ or ..\
+        r"%2E%2E[/\\]",                       # URL encoded ../ or ..\ (uppercase)
+        r"%252e%252e[/\\]",                   # Double URL encoded
+        r"%252E%252E[/\\]",                   # Double URL encoded (uppercase)
+        r"%c0%ae%c0%ae[/\\]",                 # Overlong UTF-8 encoding
+        r"%e0%80%ae%e0%80%ae[/\\]",           # Overlong UTF-8 encoding (longer)
+        
+        # Unicode variants
+        r"\\u002e\\u002e[/\\\\]",             # Unicode escapes
+        r"\\u002E\\u002E[/\\\\]",             # Unicode escapes (uppercase)
+        r"\u002e\u002e[/\\\\]",               # Direct Unicode
+        r"\u002E\u002E[/\\\\]",               # Direct Unicode (uppercase)
+        r"\\uff0e\\uff0e[/\\\\]",             # Fullwidth Unicode
+        r"\uff0e\uff0e[/\\\\]",               # Direct fullwidth Unicode
+        
+        # HTML entity encoding
+        r"&#46;&#46;[/\\\\]",                 # HTML decimal entities
+        r"&#x2e;&#x2e;[/\\\\]",               # HTML hex entities
+        r"&#X2E;&#X2E;[/\\\\]",               # HTML hex entities (uppercase)
+        r"&period;&period;[/\\\\]",           # HTML named entities
+        
+        # Mixed encoding
+        r"\.%2e[/\\\\]",                      # Mixed literal and encoded
+        r"%2e\.[/\\\\]",                      # Mixed encoded and literal
+        r"\.%252e[/\\\\]",                    # Mixed literal and double-encoded
+        r"%252e\.[/\\\\]",                    # Mixed double-encoded and literal
+        
+        # Path separator variations
+        r"\.\.[/\\\\]",                       # Standard separators
+        r"\.\.%2f",                           # URL encoded forward slash
+        r"\.\.%5c",                           # URL encoded backslash
+        r"\.\.%5C",                           # URL encoded backslash (uppercase)
+        r"\.\.%252f",                         # Double URL encoded forward slash
+        r"\.\.%255c",                         # Double URL encoded backslash
+        r"\.\.%255C",                         # Double URL encoded backslash (uppercase)
+        
+        # Common target files (Unix)
+        r"(?:^|/)etc/passwd",                 # Unix password file
+        r"(?:^|/)etc/shadow",                 # Unix shadow file
+        r"(?:^|/)etc/hosts",                  # Unix hosts file
+        r"(?:^|/)etc/fstab",                  # Unix filesystem table
+        r"(?:^|/)etc/crontab",                # Unix cron table
+        r"(?:^|/)root/\.bash_history",        # Root bash history
+        r"(?:^|/)home/[^/]+/\.bash_history",  # User bash history
+        r"(?:^|/)var/log/",                   # Log directory
+        r"(?:^|/)proc/self/environ",          # Process environment
+        r"(?:^|/)proc/version",               # Kernel version
+        r"(?:^|/)proc/cmdline",               # Kernel command line
+        
+        # Common target files (Windows)
+        r"(?:^|\\\\)windows\\\\system32",     # Windows system directory
+        r"(?:^|\\\\)windows\\\\win\.ini",     # Windows ini file
+        r"(?:^|\\\\)windows\\\\system\.ini",  # Windows system ini
+        r"(?:^|\\\\)winnt\\\\system32",       # Windows NT system
+        r"(?:^|\\\\)boot\.ini",               # Windows boot file
+        r"(?:^|\\\\)autoexec\.bat",           # Windows autoexec
+        r"(?:^|\\\\)config\.sys",             # Windows config
+        r"(?:^|\\\\)windows\\\\repair\\\\sam", # Windows SAM file
+        r"(?:^|\\\\)inetpub\\\\wwwroot",      # IIS web root
+        
+        # Protocol-based traversal
+        r"file://",                           # File protocol
+        r"file:///",                          # File protocol with triple slash
+        r"ftp://",                            # FTP protocol
+        r"sftp://",                           # SFTP protocol
+        r"smb://",                            # SMB protocol
+        r"\\\\\\\\",                          # UNC paths (escaped)
+        r"\\\\",                              # UNC paths
+        r"//",                                # Network paths
+        
+        # Container/jail escapes
+        r"/proc/self/root/",                  # Process root escape
+        r"/proc/1/root/",                     # Init process root
+        r"/proc/self/cwd/",                   # Current working directory
+        r"/sys/class/",                       # System class directory
+        r"/dev/",                             # Device directory
+        r"/run/secrets/",                     # Container secrets
+        
+        # Web application specific
+        r"WEB-INF/",                          # Java web app directory
+        r"META-INF/",                         # Java metadata directory
+        r"\.svn/",                            # Subversion directory
+        r"\.git/",                            # Git directory
+        r"\.hg/",                             # Mercurial directory
+        r"\.bzr/",                            # Bazaar directory
+        r"CVS/",                              # CVS directory
+        r"\.env",                             # Environment file
+        r"\.htaccess",                        # Apache config
+        r"\.htpasswd",                        # Apache password
+        r"web\.config",                       # IIS config
+        r"application\.properties",           # Java properties
+        r"config\.php",                       # PHP config
+        r"wp-config\.php",                    # WordPress config
+        
+        # Archive/compression escapes
+        r"\.\.tar",                           # Tar archive escape
+        r"\.\.zip",                           # Zip archive escape
+        r"\.\.gz",                            # Gzip escape
+        r"\.\.bz2",                           # Bzip2 escape
+        r"\.\.xz",                            # XZ escape
+        
+        # Null byte injection (historical)
+        r"\.\.%00",                           # Null byte
+        r"\.\.\x00",                          # Direct null byte
+        r"\.\.\\0",                           # Escaped null byte
+        
+        # Advanced evasion techniques
+        r"\.{2,}/",                           # Multiple dots
+        r"\.{2,}\\\\",                        # Multiple dots (Windows)
+        r"[.]{2,}[/\\\\]",                    # Character class dots
+        r"\.\.(?:/[^/]*)*",                   # Deep traversal patterns
+        r"\.\.(?:\\\\[^\\\\]*)*",             # Deep traversal patterns (Windows)
+        
+        # Case variations (flags handled at compile time)
+        r"\.\.[/\\\\]",                       # Standard separators (case handled by IGNORECASE flag)
+        
+        # Combined with legitimate paths
+        r"uploads/\.\./",                     # Combined with upload directory
+        r"images/\.\./",                      # Combined with images directory
+        r"static/\.\./",                      # Combined with static directory
+        r"assets/\.\./",                      # Combined with assets directory
+        r"public/\.\./",                      # Combined with public directory
+        r"tmp/\.\./",                         # Combined with temp directory
     ]
     
     def __init__(self,

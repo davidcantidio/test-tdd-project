@@ -20,6 +20,7 @@ from datetime import datetime, timedelta
 from functools import wraps
 from threading import Lock
 import json
+import logging
 
 # Graceful imports
 try:
@@ -103,21 +104,83 @@ class AdvancedCache:
     
     def _generate_key(self, key: Union[str, tuple, dict]) -> str:
         """Generate a consistent cache key from various input types."""
+        # SECURITY FIX: Always hash keys to prevent path traversal attacks
+        # Never return raw strings that could contain ../../../ or other path traversal sequences
+        
+        # Check for path traversal attempts and log security violations
+        key_str = str(key)
+        path_traversal_patterns = [
+            '../', '..\\', '%2e%2e', '..%2f', '..%5c',  # Basic traversal
+            '%252e%252e', '\u002e\u002e', '\\\\',       # Encoded variants
+            '/etc/passwd', '\\windows\\system32'         # Common targets
+        ]
+        
+        for pattern in path_traversal_patterns:
+            if pattern.lower() in key_str.lower():
+                # Log security violation
+                security_logger = logging.getLogger('security.cache')
+                security_logger.error(
+                    f"SECURITY VIOLATION: Path traversal attempt detected in cache key: {key_str[:100]}..."
+                )
+                # Continue with hashing to prevent the attack but log it
+                break
+        
+        # Always hash all inputs for consistent, safe cache keys
         if isinstance(key, str):
-            return key
+            # CRITICAL FIX: Always hash string keys - never return raw strings
+            return hashlib.sha256(key.encode('utf-8')).hexdigest()
         elif isinstance(key, (tuple, list)):
             # Convert all elements to strings before sorting for consistent comparison
             try:
                 str_elements = [str(item) for item in key]
-                return hashlib.sha256(str(sorted(str_elements)).encode()).hexdigest()
+                return hashlib.sha256(str(sorted(str_elements)).encode('utf-8')).hexdigest()
             except TypeError:
                 # If sorting fails, just use the original order
-                return hashlib.sha256(str(key).encode()).hexdigest()
+                return hashlib.sha256(str(key).encode('utf-8')).hexdigest()
         elif isinstance(key, dict):
             sorted_items = sorted(key.items())
-            return hashlib.sha256(str(sorted_items).encode()).hexdigest()
+            return hashlib.sha256(str(sorted_items).encode('utf-8')).hexdigest()
         else:
-            return hashlib.sha256(str(key).encode()).hexdigest()
+            return hashlib.sha256(str(key).encode('utf-8')).hexdigest()
+    
+    def _validate_cache_key_for_filesystem(self, cache_key: str) -> bool:
+        """
+        Validate that cache key is safe for filesystem usage.
+        
+        Args:
+            cache_key: The cache key to validate
+            
+        Returns:
+            True if safe, False if potentially dangerous
+        """
+        # Cache keys should be SHA-256 hashes (64 hexadecimal characters)
+        # This is additional validation since _generate_key now always hashes
+        
+        if not cache_key:
+            return False
+            
+        # Should be exactly 64 characters (SHA-256 hex)
+        if len(cache_key) != 64:
+            return False
+            
+        # Should only contain hexadecimal characters (0-9, a-f)
+        if not all(c in '0123456789abcdef' for c in cache_key.lower()):
+            return False
+            
+        # Additional checks for dangerous patterns (defense in depth)
+        dangerous_patterns = [
+            '..', '/', '\\', ':', '*', '?', '"', '<', '>', '|',
+            'CON', 'PRN', 'AUX', 'NUL',  # Windows reserved names
+            'com1', 'com2', 'com3', 'com4', 'com5', 'com6', 'com7', 'com8', 'com9',
+            'lpt1', 'lpt2', 'lpt3', 'lpt4', 'lpt5', 'lpt6', 'lpt7', 'lpt8', 'lpt9'
+        ]
+        
+        cache_key_lower = cache_key.lower()
+        for pattern in dangerous_patterns:
+            if pattern.lower() in cache_key_lower:
+                return False
+                
+        return True
     
     def get(self, key: Union[str, tuple, dict], default: Any = None) -> Any:
         """Get value from cache with fallback chain: memory -> disk -> default."""
@@ -313,7 +376,27 @@ class AdvancedCache:
         if not self.cache_dir:
             return None
         
+        # SECURITY VALIDATION: Ensure cache_key is safe for filesystem
+        if not self._validate_cache_key_for_filesystem(cache_key):
+            security_logger = logging.getLogger('security.cache')
+            security_logger.error(f"SECURITY VIOLATION: Invalid cache key for filesystem: {cache_key}")
+            return None
+        
         cache_file = self.cache_dir / f"{cache_key}.cache"
+        
+        # Additional safety check: Ensure the resolved path is within cache directory
+        try:
+            resolved_cache_file = cache_file.resolve()
+            resolved_cache_dir = self.cache_dir.resolve()
+            
+            if not str(resolved_cache_file).startswith(str(resolved_cache_dir)):
+                security_logger = logging.getLogger('security.cache')
+                security_logger.error(f"SECURITY VIOLATION: Path traversal detected in resolved path: {resolved_cache_file}")
+                return None
+        except (OSError, ValueError) as e:
+            security_logger = logging.getLogger('security.cache')
+            security_logger.error(f"SECURITY ERROR: Path resolution failed: {e}")
+            return None
         
         try:
             if cache_file.exists():
@@ -346,7 +429,27 @@ class AdvancedCache:
         if not self.cache_dir:
             return
         
+        # SECURITY VALIDATION: Ensure cache_key is safe for filesystem
+        if not self._validate_cache_key_for_filesystem(cache_key):
+            security_logger = logging.getLogger('security.cache')
+            security_logger.error(f"SECURITY VIOLATION: Invalid cache key for filesystem: {cache_key}")
+            return
+        
         cache_file = self.cache_dir / f"{cache_key}.cache"
+        
+        # Additional safety check: Ensure the resolved path is within cache directory
+        try:
+            resolved_cache_file = cache_file.resolve()
+            resolved_cache_dir = self.cache_dir.resolve()
+            
+            if not str(resolved_cache_file).startswith(str(resolved_cache_dir)):
+                security_logger = logging.getLogger('security.cache')
+                security_logger.error(f"SECURITY VIOLATION: Path traversal detected in resolved path: {resolved_cache_file}")
+                return
+        except (OSError, ValueError) as e:
+            security_logger = logging.getLogger('security.cache') 
+            security_logger.error(f"SECURITY ERROR: Path resolution failed: {e}")
+            return
         
         try:
             # Convert datetime objects to ISO format strings for msgpack compatibility
@@ -376,7 +479,27 @@ class AdvancedCache:
         if not self.cache_dir:
             return False
         
+        # SECURITY VALIDATION: Ensure cache_key is safe for filesystem
+        if not self._validate_cache_key_for_filesystem(cache_key):
+            security_logger = logging.getLogger('security.cache')
+            security_logger.error(f"SECURITY VIOLATION: Invalid cache key for filesystem: {cache_key}")
+            return False
+        
         cache_file = self.cache_dir / f"{cache_key}.cache"
+        
+        # Additional safety check: Ensure the resolved path is within cache directory
+        try:
+            resolved_cache_file = cache_file.resolve()
+            resolved_cache_dir = self.cache_dir.resolve()
+            
+            if not str(resolved_cache_file).startswith(str(resolved_cache_dir)):
+                security_logger = logging.getLogger('security.cache')
+                security_logger.error(f"SECURITY VIOLATION: Path traversal detected in resolved path: {resolved_cache_file}")
+                return False
+        except (OSError, ValueError) as e:
+            security_logger = logging.getLogger('security.cache')
+            security_logger.error(f"SECURITY ERROR: Path resolution failed: {e}")
+            return False
         
         try:
             if cache_file.exists():

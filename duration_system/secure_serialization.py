@@ -27,6 +27,7 @@ Usage:
 import msgpack
 import hashlib
 import logging
+import pickle
 from typing import Any, Optional, Dict, List, Union, Tuple
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -461,34 +462,151 @@ def secure_deserialize_from_file(file_path: Union[str, Path],
     return _default_serializer.deserialize_from_file(file_path, validate)
 
 
+class SecureUnpickler(pickle.Unpickler):
+    """
+    Secure pickle unpickler that restricts dangerous operations.
+    
+    This unpickler only allows loading of safe built-in types and
+    prevents execution of arbitrary code during deserialization.
+    """
+    
+    # Allowed safe types for unpickling
+    SAFE_BUILTINS = {
+        'str', 'int', 'float', 'bool', 'bytes', 'list', 'tuple', 'dict', 'set', 'frozenset',
+        'complex', 'type(None)', 'NoneType', 'datetime.datetime', 'datetime.date', 
+        'datetime.time', 'datetime.timedelta', 'decimal.Decimal'
+    }
+    
+    def find_class(self, module, name):
+        """Override find_class to restrict allowed modules and classes."""
+        # Only allow safe built-in types
+        full_name = f"{module}.{name}"
+        
+        # Allow common safe types
+        if module == 'builtins' and name in self.SAFE_BUILTINS:
+            return getattr(__builtins__, name)
+        
+        # Allow datetime objects
+        if module == 'datetime' and name in ['datetime', 'date', 'time', 'timedelta']:
+            import datetime
+            return getattr(datetime, name)
+        
+        # Allow decimal objects
+        if module == 'decimal' and name == 'Decimal':
+            import decimal
+            return decimal.Decimal
+        
+        # Block everything else
+        security_logger.error(f"SECURITY VIOLATION: Attempted to load restricted class: {full_name}")
+        raise pickle.UnpicklingError(f"Loading {full_name} is not permitted for security reasons")
+
+def _validate_pickle_file_signature(file_path: Path) -> bool:
+    """
+    Validate pickle file has correct magic bytes and basic structure.
+    
+    Args:
+        file_path: Path to pickle file
+        
+    Returns:
+        True if valid pickle file, False otherwise
+    """
+    try:
+        with open(file_path, 'rb') as f:
+            # Read first few bytes to check pickle magic
+            magic = f.read(2)
+            
+            # Pickle protocol magic bytes
+            valid_magic = [
+                b'\x80\x02',  # Protocol 2
+                b'\x80\x03',  # Protocol 3  
+                b'\x80\x04',  # Protocol 4
+                b'\x80\x05',  # Protocol 5
+                b']q\x00',    # Protocol 0/1 (list)
+                b'}q\x00',    # Protocol 0/1 (dict)
+                b'(d',        # Protocol 0/1 (dict)
+                b'c__',       # Protocol 0/1 (class)
+            ]
+            
+            # Check if starts with valid pickle magic
+            for valid in valid_magic:
+                if magic.startswith(valid[:len(magic)]):
+                    return True
+                    
+            return False
+            
+    except Exception:
+        return False
+
+def _secure_pickle_load(file_path: Path, max_file_size: int = 50 * 1024 * 1024) -> Any:
+    """
+    Securely load pickle file with restrictions and validation.
+    
+    Args:
+        file_path: Path to pickle file
+        max_file_size: Maximum allowed file size in bytes (default 50MB)
+        
+    Returns:
+        Loaded data object
+        
+    Raises:
+        SecurityError: If file fails security validation
+        ValueError: If file is invalid or too large
+    """
+    # File size validation
+    if file_path.stat().st_size > max_file_size:
+        raise ValueError(f"Pickle file too large: {file_path.stat().st_size} bytes (max: {max_file_size})")
+    
+    # Signature validation
+    if not _validate_pickle_file_signature(file_path):
+        raise ValueError(f"Invalid pickle file signature: {file_path}")
+    
+    # Content inspection - scan for dangerous patterns
+    dangerous_patterns = [
+        b'__reduce__', b'__reduce_ex__', b'eval', b'exec', b'compile',
+        b'subprocess', b'os.system', b'__import__', b'open(',
+        b'file(', b'input(', b'raw_input('
+    ]
+    
+    with open(file_path, 'rb') as f:
+        content = f.read()
+        
+        for pattern in dangerous_patterns:
+            if pattern in content:
+                security_logger.error(f"SECURITY VIOLATION: Dangerous pattern '{pattern.decode('utf-8', errors='ignore')}' found in pickle file")
+                raise ValueError(f"Pickle file contains dangerous patterns: {file_path}")
+    
+    # Load with restricted unpickler
+    security_logger.warning(f"Attempting secure pickle load: {file_path}")
+    
+    with open(file_path, 'rb') as f:
+        unpickler = SecureUnpickler(f)
+        data = unpickler.load()
+    
+    security_logger.info(f"Successfully loaded pickle with security restrictions: {file_path}")
+    return data
+
 # Migration helper for existing pickle files
 def migrate_pickle_to_secure(pickle_file: Union[str, Path], 
                            output_file: Union[str, Path],
-                           validate_output: bool = True) -> bool:
+                           validate_output: bool = True,
+                           force_unsafe: bool = False) -> bool:
     """
-    Migrate existing pickle file to secure msgpack format.
+    SECURITY ENHANCED: Migrate pickle file to secure msgpack format with safety checks.
     
-    WARNING: This function imports pickle temporarily for migration.
-    Use only for trusted pickle files during migration.
+    This function now uses a secure unpickler that restricts dangerous operations
+    and validates file integrity before loading.
     
     Args:
         pickle_file: Path to existing pickle file
         output_file: Path for new secure file
         validate_output: Validate migrated data
+        force_unsafe: Force unsafe migration (use with extreme caution)
         
     Returns:
         True if migration successful
     """
     import pickle
     import warnings
-    
-    warnings.warn(
-        "SECURITY WARNING: migrate_pickle_to_secure uses pickle.load() for migration. "
-        "This function should ONLY be used with trusted pickle files from known sources. "
-        "Never use with untrusted or user-provided pickle files as this can lead to "
-        "arbitrary code execution vulnerabilities.",
-        SecurityWarning
-    )
     
     pickle_path = Path(pickle_file)
     output_path = Path(output_file)
@@ -498,11 +616,22 @@ def migrate_pickle_to_secure(pickle_file: Union[str, Path],
         return False
     
     try:
-        # Read and deserialize pickle data
-        with open(pickle_path, 'rb') as f:
-            data = pickle.load(f)  # nosec B301: Controlled migration context with security warnings - only for trusted pickle files
-        
-        security_logger.warning(f"Loaded pickle data for migration: {pickle_path}")
+        if force_unsafe:
+            # UNSAFE PATH - Only for emergency recovery
+            warnings.warn(
+                "CRITICAL SECURITY WARNING: Using unsafe pickle loading! "
+                "This bypasses all security protections and can lead to arbitrary code execution. "
+                "Only use for emergency recovery of trusted files.",
+                SecurityWarning
+            )
+            
+            security_logger.critical(f"UNSAFE PICKLE LOADING ENABLED: {pickle_path}")
+            
+            with open(pickle_path, 'rb') as f:
+                data = pickle.load(f)  # nosec B301: Explicitly unsafe path for emergency recovery only
+        else:
+            # SECURE PATH - Default and recommended
+            data = _secure_pickle_load(pickle_path)
         
         # Serialize to secure format
         secure_serialize_to_file(data, output_path, validate_output)
@@ -512,7 +641,7 @@ def migrate_pickle_to_secure(pickle_file: Union[str, Path],
         return True
         
     except Exception as e:
-        security_logger.error(f"Migration failed: {e}")
+        security_logger.error(f"Migration failed for {pickle_path}: {e}")
         return False
 
 
