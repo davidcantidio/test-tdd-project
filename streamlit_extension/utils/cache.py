@@ -320,15 +320,20 @@ class AdvancedCache:
                 with open(cache_file, 'rb') as f:
                     cache_data = msgpack.unpackb(f.read(), raw=False)
                 
+                # Convert ISO format string back to datetime for expiration check
+                expires_at_str = cache_data['expires_at']
+                expires_at = datetime.fromisoformat(expires_at_str)
+                
                 # Check expiration
-                if datetime.now() <= cache_data['expires_at']:
+                if datetime.now() <= expires_at:
                     return cache_data['value']
                 else:
                     # Expired, remove file
                     cache_file.unlink()
                     
-        except (msgpack.exceptions.ExtraData, msgpack.exceptions.UnpackException, KeyError, OSError):
-            # Corrupted cache file, remove it
+        except (msgpack.exceptions.ExtraData, msgpack.exceptions.UnpackException, 
+                KeyError, OSError, ValueError):
+            # Corrupted cache file or invalid datetime format, remove it
             try:
                 cache_file.unlink()
             except OSError:
@@ -344,10 +349,14 @@ class AdvancedCache:
         cache_file = self.cache_dir / f"{cache_key}.cache"
         
         try:
+            # Convert datetime objects to ISO format strings for msgpack compatibility
+            now = datetime.now()
+            expires_at = now + timedelta(seconds=ttl)
+            
             cache_data = {
                 'value': value,
-                'created_at': datetime.now(),
-                'expires_at': datetime.now() + timedelta(seconds=ttl)
+                'created_at': now.isoformat(),
+                'expires_at': expires_at.isoformat()
             }
             
             with open(cache_file, 'wb') as f:
