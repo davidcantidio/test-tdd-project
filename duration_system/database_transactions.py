@@ -156,13 +156,26 @@ class DatabaseConnectionPool:
                 self._in_use.remove(connection)
                 self.stats["active_connections"] -= 1
             
-            # If connection not in pool and we're over limit, close it
-            if connection not in self._connections and len(self._connections) >= self.max_connections:
+            # Connections created during timeout handling aren't added to
+            # the pool. These emergency connections would previously remain
+            # open after release, keeping SQLite write locks active. Always
+            # close any connection that isn't part of the managed pool.
+            if connection not in self._connections:
                 try:
                     connection.close()
                     self.stats["connections_closed"] += 1
                 except Exception:
                     # Connection close failed - acceptable during cleanup
+                    pass  # nosec B110: Cleanup failure is acceptable
+                return
+
+            # If connection belongs to pool but we're over limit, close it
+            if len(self._connections) > self.max_connections:
+                try:
+                    connection.close()
+                    self._connections.remove(connection)
+                    self.stats["connections_closed"] += 1
+                except Exception:
                     pass  # nosec B110: Cleanup failure is acceptable
     
     def _create_connection(self) -> sqlite3.Connection:

@@ -38,6 +38,14 @@ sys.path.append(str(Path(__file__).parent))
 from data_base_strategy import DataBaseCalculator, DateBaseStrategy
 from json_enrichment import JSONEnrichmentEngine
 
+# Import the fixed connection pool
+sys.path.append(str(Path(__file__).parent.parent))
+try:
+    from duration_system.database_transactions import DatabaseConnectionPool
+    CONNECTION_POOL_AVAILABLE = True
+except ImportError:
+    CONNECTION_POOL_AVAILABLE = False
+
 
 class SyncDirection(Enum):
     """Direções de sincronização."""
@@ -158,6 +166,12 @@ class BidirectionalSyncEngine:
         self.enrichment_engine = JSONEnrichmentEngine(DateBaseStrategy.NEXT_MONDAY)
         self.field_mapping = FieldMapping()
         
+        # Initialize connection pool if available
+        if CONNECTION_POOL_AVAILABLE:
+            self.connection_pool = DatabaseConnectionPool(db_path, max_connections=5)
+        else:
+            self.connection_pool = None
+        
         # Sync tracking
         self.sync_session_id = datetime.now().strftime("%Y%m%d_%H%M%S")
     
@@ -166,13 +180,17 @@ class BidirectionalSyncEngine:
         json_str = json.dumps(data, sort_keys=True, ensure_ascii=False)
         return hashlib.sha256(json_str.encode()).hexdigest()
     
-    def get_database_connection(self) -> sqlite3.Connection:
-        """Get database connection with proper configuration."""
-        conn = sqlite3.connect(self.db_path, timeout=30.0)
-        conn.row_factory = sqlite3.Row  # Enable column access by name
-        conn.execute("PRAGMA journal_mode=WAL")  # Enable WAL mode for better concurrency
-        conn.execute("PRAGMA busy_timeout=30000")  # 30 second timeout
-        return conn
+    def get_database_connection(self):
+        """Get database connection using fixed connection pool."""
+        if self.connection_pool:
+            return self.connection_pool.get_connection()
+        else:
+            # Fallback to direct connection with improved settings
+            conn = sqlite3.connect(self.db_path, timeout=30.0)
+            conn.row_factory = sqlite3.Row  # Enable column access by name
+            conn.execute("PRAGMA journal_mode=WAL")  # Enable WAL mode for better concurrency
+            conn.execute("PRAGMA busy_timeout=30000")  # 30 second timeout
+            return conn
     
     def epic_exists_in_db(self, epic_key: str) -> bool:
         """Check if epic exists in database."""
