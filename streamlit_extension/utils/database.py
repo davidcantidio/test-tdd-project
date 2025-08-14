@@ -442,7 +442,10 @@ class DatabaseManager:
                         SELECT id, epic_key, name, status, points_earned
                         FROM framework_epics WHERE id = :epic_id
                     """), {"epic_id": epic_id})
-                    epic = dict(epic_result.fetchone()._mapping)
+                    epic_row = epic_result.fetchone()
+                    if not epic_row:
+                        return self._get_default_progress()
+                    epic = dict(epic_row._mapping)
                     
                     # Get task counts
                     task_result = conn.execute(text("""
@@ -452,7 +455,11 @@ class DatabaseManager:
                             SUM(CASE WHEN status = 'in_progress' THEN 1 ELSE 0 END) as in_progress_tasks
                         FROM framework_tasks WHERE epic_id = :epic_id
                     """), {"epic_id": epic_id})
-                    tasks = dict(task_result.fetchone()._mapping)
+                    task_row = task_result.fetchone()
+                    if not task_row:
+                        tasks = {"total_tasks": 0, "completed_tasks": 0, "in_progress_tasks": 0}
+                    else:
+                        tasks = dict(task_row._mapping)
                     
                 else:
                     cursor = conn.cursor()
@@ -462,7 +469,10 @@ class DatabaseManager:
                         SELECT id, epic_key, name, status, points_earned
                         FROM framework_epics WHERE id = ?
                     """, [epic_id])
-                    epic = dict(cursor.fetchone())
+                    epic_row = cursor.fetchone()
+                    if not epic_row:
+                        return self._get_default_progress()
+                    epic = dict(epic_row)
                     
                     # Get task counts
                     cursor.execute("""
@@ -472,22 +482,41 @@ class DatabaseManager:
                             SUM(CASE WHEN status = 'in_progress' THEN 1 ELSE 0 END) as in_progress_tasks
                         FROM framework_tasks WHERE epic_id = ? AND deleted_at IS NULL
                     """, [epic_id])
-                    tasks = dict(cursor.fetchone())
+                    task_row = cursor.fetchone()
+                    if not task_row:
+                        tasks = {"total_tasks": 0, "completed_tasks": 0, "in_progress_tasks": 0}
+                    else:
+                        tasks = dict(task_row)
                 
                 # Calculate progress
-                total = tasks["total_tasks"] or 0
-                completed = tasks["completed_tasks"] or 0
+                total = tasks.get("total_tasks") or 0
+                completed = tasks.get("completed_tasks") or 0
                 progress_pct = (completed / total * 100) if total > 0 else 0
                 
                 return {
                     **epic,
                     **tasks,
-                    "progress_percentage": round(progress_pct, 1)
+                    "progress_percentage": round(progress_pct, 1),
+                    "points_earned": epic.get("points_earned", 0)
                 }
                 
         except Exception as e:
             print(f"Error getting epic progress: {e}")
-            return {}
+            return self._get_default_progress()
+    
+    def _get_default_progress(self) -> Dict[str, Any]:
+        """Return default progress structure when epic not found."""
+        return {
+            "id": 0,
+            "epic_key": "N/A",
+            "name": "Unknown",
+            "status": "unknown",
+            "points_earned": 0,
+            "total_tasks": 0,
+            "completed_tasks": 0,
+            "in_progress_tasks": 0,
+            "progress_percentage": 0.0
+        }
     
     def check_database_health(self) -> Dict[str, Any]:
         """Check database connectivity and basic health."""
