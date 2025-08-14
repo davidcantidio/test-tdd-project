@@ -25,7 +25,7 @@ from datetime import datetime, timedelta
 from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor, as_completed
 import subprocess
 import sqlite3
-import pickle
+import msgpack
 from dataclasses import dataclass
 import logging
 
@@ -159,7 +159,7 @@ class PersistentCache:
                     conn.execute("DELETE FROM cache_entries WHERE key = ?", (key_hash,))
                     return None
                 
-                return pickle.loads(value_blob)
+                return msgpack.unpackb(value_blob, raw=False)
                 
         except Exception as e:
             handle_error(e, severity=ErrorSeverity.DEBUG)
@@ -169,7 +169,7 @@ class PersistentCache:
         """Set value in persistent cache."""
         try:
             key_hash = hashlib.sha256(key.encode()).hexdigest()
-            value_blob = pickle.dumps(value)
+            value_blob = msgpack.packb(value, use_bin_type=True)
             timestamp = time.time()
             
             with sqlite3.connect(self.cache_file) as conn:

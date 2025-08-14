@@ -11,7 +11,7 @@ Intelligent caching with TTL, invalidation, and performance optimization:
 
 import sys
 import os
-import pickle
+import msgpack
 import hashlib
 import time
 from pathlib import Path
@@ -318,7 +318,7 @@ class AdvancedCache:
         try:
             if cache_file.exists():
                 with open(cache_file, 'rb') as f:
-                    cache_data = pickle.load(f)
+                    cache_data = msgpack.unpackb(f.read(), raw=False)
                 
                 # Check expiration
                 if datetime.now() <= cache_data['expires_at']:
@@ -327,7 +327,7 @@ class AdvancedCache:
                     # Expired, remove file
                     cache_file.unlink()
                     
-        except (pickle.PickleError, KeyError, OSError):
+        except (msgpack.exceptions.ExtraData, msgpack.exceptions.UnpackException, KeyError, OSError):
             # Corrupted cache file, remove it
             try:
                 cache_file.unlink()
@@ -351,14 +351,14 @@ class AdvancedCache:
             }
             
             with open(cache_file, 'wb') as f:
-                pickle.dump(cache_data, f)
+                f.write(msgpack.packb(cache_data, use_bin_type=True))
             
             self.stats["disk_writes"] += 1
             
             # Check if disk cache needs cleanup after writing
             self._cleanup_disk_cache()
             
-        except (pickle.PickleError, OSError):
+        except (msgpack.exceptions.PackException, OSError):
             # Failed to write to disk, continue without disk cache
             pass
     

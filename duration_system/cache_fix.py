@@ -19,7 +19,7 @@ Security enhancements (SEC-001 fix):
 
 import sys
 import os
-import pickle
+import msgpack
 import hashlib
 import time
 import signal
@@ -402,7 +402,7 @@ class InterruptSafeCache:
             temp_file = cache_file.with_suffix('.tmp')
             
             with open(temp_file, 'wb') as f:
-                pickle.dump(cache_data, f)
+                f.write(msgpack.packb(cache_data, use_bin_type=True))
             
             # Atomic move
             temp_file.replace(cache_file)
