@@ -41,28 +41,36 @@ def backup_database() -> Path:
     return backup_path
 
 def apply_schema_v6(conn: sqlite3.Connection) -> bool:
-    """Apply schema extensions v6."""
-    
+    """Apply schema extensions v6 if needed."""
+
     schema_path = project_root / "schema_extensions_v6.sql"
-    
+
     if not schema_path.exists():
         print(f"❌ Schema file not found: {schema_path}")
         return False
-    
-    print(f"📋 Applying schema v6: {schema_path.name}")
-    
+
     try:
+        cursor = conn.cursor()
+
+        # Check if project_id column already exists
+        cursor.execute("PRAGMA table_info(framework_epics)")
+        columns = [row[1] for row in cursor.fetchall()]
+        if "project_id" in columns:
+            print("ℹ️  project_id column already exists - skipping schema application")
+            return True
+
+        print(f"📋 Applying schema v6: {schema_path.name}")
+
         with open(schema_path, 'r', encoding='utf-8') as f:
             schema_sql = f.read()
-        
+
         # Execute schema in transaction
-        cursor = conn.cursor()
         cursor.executescript(schema_sql)
         conn.commit()
-        
+
         print(f"✅ Schema v6 applied successfully")
         return True
-        
+
     except Exception as e:
         print(f"❌ Error applying schema: {e}")
         conn.rollback()
@@ -270,34 +278,66 @@ def migrate_existing_epics(conn: sqlite3.Connection, project_id: int) -> bool:
         conn.rollback()
         return False
 
+def check_orphan_epics(conn: sqlite3.Connection) -> bool:
+    """Ensure there are no epics referencing non-existent projects."""
+
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        SELECT id, epic_key, project_id
+        FROM framework_epics
+        WHERE project_id IS NOT NULL
+          AND project_id NOT IN (SELECT id FROM framework_projects)
+        """
+    )
+    orphans = cursor.fetchall()
+    if orphans:
+        print("❌ Found orphaned epics:")
+        for oid, ekey, pid in orphans:
+            print(f"   • Epic {ekey} (ID {oid}) references missing project {pid}")
+        return False
+
+    print("✅ No orphaned epics found")
+    return True
+
+
 def add_foreign_key_constraint(conn: sqlite3.Connection) -> bool:
-    """Add foreign key constraint from epics to projects."""
-    
+    """Add foreign key constraint from epics to projects if missing."""
+
     print("🔗 Adding foreign key constraint: epics → projects")
-    
+
     try:
         cursor = conn.cursor()
-        
-        # Check if constraint already exists by trying to create it
-        # SQLite doesn't have ALTER TABLE ADD CONSTRAINT, so we need to check differently
         cursor.execute("PRAGMA foreign_key_list(framework_epics)")
         fks = cursor.fetchall()
-        
-        # Check if project_id FK already exists
         project_fk_exists = any(fk[2] == 'framework_projects' and fk[3] == 'project_id' for fk in fks)
-        
+
         if project_fk_exists:
             print("✅ Foreign key constraint already exists")
             return True
-        
-        # For SQLite, we need to recreate the table to add FK constraint
-        # This is complex, so we'll document it but not implement for now
-        print("ℹ️  Foreign key constraint will be enforced at application level")
-        print("ℹ️  SQLite FK constraint requires table recreation (deferred for safety)")
-        
+
+        # Recreate table with FK constraint
+        cursor.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='framework_epics'")
+        create_sql = cursor.fetchone()[0]
+        new_create_sql = create_sql.rstrip(')') + \
+            ",\n    FOREIGN KEY (project_id) REFERENCES framework_projects(id) ON DELETE CASCADE ON UPDATE NO ACTION)"
+
+        cursor.execute("PRAGMA foreign_keys=off")
+        cursor.execute("BEGIN TRANSACTION")
+        cursor.execute("ALTER TABLE framework_epics RENAME TO framework_epics_old")
+        cursor.execute(new_create_sql.replace("framework_epics", "framework_epics_new", 1))
+        cursor.execute("INSERT INTO framework_epics_new SELECT * FROM framework_epics_old")
+        cursor.execute("DROP TABLE framework_epics_old")
+        cursor.execute("ALTER TABLE framework_epics_new RENAME TO framework_epics")
+        cursor.execute("COMMIT")
+        cursor.execute("PRAGMA foreign_keys=on")
+
+        print("✅ Foreign key constraint added successfully")
         return True
-        
+
     except Exception as e:
+        cursor.execute("ROLLBACK")
+        cursor.execute("PRAGMA foreign_keys=on")
         print(f"❌ Error adding foreign key constraint: {e}")
         return False
 
@@ -465,17 +505,22 @@ def main():
             print("❌ Migration failed at epic migration")
             return False
         
-        # Step 5: Add foreign key constraint
+        # Step 5: Check for orphaned epics
+        if not check_orphan_epics(conn):
+            print("❌ Migration aborted due to orphaned epics")
+            return False
+
+        # Step 6: Add foreign key constraint
         if not add_foreign_key_constraint(conn):
             print("❌ Migration failed at constraint creation")
             return False
-        
-        # Step 6: Update project completion
+
+        # Step 7: Update project completion
         if not update_project_completion(conn):
             print("❌ Migration failed at completion calculation")
             return False
-        
-        # Step 7: Validate migration
+
+        # Step 8: Validate migration
         if not validate_migration(conn):
             print("❌ Migration validation failed")
             return False

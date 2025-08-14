@@ -14,6 +14,9 @@ import sys
 from pathlib import Path
 from datetime import datetime
 import json
+import sqlite3
+import tempfile
+import shutil
 
 # Add project root to path
 project_root = Path(__file__).parent
@@ -340,6 +343,89 @@ def test_data_integrity():
         print(f"❌ Data integrity test failed: {e}")
         return False
 
+
+def test_foreign_key_constraints():
+    """Validate foreign key enforcement for hierarchy tables."""
+    print("🛡️ Testing foreign key constraints...")
+
+    try:
+        config = load_config()
+
+        # Work on a temporary copy of the database to avoid altering production data
+        with tempfile.NamedTemporaryFile(suffix=".db") as tmp:
+            shutil.copy2(config.get_database_path(), tmp.name)
+            conn = sqlite3.connect(tmp.name)
+            conn.execute("PRAGMA foreign_keys = ON")
+            cur = conn.cursor()
+
+            # Invalid project_id for epic
+            try:
+                cur.execute(
+                    "INSERT INTO framework_epics (epic_key, name, description, project_id) VALUES (?, ?, ?, ?)",
+                    ("fk_test_epic", "FK Test Epic", "Should fail", 99999)
+                )
+                conn.commit()
+                print("   ❌ Epic insert with invalid project_id succeeded")
+                return False
+            except sqlite3.IntegrityError:
+                print("   ✅ Epic insert with invalid project_id failed")
+
+            # Invalid client_id for project
+            try:
+                cur.execute(
+                    "INSERT INTO framework_projects (client_id, project_key, name) VALUES (?, ?, ?)",
+                    (99999, "fk_test_project", "FK Test Project")
+                )
+                conn.commit()
+                print("   ❌ Project insert with invalid client_id succeeded")
+                return False
+            except sqlite3.IntegrityError:
+                print("   ✅ Project insert with invalid client_id failed")
+
+            # Invalid epic_id for task
+            try:
+                cur.execute(
+                    "INSERT INTO framework_tasks (task_key, epic_id, title, tdd_phase) VALUES (?, ?, ?, 'analysis')",
+                    ("fk_test_task", 99999, "FK Test Task")
+                )
+                conn.commit()
+                print("   ❌ Task insert with invalid epic_id succeeded")
+                return False
+            except sqlite3.IntegrityError:
+                print("   ✅ Task insert with invalid epic_id failed")
+
+            # Cascade delete: deleting project removes epics
+            cur.execute("INSERT INTO framework_clients (client_key, name) VALUES (?, ?)", ("fk_temp_client", "FK Temp Client"))
+            client_id = cur.lastrowid
+            cur.execute(
+                "INSERT INTO framework_projects (client_id, project_key, name) VALUES (?, ?, ?)",
+                (client_id, "fk_temp_project", "FK Temp Project")
+            )
+            project_id = cur.lastrowid
+            cur.execute(
+                "INSERT INTO framework_epics (epic_key, name, project_id) VALUES (?, ?, ?)",
+                ("fk_temp_epic", "FK Temp Epic", project_id)
+            )
+            conn.commit()
+
+            cur.execute("DELETE FROM framework_projects WHERE id = ?", (project_id,))
+            conn.commit()
+
+            cur.execute("SELECT id FROM framework_epics WHERE epic_key = 'fk_temp_epic'")
+            if cur.fetchone() is None:
+                print("   ✅ Cascade delete enforced (project → epics)")
+            else:
+                print("   ❌ Cascade delete failed")
+                return False
+
+            conn.close()
+
+        return True
+
+    except Exception as e:
+        print(f"❌ Foreign key constraint test failed: {e}")
+        return False
+
 def print_hierarchy_summary():
     """Print a summary of the current hierarchy."""
     print("📋 Current Hierarchy Summary")
@@ -439,16 +525,22 @@ def main():
         tests_passed += 1
     print()
     
-    # Test 6: Data integrity
+    # Test 6: Foreign key constraints
+    total_tests += 1
+    if test_foreign_key_constraints():
+        tests_passed += 1
+    print()
+
+    # Test 7: Data integrity
     total_tests += 1
     if test_data_integrity():
         tests_passed += 1
     print()
-    
+
     # Print hierarchy summary
     print_hierarchy_summary()
     print()
-    
+
     # Final results
     print("🎯 Test Results")
     print("=" * 60)

@@ -187,10 +187,10 @@ CREATE TABLE IF NOT EXISTS framework_projects (
 -- ==================================================================================
 
 -- Add project_id foreign key to framework_epics
-ALTER TABLE framework_epics ADD COLUMN project_id INTEGER;
-
--- Add foreign key constraint (will be enforced after data migration)
--- This will be added as a separate step after migrating existing data
+ALTER TABLE framework_epics ADD COLUMN project_id INTEGER
+    REFERENCES framework_projects(id)
+    ON DELETE CASCADE
+    ON UPDATE NO ACTION;
 
 -- ==================================================================================
 -- PHASE 1.4: PERFORMANCE INDEXES FOR HIERARCHICAL QUERIES
