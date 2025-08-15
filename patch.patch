@@ -1,453 +1,118 @@
  (cd "$(git rev-parse --show-toplevel)" && git apply --3way <<'EOF' 
-diff --git a/streamlit_extension/streamlit_app.py b/streamlit_extension/streamlit_app.py
-index 718954415f2a046756a44bb75b939558203f195e..51afcec0eadda4ba9ec519156380c0ed96b074da 100644
---- a/streamlit_extension/streamlit_app.py
-+++ b/streamlit_extension/streamlit_app.py
-@@ -235,173 +235,190 @@ def render_timer_and_current_task():
-                     for task in available_tasks:
-                         epic_name = task.get('epic_name', 'No Epic')
-                         task_display = f"{task['title']} ({epic_name})"
-                         task_options.append(task_display)
-                     
-                     selected = st.selectbox("Quick start:", task_options)
-                     
-                     if selected != "Select a task...":
-                         if st.button("▶️ Start Task"):
-                             # Find the selected task and update its status
-                             for task in available_tasks:
-                                 epic_name = task.get('epic_name', 'No Epic')
-                                 task_display = f"{task['title']} ({epic_name})"
-                                 if task_display == selected:
-                                     # Here you would update the task status in the database
-                                     st.success(f"Started: {task['title']}")
-                                     st.rerun()
-                                     break
-                 else:
-                     st.warning("📝 No available tasks found. Create tasks in the Kanban board to start tracking!")
-         except Exception as e:
-             st.error(f"❌ Error loading tasks: {e}")
-             st.info("Please check database connection or refresh the page.")
- 
- 
-+def format_epic_summary(epic: Dict[str, Any], max_length: int = 100) -> str:
-+    """Return a safe, truncated summary for epic display."""
-+    raw = epic.get("summary") or epic.get("description")
-+    if not raw:
-+        return "No description available"
-+    text = str(raw)
-+    return text[:max_length] + ("..." if len(text) > max_length else "")
-+
-+
- def render_enhanced_epic_cards():
-     """Render enhanced epic progress cards with visualizations."""
-     
-     st.markdown("### 🎯 Epic Progress")
-     
-     db_manager = st.session_state.db_manager
-     
-     # 🔍 DEBUG: Log database configuration
-     if st.session_state.get("show_debug_info", False):
-         with st.expander("🔧 Epic Progress Debug Info", expanded=False):
-             st.write("**Database Manager Config:**")
-             st.write(f"- Framework DB Path: {db_manager.framework_db_path}")
-             st.write(f"- Timer DB Path: {db_manager.timer_db_path}")
-             st.write(f"- Framework DB Exists: {db_manager.framework_db_path.exists()}")
-             st.write(f"- Timer DB Exists: {db_manager.timer_db_path.exists()}")
-     
-     try:
-         epics = db_manager.get_epics()
-         
-         if not epics:
-             st.info("📝 No epics found. Create your first epic to get started!")
-             return
-         
-         # Show top 6 active epics for better overview
-         active_epics = [e for e in epics if e.get("status") not in ["completed", "archived"]][:6]
-         
-         if not active_epics:
-             st.info("✅ All epics completed! Great work!")
-             return
-         
-         for epic in active_epics:
-+            print(f"DEBUG: Processing epic: {epic}")
-+            print(f"DEBUG: Epic keys: {epic.keys() if isinstance(epic, dict) else 'NOT A DICT'}")
-             epic_id = epic.get('id')
-+            print(f"DEBUG: Epic ID: {epic_id}, type: {type(epic_id)}")
-             epic_name = epic.get('name', 'Unknown')
--            
-+
-             try:
-                 with st.expander(f"**{epic_name}** - Epic {epic.get('epic_key', 'N/A')}", expanded=False):
-                     # Get progress with robust error handling
-                     progress = db_manager.get_epic_progress(epic_id)
-+                    print(f"DEBUG: Progress received: {progress}, type: {type(progress)}")
-                     
-                     # SAFEGUARD: Ensure progress structure is valid
-                     if not isinstance(progress, dict):
-                         progress = {
-                             "progress_percentage": 0,
-                             "total_tasks": 0,
-                             "completed_tasks": 0,
-                             "in_progress_tasks": 0,
-                             "points_earned": 0
-                         }
-                     
-                     # Ensure all required keys exist
-                     required_keys = ["progress_percentage", "total_tasks", "completed_tasks", "in_progress_tasks", "points_earned"]
-                     for key in required_keys:
-                         if key not in progress:
-                             progress[key] = 0
-                     
-                     # Safe progress percentage calculation
-                     progress_percentage = progress.get("progress_percentage", 0)
-                     if isinstance(progress_percentage, (int, float)):
-                         progress_pct = progress_percentage / 100
-                     else:
-                         progress_pct = 0
-                     
-                     col1, col2, col3, col4 = st.columns([2, 1, 1, 1])
--                    
-+
-                     with col1:
-                         # Epic description and progress
--                        summary = epic.get('summary', epic.get('description', 'No description available'))
--                        st.markdown(f"**Summary:** {summary[:100]}{'...' if len(summary) > 100 else ''}")
--                        
-+                        summary_text = format_epic_summary(epic)
-+                        st.markdown(f"**Summary:** {summary_text}")
-+
-                         # Progress bar with error handling
-                         try:
-                             st.progress(progress_pct)
--                            st.caption(f"Progress: {progress_pct*100:.1f}% • Status: {epic.get('status', 'Unknown').title()}")
-+                            status = (epic.get('status') or 'Unknown').title()
-+                            st.caption(f"Progress: {progress_pct*100:.1f}% • Status: {status}")
-                         except Exception as e:
-                             st.error(f"Progress display error: {e}")
-                     
-                     with col2:
-                         # Tasks breakdown
-                         try:
-                             total_tasks = progress.get("total_tasks", 0)
-                             completed_tasks = progress.get("completed_tasks", 0)
-                             in_progress_tasks = progress.get("in_progress_tasks", 0)
-                             
-                             st.metric(
-                                 label="Tasks Progress",
-                                 value=f"{completed_tasks}/{total_tasks}",
-                                 delta=f"{in_progress_tasks} in progress" if in_progress_tasks > 0 else "Ready to start"
-                             )
-                         except Exception as e:
-                             st.error(f"Tasks breakdown error: {e}")
-                     
-                     with col3:
-                         # Duration and timing
-                         try:
-                             duration = epic.get('duration_description', 'Not set')
-                             st.metric(
-                                 label="Duration",
-                                 value=duration if duration else "TBD",
-                                 delta="Estimated"
-                             )
-                         except Exception as e:
-                             st.error(f"Duration display error: {e}")
-                     
-                     with col4:
-                         # Epic stats and actions
-                         try:
-                             points = progress.get("points_earned", 0)
-                             
-                             st.metric(
-                                 label="Points",
-                                 value=points,
-                                 delta="Earned!" if points > 0 else "Pending"
-                             )
-                             
-                             # Quick action button
-                             if st.button(f"View Epic {epic.get('epic_key', 'N/A')}", key=f"view_epic_{epic['id']}"):
-                                 st.info(f"Navigate to epic {epic['name']} details")
-                         except Exception as e:
-                             st.error(f"Epic stats error: {e}")
-                         
-             except Exception as e:
-+                print(f"ERROR: Exception in get_epic_progress: {e}")
-+                print(f"ERROR: Epic data: {epic}")
-+                print(f"ERROR: Epic ID: {epic_id}")
-                 st.error(f"❌ Error loading epic {epic_name}: {e}")
--                
-+
-                 # Show detailed error info in debug mode
-                 if st.session_state.get("show_debug_info", False):
-                     import traceback
-                     error_details = traceback.format_exc()
-                     with st.expander("🔧 Error Details", expanded=False):
-                         st.code(error_details)
-                 
-     except Exception as e:
-         st.error(f"❌ Error loading epics: {e}")
-         
-         # Show detailed error info in debug mode
-         if st.session_state.get("show_debug_info", False):
-             import traceback
-             error_details = traceback.format_exc()
-             with st.expander("🔧 Critical Error Details", expanded=False):
-                 st.code(error_details)
-         
-         st.info("Please check database connection or refresh the page.")
- 
- 
- def render_notifications_panel():
-     """Render notifications panel with alerts and reminders."""
-     
-     st.markdown("### 🔔 Notifications & Alerts")
-     
-diff --git a/streamlit_extension/utils/database.py b/streamlit_extension/utils/database.py
-index b665ac7c2247fc667aa9af0f59abdf5d57764e8f..cf73bea98ec76a862d28dded97607c7e089d7819 100644
---- a/streamlit_extension/utils/database.py
-+++ b/streamlit_extension/utils/database.py
-@@ -414,119 +414,141 @@ class DatabaseManager:
-                     cursor = conn.cursor()
-                     cursor.execute("""
-                         INSERT INTO timer_sessions (
-                             task_reference, user_identifier, started_at, ended_at,
-                             planned_duration_minutes, actual_duration_minutes,
-                             focus_rating, interruptions_count, notes, created_at
-                         ) VALUES (?, 'user1', CURRENT_TIMESTAMP, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-                     """, [
-                         str(task_id) if task_id else None,
-                         ended_at,
-                         duration_minutes,
-                         actual_duration_minutes or duration_minutes,
-                         focus_rating,
-                         interruptions,
-                         notes
-                     ])
-                     conn.commit()
-                 
-                 return True
-                 
-         except Exception as e:
-             print(f"Error creating timer session: {e}")
-             return False
-     
-     def get_epic_progress(self, epic_id: int) -> Dict[str, Any]:
--        """Get detailed progress for an epic."""
-+        """Get detailed progress for an epic with extensive debugging."""
-+
-+        # Early validation
-+        if epic_id is None:
-+            print("DEBUG: get_epic_progress called with epic_id=None")
-+            return self._get_default_progress()
-+
-+        print(f"DEBUG: get_epic_progress called with epic_id={epic_id}, type={type(epic_id)}")
-+
-         try:
-             with self.get_connection("framework") as conn:
-                 if SQLALCHEMY_AVAILABLE:
-                     # Get epic info
--                    epic_result = conn.execute(text("""
--                        SELECT id, epic_key, name, status, points_earned
--                        FROM framework_epics
--                        WHERE id = :epic_id AND deleted_at IS NULL
--                    """), {"epic_id": epic_id})
-+                    epic_query = (
-+                        "SELECT id, epic_key, name, status, points_earned "
-+                        "FROM framework_epics "
-+                        "WHERE id = :epic_id AND deleted_at IS NULL"
-+                    )
-+                    print(f"DEBUG: Executing epic query: {epic_query}")
-+                    epic_result = conn.execute(text(epic_query), {"epic_id": epic_id})
-                     epic_row = epic_result.fetchone()
-+                    print(f"DEBUG: Epic row: {epic_row}, type={type(epic_row)}")
-                     if not epic_row:
-                         return self._get_default_progress()
-                     epic = dict(epic_row._mapping)
--                    
-+
-                     # Get task counts
--                    task_result = conn.execute(text("""
--                        SELECT 
--                            COUNT(*) as total_tasks,
--                            SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed_tasks,
--                            SUM(CASE WHEN status = 'in_progress' THEN 1 ELSE 0 END) as in_progress_tasks
--                        FROM framework_tasks
--                        WHERE epic_id = :epic_id AND deleted_at IS NULL
--                    """), {"epic_id": epic_id})
-+                    task_query = (
-+                        "SELECT "
-+                        "    COUNT(*) as total_tasks, "
-+                        "    SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed_tasks, "
-+                        "    SUM(CASE WHEN status = 'in_progress' THEN 1 ELSE 0 END) as in_progress_tasks "
-+                        "FROM framework_tasks "
-+                        "WHERE epic_id = :epic_id AND deleted_at IS NULL"
-+                    )
-+                    print(f"DEBUG: Executing task query: {task_query}")
-+                    task_result = conn.execute(text(task_query), {"epic_id": epic_id})
-                     task_row = task_result.fetchone()
-+                    print(f"DEBUG: Task row: {task_row}, type={type(task_row)}")
-                     if not task_row:
-                         tasks = {"total_tasks": 0, "completed_tasks": 0, "in_progress_tasks": 0}
-                     else:
-                         tasks = {k: (v or 0) for k, v in dict(task_row._mapping).items()}
--                    
-+
-                 else:
-                     cursor = conn.cursor()
--                    
-+
-                     # Get epic info
--                    cursor.execute("""
--                        SELECT id, epic_key, name, status, points_earned
--                        FROM framework_epics WHERE id = ? AND deleted_at IS NULL
--                    """, [epic_id])
-+                    epic_query = (
-+                        "SELECT id, epic_key, name, status, points_earned "
-+                        "FROM framework_epics WHERE id = ? AND deleted_at IS NULL"
-+                    )
-+                    print(f"DEBUG: Executing epic query: {epic_query}")
-+                    cursor.execute(epic_query, [epic_id])
-                     epic_row = cursor.fetchone()
-+                    print(f"DEBUG: Epic row: {epic_row}, type={type(epic_row)}")
-                     if not epic_row:
-                         return self._get_default_progress()
-                     epic = dict(epic_row)
--                    
-+
-                     # Get task counts
--                    cursor.execute("""
--                        SELECT 
--                            COUNT(*) as total_tasks,
--                            SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed_tasks,
--                            SUM(CASE WHEN status = 'in_progress' THEN 1 ELSE 0 END) as in_progress_tasks
--                        FROM framework_tasks WHERE epic_id = ? AND deleted_at IS NULL
--                    """, [epic_id])
-+                    task_query = (
-+                        "SELECT "
-+                        "    COUNT(*) as total_tasks, "
-+                        "    SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed_tasks, "
-+                        "    SUM(CASE WHEN status = 'in_progress' THEN 1 ELSE 0 END) as in_progress_tasks "
-+                        "FROM framework_tasks WHERE epic_id = ? AND deleted_at IS NULL"
-+                    )
-+                    print(f"DEBUG: Executing task query: {task_query}")
-+                    cursor.execute(task_query, [epic_id])
-                     task_row = cursor.fetchone()
-+                    print(f"DEBUG: Task row: {task_row}, type={type(task_row)}")
-                     if not task_row:
-                         tasks = {"total_tasks": 0, "completed_tasks": 0, "in_progress_tasks": 0}
-                     else:
-                         tasks = {k: (v or 0) for k, v in dict(task_row).items()}
--                
-+
-                 # Calculate progress
-                 total = tasks.get("total_tasks") or 0
-                 completed = tasks.get("completed_tasks") or 0
-                 progress_pct = (completed / total * 100) if total > 0 else 0
--                
--                return {
-+
-+                progress_dict = {
-                     **epic,
-                     **tasks,
-                     "progress_percentage": round(progress_pct, 1),
--                    "points_earned": epic.get("points_earned") or 0
-+                    "points_earned": epic.get("points_earned") or 0,
-                 }
--                
-+                print(f"DEBUG: Returning: {progress_dict}")
-+                return progress_dict
-+
-         except Exception as e:
-             print(f"Error getting epic progress: {e}")
-             return self._get_default_progress()
-     
-     def _get_default_progress(self) -> Dict[str, Any]:
-         """Return default progress structure when epic not found."""
-         return {
-             "id": 0,
-             "epic_key": "N/A",
-             "name": "Unknown",
-             "status": "unknown",
-             "points_earned": 0,
-             "total_tasks": 0,
-             "completed_tasks": 0,
-             "in_progress_tasks": 0,
-             "progress_percentage": 0.0
-         }
-     
-     def check_database_health(self) -> Dict[str, Any]:
-         """Check database connectivity and basic health."""
-         health = {
-             "framework_db_exists": self.framework_db_path.exists(),
-             "timer_db_exists": self.timer_db_path.exists(),
-             "framework_db_connected": False,
-             "timer_db_connected": False,
-diff --git a/tests/test_epic_progress_defaults.py b/tests/test_epic_progress_defaults.py
-index 45907290d1d08c4717115f5ac82b35fece63a39a..78d977f6f9cfe3b51ff600ec0f48b5b3f8d26454 100644
---- a/tests/test_epic_progress_defaults.py
-+++ b/tests/test_epic_progress_defaults.py
-@@ -58,25 +58,36 @@ def test_missing_epic_returns_default_progress(tmp_path):
- 
-     manager = DatabaseManager(framework_db_path=str(db_file))
-     progress = manager.get_epic_progress(999)
- 
-     assert progress["name"] == "Unknown"
-     assert progress["progress_percentage"] == 0.0
- 
- 
- def test_deleted_epic_returns_default_progress(tmp_path):
-     db_file = tmp_path / "framework.db"
-     setup_framework_db(db_file)
- 
-     conn = sqlite3.connect(db_file)
-     cur = conn.cursor()
-     cur.execute("UPDATE framework_epics SET deleted_at = '2024-01-01' WHERE id = 1")
-     conn.commit()
-     conn.close()
- 
-     manager = DatabaseManager(framework_db_path=str(db_file))
-     progress = manager.get_epic_progress(1)
- 
-     assert progress["name"] == "Unknown"
-     assert progress["total_tasks"] == 0
-     assert progress["progress_percentage"] == 0.0
- 
-+
-+def test_none_epic_id_returns_default_progress(tmp_path):
-+    db_file = tmp_path / "framework.db"
-+    setup_framework_db(db_file)
-+
-+    manager = DatabaseManager(framework_db_path=str(db_file))
-+    progress = manager.get_epic_progress(None)
-+
-+    assert progress["id"] == 0
-+    assert progress["progress_percentage"] == 0.0
-+
-diff --git a/tests/test_epic_summary_formatting.py b/tests/test_epic_summary_formatting.py
+diff --git a/docs/ENTERPRISE_UI_GUIDELINES.md b/docs/ENTERPRISE_UI_GUIDELINES.md
 new file mode 100644
-index 0000000000000000000000000000000000000000..b2aa1a7d5f290937502b36ae5d4c8ba6bee6ee0b
+index 0000000000000000000000000000000000000000..b3702fb09a4ef6c293b9ef0968b760158503a3b6
 --- /dev/null
-+++ b/tests/test_epic_summary_formatting.py
-@@ -0,0 +1,20 @@
-+import sys
-+from pathlib import Path
++++ b/docs/ENTERPRISE_UI_GUIDELINES.md
+@@ -0,0 +1,108 @@
++# Guia de UI/UX para Aplicação Streamlit Enterprise
 +
-+sys.path.append(str(Path(__file__).resolve().parents[1]))
++Este documento serve como fonte de verdade e prompt para agentes de IA implementarem um redesign enterprise-grade em um aplicativo Streamlit já funcional. As instruções estão organizadas em fases sequenciais, cada uma com etapas e tarefas checkáveis para facilitar o acompanhamento.
 +
-+from streamlit_extension.streamlit_app import format_epic_summary
++## Fase 1 – Fundamentos Visuais
 +
++### 1.1 Paleta e Tema
++- Definir **primaryColor**, **backgroundColor**, **secondaryBackgroundColor** e **textColor** no `~/.streamlit/config.toml`.
++- Garantir contraste mínimo WCAG AA para textos e elementos interativos.
++- Disponibilizar tema claro e escuro com mesma paleta base.
 +
-+def test_format_epic_summary_handles_none():
-+    epic = {"summary": None, "description": None}
-+    assert format_epic_summary(epic) == "No description available"
++### 1.2 Tipografia
++- Utilizar `st.title`, `st.header`, `st.subheader` e `st.caption` para manter hierarquia consistente.
++- Limitar o app a 2–3 tamanhos de fonte e à mesma família tipográfica.
 +
++### 1.3 Grid e Espaçamento
++- Ativar `st.set_page_config(layout="wide")`.
++- Organizar elementos em colunas com `st.columns` respeitando múltiplos de 4 px para margens e paddings.
 +
-+def test_format_epic_summary_truncates_long_text():
-+    text = "a" * 150
-+    epic = {"summary": text}
-+    result = format_epic_summary(epic)
-+    assert result.startswith("a" * 100)
-+    assert result.endswith("...")
-+    assert len(result) == 103
++### 1.4 Iconografia
++- Adotar uma única biblioteca ou estilo de ícones/emoji.
++- Incluir rótulos textuais ou `alt` em todas as instâncias para acessibilidade.
++
++## Fase 2 – Componentização
++
++### 2.1 Cards de KPI
++- Criar componente reutilizável exibindo valor, rótulo e ação rápida opcional.
++- Limitar a 4 cards por linha.
++
++### 2.2 Tabelas e Listas
++- Exibir dados com `st.dataframe` ou `st.data_editor`.
++- Oferecer filtros e busca acima da tabela.
++- Utilizar formatação condicional sutil para alertas (ex.: atraso em vermelho).
++
++### 2.3 Formulários
++- Agrupar campos com `st.form` e validar entrada com `st.error` inline.
++- Formular fluxo natural: do simples ao complexo, sem múltiplas colunas.
++- Para formulários longos, dividir em etapas ou abas.
++
++### 2.4 Modais e Diálogos
++- Usar `@st.dialog` para confirmações ou formulários curtos.
++- Sempre exibir botões de ação claros (ex.: “Confirmar”/“Cancelar”).
++
++### 2.5 Navegação e Breadcrumbs
++- Utilizar `st.sidebar` como menu principal e destacar página ativa.
++- Construir breadcrumbs via `st.markdown` para exibir a hierarquia atual.
++
++### 2.6 Ações Rápidas
++- Agrupar até quatro botões por linha com ícones e rótulos textuais.
++- Posicionar em local previsível (topo da página ou seção dedicada).
++
++## Fase 3 – Layouts e Templates
++
++### 3.1 Dashboard
++- Exibir KPIs em cards no topo seguido de gráficos e listas resumidas.
++- Priorizar “tempo para insight” mínimo com seções claras e espaçamento adequado.
++
++### 3.2 Páginas CRUD
++- **Listagem:** tabela ou cards com filtros e botão “Novo [Entidade]”.
++- **Detalhe:** campos chave em leitura, breadcrumbs e ações “Editar/Excluir”.
++- **Edição/Criação:** reutilizar formulários com validação, retorno com `st.success`.
++
++### 3.3 Navegação Hierárquica
++- Permitir fluxo Cliente → Projeto → Épico → Tarefa via páginas aninhadas ou selects encadeados.
++- Indicar contexto atual em títulos e breadcrumbs.
++
++### 3.4 Analytics
++- Fornecer filtros de alto nível seguidos por 3–5 gráficos pertinentes.
++- Acompanhar cada gráfico com descrição breve ou destaque textual.
++
++## Fase 4 – Interação e Feedback
++
++### 4.1 Estados do Sistema
++- Usar `st.spinner` para cargas longas e mensagens `st.info`, `st.success`, `st.error` para feedback imediato.
++- Exibir placeholders informativos quando não houver dados.
++
++### 4.2 Desempenho e Transições
++- Aplicar `@st.cache_data` e `@st.cache_resource` para evitar recomputações.
++- Minimizar rerenders completos utilizando `st.session_state` e lógica condicional.
++
++### 4.3 Acessibilidade
++- Garantir navegação por teclado em todos os elementos interativos.
++- Fornecer descrições textuais para imagens e gráficos (`caption` ou `alt`).
++- Manter contraste e estrutura semântica adequados para leitores de tela.
++
++## Checklist Resumido
++
++| Fase | Tarefa | Status |
++|------|--------|--------|
++| 1.1 | Paleta definida no tema e contraste validado | ☐ |
++| 1.2 | Tipografia hierárquica configurada | ☐ |
++| 1.3 | Grid de 4 px aplicado em todas as páginas | ☐ |
++| 1.4 | Iconografia consistente documentada | ☐ |
++| 2.1 | Card de KPI reutilizável criado | ☐ |
++| 2.2 | Tabelas com filtros implementadas | ☐ |
++| 2.3 | Formulários com validação inline | ☐ |
++| 2.4 | Diálogos contextuais adicionados | ☐ |
++| 2.5 | Navegação e breadcrumbs padronizados | ☐ |
++| 2.6 | Seção de ações rápidas | ☐ |
++| 3.1 | Dashboard com KPIs e gráficos | ☐ |
++| 3.2 | Páginas CRUD padronizadas | ☐ |
++| 3.3 | Navegação hierárquica funcional | ☐ |
++| 3.4 | Página de analytics com insights | ☐ |
++| 4.1 | Feedback visual para todos os estados | ☐ |
++| 4.2 | Cache e transições otimizadas | ☐ |
++| 4.3 | Acessibilidade verificada | ☐ |
++
++Preencha o status de cada item conforme for implementando. O cumprimento integral deste checklist aproxima o aplicativo dos padrões enterprise desejados, com foco em produtividade, apresentação executiva e acessibilidade.
  
 EOF
 )

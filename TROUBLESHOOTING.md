@@ -20,6 +20,7 @@
 - [🎯 Type Hints and Constants Issues](#-type-hints-and-constants-issues)
 - [🏗️ DRY Components Issues](#-dry-components-issues)
 - [🔒 Security and Validation Issues](#-security-and-validation-issues)
+- [🏗️ Service Layer Issues](#-service-layer-issues)
 - [📞 Getting Additional Help](#-getting-additional-help)
 
 ## 🚨 **Common Setup Issues**
@@ -977,6 +978,289 @@ print('Email pattern:', ValidationRules.EMAIL_PATTERN)
 # 1. Import validation functions correctly
 # 2. Apply business rules consistently  
 # 3. Use ValidationRules constants for limits
+```
+
+## 🏗️ **Service Layer Issues**
+
+### **❌ Service Import Errors**
+
+**Error:**
+```
+ImportError: No module named 'streamlit_extension.services'
+```
+
+**Solution:**
+```bash
+# Check if services module exists
+ls -la streamlit_extension/services/
+
+# Verify service container setup
+python -c "
+from streamlit_extension.services import ServiceContainer
+container = ServiceContainer()
+print('Container initialized:', container is not None)
+"
+
+# Test individual service imports
+python -c "
+from streamlit_extension.services import ClientService, ProjectService
+print('Services imported successfully')
+"
+```
+
+### **❌ Service Container Registration Fails**
+
+**Error:**
+```
+ServiceError: Service 'client_service' not registered
+```
+
+**Solution:**
+```bash
+# Check service container initialization
+python -c "
+from streamlit_extension.services.service_container import ServiceContainer
+container = ServiceContainer()
+health = container.health_check()
+print('Container health:', health)
+"
+
+# Verify all services are registered
+python -c "
+from streamlit_extension.services import ServiceContainer
+container = ServiceContainer()
+services = ['client_service', 'project_service', 'epic_service', 'task_service', 'analytics_service', 'timer_service']
+for service in services:
+    try:
+        svc = getattr(container, f'get_{service}')()
+        print(f'{service}: OK')
+    except Exception as e:
+        print(f'{service}: ERROR - {e}')
+"
+```
+
+### **❌ ServiceResult Pattern Errors**
+
+**Error:**
+```
+AttributeError: 'ServiceResult' object has no attribute 'is_success'
+```
+
+**Solution:**
+```bash
+# Check ServiceResult usage pattern
+python -c "
+from streamlit_extension.services.base import ServiceResult
+result = ServiceResult.success('test')
+print('Success result:', result.success, result.data)
+
+error_result = ServiceResult.error('Test error')
+print('Error result:', error_result.success, error_result.errors)
+"
+
+# Use proper ServiceResult checking:
+# if result.success:
+#     data = result.data
+# else:
+#     errors = result.errors
+```
+
+### **❌ Repository Transaction Errors**
+
+**Error:**
+```
+sqlite3.OperationalError: database is locked
+```
+
+**Solution:**
+```bash
+# Check database connection pool
+python -c "
+from streamlit_extension.services.base import BaseRepository
+from streamlit_extension.utils.database import DatabaseManager
+
+db_manager = DatabaseManager()
+repo = BaseRepository(db_manager)
+print('Repository initialized:', repo is not None)
+"
+
+# Test transaction handling
+python -c "
+from streamlit_extension.services import ServiceContainer
+container = ServiceContainer()
+client_service = container.get_client_service()
+
+# Test with proper transaction context
+try:
+    result = client_service.get_all_clients()
+    print('Transaction test:', result.success)
+except Exception as e:
+    print('Transaction error:', e)
+"
+```
+
+### **❌ Business Rule Validation Fails**
+
+**Error:**
+```
+ValidationError: Email already exists
+```
+
+**Solution:**
+```bash
+# Check business rule validation
+python -c "
+from streamlit_extension.services import ServiceContainer
+container = ServiceContainer()
+client_service = container.get_client_service()
+
+# Test validation rules
+client_data = {
+    'name': 'Test Client',
+    'email': 'test@example.com',
+    'phone': '+1234567890'
+}
+
+result = client_service.validate_client_data(client_data)
+print('Validation result:', result.success)
+if not result.success:
+    print('Validation errors:', result.errors)
+"
+
+# Business rules to check:
+# 1. Email uniqueness (clients)
+# 2. Project name uniqueness per client
+# 3. Task dependencies (no cycles)
+# 4. Date consistency (start <= end)
+# 5. Budget validation (positive values)
+```
+
+### **❌ TDD Workflow Integration Issues**
+
+**Error:**
+```
+TypeError: advance_tdd_phase() missing required argument 'task_id'
+```
+
+**Solution:**
+```bash
+# Test TDD workflow integration
+python -c "
+from streamlit_extension.services import ServiceContainer
+container = ServiceContainer()
+task_service = container.get_task_service()
+
+# Check TDD phase management
+task_id = 1  # Replace with actual task ID
+result = task_service.advance_tdd_phase(task_id)
+print('TDD phase advancement:', result.success)
+
+if result.success:
+    print('New phase:', result.data)
+else:
+    print('TDD errors:', result.errors)
+"
+
+# TDD Phase progression:
+# RED -> GREEN -> REFACTOR -> RED (cycle)
+# Ensure task exists and phase is valid
+```
+
+### **❌ Analytics Service Calculation Errors**
+
+**Error:**
+```
+ZeroDivisionError: division by zero in productivity calculation
+```
+
+**Solution:**
+```bash
+# Test analytics calculations with safe defaults
+python -c "
+from streamlit_extension.services import ServiceContainer
+container = ServiceContainer()
+analytics_service = container.get_analytics_service()
+
+# Test dashboard metrics
+try:
+    metrics = analytics_service.get_dashboard_metrics()
+    print('Dashboard metrics:', metrics.success)
+    if metrics.success:
+        print('Metrics data keys:', list(metrics.data.keys()))
+except Exception as e:
+    print('Analytics error:', e)
+"
+
+# Analytics calculations use safe defaults:
+# - Zero division protection
+# - Minimum data requirements
+# - Graceful degradation for empty datasets
+```
+
+### **❌ Timer Service Session Errors**
+
+**Error:**
+```
+TimerError: Invalid session type 'custom_focus'
+```
+
+**Solution:**
+```bash
+# Check valid session types
+python -c "
+from streamlit_extension.services import ServiceContainer
+from streamlit_extension.config.constants import SessionType
+
+container = ServiceContainer()
+timer_service = container.get_timer_service()
+
+# Check available session types
+print('Session types:', [t.value for t in SessionType])
+
+# Valid types: focus, break, deep_work, planning, review
+session_data = {
+    'session_type': SessionType.FOCUS.value,
+    'duration_minutes': 25,
+    'task_id': 1
+}
+
+result = timer_service.start_session(session_data)
+print('Session start:', result.success)
+"
+```
+
+### **❌ Service Health Check Failures**
+
+**Error:**
+```
+HealthCheckError: Service dependencies not available
+```
+
+**Solution:**
+```bash
+# Run comprehensive service health check
+python -c "
+from streamlit_extension.services import ServiceContainer
+
+container = ServiceContainer()
+health = container.health_check()
+
+print('=== Service Health Check ===')
+for service, status in health.items():
+    status_icon = '✅' if status['healthy'] else '❌'
+    print(f'{status_icon} {service}: {status.get('message', 'OK')}')
+
+# Check database connectivity
+print('\n=== Database Health ===')
+db_health = container.get_client_service().repository.health_check()
+print(f'Database: {'✅ Connected' if db_health else '❌ Connection failed'}')
+"
+
+# Health check verifies:
+# 1. Database connectivity
+# 2. Service initialization
+# 3. Configuration validation
+# 4. Dependency availability
 ```
 
 ## 📞 **Getting Additional Help**

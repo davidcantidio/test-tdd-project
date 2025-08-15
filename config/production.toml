@@ -1,0 +1,89 @@
+# 🚀 Production Environment Configuration
+# TDD Framework - Production Settings (SECURE)
+
+[app]
+name = "TDD Framework"
+environment = "production"
+debug = false
+version = "1.0.0"
+host = "0.0.0.0"
+port = 8501
+
+[database]
+# Production database paths (set via environment variables)
+framework_db_path = "/app/data/framework.db"
+timer_db_path = "/app/data/task_timer.db"
+connection_timeout = 20
+pool_size = 10  # Higher pool for production load
+max_overflow = 20
+
+# Production database optimizations
+enable_wal_mode = true
+cache_size = -4000  # 4MB cache for production
+temp_store = "memory"
+
+[security]
+require_auth = true  # MANDATORY authentication in production
+csrf_token_expiry = 1800  # 30 minutes (stricter)
+session_timeout_minutes = 120  # 2 hours (shorter for security)
+cookie_name = "tdd_framework_session"
+
+# Maximum security for production
+enable_rate_limiting = true
+enable_dos_protection = true
+enable_log_sanitization = true
+log_level = "WARNING"  # Only warnings and errors
+
+[performance]
+enable_database_cache = true
+cache_ttl_seconds = 600  # 10 minutes (longer for production)
+enable_redis = true  # Redis recommended for production
+redis_url = ""  # Set via REDIS_URL environment variable
+
+# Pagination settings optimized for production
+default_page_size = 50
+max_page_size = 1000
+
+# Streamlit optimization
+enable_streamlit_cache = true
+
+[monitoring]
+enable_health_check = true  # MANDATORY for production
+health_check_port = 8080
+enable_metrics = true  # Full metrics collection
+metrics_port = 9090
+
+# Production logging with full observability
+log_format = "json"
+enable_correlation_ids = true
+log_file_path = "/app/logs/tdd_framework.log"
+
+[google_oauth]
+# SECURITY: These MUST be set via environment variables
+# NEVER store actual secrets in config files
+client_id = ""  # MUST be set via GOOGLE_CLIENT_ID
+client_secret = ""  # MUST be set via GOOGLE_CLIENT_SECRET
+redirect_uri = "https://app.tdd-framework.com"
+scopes = [
+    "https://www.googleapis.com/auth/userinfo.email",
+    "https://www.googleapis.com/auth/userinfo.profile"
+]
+
+# Production-specific settings
+[security.advanced]
+# Additional security headers
+force_https = true
+hsts_max_age = 31536000  # 1 year
+content_security_policy = "default-src 'self'"
+
+[performance.caching]
+# Advanced caching for production
+enable_cdn = true
+static_cache_duration = 86400  # 24 hours
+api_cache_duration = 300  # 5 minutes
+
+[monitoring.alerting]
+# Production alerting (when implemented)
+enable_alerts = true
+error_threshold = 10  # Alert after 10 errors
+response_time_threshold = 2000  # Alert if response > 2s

@@ -29,11 +29,17 @@ except ImportError:
 try:
     from streamlit_extension.utils.database import DatabaseManager
     from streamlit_extension.utils.validators import validate_project_data, validate_project_key_uniqueness
+    from streamlit_extension.utils.auth import require_authentication
+    from streamlit_extension.utils.security import (
+        create_safe_project, sanitize_display, validate_form, check_rate_limit,
+        security_manager
+    )
     from streamlit_extension.config import load_config
     DATABASE_UTILS_AVAILABLE = True
 except ImportError:
     DATABASE_UTILS_AVAILABLE = False
     DatabaseManager = validate_project_data = load_config = None
+    create_safe_project = sanitize_display = validate_form = None
 
 
 def render_project_card(project: Dict[str, Any], db_manager: DatabaseManager, clients_map: Dict[int, str]):
@@ -74,7 +80,8 @@ def render_project_card(project: Dict[str, Any], db_manager: DatabaseManager, cl
         
         with col1:
             if project.get('description'):
-                st.markdown(f"**Description:** {project['description']}")
+                safe_description = sanitize_display(project['description']) if sanitize_display else project['description']
+                st.markdown(f"**Description:** {safe_description}")
             
             # Project info
             if project.get('project_type'):
@@ -136,6 +143,10 @@ def render_edit_project_modal(project: Dict[str, Any], db_manager: DatabaseManag
     with st.modal(f"Edit Project: {project['name']}", width="large"):
         with st.form(f"edit_project_form_{project['id']}"):
             st.markdown("### 📝 Edit Project Information")
+            
+            # Generate CSRF token for form protection
+            csrf_form_id = f"edit_project_form_{project['id']}"
+            csrf_field = security_manager.get_csrf_form_field(csrf_form_id) if security_manager else None
             
             col1, col2 = st.columns(2)
             
@@ -209,8 +220,23 @@ def render_edit_project_modal(project: Dict[str, Any], db_manager: DatabaseManag
             
             with col1:
                 if st.form_submit_button("💾 Update Project", use_container_width=True):
-                    # Validate data
-                    project_data = {
+                    # CSRF Protection
+                    if csrf_field and security_manager:
+                        csrf_valid, csrf_error = security_manager.require_csrf_protection(
+                            csrf_form_id, csrf_field.get("token_value")
+                        )
+                        if not csrf_valid:
+                            st.error(f"🔒 Security Error: {csrf_error}")
+                            return
+                    
+                    # Check rate limit for form submission
+                    rate_allowed, rate_error = check_rate_limit("form_submit") if check_rate_limit else (True, None)
+                    if not rate_allowed:
+                        st.error(f"🚦 {rate_error}")
+                        return
+                    
+                    # Create raw data
+                    raw_data = {
                         'client_id': selected_client_id,
                         'project_key': project_key,
                         'name': name,
@@ -227,6 +253,17 @@ def render_edit_project_modal(project: Dict[str, Any], db_manager: DatabaseManag
                         'completion_percentage': completion_percentage
                     }
                     
+                    # Security validation
+                    if validate_form:
+                        security_valid, security_errors = validate_form(raw_data)
+                        if not security_valid:
+                            for error in security_errors:
+                                st.error(f"🔒 Security: {error}")
+                            return
+                    
+                    # Sanitize data for security
+                    project_data = create_safe_project(raw_data) if create_safe_project else raw_data
+                    
                     is_valid, errors = validate_project_data(project_data)
                     
                     if is_valid:
@@ -236,6 +273,12 @@ def render_edit_project_modal(project: Dict[str, Any], db_manager: DatabaseManag
                         if not validate_project_key_uniqueness(project_key, selected_client_id, existing_projects, project['id']):
                             st.error("❌ Project key already exists for this client")
                         else:
+                            # Check rate limit for database write
+                            db_rate_allowed, db_rate_error = check_rate_limit("db_write") if check_rate_limit else (True, None)
+                            if not db_rate_allowed:
+                                st.error(f"🚦 Database {db_rate_error}")
+                                return
+                            
                             # Update project
                             success = db_manager.update_project(project['id'], **project_data)
                             if success:
@@ -300,6 +343,10 @@ def render_create_project_form(db_manager: DatabaseManager, clients_map: Dict[in
         with st.form("create_project_form"):
             st.markdown("### 📝 New Project Information")
             
+            # Generate CSRF token for form protection
+            csrf_form_id = "create_project_form"
+            csrf_field = security_manager.get_csrf_form_field(csrf_form_id) if security_manager else None
+            
             col1, col2 = st.columns(2)
             
             with col1:
@@ -348,8 +395,23 @@ def render_create_project_form(db_manager: DatabaseManager, clients_map: Dict[in
                 )
             
             if st.form_submit_button("🚀 Create Project", use_container_width=True):
-                # Validate data
-                project_data = {
+                # CSRF Protection
+                if csrf_field and security_manager:
+                    csrf_valid, csrf_error = security_manager.require_csrf_protection(
+                        csrf_form_id, csrf_field.get("token_value")
+                    )
+                    if not csrf_valid:
+                        st.error(f"🔒 Security Error: {csrf_error}")
+                        return
+                
+                # Check rate limit for form submission
+                rate_allowed, rate_error = check_rate_limit("form_submit") if check_rate_limit else (True, None)
+                if not rate_allowed:
+                    st.error(f"🚦 {rate_error}")
+                    return
+                
+                # Create raw data
+                raw_data = {
                     'client_id': selected_client_id,
                     'project_key': project_key,
                     'name': name,
@@ -366,6 +428,17 @@ def render_create_project_form(db_manager: DatabaseManager, clients_map: Dict[in
                     'completion_percentage': 0.0
                 }
                 
+                # Security validation
+                if validate_form:
+                    security_valid, security_errors = validate_form(raw_data)
+                    if not security_valid:
+                        for error in security_errors:
+                            st.error(f"🔒 Security: {error}")
+                        return
+                
+                # Sanitize data for security
+                project_data = create_safe_project(raw_data) if create_safe_project else raw_data
+                
                 is_valid, errors = validate_project_data(project_data)
                 
                 if is_valid:
@@ -375,6 +448,12 @@ def render_create_project_form(db_manager: DatabaseManager, clients_map: Dict[in
                     if not validate_project_key_uniqueness(project_key, selected_client_id, existing_projects):
                         st.error("❌ Project key already exists for this client")
                     else:
+                        # Check rate limit for database write
+                        db_rate_allowed, db_rate_error = check_rate_limit("db_write") if check_rate_limit else (True, None)
+                        if not db_rate_allowed:
+                            st.error(f"🚦 Database {db_rate_error}")
+                            return
+                        
                         # Create project
                         project_id = db_manager.create_project(
                             client_id=selected_client_id,
@@ -407,6 +486,7 @@ def render_create_project_form(db_manager: DatabaseManager, clients_map: Dict[in
                         st.error(f"❌ {error}")
 
 
+@require_authentication
 def render_projects_page():
     """Render the main projects management page."""
     if not STREAMLIT_AVAILABLE:
@@ -415,6 +495,13 @@ def render_projects_page():
     if not DATABASE_UTILS_AVAILABLE:
         st.error("❌ Database utilities not available")
         return {"error": "Database utilities not available"}
+    
+    # Check rate limit for page load
+    page_rate_allowed, page_rate_error = check_rate_limit("page_load") if check_rate_limit else (True, None)
+    if not page_rate_allowed:
+        st.error(f"🚦 {page_rate_error}")
+        st.info("Please wait before reloading the page.")
+        return {"error": "Rate limited"}
     
     st.title("📁 Project Management")
     st.markdown("Manage your projects, timelines, and deliverables")
@@ -470,6 +557,12 @@ def render_projects_page():
     
     # Get projects with filters
     try:
+        # Check rate limit for database read
+        db_read_allowed, db_read_error = check_rate_limit("db_read") if check_rate_limit else (True, None)
+        if not db_read_allowed:
+            st.error(f"🚦 Database {db_read_error}")
+            return {"error": "Database rate limited"}
+        
         all_projects = db_manager.get_projects(include_inactive=True)
         
         if not all_projects:
@@ -512,6 +605,7 @@ def render_projects_page():
 __all__ = ["render_projects_page"]
 
 # Execute when run as a Streamlit page
-if __name__ == "__main__" or True:  # Always execute for Streamlit multipage
+if __name__ == "__main__":
     if STREAMLIT_AVAILABLE:
         render_projects_page()
+

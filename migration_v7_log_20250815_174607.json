@@ -1,0 +1,58 @@
+{
+  "migration_version": "v7",
+  "timestamp": "2025-08-15T17:46:07.313938",
+  "database_path": "framework.db",
+  "backup_path": "framework.db.backup_before_v7_20250815_174607",
+  "operations": [
+    {
+      "table": "framework_epics",
+      "column": "points_value",
+      "definition": "INTEGER DEFAULT 10",
+      "description": "Points awarded for completing this epic",
+      "status": "added"
+    },
+    {
+      "table": "framework_epics",
+      "column": "due_date",
+      "definition": "DATE NULL",
+      "description": "Optional due date for epic completion",
+      "status": "added"
+    },
+    {
+      "table": "framework_epics",
+      "column": "icon",
+      "definition": "VARCHAR(50) DEFAULT '\ud83c\udfaf'",
+      "description": "Icon emoji for visual representation",
+      "status": "added"
+    },
+    {
+      "table": "framework_tasks",
+      "column": "points_value",
+      "definition": "INTEGER DEFAULT 5",
+      "description": "Points awarded for completing this task",
+      "status": "added"
+    },
+    {
+      "table": "framework_tasks",
+      "column": "due_date",
+      "definition": "DATE NULL",
+      "description": "Optional due date for task completion",
+      "status": "added"
+    },
+    {
+      "table": "achievement_types",
+      "column": "points_value",
+      "definition": "INTEGER DEFAULT 0",
+      "description": "Points awarded for this achievement (alias for points_reward)",
+      "status": "added"
+    },
+    {
+      "table": "achievement_types",
+      "column": "icon",
+      "definition": "VARCHAR(50) DEFAULT '\ud83c\udfc6'",
+      "description": "Icon emoji for achievement display",
+      "status": "added"
+    }
+  ],
+  "total_columns_added": 7
+}

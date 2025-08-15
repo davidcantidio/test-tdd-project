@@ -70,6 +70,12 @@ gql = {version = "^3.4.0", optional = true}
 aiohttp = {version = "^3.8.0", optional = true}
 pytz = {version = "^2023.3", optional = true}
 
+# Authentication dependencies (optional)
+google-auth = {version = "^2.23.0", optional = true}
+google-auth-oauthlib = {version = "^1.1.0", optional = true}
+google-auth-httplib2 = {version = "^0.2.0", optional = true}
+streamlit-authenticator = {version = "^0.2.3", optional = true}
+
 [tool.poetry.group.dev.dependencies]
 # Testing
 pytest = "^7.4.0"
@@ -118,8 +124,9 @@ matplotlib = "^3.7.0"
 # Optional feature sets
 analytics = ["pandas", "numpy", "plotly", "jupyter"]
 web = ["requests", "httpx"]
-streamlit = ["streamlit", "sqlalchemy", "python-dotenv", "gql", "aiohttp", "pytz", "pandas", "plotly", "numpy", "requests", "pysqlcipher3"]
-all = ["pandas", "numpy", "plotly", "jupyter", "requests", "httpx", "streamlit", "sqlalchemy", "python-dotenv", "gql", "aiohttp", "pytz", "pysqlcipher3"]
+auth = ["google-auth", "google-auth-oauthlib", "google-auth-httplib2", "streamlit-authenticator"]
+streamlit = ["streamlit", "sqlalchemy", "python-dotenv", "gql", "aiohttp", "pytz", "pandas", "plotly", "numpy", "requests", "pysqlcipher3", "google-auth", "google-auth-oauthlib", "google-auth-httplib2", "streamlit-authenticator"]
+all = ["pandas", "numpy", "plotly", "jupyter", "requests", "httpx", "streamlit", "sqlalchemy", "python-dotenv", "gql", "aiohttp", "pytz", "pysqlcipher3", "google-auth", "google-auth-oauthlib", "google-auth-httplib2", "streamlit-authenticator"]
 
 [tool.poetry.scripts]
 # CLI commands

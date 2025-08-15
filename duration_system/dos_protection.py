@@ -43,8 +43,13 @@ from collections import defaultdict, deque
 import ipaddress
 from pathlib import Path
 
-from .rate_limiter import RateLimiter, RateLimitConfig, RateLimitExceeded
-from .circuit_breaker import CircuitBreaker, CircuitBreakerConfig, CircuitBreakerError
+try:
+    from .rate_limiter import RateLimiter, RateLimitConfig, RateLimitExceeded
+    from .circuit_breaker import CircuitBreaker, CircuitBreakerConfig, CircuitBreakerError
+except ImportError:
+    # Fallback to absolute imports when used standalone
+    from rate_limiter import RateLimiter, RateLimitConfig, RateLimitExceeded
+    from circuit_breaker import CircuitBreaker, CircuitBreakerConfig, CircuitBreakerError
 
 # DoS protection logging
 dos_logger = logging.getLogger('security.dos_protection')

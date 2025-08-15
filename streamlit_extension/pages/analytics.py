@@ -45,6 +45,7 @@ except ImportError:
 # Local imports
 try:
     from streamlit_extension.utils.database import DatabaseManager
+    from streamlit_extension.utils.auth import require_authentication
     from streamlit_extension.config import load_config
     DATABASE_UTILS_AVAILABLE = True
 except ImportError:
@@ -223,6 +224,7 @@ def optimize_database_queries(db_manager: DatabaseManager, days: int, filters: D
         }
 
 
+@require_authentication
 def render_analytics_page():
     """Render the analytics dashboard page."""
     if not STREAMLIT_AVAILABLE:

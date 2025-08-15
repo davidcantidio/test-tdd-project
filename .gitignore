@@ -77,3 +77,6 @@ task_timer.db
 # Temporary files
 *.tmp
 *_cache.json
+
+# Streamlit cache
+.streamlit_cache/.streamlit/secrets.toml

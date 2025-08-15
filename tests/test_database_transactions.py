@@ -56,7 +56,7 @@ class TestDatabaseConnectionPool:
             """)
             conn.commit()
         
-        self.pool = DatabaseConnectionPool(self.db_path, max_connections=3)
+        self.pool = DatabaseConnectionPool(self.db_path, max_connections=3, connection_timeout=0.1)
     
     def teardown_method(self):
         """Cleanup after each test."""

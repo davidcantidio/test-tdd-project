@@ -74,6 +74,7 @@ try:
         NotificationToast, NotificationData, QuickActionButton
     )
     from streamlit_extension.utils.database import DatabaseManager
+    from streamlit_extension.utils.auth import GoogleOAuthManager, require_authentication, render_user_menu, get_authenticated_user
     from streamlit_extension.config import load_config, load_config
 except ImportError as e:
     st.error(f"❌ Import Error: {e}")
@@ -127,8 +128,12 @@ def initialize_session_state():
 def render_enhanced_header():
     """Render the enhanced main application header with welcome message and quick stats."""
     
+    # Get authenticated user for personalized greeting
+    user = get_authenticated_user()
+    username = user.get('name', 'Developer') if user else 'Developer'
+    
     # Welcome header with dynamic greeting
-    WelcomeHeader.render(username="Developer")
+    WelcomeHeader.render(username=username)
     
     # Daily statistics bar
     db_manager = st.session_state.db_manager
@@ -649,6 +654,7 @@ def render_debug_panel():
         st.json(cache_stats)
 
 
+@require_authentication
 def main():
     """Main application entry point with enhanced dashboard."""
     
@@ -660,6 +666,13 @@ def main():
     
     # Initialize session state
     initialize_session_state()
+    
+    # Initialize authentication manager
+    try:
+        auth_manager = GoogleOAuthManager()
+    except Exception as e:
+        st.error(f"❌ Authentication initialization failed: {e}")
+        st.stop()
     
     # Check database connectivity
     health = st.session_state.db_health_check
@@ -675,6 +688,9 @@ def main():
     
     # Render sidebar
     sidebar_state = render_sidebar()
+    
+    # Render user menu in sidebar
+    render_user_menu(auth_manager)
     
     # Page navigation logic
     current_page = st.session_state.get("current_page", "Dashboard")

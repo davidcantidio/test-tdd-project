@@ -1,0 +1,69 @@
+# 🧪 Development Environment Configuration
+# TDD Framework - Development Settings
+
+[app]
+name = "TDD Framework (Dev)"
+environment = "development"
+debug = true
+version = "1.0.0-dev"
+host = "localhost"
+port = 8501
+
+[database]
+framework_db_path = "framework.db"
+timer_db_path = "task_timer.db"
+connection_timeout = 10
+pool_size = 3
+max_overflow = 5
+
+# Development database optimizations
+enable_wal_mode = false  # Simpler for dev
+cache_size = -1000  # 1MB cache (smaller for dev)
+temp_store = "memory"
+
+[security]
+require_auth = false  # Optional auth for development
+csrf_token_expiry = 7200  # 2 hours (longer for dev convenience)
+session_timeout_minutes = 480  # 8 hours
+cookie_name = "tdd_framework_session_dev"
+
+# Relaxed security for development
+enable_rate_limiting = false
+enable_dos_protection = false
+enable_log_sanitization = true
+log_level = "DEBUG"
+
+[performance]
+enable_database_cache = true
+cache_ttl_seconds = 60  # Short TTL for development (1 minute)
+enable_redis = false  # No Redis in development
+redis_url = ""
+
+# Pagination settings
+default_page_size = 10  # Smaller pages for easier testing
+max_page_size = 100
+
+# Streamlit optimization
+enable_streamlit_cache = true
+
+[monitoring]
+enable_health_check = false  # Not needed in development
+health_check_port = 8080
+enable_metrics = false
+metrics_port = 9090
+
+# Development logging
+log_format = "text"  # Human-readable logs
+enable_correlation_ids = false  # Simpler logging
+log_file_path = ""  # Console logging only
+
+[google_oauth]
+# These will be overridden by environment variables in production
+# Development values (these are example/test values)
+client_id = "dev-client-id"
+client_secret = "dev-client-secret"
+redirect_uri = "http://localhost:8501"
+scopes = [
+    "https://www.googleapis.com/auth/userinfo.email",
+    "https://www.googleapis.com/auth/userinfo.profile"
+]

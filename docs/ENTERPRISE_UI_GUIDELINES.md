@@ -1,0 +1,108 @@
+# Guia de UI/UX para Aplicação Streamlit Enterprise
+
+Este documento serve como fonte de verdade e prompt para agentes de IA implementarem um redesign enterprise-grade em um aplicativo Streamlit já funcional. As instruções estão organizadas em fases sequenciais, cada uma com etapas e tarefas checkáveis para facilitar o acompanhamento.
+
+## Fase 1 – Fundamentos Visuais
+
+### 1.1 Paleta e Tema
+- Definir **primaryColor**, **backgroundColor**, **secondaryBackgroundColor** e **textColor** no `~/.streamlit/config.toml`.
+- Garantir contraste mínimo WCAG AA para textos e elementos interativos.
+- Disponibilizar tema claro e escuro com mesma paleta base.
+
+### 1.2 Tipografia
+- Utilizar `st.title`, `st.header`, `st.subheader` e `st.caption` para manter hierarquia consistente.
+- Limitar o app a 2–3 tamanhos de fonte e à mesma família tipográfica.
+
+### 1.3 Grid e Espaçamento
+- Ativar `st.set_page_config(layout="wide")`.
+- Organizar elementos em colunas com `st.columns` respeitando múltiplos de 4 px para margens e paddings.
+
+### 1.4 Iconografia
+- Adotar uma única biblioteca ou estilo de ícones/emoji.
+- Incluir rótulos textuais ou `alt` em todas as instâncias para acessibilidade.
+
+## Fase 2 – Componentização
+
+### 2.1 Cards de KPI
+- Criar componente reutilizável exibindo valor, rótulo e ação rápida opcional.
+- Limitar a 4 cards por linha.
+
+### 2.2 Tabelas e Listas
+- Exibir dados com `st.dataframe` ou `st.data_editor`.
+- Oferecer filtros e busca acima da tabela.
+- Utilizar formatação condicional sutil para alertas (ex.: atraso em vermelho).
+
+### 2.3 Formulários
+- Agrupar campos com `st.form` e validar entrada com `st.error` inline.
+- Formular fluxo natural: do simples ao complexo, sem múltiplas colunas.
+- Para formulários longos, dividir em etapas ou abas.
+
+### 2.4 Modais e Diálogos
+- Usar `@st.dialog` para confirmações ou formulários curtos.
+- Sempre exibir botões de ação claros (ex.: “Confirmar”/“Cancelar”).
+
+### 2.5 Navegação e Breadcrumbs
+- Utilizar `st.sidebar` como menu principal e destacar página ativa.
+- Construir breadcrumbs via `st.markdown` para exibir a hierarquia atual.
+
+### 2.6 Ações Rápidas
+- Agrupar até quatro botões por linha com ícones e rótulos textuais.
+- Posicionar em local previsível (topo da página ou seção dedicada).
+
+## Fase 3 – Layouts e Templates
+
+### 3.1 Dashboard
+- Exibir KPIs em cards no topo seguido de gráficos e listas resumidas.
+- Priorizar “tempo para insight” mínimo com seções claras e espaçamento adequado.
+
+### 3.2 Páginas CRUD
+- **Listagem:** tabela ou cards com filtros e botão “Novo [Entidade]”.
+- **Detalhe:** campos chave em leitura, breadcrumbs e ações “Editar/Excluir”.
+- **Edição/Criação:** reutilizar formulários com validação, retorno com `st.success`.
+
+### 3.3 Navegação Hierárquica
+- Permitir fluxo Cliente → Projeto → Épico → Tarefa via páginas aninhadas ou selects encadeados.
+- Indicar contexto atual em títulos e breadcrumbs.
+
+### 3.4 Analytics
+- Fornecer filtros de alto nível seguidos por 3–5 gráficos pertinentes.
+- Acompanhar cada gráfico com descrição breve ou destaque textual.
+
+## Fase 4 – Interação e Feedback
+
+### 4.1 Estados do Sistema
+- Usar `st.spinner` para cargas longas e mensagens `st.info`, `st.success`, `st.error` para feedback imediato.
+- Exibir placeholders informativos quando não houver dados.
+
+### 4.2 Desempenho e Transições
+- Aplicar `@st.cache_data` e `@st.cache_resource` para evitar recomputações.
+- Minimizar rerenders completos utilizando `st.session_state` e lógica condicional.
+
+### 4.3 Acessibilidade
+- Garantir navegação por teclado em todos os elementos interativos.
+- Fornecer descrições textuais para imagens e gráficos (`caption` ou `alt`).
+- Manter contraste e estrutura semântica adequados para leitores de tela.
+
+## Checklist Resumido
+
+| Fase | Tarefa | Status |
+|------|--------|--------|
+| 1.1 | Paleta definida no tema e contraste validado | ☐ |
+| 1.2 | Tipografia hierárquica configurada | ☐ |
+| 1.3 | Grid de 4 px aplicado em todas as páginas | ☐ |
+| 1.4 | Iconografia consistente documentada | ☐ |
+| 2.1 | Card de KPI reutilizável criado | ☐ |
+| 2.2 | Tabelas com filtros implementadas | ☐ |
+| 2.3 | Formulários com validação inline | ☐ |
+| 2.4 | Diálogos contextuais adicionados | ☐ |
+| 2.5 | Navegação e breadcrumbs padronizados | ☐ |
+| 2.6 | Seção de ações rápidas | ☐ |
+| 3.1 | Dashboard com KPIs e gráficos | ☐ |
+| 3.2 | Páginas CRUD padronizadas | ☐ |
+| 3.3 | Navegação hierárquica funcional | ☐ |
+| 3.4 | Página de analytics com insights | ☐ |
+| 4.1 | Feedback visual para todos os estados | ☐ |
+| 4.2 | Cache e transições otimizadas | ☐ |
+| 4.3 | Acessibilidade verificada | ☐ |
+
+Preencha o status de cada item conforme for implementando. O cumprimento integral deste checklist aproxima o aplicativo dos padrões enterprise desejados, com foco em produtividade, apresentação executiva e acessibilidade.

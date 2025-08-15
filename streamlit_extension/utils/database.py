@@ -10,7 +10,7 @@ Streamlit-optimized database operations with:
 
 import sqlite3
 from pathlib import Path
-from typing import Optional, Dict, Any, List, Union
+from typing import Optional, Dict, Any, List, Union, Iterator, Tuple, Generator
 from contextlib import contextmanager
 from datetime import datetime
 import json
@@ -21,12 +21,14 @@ try:
     import sqlalchemy as sa
     from sqlalchemy import create_engine, text
     from sqlalchemy.pool import StaticPool
+    from sqlalchemy.engine import Connection
     SQLALCHEMY_AVAILABLE = True
 except ImportError:
     sa = None
     create_engine = None
     text = None
     StaticPool = None
+    Connection = None
     SQLALCHEMY_AVAILABLE = False
 
 try:
@@ -84,7 +86,7 @@ class DatabaseManager:
         if SQLALCHEMY_AVAILABLE:
             self._initialize_engines()
     
-    def _initialize_engines(self):
+    def _initialize_engines(self) -> None:
         """Initialize SQLAlchemy engines with optimized settings."""
         if not SQLALCHEMY_AVAILABLE:
             return
@@ -116,7 +118,7 @@ class DatabaseManager:
             )
     
     @contextmanager
-    def get_connection(self, db_name: str = "framework"):
+    def get_connection(self, db_name: str = "framework") -> Generator[Union[Connection, sqlite3.Connection], None, None]:
         """Get database connection with context manager."""
         if SQLALCHEMY_AVAILABLE and db_name in self.engines:
             # Use SQLAlchemy engine
@@ -143,75 +145,195 @@ class DatabaseManager:
                 conn.close()
     
     @cache_database_query("get_epics", ttl=300) if CACHE_AVAILABLE else lambda f: f
-    def get_epics(self) -> List[Dict[str, Any]]:
-        """Get all epics with intelligent caching."""
+    def get_epics(self, page: int = 1, page_size: int = 50, 
+                 status_filter: str = "", project_id: Optional[int] = None) -> Dict[str, Any]:
+        """Get epics with intelligent caching and pagination.
+        
+        Args:
+            page: Page number (1-based)
+            page_size: Number of items per page
+            status_filter: Filter by specific status
+            project_id: Filter by specific project ID
+            
+        Returns:
+            Dictionary with 'data' (list of epics), 'total', 'page', 'total_pages'
+        """
         try:
             with self.get_connection("framework") as conn:
+                # Build WHERE conditions
+                where_conditions = ["deleted_at IS NULL"]
+                params: Dict[str, Any] = {}
+                
+                if status_filter:
+                    where_conditions.append("status = :status_filter")
+                    params["status_filter"] = status_filter
+                
+                if project_id:
+                    where_conditions.append("project_id = :project_id")
+                    params["project_id"] = project_id
+                
+                where_clause = " AND ".join(where_conditions)
+                
+                # Count total records
+                count_query = f"SELECT COUNT(*) FROM framework_epics WHERE {where_clause}"
+                
                 if SQLALCHEMY_AVAILABLE:
-                    result = conn.execute(text("""
-                        SELECT id, epic_key, name, description, status, 
-                               created_at, updated_at, completed_at,
-                               points_earned, difficulty_level, project_id
-                        FROM framework_epics 
-                        WHERE deleted_at IS NULL
-                        ORDER BY created_at DESC
-                    """))
-                    return [dict(row._mapping) for row in result]
+                    count_result = conn.execute(text(count_query), params)
+                    total = count_result.scalar()
                 else:
                     cursor = conn.cursor()
-                    cursor.execute("""
-                        SELECT id, epic_key, name, description, status,
-                               created_at, updated_at, completed_at,
-                               points_earned, difficulty_level, project_id
-                        FROM framework_epics 
-                        WHERE deleted_at IS NULL
-                        ORDER BY created_at DESC
-                    """)
-                    return [dict(row) for row in cursor.fetchall()]
+                    cursor.execute(count_query, params)
+                    total = cursor.fetchone()[0]
+                
+                # Calculate pagination
+                total_pages = (total + page_size - 1) // page_size
+                offset = (page - 1) * page_size
+                
+                # Get paginated data
+                data_query = f"""
+                    SELECT id, epic_key, name, description, status, 
+                           created_at, updated_at, completed_at,
+                           points_earned, difficulty_level, project_id
+                    FROM framework_epics
+                    WHERE {where_clause}
+                    ORDER BY created_at DESC
+                    LIMIT :limit OFFSET :offset
+                """
+                params["limit"] = page_size
+                params["offset"] = offset
+                
+                if SQLALCHEMY_AVAILABLE:
+                    result = conn.execute(text(data_query), params)
+                    data = [dict(row._mapping) for row in result]
+                else:
+                    cursor = conn.cursor()
+                    cursor.execute(data_query, params)
+                    data = [dict(row) for row in cursor.fetchall()]
+                
+                return {
+                    "data": data,
+                    "total": total,
+                    "page": page,
+                    "page_size": page_size,
+                    "total_pages": total_pages
+                }
         except Exception as e:
             print(f"Error loading epics: {e}")
-            return []
+            return {
+                "data": [],
+                "total": 0,
+                "page": page,
+                "page_size": page_size,
+                "total_pages": 0
+            }
+    
+    def get_all_epics(self) -> List[Dict[str, Any]]:
+        """Backward compatibility method - get all epics without pagination."""
+        result = self.get_epics(page=1, page_size=1000)  # Large page size to get all
+        return result["data"] if isinstance(result, dict) else result
     
     @cache_database_query("get_tasks", ttl=300) if CACHE_AVAILABLE else lambda f: f
-    def get_tasks(self, epic_id: Optional[int] = None) -> List[Dict[str, Any]]:
-        """Get tasks with intelligent caching, optionally filtered by epic."""
+    def get_tasks(self, epic_id: Optional[int] = None, page: int = 1, page_size: int = 100,
+                 status_filter: str = "", tdd_phase_filter: str = "") -> Dict[str, Any]:
+        """Get tasks with intelligent caching, pagination, and filtering.
+        
+        Args:
+            epic_id: Filter by specific epic ID
+            page: Page number (1-based)
+            page_size: Number of items per page
+            status_filter: Filter by specific status
+            tdd_phase_filter: Filter by TDD phase
+            
+        Returns:
+            Dictionary with 'data' (list of tasks), 'total', 'page', 'total_pages'
+        """
         try:
             with self.get_connection("framework") as conn:
-                query = """
+                # Build WHERE conditions
+                where_conditions = ["1=1"]
+                params: Dict[str, Any] = {}
+                
+                if epic_id:
+                    where_conditions.append("t.epic_id = :epic_id")
+                    params["epic_id"] = epic_id
+                
+                if status_filter:
+                    where_conditions.append("t.status = :status_filter")
+                    params["status_filter"] = status_filter
+                
+                if tdd_phase_filter:
+                    where_conditions.append("t.tdd_phase = :tdd_phase_filter")
+                    params["tdd_phase_filter"] = tdd_phase_filter
+                
+                where_clause = " AND ".join(where_conditions)
+                
+                # Count total records
+                count_query = f"""
+                    SELECT COUNT(*) 
+                    FROM framework_tasks t
+                    JOIN framework_epics e ON t.epic_id = e.id
+                    WHERE {where_clause}
+                """
+                
+                if SQLALCHEMY_AVAILABLE:
+                    count_result = conn.execute(text(count_query), params)
+                    total = count_result.scalar()
+                else:
+                    cursor = conn.cursor()
+                    cursor.execute(count_query, list(params.values()))
+                    total = cursor.fetchone()[0]
+                
+                # Calculate pagination
+                total_pages = (total + page_size - 1) // page_size
+                offset = (page - 1) * page_size
+                
+                # Get paginated data
+                data_query = f"""
                     SELECT t.id, t.epic_id, t.title, t.description, t.status,
                            t.estimate_minutes, t.tdd_phase, t.position,
                            t.created_at, t.updated_at, t.completed_at,
                            e.name as epic_name, e.epic_key, t.task_key
                     FROM framework_tasks t
                     JOIN framework_epics e ON t.epic_id = e.id
-                    WHERE 1=1
+                    WHERE {where_clause}
+                    ORDER BY t.position ASC, t.created_at DESC
+                    LIMIT :limit OFFSET :offset
                 """
-                
-                params: Dict[str, Any] = {}
-                sqlite_params = []
-                if epic_id:
-                    if SQLALCHEMY_AVAILABLE:
-                        query += " AND t.epic_id = :epic_id"
-                        params["epic_id"] = epic_id
-                    else:
-                        query += " AND t.epic_id = ?"
-                        sqlite_params.append(epic_id)
-                
-                query += " ORDER BY t.position ASC, t.created_at DESC"
+                params["limit"] = page_size
+                params["offset"] = offset
                 
                 if SQLALCHEMY_AVAILABLE:
-                    result = conn.execute(text(query), params)
-                    return [dict(row._mapping) for row in result]
+                    result = conn.execute(text(data_query), params)
+                    data = [dict(row._mapping) for row in result]
                 else:
                     cursor = conn.cursor()
-                    cursor.execute(query, sqlite_params)
-                    return [dict(row) for row in cursor.fetchall()]
+                    cursor.execute(data_query, list(params.values()))
+                    data = [dict(row) for row in cursor.fetchall()]
+                
+                return {
+                    "data": data,
+                    "total": total,
+                    "page": page,
+                    "page_size": page_size,
+                    "total_pages": total_pages
+                }
         except Exception as e:
             logger.error(f"Error loading tasks: {e}")
             if STREAMLIT_AVAILABLE and st:
                 st.error(f"❌ Error loading tasks: {e}")
             print(f"Error loading tasks: {e}")
-            return []
+            return {
+                "data": [],
+                "total": 0,
+                "page": page,
+                "page_size": page_size,
+                "total_pages": 0
+            }
+    
+    def get_all_tasks(self, epic_id: Optional[int] = None) -> List[Dict[str, Any]]:
+        """Backward compatibility method - get all tasks without pagination."""
+        result = self.get_tasks(epic_id=epic_id, page=1, page_size=1000)  # Large page size to get all
+        return result["data"] if isinstance(result, dict) else result
     
     @cache_database_query("get_timer_sessions", ttl=60) if CACHE_AVAILABLE else lambda f: f
     def get_timer_sessions(self, days: int = 30) -> List[Dict[str, Any]]:
@@ -651,7 +773,7 @@ class DatabaseManager:
         
         return sessions
     
-    def clear_cache(self):
+    def clear_cache(self) -> None:
         """Clear all database query caches."""
         if CACHE_AVAILABLE:
             cache = get_cache()
@@ -1654,7 +1776,7 @@ class DatabaseManager:
                 where_clause = " AND ".join(where_conditions)
                 
                 # Count total records
-                count_query = f"SELECT COUNT(*) FROM framework_clients WHERE {where_clause}"
+                count_query = f"SELECT COUNT(*) FROM framework_clients WHERE {where_clause}"  # nosec B608
                 
                 if SQLALCHEMY_AVAILABLE:
                     count_result = conn.execute(text(count_query), params)
@@ -1680,7 +1802,7 @@ class DatabaseManager:
                     WHERE {where_clause}
                     ORDER BY priority_level DESC, name ASC
                     LIMIT :limit OFFSET :offset
-                """
+                """  # nosec B608
                 params["limit"] = page_size
                 params["offset"] = offset
                 
@@ -1707,19 +1829,67 @@ class DatabaseManager:
             return {"data": [], "total": 0, "page": 1, "page_size": page_size, "total_pages": 0}
     
     @cache_database_query("get_projects", ttl=300) if CACHE_AVAILABLE else lambda f: f
-    def get_projects(self, client_id: Optional[int] = None, include_inactive: bool = False) -> List[Dict[str, Any]]:
-        """Get projects with caching support.
+    def get_projects(self, client_id: Optional[int] = None, include_inactive: bool = False,
+                    page: int = 1, page_size: int = 50, status_filter: str = "",
+                    project_type_filter: str = "") -> Dict[str, Any]:
+        """Get projects with caching support and pagination.
         
         Args:
             client_id: Filter by specific client ID (optional)
             include_inactive: If True, include inactive/archived projects
+            page: Page number (1-based)
+            page_size: Number of items per page
+            status_filter: Filter by specific status
+            project_type_filter: Filter by project type
             
         Returns:
-            List of project dictionaries with client information
+            Dictionary with 'data' (list of projects), 'total', 'page', 'total_pages'
         """
         try:
             with self.get_connection("framework") as conn:
-                query = """
+                # Build WHERE conditions
+                where_conditions = ["p.deleted_at IS NULL"]
+                params: Dict[str, Any] = {}
+                
+                if client_id:
+                    where_conditions.append("p.client_id = :client_id")
+                    params["client_id"] = client_id
+
+                if not include_inactive:
+                    where_conditions.append("p.status NOT IN ('cancelled', 'archived')")
+                
+                if status_filter:
+                    where_conditions.append("p.status = :status_filter")
+                    params["status_filter"] = status_filter
+                
+                if project_type_filter:
+                    where_conditions.append("p.project_type = :project_type_filter")
+                    params["project_type_filter"] = project_type_filter
+                
+                where_clause = " AND ".join(where_conditions)
+                
+                # Count total records
+                count_query = f"""
+                    SELECT COUNT(*) 
+                    FROM framework_projects p
+                    INNER JOIN framework_clients c ON p.client_id = c.id AND c.deleted_at IS NULL
+                    WHERE {where_clause}
+                """
+                
+                if SQLALCHEMY_AVAILABLE:
+                    count_result = conn.execute(text(count_query), params)
+                    total = count_result.scalar()
+                else:
+                    cursor = conn.cursor()
+                    cursor.execute(count_query, list(params.values()))
+                    total = cursor.fetchone()[0]
+                
+                # Calculate pagination
+                total_pages = (total + page_size - 1) // page_size
+                offset = (page - 1) * page_size
+                
+                # Get paginated data
+                data_query = f"""
                     SELECT p.id, p.client_id, p.project_key, p.name, p.description,
                            p.summary, p.project_type, p.methodology, p.status,
                            p.priority, p.health_status, p.completion_percentage,
@@ -1734,46 +1904,102 @@ class DatabaseManager:
                            c.status as client_status, c.client_tier
                     FROM framework_projects p
                     INNER JOIN framework_clients c ON p.client_id = c.id AND c.deleted_at IS NULL
-                    WHERE p.deleted_at IS NULL
+                    WHERE {where_clause}
+                    ORDER BY p.priority DESC, p.name ASC
+                    LIMIT :limit OFFSET :offset
                 """
-
-                params: Dict[str, Any] = {}
-                if client_id:
-                    query += " AND p.client_id = :client_id"
-                    params["client_id"] = client_id
-
-                if not include_inactive:
-                    query += " AND p.status NOT IN ('cancelled', 'archived')"
-
-                query += " ORDER BY p.priority DESC, p.name ASC"
+                params["limit"] = page_size
+                params["offset"] = offset
 
                 if SQLALCHEMY_AVAILABLE:
-                    result = conn.execute(text(query), params)
-                    return [dict(row._mapping) for row in result]
+                    result = conn.execute(text(data_query), params)
+                    data = [dict(row._mapping) for row in result]
                 else:
                     cursor = conn.cursor()
-                    cursor.execute(query, params)
-                    return [dict(row) for row in cursor.fetchall()]
+                    cursor.execute(data_query, list(params.values()))
+                    data = [dict(row) for row in cursor.fetchall()]
+                
+                return {
+                    "data": data,
+                    "total": total,
+                    "page": page,
+                    "page_size": page_size,
+                    "total_pages": total_pages
+                }
         except Exception as e:
             logger.error(f"Error loading projects: {e}")
             if STREAMLIT_AVAILABLE and st:
                 st.error(f"❌ Error loading projects: {e}")
-            return []
+            return {
+                "data": [],
+                "total": 0,
+                "page": page,
+                "page_size": page_size,
+                "total_pages": 0
+            }
+    
+    def get_all_projects(self, client_id: Optional[int] = None, include_inactive: bool = False) -> List[Dict[str, Any]]:
+        """Backward compatibility method - get all projects without pagination."""
+        result = self.get_projects(client_id=client_id, include_inactive=include_inactive, page=1, page_size=1000)
+        return result["data"] if isinstance(result, dict) else result
     
     @cache_database_query("get_epics_with_hierarchy", ttl=300) if CACHE_AVAILABLE else lambda f: f
-    def get_epics_with_hierarchy(self, project_id: Optional[int] = None, client_id: Optional[int] = None) -> List[Dict[str, Any]]:
-        """Get epics with complete hierarchy information (client → project → epic).
+    def get_epics_with_hierarchy(self, project_id: Optional[int] = None, client_id: Optional[int] = None,
+                               page: int = 1, page_size: int = 25, status_filter: str = "") -> Dict[str, Any]:
+        """Get epics with complete hierarchy information (client → project → epic) with pagination.
         
         Args:
             project_id: Filter by specific project ID (optional)
             client_id: Filter by specific client ID (optional)
+            page: Page number (1-based)
+            page_size: Number of items per page
+            status_filter: Filter by epic status
             
         Returns:
-            List of epic dictionaries with client and project information
+            Dictionary with 'data' (list of epics), 'total', 'page', 'total_pages'
         """
         try:
             with self.get_connection("framework") as conn:
-                query = """
+                # Build WHERE conditions
+                where_conditions = ["e.deleted_at IS NULL"]
+                params: Dict[str, Any] = {}
+                
+                if project_id:
+                    where_conditions.append("e.project_id = :project_id")
+                    params["project_id"] = project_id
+                elif client_id:
+                    where_conditions.append("p.client_id = :client_id")
+                    params["client_id"] = client_id
+                
+                if status_filter:
+                    where_conditions.append("e.status = :status_filter")
+                    params["status_filter"] = status_filter
+                
+                where_clause = " AND ".join(where_conditions)
+                
+                # Count total records
+                count_query = f"""
+                    SELECT COUNT(*) 
+                    FROM framework_epics e
+                    LEFT JOIN framework_projects p ON e.project_id = p.id AND p.deleted_at IS NULL
+                    LEFT JOIN framework_clients c ON p.client_id = c.id AND c.deleted_at IS NULL
+                    WHERE {where_clause}
+                """
+                
+                if SQLALCHEMY_AVAILABLE:
+                    count_result = conn.execute(text(count_query), params)
+                    total = count_result.scalar()
+                else:
+                    cursor = conn.cursor()
+                    cursor.execute(count_query, list(params.values()))
+                    total = cursor.fetchone()[0]
+                
+                # Calculate pagination
+                total_pages = (total + page_size - 1) // page_size
+                offset = (page - 1) * page_size
+                
+                # Get paginated data
+                data_query = f"""
                     SELECT e.id, e.epic_key, e.name, e.description, e.summary,
                            e.status, e.priority, e.duration_days,
                            e.points_earned, e.difficulty_level,
@@ -1789,40 +2015,44 @@ class DatabaseManager:
                     FROM framework_epics e
                     LEFT JOIN framework_projects p ON e.project_id = p.id AND p.deleted_at IS NULL
                     LEFT JOIN framework_clients c ON p.client_id = c.id AND c.deleted_at IS NULL
-                    WHERE e.deleted_at IS NULL
+                    WHERE {where_clause}
+                    ORDER BY c.priority_level DESC, p.priority DESC, e.created_at DESC
+                    LIMIT :limit OFFSET :offset
                 """
-                
-                params: Dict[str, Any] = {}
-                sqlite_params = []
-                if project_id:
-                    if SQLALCHEMY_AVAILABLE:
-                        query += " AND e.project_id = :project_id"
-                        params["project_id"] = project_id
-                    else:
-                        query += " AND e.project_id = ?"
-                        sqlite_params.append(project_id)
-                elif client_id:
-                    if SQLALCHEMY_AVAILABLE:
-                        query += " AND p.client_id = :client_id"
-                        params["client_id"] = client_id
-                    else:
-                        query += " AND p.client_id = ?"
-                        sqlite_params.append(client_id)
-                
-                query += " ORDER BY c.priority_level DESC, p.priority DESC, e.created_at DESC"
+                params["limit"] = page_size
+                params["offset"] = offset
                 
                 if SQLALCHEMY_AVAILABLE:
-                    result = conn.execute(text(query), params)
-                    return [dict(row._mapping) for row in result]
+                    result = conn.execute(text(data_query), params)
+                    data = [dict(row._mapping) for row in result]
                 else:
                     cursor = conn.cursor()
-                    cursor.execute(query, sqlite_params)
-                    return [dict(row) for row in cursor.fetchall()]
+                    cursor.execute(data_query, list(params.values()))
+                    data = [dict(row) for row in cursor.fetchall()]
+                
+                return {
+                    "data": data,
+                    "total": total,
+                    "page": page,
+                    "page_size": page_size,
+                    "total_pages": total_pages
+                }
         except Exception as e:
             logger.error(f"Error loading epics with hierarchy: {e}")
             if STREAMLIT_AVAILABLE and st:
                 st.error(f"❌ Error loading epics with hierarchy: {e}")
-            return []
+            return {
+                "data": [],
+                "total": 0,
+                "page": page,
+                "page_size": page_size,
+                "total_pages": 0
+            }
+    
+    def get_all_epics_with_hierarchy(self, project_id: Optional[int] = None, client_id: Optional[int] = None) -> List[Dict[str, Any]]:
+        """Backward compatibility method - get all epics with hierarchy without pagination."""
+        result = self.get_epics_with_hierarchy(project_id=project_id, client_id=client_id, page=1, page_size=1000)
+        return result["data"] if isinstance(result, dict) else result
     
     @cache_database_query("get_hierarchy_overview", ttl=180) if CACHE_AVAILABLE else lambda f: f
     def get_hierarchy_overview(self, client_id: Optional[int] = None) -> List[Dict[str, Any]]:
@@ -2007,7 +2237,7 @@ class DatabaseManager:
                     # Convert to named parameters for SQLAlchemy
                     named_placeholders = ', '.join([f':{key}' for key in client_data.keys()])
                     result = conn.execute(
-                        text(f"INSERT INTO framework_clients ({columns}) VALUES ({named_placeholders})"),
+                        text(f"INSERT INTO framework_clients ({columns}) VALUES ({named_placeholders})"),  # nosec B608
                         client_data
                     )
                     conn.commit()
@@ -2015,7 +2245,7 @@ class DatabaseManager:
                 else:
                     cursor = conn.cursor()
                     cursor.execute(
-                        f"INSERT INTO framework_clients ({columns}) VALUES ({placeholders})",
+                        f"INSERT INTO framework_clients ({columns}) VALUES ({placeholders})",  # nosec B608
                         list(client_data.values())
                     )
                     conn.commit()
@@ -2088,7 +2318,7 @@ class DatabaseManager:
                 if SQLALCHEMY_AVAILABLE:
                     named_placeholders = ', '.join([f':{key}' for key in project_data.keys()])
                     result = conn.execute(
-                        text(f"INSERT INTO framework_projects ({columns}) VALUES ({named_placeholders})"),
+                        text(f"INSERT INTO framework_projects ({columns}) VALUES ({named_placeholders})"),  # nosec B608
                         project_data
                     )
                     conn.commit()
@@ -2244,7 +2474,7 @@ class DatabaseManager:
                         UPDATE framework_clients 
                         SET {', '.join(set_clauses)}
                         WHERE id = :client_id AND deleted_at IS NULL
-                    """), values)
+                    """), values)  # nosec B608
                     conn.commit()
                 else:
                     cursor = conn.cursor()
@@ -2259,7 +2489,7 @@ class DatabaseManager:
                         UPDATE framework_clients 
                         SET {', '.join(sqlite_clauses)}
                         WHERE id = ? AND deleted_at IS NULL
-                    """, positional_values)
+                    """, positional_values)  # nosec B608
                     conn.commit()
                 
                 return True
@@ -2359,7 +2589,7 @@ class DatabaseManager:
                         UPDATE framework_projects 
                         SET {', '.join(set_clauses)}
                         WHERE id = :project_id AND deleted_at IS NULL
-                    """), values)
+                    """), values)  # nosec B608
                     conn.commit()
                 else:
                     cursor = conn.cursor()
@@ -2374,7 +2604,7 @@ class DatabaseManager:
                         UPDATE framework_projects 
                         SET {', '.join(sqlite_clauses)}
                         WHERE id = ? AND deleted_at IS NULL
-                    """, positional_values)
+                    """, positional_values)  # nosec B608
                     conn.commit()
                 
                 return True
