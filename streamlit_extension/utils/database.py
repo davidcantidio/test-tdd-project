@@ -1619,18 +1619,57 @@ class DatabaseManager:
     # ==================================================================================
     
     @cache_database_query("get_clients", ttl=300) if CACHE_AVAILABLE else lambda f: f
-    def get_clients(self, include_inactive: bool = True) -> List[Dict[str, Any]]:
-        """Get all clients with caching support.
+    def get_clients(self, include_inactive: bool = True, page: int = 1, page_size: int = 20, 
+                   name_filter: str = "", status_filter: str = "") -> Dict[str, Any]:
+        """Get all clients with caching support and pagination.
         
         Args:
             include_inactive: If True, include inactive/archived clients
+            page: Page number (1-based)
+            page_size: Number of items per page
+            name_filter: Filter by client name (partial match)
+            status_filter: Filter by specific status
             
         Returns:
-            List of client dictionaries
+            Dictionary with 'data' (list of clients), 'total', 'page', 'total_pages'
         """
         try:
             with self.get_connection("framework") as conn:
-                query = """
+                # Build WHERE conditions
+                where_conditions = ["deleted_at IS NULL"]
+                params: Dict[str, Any] = {}
+                
+                if not include_inactive:
+                    where_conditions.append("status = :status")
+                    params["status"] = "active"
+                
+                if name_filter:
+                    where_conditions.append("name LIKE :name_filter")
+                    params["name_filter"] = f"%{name_filter}%"
+                
+                if status_filter:
+                    where_conditions.append("status = :status_filter")
+                    params["status_filter"] = status_filter
+                
+                where_clause = " AND ".join(where_conditions)
+                
+                # Count total records
+                count_query = f"SELECT COUNT(*) FROM framework_clients WHERE {where_clause}"
+                
+                if SQLALCHEMY_AVAILABLE:
+                    count_result = conn.execute(text(count_query), params)
+                    total = count_result.scalar()
+                else:
+                    cursor = conn.cursor()
+                    cursor.execute(count_query, params)
+                    total = cursor.fetchone()[0]
+                
+                # Calculate pagination
+                total_pages = (total + page_size - 1) // page_size
+                offset = (page - 1) * page_size
+                
+                # Get paginated data
+                data_query = f"""
                     SELECT id, client_key, name, description, industry, company_size,
                            primary_contact_name, primary_contact_email,
                            timezone, currency, preferred_language,
@@ -1638,28 +1677,34 @@ class DatabaseManager:
                            priority_level, account_manager_id, technical_lead_id,
                            created_at, updated_at, last_contact_date
                     FROM framework_clients
-                    WHERE deleted_at IS NULL
+                    WHERE {where_clause}
+                    ORDER BY priority_level DESC, name ASC
+                    LIMIT :limit OFFSET :offset
                 """
-
-                params: Dict[str, Any] = {}
-                if not include_inactive:
-                    query += " AND status = :status"
-                    params["status"] = "active"
-
-                query += " ORDER BY priority_level DESC, name ASC"
-
+                params["limit"] = page_size
+                params["offset"] = offset
+                
                 if SQLALCHEMY_AVAILABLE:
-                    result = conn.execute(text(query), params)
-                    return [dict(row._mapping) for row in result]
+                    result = conn.execute(text(data_query), params)
+                    data = [dict(row._mapping) for row in result]
                 else:
                     cursor = conn.cursor()
-                    cursor.execute(query, params)
-                    return [dict(row) for row in cursor.fetchall()]
+                    cursor.execute(data_query, params)
+                    data = [dict(row) for row in cursor.fetchall()]
+                
+                return {
+                    "data": data,
+                    "total": total,
+                    "page": page,
+                    "page_size": page_size,
+                    "total_pages": total_pages
+                }
+                
         except Exception as e:
             logger.error(f"Error loading clients: {e}")
             if STREAMLIT_AVAILABLE and st:
                 st.error(f"❌ Error loading clients: {e}")
-            return []
+            return {"data": [], "total": 0, "page": 1, "page_size": page_size, "total_pages": 0}
     
     @cache_database_query("get_projects", ttl=300) if CACHE_AVAILABLE else lambda f: f
     def get_projects(self, client_id: Optional[int] = None, include_inactive: bool = False) -> List[Dict[str, Any]]:

@@ -49,6 +49,7 @@ if SQLALCHEMY_AVAILABLE:
         
         # Relationships
         tasks = relationship("FrameworkTask", back_populates="epic")
+        project = relationship("Project", back_populates="epics")
     
     class FrameworkTask(Base):
         """Framework Task model matching existing database schema."""
@@ -124,6 +125,166 @@ if SQLALCHEMY_AVAILABLE:
         # Audit
         created_at = Column(DateTime, default=datetime.utcnow)
         updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    class Client(Base):
+        """
+        🏢 Client Model - Top-level organization in hierarchy
+        
+        Represents clients in the Client → Project → Epic → Task hierarchy.
+        Stores client information, contact details, and business data.
+        """
+        __tablename__ = 'framework_clients'
+        
+        id = Column(Integer, primary_key=True)
+        client_key = Column(String(50), unique=True, nullable=False)
+        name = Column(String(255), nullable=False)
+        
+        # Client Information
+        description = Column(Text)
+        industry = Column(String(100))
+        company_size = Column(String(50))
+        
+        # Contact Information
+        primary_contact_name = Column(String(255))
+        primary_contact_email = Column(String(255))
+        primary_contact_phone = Column(String(50))
+        
+        # Business Information
+        billing_email = Column(String(255))
+        billing_address = Column(Text)
+        tax_id = Column(String(100))
+        
+        # Configuration
+        timezone = Column(String(50), default='America/Sao_Paulo')
+        currency = Column(String(10), default='BRL')
+        preferred_language = Column(String(10), default='pt-BR')
+        preferences = Column(JSON)
+        custom_fields = Column(JSON)
+        
+        # Commercial
+        hourly_rate = Column(Float)
+        contract_type = Column(String(50), default='time_and_materials')
+        payment_terms = Column(String(100))
+        
+        # Status and Management
+        status = Column(String(50), default='active')
+        client_tier = Column(String(20), default='standard')
+        priority_level = Column(Integer, default=5)
+        
+        # Relationships
+        account_manager_id = Column(Integer)
+        technical_lead_id = Column(Integer)
+        
+        # Integration
+        external_client_id = Column(String(100))
+        external_system_name = Column(String(100))
+        
+        # Security
+        access_level = Column(String(50), default='standard')
+        allowed_ips = Column(JSON)
+        requires_2fa = Column(Boolean, default=False)
+        
+        # Audit
+        created_at = Column(DateTime, default=datetime.utcnow)
+        updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+        created_by = Column(Integer)
+        last_contact_date = Column(DateTime)
+        deleted_at = Column(DateTime)
+        deleted_by = Column(Integer)
+        
+        # Relationships
+        projects = relationship("Project", back_populates="client")
+    
+    class Project(Base):
+        """
+        📁 Project Model - Client's projects in hierarchy
+        
+        Represents projects within clients in the Client → Project → Epic → Task hierarchy.
+        Manages project lifecycle, timeline, budget, and team assignments.
+        """
+        __tablename__ = 'framework_projects'
+        
+        id = Column(Integer, primary_key=True)
+        client_id = Column(Integer, ForeignKey('framework_clients.id'), nullable=False)
+        project_key = Column(String(50), nullable=False)
+        name = Column(String(255), nullable=False)
+        
+        # Project Information
+        description = Column(Text)
+        summary = Column(Text)
+        project_type = Column(String(50), default='development')
+        methodology = Column(String(100), default='agile')
+        
+        # Scope and Planning
+        objectives = Column(JSON)
+        deliverables = Column(JSON)
+        success_criteria = Column(JSON)
+        assumptions = Column(JSON)
+        constraints = Column(JSON)
+        risks = Column(JSON)
+        
+        # Timeline
+        planned_start_date = Column(DateTime)
+        planned_end_date = Column(DateTime)
+        actual_start_date = Column(DateTime)
+        actual_end_date = Column(DateTime)
+        estimated_hours = Column(Float)
+        actual_hours = Column(Float, default=0)
+        
+        # Budget and Commercial
+        budget_amount = Column(Float)
+        budget_currency = Column(String(10), default='BRL')
+        hourly_rate = Column(Float)
+        fixed_price = Column(Float)
+        
+        # Status and Progress
+        status = Column(String(50), default='planning')
+        priority = Column(Integer, default=5)
+        health_status = Column(String(20), default='green')
+        completion_percentage = Column(Float, default=0)
+        
+        # Team and Responsibilities
+        project_manager_id = Column(Integer)
+        technical_lead_id = Column(Integer)
+        client_contact_id = Column(Integer)
+        
+        # Integration and Tools
+        repository_url = Column(String(500))
+        deployment_url = Column(String(500))
+        documentation_url = Column(String(500))
+        external_project_id = Column(String(100))
+        github_project_id = Column(String(100))
+        jira_project_key = Column(String(50))
+        
+        # Communication
+        slack_channel = Column(String(100))
+        teams_channel = Column(String(100))
+        notification_settings = Column(JSON)
+        
+        # Security and Access
+        visibility = Column(String(20), default='client')
+        access_level = Column(String(50), default='standard')
+        
+        # Gamification and Metrics
+        total_points_earned = Column(Integer, default=0)
+        complexity_score = Column(Float)
+        quality_score = Column(Float)
+        
+        # Custom Fields and Metadata
+        custom_fields = Column(JSON)
+        tags = Column(JSON)
+        labels = Column(JSON)
+        
+        # Audit
+        created_at = Column(DateTime, default=datetime.utcnow)
+        updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+        created_by = Column(Integer)
+        deleted_at = Column(DateTime)
+        deleted_by = Column(Integer)
+        
+        # Relationships
+        client = relationship("Client", back_populates="projects")
+        epics = relationship("FrameworkEpic", back_populates="project")
 
 
 @dataclass
@@ -203,12 +364,14 @@ if SQLALCHEMY_AVAILABLE:
     __all__ = [
         'FrameworkEpic', 'FrameworkTask', 'TimerSession', 
         'UserAchievement', 'UserStreak', 'EpicProgress', 'TimerStats',
+        'Client', 'Project',
         'create_database_engine', 'create_session', 'initialize_database'
     ]
 else:
     # Provide fallback
     FrameworkEpic = FrameworkTask = TimerSession = DatabaseModelsUnavailable()
     UserAchievement = UserStreak = EpicProgress = TimerStats = DatabaseModelsUnavailable()
+    Client = Project = DatabaseModelsUnavailable()
     create_database_engine = create_session = initialize_database = DatabaseModelsUnavailable()
     
     __all__ = ['DatabaseModelsUnavailable']

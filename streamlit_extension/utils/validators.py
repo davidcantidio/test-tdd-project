@@ -6,12 +6,14 @@ Validation utilities for Streamlit extension with:
 - Database schema validation
 - Input sanitization
 - Error reporting
+- Client and Project data validation
 """
 
 from typing import Dict, Any, List, Tuple, Optional
 from pathlib import Path
 import re
 import json
+from datetime import datetime
 
 # Graceful imports
 try:
@@ -433,3 +435,308 @@ def generate_validation_report(validations: List[Tuple[str, bool, List[str]]]) -
         })
     
     return report
+
+
+def validate_client_data(client: Dict[str, Any]) -> Tuple[bool, List[str]]:
+    """
+    🏢 Validate client data structure and business rules.
+    
+    Args:
+        client: Client dictionary to validate
+    
+    Returns:
+        Tuple of (is_valid, error_messages)
+    """
+    errors = []
+    
+    # Required fields
+    required_fields = ["client_key", "name", "primary_contact_email"]
+    for field in required_fields:
+        if field not in client or not client[field]:
+            errors.append(f"Missing required field: {field}")
+    
+    # Validate client_key format
+    client_key = client.get("client_key", "")
+    if client_key:
+        if not re.match(r'^[a-z0-9_]{2,50}$', client_key):
+            errors.append("Client key must be lowercase, contain only letters, numbers, underscores (2-50 chars)")
+    
+    # Validate name length
+    name = client.get("name", "")
+    if len(name) > 255:
+        errors.append(f"Client name too long ({len(name)} characters, max 255)")
+    if len(name.strip()) == 0:
+        errors.append("Client name cannot be empty")
+    
+    # Validate primary contact email
+    email = client.get("primary_contact_email", "")
+    if email:
+        email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+        if not re.match(email_pattern, email):
+            errors.append(f"Invalid email format: {email}")
+    
+    # Validate status
+    valid_statuses = ["active", "inactive", "suspended", "archived"]
+    status = client.get("status", "active").lower()
+    if status and status not in valid_statuses:
+        errors.append(f"Invalid status '{status}'. Valid options: {', '.join(valid_statuses)}")
+    
+    # Validate client tier
+    valid_tiers = ["basic", "standard", "premium", "enterprise"]
+    tier = client.get("client_tier", "standard").lower()
+    if tier and tier not in valid_tiers:
+        errors.append(f"Invalid client tier '{tier}'. Valid options: {', '.join(valid_tiers)}")
+    
+    # Validate priority level
+    priority = client.get("priority_level")
+    if priority is not None:
+        try:
+            priority_int = int(priority)
+            if priority_int < 1 or priority_int > 10:
+                errors.append(f"Priority level {priority_int} outside valid range (1-10)")
+        except (ValueError, TypeError):
+            errors.append(f"Invalid priority level value: {priority}")
+    
+    # Validate hourly rate
+    hourly_rate = client.get("hourly_rate")
+    if hourly_rate is not None:
+        try:
+            rate_float = float(hourly_rate)
+            if rate_float < 0:
+                errors.append("Hourly rate cannot be negative")
+            if rate_float > 10000:
+                errors.append(f"Hourly rate {rate_float} seems unreasonably high")
+        except (ValueError, TypeError):
+            errors.append(f"Invalid hourly rate value: {hourly_rate}")
+    
+    # Validate contract type
+    valid_contract_types = ["time_and_materials", "fixed_price", "retainer", "subscription"]
+    contract_type = client.get("contract_type", "time_and_materials")
+    if contract_type and contract_type not in valid_contract_types:
+        errors.append(f"Invalid contract type '{contract_type}'. Valid options: {', '.join(valid_contract_types)}")
+    
+    # Validate billing email if provided
+    billing_email = client.get("billing_email", "")
+    if billing_email:
+        if not re.match(email_pattern, billing_email):
+            errors.append(f"Invalid billing email format: {billing_email}")
+    
+    return len(errors) == 0, errors
+
+
+def validate_project_data(project: Dict[str, Any]) -> Tuple[bool, List[str]]:
+    """
+    📁 Validate project data structure and business rules.
+    
+    Args:
+        project: Project dictionary to validate
+    
+    Returns:
+        Tuple of (is_valid, error_messages)
+    """
+    errors = []
+    
+    # Required fields
+    required_fields = ["client_id", "project_key", "name", "status", "planned_start_date", "planned_end_date"]
+    for field in required_fields:
+        if field not in project or project[field] is None:
+            errors.append(f"Missing required field: {field}")
+    
+    # Validate client_id
+    client_id = project.get("client_id")
+    if client_id is not None:
+        try:
+            client_id_int = int(client_id)
+            if client_id_int < 1:
+                errors.append("Client ID must be a positive integer")
+        except (ValueError, TypeError):
+            errors.append(f"Invalid client ID value: {client_id}")
+    
+    # Validate project_key format
+    project_key = project.get("project_key", "")
+    if project_key:
+        if not re.match(r'^[a-z0-9_]{2,50}$', project_key):
+            errors.append("Project key must be lowercase, contain only letters, numbers, underscores (2-50 chars)")
+    
+    # Validate name length
+    name = project.get("name", "")
+    if len(name) > 255:
+        errors.append(f"Project name too long ({len(name)} characters, max 255)")
+    if len(name.strip()) == 0:
+        errors.append("Project name cannot be empty")
+    
+    # Validate status
+    valid_statuses = ["planning", "in_progress", "completed", "on_hold", "cancelled"]
+    status = project.get("status", "").lower()
+    if status and status not in valid_statuses:
+        errors.append(f"Invalid status '{status}'. Valid options: {', '.join(valid_statuses)}")
+    
+    # Validate project type
+    valid_types = ["development", "maintenance", "consulting", "research", "support"]
+    project_type = project.get("project_type", "development")
+    if project_type and project_type not in valid_types:
+        errors.append(f"Invalid project type '{project_type}'. Valid options: {', '.join(valid_types)}")
+    
+    # Validate methodology
+    valid_methodologies = ["agile", "waterfall", "kanban", "scrum", "lean", "hybrid"]
+    methodology = project.get("methodology", "agile")
+    if methodology and methodology not in valid_methodologies:
+        errors.append(f"Invalid methodology '{methodology}'. Valid options: {', '.join(valid_methodologies)}")
+    
+    # Validate dates
+    try:
+        planned_start = project.get("planned_start_date")
+        planned_end = project.get("planned_end_date")
+        
+        if planned_start and planned_end:
+            # Convert to datetime if they're strings
+            if isinstance(planned_start, str):
+                try:
+                    planned_start = datetime.fromisoformat(planned_start.replace('Z', '+00:00'))
+                except ValueError:
+                    errors.append(f"Invalid planned start date format: {planned_start}")
+                    planned_start = None
+            
+            if isinstance(planned_end, str):
+                try:
+                    planned_end = datetime.fromisoformat(planned_end.replace('Z', '+00:00'))
+                except ValueError:
+                    errors.append(f"Invalid planned end date format: {planned_end}")
+                    planned_end = None
+            
+            # Check date logic
+            if planned_start and planned_end:
+                if planned_end <= planned_start:
+                    errors.append("Planned end date must be after planned start date")
+    except Exception as e:
+        errors.append(f"Error validating dates: {str(e)}")
+    
+    # Validate priority
+    priority = project.get("priority")
+    if priority is not None:
+        try:
+            priority_int = int(priority)
+            if priority_int < 1 or priority_int > 10:
+                errors.append(f"Priority {priority_int} outside valid range (1-10)")
+        except (ValueError, TypeError):
+            errors.append(f"Invalid priority value: {priority}")
+    
+    # Validate health status
+    valid_health = ["green", "yellow", "red"]
+    health = project.get("health_status", "green")
+    if health and health not in valid_health:
+        errors.append(f"Invalid health status '{health}'. Valid options: {', '.join(valid_health)}")
+    
+    # Validate budget amount
+    budget = project.get("budget_amount")
+    if budget is not None:
+        try:
+            budget_float = float(budget)
+            if budget_float < 0:
+                errors.append("Budget amount cannot be negative")
+            if budget_float > 10000000:  # 10M limit
+                errors.append(f"Budget amount {budget_float} seems unreasonably high")
+        except (ValueError, TypeError):
+            errors.append(f"Invalid budget amount value: {budget}")
+    
+    # Validate estimated hours
+    estimated_hours = project.get("estimated_hours")
+    if estimated_hours is not None:
+        try:
+            hours_float = float(estimated_hours)
+            if hours_float < 0:
+                errors.append("Estimated hours cannot be negative")
+            if hours_float > 10000:  # 10k hours limit
+                errors.append(f"Estimated hours {hours_float} seems unreasonably high")
+        except (ValueError, TypeError):
+            errors.append(f"Invalid estimated hours value: {estimated_hours}")
+    
+    # Validate completion percentage
+    completion = project.get("completion_percentage")
+    if completion is not None:
+        try:
+            completion_float = float(completion)
+            if completion_float < 0 or completion_float > 100:
+                errors.append(f"Completion percentage {completion_float} outside valid range (0-100)")
+        except (ValueError, TypeError):
+            errors.append(f"Invalid completion percentage value: {completion}")
+    
+    return len(errors) == 0, errors
+
+
+def validate_email_uniqueness(email: str, existing_clients: List[Dict[str, Any]], exclude_client_id: Optional[int] = None) -> bool:
+    """
+    📧 Check if email is unique among existing clients.
+    
+    Args:
+        email: Email to check
+        existing_clients: List of existing client dictionaries
+        exclude_client_id: Client ID to exclude from check (for updates)
+    
+    Returns:
+        True if email is unique, False otherwise
+    """
+    if not email:
+        return True
+    
+    for client in existing_clients:
+        if exclude_client_id and client.get("id") == exclude_client_id:
+            continue
+        
+        if (client.get("primary_contact_email", "").lower() == email.lower() or
+            client.get("billing_email", "").lower() == email.lower()):
+            return False
+    
+    return True
+
+
+def validate_client_key_uniqueness(client_key: str, existing_clients: List[Dict[str, Any]], exclude_client_id: Optional[int] = None) -> bool:
+    """
+    🔑 Check if client key is unique among existing clients.
+    
+    Args:
+        client_key: Client key to check
+        existing_clients: List of existing client dictionaries
+        exclude_client_id: Client ID to exclude from check (for updates)
+    
+    Returns:
+        True if client key is unique, False otherwise
+    """
+    if not client_key:
+        return True
+    
+    for client in existing_clients:
+        if exclude_client_id and client.get("id") == exclude_client_id:
+            continue
+        
+        if client.get("client_key", "").lower() == client_key.lower():
+            return False
+    
+    return True
+
+
+def validate_project_key_uniqueness(project_key: str, client_id: int, existing_projects: List[Dict[str, Any]], exclude_project_id: Optional[int] = None) -> bool:
+    """
+    🔑 Check if project key is unique within the client's projects.
+    
+    Args:
+        project_key: Project key to check
+        client_id: Client ID for scoping
+        existing_projects: List of existing project dictionaries
+        exclude_project_id: Project ID to exclude from check (for updates)
+    
+    Returns:
+        True if project key is unique within client, False otherwise
+    """
+    if not project_key or not client_id:
+        return True
+    
+    for project in existing_projects:
+        if exclude_project_id and project.get("id") == exclude_project_id:
+            continue
+        
+        if (project.get("client_id") == client_id and 
+            project.get("project_key", "").lower() == project_key.lower()):
+            return False
+    
+    return True
