@@ -80,3 +80,14 @@ def test_deleted_epic_returns_default_progress(tmp_path):
     assert progress["total_tasks"] == 0
     assert progress["progress_percentage"] == 0.0
 
+
+def test_none_epic_id_returns_default_progress(tmp_path):
+    db_file = tmp_path / "framework.db"
+    setup_framework_db(db_file)
+
+    manager = DatabaseManager(framework_db_path=str(db_file))
+    progress = manager.get_epic_progress(None)
+
+    assert progress["id"] == 0
+    assert progress["progress_percentage"] == 0.0
+

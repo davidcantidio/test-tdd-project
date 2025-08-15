@@ -257,6 +257,15 @@ def render_timer_and_current_task():
             st.info("Please check database connection or refresh the page.")
 
 
+def format_epic_summary(epic: Dict[str, Any], max_length: int = 100) -> str:
+    """Return a safe, truncated summary for epic display."""
+    raw = epic.get("summary") or epic.get("description")
+    if not raw:
+        return "No description available"
+    text = str(raw)
+    return text[:max_length] + ("..." if len(text) > max_length else "")
+
+
 def render_enhanced_epic_cards():
     """Render enhanced epic progress cards with visualizations."""
     
@@ -288,13 +297,17 @@ def render_enhanced_epic_cards():
             return
         
         for epic in active_epics:
+            print(f"DEBUG: Processing epic: {epic}")
+            print(f"DEBUG: Epic keys: {epic.keys() if isinstance(epic, dict) else 'NOT A DICT'}")
             epic_id = epic.get('id')
+            print(f"DEBUG: Epic ID: {epic_id}, type: {type(epic_id)}")
             epic_name = epic.get('name', 'Unknown')
-            
+
             try:
                 with st.expander(f"**{epic_name}** - Epic {epic.get('epic_key', 'N/A')}", expanded=False):
                     # Get progress with robust error handling
                     progress = db_manager.get_epic_progress(epic_id)
+                    print(f"DEBUG: Progress received: {progress}, type: {type(progress)}")
                     
                     # SAFEGUARD: Ensure progress structure is valid
                     if not isinstance(progress, dict):
@@ -320,16 +333,17 @@ def render_enhanced_epic_cards():
                         progress_pct = 0
                     
                     col1, col2, col3, col4 = st.columns([2, 1, 1, 1])
-                    
+
                     with col1:
                         # Epic description and progress
-                        summary = epic.get('summary', epic.get('description', 'No description available'))
-                        st.markdown(f"**Summary:** {summary[:100]}{'...' if len(summary) > 100 else ''}")
-                        
+                        summary_text = format_epic_summary(epic)
+                        st.markdown(f"**Summary:** {summary_text}")
+
                         # Progress bar with error handling
                         try:
                             st.progress(progress_pct)
-                            st.caption(f"Progress: {progress_pct*100:.1f}% • Status: {epic.get('status', 'Unknown').title()}")
+                            status = (epic.get('status') or 'Unknown').title()
+                            st.caption(f"Progress: {progress_pct*100:.1f}% • Status: {status}")
                         except Exception as e:
                             st.error(f"Progress display error: {e}")
                     
@@ -378,8 +392,11 @@ def render_enhanced_epic_cards():
                             st.error(f"Epic stats error: {e}")
                         
             except Exception as e:
+                print(f"ERROR: Exception in get_epic_progress: {e}")
+                print(f"ERROR: Epic data: {epic}")
+                print(f"ERROR: Epic ID: {epic_id}")
                 st.error(f"❌ Error loading epic {epic_name}: {e}")
-                
+
                 # Show detailed error info in debug mode
                 if st.session_state.get("show_debug_info", False):
                     import traceback

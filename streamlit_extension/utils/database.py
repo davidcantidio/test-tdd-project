@@ -436,75 +436,97 @@ class DatabaseManager:
             return False
     
     def get_epic_progress(self, epic_id: int) -> Dict[str, Any]:
-        """Get detailed progress for an epic."""
+        """Get detailed progress for an epic with extensive debugging."""
+
+        # Early validation
+        if epic_id is None:
+            print("DEBUG: get_epic_progress called with epic_id=None")
+            return self._get_default_progress()
+
+        print(f"DEBUG: get_epic_progress called with epic_id={epic_id}, type={type(epic_id)}")
+
         try:
             with self.get_connection("framework") as conn:
                 if SQLALCHEMY_AVAILABLE:
                     # Get epic info
-                    epic_result = conn.execute(text("""
-                        SELECT id, epic_key, name, status, points_earned
-                        FROM framework_epics
-                        WHERE id = :epic_id AND deleted_at IS NULL
-                    """), {"epic_id": epic_id})
+                    epic_query = (
+                        "SELECT id, epic_key, name, status, points_earned "
+                        "FROM framework_epics "
+                        "WHERE id = :epic_id AND deleted_at IS NULL"
+                    )
+                    print(f"DEBUG: Executing epic query: {epic_query}")
+                    epic_result = conn.execute(text(epic_query), {"epic_id": epic_id})
                     epic_row = epic_result.fetchone()
+                    print(f"DEBUG: Epic row: {epic_row}, type={type(epic_row)}")
                     if not epic_row:
                         return self._get_default_progress()
                     epic = dict(epic_row._mapping)
-                    
+
                     # Get task counts
-                    task_result = conn.execute(text("""
-                        SELECT 
-                            COUNT(*) as total_tasks,
-                            SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed_tasks,
-                            SUM(CASE WHEN status = 'in_progress' THEN 1 ELSE 0 END) as in_progress_tasks
-                        FROM framework_tasks
-                        WHERE epic_id = :epic_id AND deleted_at IS NULL
-                    """), {"epic_id": epic_id})
+                    task_query = (
+                        "SELECT "
+                        "    COUNT(*) as total_tasks, "
+                        "    SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed_tasks, "
+                        "    SUM(CASE WHEN status = 'in_progress' THEN 1 ELSE 0 END) as in_progress_tasks "
+                        "FROM framework_tasks "
+                        "WHERE epic_id = :epic_id AND deleted_at IS NULL"
+                    )
+                    print(f"DEBUG: Executing task query: {task_query}")
+                    task_result = conn.execute(text(task_query), {"epic_id": epic_id})
                     task_row = task_result.fetchone()
+                    print(f"DEBUG: Task row: {task_row}, type={type(task_row)}")
                     if not task_row:
                         tasks = {"total_tasks": 0, "completed_tasks": 0, "in_progress_tasks": 0}
                     else:
                         tasks = {k: (v or 0) for k, v in dict(task_row._mapping).items()}
-                    
+
                 else:
                     cursor = conn.cursor()
-                    
+
                     # Get epic info
-                    cursor.execute("""
-                        SELECT id, epic_key, name, status, points_earned
-                        FROM framework_epics WHERE id = ? AND deleted_at IS NULL
-                    """, [epic_id])
+                    epic_query = (
+                        "SELECT id, epic_key, name, status, points_earned "
+                        "FROM framework_epics WHERE id = ? AND deleted_at IS NULL"
+                    )
+                    print(f"DEBUG: Executing epic query: {epic_query}")
+                    cursor.execute(epic_query, [epic_id])
                     epic_row = cursor.fetchone()
+                    print(f"DEBUG: Epic row: {epic_row}, type={type(epic_row)}")
                     if not epic_row:
                         return self._get_default_progress()
                     epic = dict(epic_row)
-                    
+
                     # Get task counts
-                    cursor.execute("""
-                        SELECT 
-                            COUNT(*) as total_tasks,
-                            SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed_tasks,
-                            SUM(CASE WHEN status = 'in_progress' THEN 1 ELSE 0 END) as in_progress_tasks
-                        FROM framework_tasks WHERE epic_id = ? AND deleted_at IS NULL
-                    """, [epic_id])
+                    task_query = (
+                        "SELECT "
+                        "    COUNT(*) as total_tasks, "
+                        "    SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed_tasks, "
+                        "    SUM(CASE WHEN status = 'in_progress' THEN 1 ELSE 0 END) as in_progress_tasks "
+                        "FROM framework_tasks WHERE epic_id = ? AND deleted_at IS NULL"
+                    )
+                    print(f"DEBUG: Executing task query: {task_query}")
+                    cursor.execute(task_query, [epic_id])
                     task_row = cursor.fetchone()
+                    print(f"DEBUG: Task row: {task_row}, type={type(task_row)}")
                     if not task_row:
                         tasks = {"total_tasks": 0, "completed_tasks": 0, "in_progress_tasks": 0}
                     else:
                         tasks = {k: (v or 0) for k, v in dict(task_row).items()}
-                
+
                 # Calculate progress
                 total = tasks.get("total_tasks") or 0
                 completed = tasks.get("completed_tasks") or 0
                 progress_pct = (completed / total * 100) if total > 0 else 0
-                
-                return {
+
+                progress_dict = {
                     **epic,
                     **tasks,
                     "progress_percentage": round(progress_pct, 1),
-                    "points_earned": epic.get("points_earned") or 0
+                    "points_earned": epic.get("points_earned") or 0,
                 }
-                
+                print(f"DEBUG: Returning: {progress_dict}")
+                return progress_dict
+
         except Exception as e:
             print(f"Error getting epic progress: {e}")
             return self._get_default_progress()
