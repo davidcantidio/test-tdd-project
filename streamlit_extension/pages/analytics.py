@@ -1018,7 +1018,8 @@ def _render_tdd_phase_distribution(analytics_data: Dict[str, Any]):
     phase_counts = {"red": 0, "green": 0, "refactor": 0, "unknown": 0}
 
     for task in tasks:
-        phase = task.get("tdd_phase", "unknown").lower()
+        phase = task.get("tdd_phase") or "unknown"
+        phase = phase.lower() if isinstance(phase, str) else "unknown"
         if phase in phase_counts:
             phase_counts[phase] += 1
         else:

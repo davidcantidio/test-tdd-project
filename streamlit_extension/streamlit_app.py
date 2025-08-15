@@ -493,6 +493,46 @@ def render_quick_actions():
     
     st.markdown("### ⚡ Quick Actions")
     
+    # First row - core actions
+    col1, col2, col3, col4 = st.columns(4)
+    
+    with col1:
+        QuickActionButton.render(
+            label="Clients",
+            icon="👥",
+            callback=lambda: st.session_state.update({"current_page": "clients"}),
+            color="primary",
+            tooltip="Manage clients and contacts"
+        )
+    
+    with col2:
+        QuickActionButton.render(
+            label="Projects",
+            icon="📁",
+            callback=lambda: st.session_state.update({"current_page": "projects"}),
+            color="primary",
+            tooltip="Manage projects and timelines"
+        )
+    
+    with col3:
+        QuickActionButton.render(
+            label="Analytics",
+            icon="📊",
+            callback=lambda: st.session_state.update({"current_page": "analytics"}),
+            color="success",
+            tooltip="View detailed analytics"
+        )
+    
+    with col4:
+        QuickActionButton.render(
+            label="Kanban",
+            icon="📋",
+            callback=lambda: st.session_state.update({"current_page": "kanban"}),
+            color="warning",
+            tooltip="Open Kanban board"
+        )
+    
+    # Second row - additional actions
     col1, col2, col3, col4 = st.columns(4)
     
     with col1:
@@ -500,26 +540,26 @@ def render_quick_actions():
             label="New Task",
             icon="➕",
             callback=lambda: st.session_state.update({"show_create_task": True}),
-            color="primary",
+            color="secondary",
             tooltip="Create a new task"
         )
     
     with col2:
         QuickActionButton.render(
-            label="Analytics",
-            icon="📊",
-            callback=lambda: st.session_state.update({"current_page": "Analytics"}),
-            color="success",
-            tooltip="View detailed analytics"
+            label="Timer",
+            icon="⏱️",
+            callback=lambda: st.session_state.update({"current_page": "timer"}),
+            color="secondary",
+            tooltip="Open focus timer"
         )
     
     with col3:
         QuickActionButton.render(
-            label="Kanban",
-            icon="📋",
-            callback=lambda: st.session_state.update({"current_page": "Kanban"}),
-            color="warning",
-            tooltip="Open Kanban board"
+            label="Gantt",
+            icon="📊",
+            callback=lambda: st.session_state.update({"current_page": "gantt"}),
+            color="secondary",
+            tooltip="View project timeline"
         )
     
     with col4:
@@ -536,7 +576,7 @@ def render_quick_actions():
             QuickActionButton.render(
                 label="Settings",
                 icon="⚙️",
-                callback=lambda: st.session_state.update({"current_page": "Settings"}),
+                callback=lambda: st.session_state.update({"current_page": "settings"}),
                 color="secondary",
                 tooltip="Configure settings"
             )
@@ -636,6 +676,35 @@ def main():
     # Render sidebar
     sidebar_state = render_sidebar()
     
+    # Page navigation logic
+    current_page = st.session_state.get("current_page", "Dashboard")
+    
+    # Import page registry and functions
+    try:
+        from streamlit_extension.pages import PAGE_REGISTRY, render_page
+        
+        # Render the appropriate page
+        if current_page == "Dashboard" or current_page not in PAGE_REGISTRY:
+            # Render main dashboard
+            render_main_dashboard()
+        else:
+            # Render selected page
+            page_result = render_page(current_page)
+            if page_result and "error" in page_result:
+                st.error(f"❌ Error loading page: {page_result['error']}")
+                # Fallback to dashboard
+                st.session_state.current_page = "Dashboard"
+                render_main_dashboard()
+    except ImportError as e:
+        st.error(f"❌ Page system not available: {e}")
+        render_main_dashboard()
+    
+    # Footer
+    render_footer()
+
+
+def render_main_dashboard():
+    """Render the main dashboard content."""
     # Main content area with enhanced dashboard
     with st.container():
         # Enhanced header with welcome and quick stats
@@ -677,7 +746,10 @@ def main():
         
         # Debug panel (if enabled)
         render_debug_panel()
-    
+
+
+def render_footer():
+    """Render the application footer."""
     # Footer with enhanced information
     st.markdown("---")
     col1, col2, col3, col4 = st.columns(4)

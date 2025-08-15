@@ -2206,3 +2206,233 @@ class DatabaseManager:
         except Exception as e:
             logger.error(f"Error getting project by key: {e}")
             return None
+    
+    @invalidate_cache_on_change("db_query:get_clients:", "db_query:get_client_dashboard:") if CACHE_AVAILABLE else lambda f: f
+    def update_client(self, client_id: int, **fields) -> bool:
+        """Update an existing client.
+        
+        Args:
+            client_id: ID of the client to update
+            **fields: Fields to update
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            if not fields:
+                return True
+                
+            # Add updated_at timestamp
+            fields['updated_at'] = 'CURRENT_TIMESTAMP'
+            
+            # Build SET clause
+            set_clauses = []
+            values = {}
+            
+            for key, value in fields.items():
+                if key == 'updated_at':
+                    set_clauses.append(f"{key} = CURRENT_TIMESTAMP")
+                else:
+                    set_clauses.append(f"{key} = :{key}")
+                    values[key] = value
+            
+            values['client_id'] = client_id
+            
+            with self.get_connection("framework") as conn:
+                if SQLALCHEMY_AVAILABLE:
+                    conn.execute(text(f"""
+                        UPDATE framework_clients 
+                        SET {', '.join(set_clauses)}
+                        WHERE id = :client_id AND deleted_at IS NULL
+                    """), values)
+                    conn.commit()
+                else:
+                    cursor = conn.cursor()
+                    # Convert to positional parameters for sqlite
+                    positional_values = [values[key] for key in values.keys() if key != 'client_id']
+                    positional_values.append(client_id)
+                    
+                    sqlite_clauses = [clause.replace(f':{key}', '?') for clause in set_clauses if f':{key}' in clause]
+                    sqlite_clauses.extend([clause for clause in set_clauses if '?' not in clause and ':' not in clause])
+                    
+                    cursor.execute(f"""
+                        UPDATE framework_clients 
+                        SET {', '.join(sqlite_clauses)}
+                        WHERE id = ? AND deleted_at IS NULL
+                    """, positional_values)
+                    conn.commit()
+                
+                return True
+                
+        except Exception as e:
+            logger.error(f"Error updating client: {e}")
+            if STREAMLIT_AVAILABLE and st:
+                st.error(f"❌ Error updating client: {e}")
+            return False
+    
+    @invalidate_cache_on_change("db_query:get_clients:", "db_query:get_client_dashboard:") if CACHE_AVAILABLE else lambda f: f
+    def delete_client(self, client_id: int, soft_delete: bool = True) -> bool:
+        """Delete a client (soft delete by default).
+        
+        Args:
+            client_id: ID of the client to delete
+            soft_delete: If True, mark as deleted instead of removing
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            with self.get_connection("framework") as conn:
+                if soft_delete:
+                    if SQLALCHEMY_AVAILABLE:
+                        conn.execute(text("""
+                            UPDATE framework_clients 
+                            SET deleted_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+                            WHERE id = :client_id
+                        """), {"client_id": client_id})
+                        conn.commit()
+                    else:
+                        cursor = conn.cursor()
+                        cursor.execute("""
+                            UPDATE framework_clients 
+                            SET deleted_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+                            WHERE id = ?
+                        """, (client_id,))
+                        conn.commit()
+                else:
+                    if SQLALCHEMY_AVAILABLE:
+                        conn.execute(text("DELETE FROM framework_clients WHERE id = :client_id"), 
+                                   {"client_id": client_id})
+                        conn.commit()
+                    else:
+                        cursor = conn.cursor()
+                        cursor.execute("DELETE FROM framework_clients WHERE id = ?", (client_id,))
+                        conn.commit()
+                
+                return True
+                
+        except Exception as e:
+            logger.error(f"Error deleting client: {e}")
+            if STREAMLIT_AVAILABLE and st:
+                st.error(f"❌ Error deleting client: {e}")
+            return False
+    
+    @invalidate_cache_on_change(
+        "db_query:get_projects:",
+        "db_query:get_hierarchy_overview:",
+        "db_query:get_client_dashboard:",
+        "db_query:get_project_dashboard:"
+    ) if CACHE_AVAILABLE else lambda f: f
+    def update_project(self, project_id: int, **fields) -> bool:
+        """Update an existing project.
+        
+        Args:
+            project_id: ID of the project to update
+            **fields: Fields to update
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            if not fields:
+                return True
+                
+            # Add updated_at timestamp
+            fields['updated_at'] = 'CURRENT_TIMESTAMP'
+            
+            # Build SET clause
+            set_clauses = []
+            values = {}
+            
+            for key, value in fields.items():
+                if key == 'updated_at':
+                    set_clauses.append(f"{key} = CURRENT_TIMESTAMP")
+                else:
+                    set_clauses.append(f"{key} = :{key}")
+                    values[key] = value
+            
+            values['project_id'] = project_id
+            
+            with self.get_connection("framework") as conn:
+                if SQLALCHEMY_AVAILABLE:
+                    conn.execute(text(f"""
+                        UPDATE framework_projects 
+                        SET {', '.join(set_clauses)}
+                        WHERE id = :project_id AND deleted_at IS NULL
+                    """), values)
+                    conn.commit()
+                else:
+                    cursor = conn.cursor()
+                    # Convert to positional parameters for sqlite
+                    positional_values = [values[key] for key in values.keys() if key != 'project_id']
+                    positional_values.append(project_id)
+                    
+                    sqlite_clauses = [clause.replace(f':{key}', '?') for clause in set_clauses if f':{key}' in clause]
+                    sqlite_clauses.extend([clause for clause in set_clauses if '?' not in clause and ':' not in clause])
+                    
+                    cursor.execute(f"""
+                        UPDATE framework_projects 
+                        SET {', '.join(sqlite_clauses)}
+                        WHERE id = ? AND deleted_at IS NULL
+                    """, positional_values)
+                    conn.commit()
+                
+                return True
+                
+        except Exception as e:
+            logger.error(f"Error updating project: {e}")
+            if STREAMLIT_AVAILABLE and st:
+                st.error(f"❌ Error updating project: {e}")
+            return False
+    
+    @invalidate_cache_on_change(
+        "db_query:get_projects:",
+        "db_query:get_hierarchy_overview:",
+        "db_query:get_client_dashboard:",
+        "db_query:get_project_dashboard:"
+    ) if CACHE_AVAILABLE else lambda f: f
+    def delete_project(self, project_id: int, soft_delete: bool = True) -> bool:
+        """Delete a project (soft delete by default).
+        
+        Args:
+            project_id: ID of the project to delete
+            soft_delete: If True, mark as deleted instead of removing
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            with self.get_connection("framework") as conn:
+                if soft_delete:
+                    if SQLALCHEMY_AVAILABLE:
+                        conn.execute(text("""
+                            UPDATE framework_projects 
+                            SET deleted_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+                            WHERE id = :project_id
+                        """), {"project_id": project_id})
+                        conn.commit()
+                    else:
+                        cursor = conn.cursor()
+                        cursor.execute("""
+                            UPDATE framework_projects 
+                            SET deleted_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+                            WHERE id = ?
+                        """, (project_id,))
+                        conn.commit()
+                else:
+                    if SQLALCHEMY_AVAILABLE:
+                        conn.execute(text("DELETE FROM framework_projects WHERE id = :project_id"), 
+                                   {"project_id": project_id})
+                        conn.commit()
+                    else:
+                        cursor = conn.cursor()
+                        cursor.execute("DELETE FROM framework_projects WHERE id = ?", (project_id,))
+                        conn.commit()
+                
+                return True
+                
+        except Exception as e:
+            logger.error(f"Error deleting project: {e}")
+            if STREAMLIT_AVAILABLE and st:
+                st.error(f"❌ Error deleting project: {e}")
+            return False

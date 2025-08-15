@@ -45,6 +45,20 @@ except ImportError:
     render_settings_page = None
     SETTINGS_AVAILABLE = False
 
+try:
+    from .clients import render_clients_page
+    CLIENTS_AVAILABLE = True
+except ImportError:
+    render_clients_page = None
+    CLIENTS_AVAILABLE = False
+
+try:
+    from .projects import render_projects_page
+    PROJECTS_AVAILABLE = True
+except ImportError:
+    render_projects_page = None
+    PROJECTS_AVAILABLE = False
+
 
 # Page registry for navigation
 PAGE_REGISTRY = {
@@ -89,6 +103,20 @@ PAGE_REGISTRY = {
         "description": "Configuration and preferences",
         "render_func": render_settings_page,
         "available": SETTINGS_AVAILABLE
+    },
+    "clients": {
+        "title": "👥 Clients",
+        "icon": "👥",
+        "description": "Client management and contacts",
+        "render_func": render_clients_page,
+        "available": CLIENTS_AVAILABLE
+    },
+    "projects": {
+        "title": "📁 Projects",
+        "icon": "📁",
+        "description": "Project management and tracking",
+        "render_func": render_projects_page,
+        "available": PROJECTS_AVAILABLE
     }
 }
 
@@ -125,6 +153,8 @@ __all__ = [
     "render_gantt_page",
     "render_timer_page",
     "render_settings_page",
+    "render_clients_page",
+    "render_projects_page",
     "PAGE_REGISTRY",
     "get_available_pages",
     "render_page",
@@ -132,5 +162,7 @@ __all__ = [
     "KANBAN_AVAILABLE",
     "GANTT_AVAILABLE", 
     "TIMER_AVAILABLE",
-    "SETTINGS_AVAILABLE"
+    "SETTINGS_AVAILABLE",
+    "CLIENTS_AVAILABLE",
+    "PROJECTS_AVAILABLE"
 ]

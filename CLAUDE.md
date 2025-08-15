@@ -525,3 +525,4 @@ streamlit run streamlit_extension/streamlit_app.py
 *Total Tests: **513** (100% passing - 511 pass, 2 skip) | Runtime: **<8s***  
 *Status: **ENTERPRISE HARDENING CERTIFIED** - Bulletproof production deployment ready*  
 *Next: Phase 1.2.2 - Priority System (Optional Enhancement)*
+- semore leia o arquivo antes de tentar edita-lo.
