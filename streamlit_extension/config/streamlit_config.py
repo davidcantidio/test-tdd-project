@@ -124,16 +124,34 @@ class StreamlitConfig:
         return all([self.github_token, self.github_repo_owner, self.github_repo_name])
     
     def get_database_path(self) -> Path:
-        """Get the main database file path."""
+        """Get the main database file path, resolved relative to project root."""
         if self.database_url.startswith("sqlite:///"):
-            return Path(self.database_url.replace("sqlite:///", ""))
-        return Path("framework.db")  # fallback
+            db_path = Path(self.database_url.replace("sqlite:///", ""))
+        else:
+            db_path = Path("framework.db")  # fallback
+        
+        # If path is relative, resolve it relative to project root
+        if not db_path.is_absolute():
+            # Get project root by going up from streamlit_extension directory
+            project_root = Path(__file__).parent.parent.parent
+            db_path = project_root / db_path
+        
+        return db_path.resolve()
     
     def get_timer_database_path(self) -> Path:
-        """Get the timer database file path."""
+        """Get the timer database file path, resolved relative to project root."""
         if self.timer_database_url.startswith("sqlite:///"):
-            return Path(self.timer_database_url.replace("sqlite:///", ""))
-        return Path("task_timer.db")  # fallback
+            db_path = Path(self.timer_database_url.replace("sqlite:///", ""))
+        else:
+            db_path = Path("task_timer.db")  # fallback
+        
+        # If path is relative, resolve it relative to project root
+        if not db_path.is_absolute():
+            # Get project root by going up from streamlit_extension directory
+            project_root = Path(__file__).parent.parent.parent
+            db_path = project_root / db_path
+        
+        return db_path.resolve()
     
     def get_streamlit_config_dict(self) -> Dict[str, Any]:
         """Get Streamlit-specific configuration as dictionary."""

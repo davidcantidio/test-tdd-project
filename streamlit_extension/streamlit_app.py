@@ -264,6 +264,15 @@ def render_enhanced_epic_cards():
     
     db_manager = st.session_state.db_manager
     
+    # 🔍 DEBUG: Log database configuration
+    if st.session_state.get("show_debug_info", False):
+        with st.expander("🔧 Epic Progress Debug Info", expanded=False):
+            st.write("**Database Manager Config:**")
+            st.write(f"- Framework DB Path: {db_manager.framework_db_path}")
+            st.write(f"- Timer DB Path: {db_manager.timer_db_path}")
+            st.write(f"- Framework DB Exists: {db_manager.framework_db_path.exists()}")
+            st.write(f"- Timer DB Exists: {db_manager.timer_db_path.exists()}")
+    
     try:
         epics = db_manager.get_epics()
         
@@ -279,13 +288,16 @@ def render_enhanced_epic_cards():
             return
         
         for epic in active_epics:
+            epic_id = epic.get('id')
+            epic_name = epic.get('name', 'Unknown')
+            
             try:
-                with st.expander(f"**{epic['name']}** - Epic {epic.get('epic_key', 'N/A')}", expanded=False):
-                    # Progress metrics
-                    progress = db_manager.get_epic_progress(epic['id'])
+                with st.expander(f"**{epic_name}** - Epic {epic.get('epic_key', 'N/A')}", expanded=False):
+                    # Get progress with robust error handling
+                    progress = db_manager.get_epic_progress(epic_id)
                     
-                    # SAFEGUARD: Ensure progress is never None
-                    if progress is None:
+                    # SAFEGUARD: Ensure progress structure is valid
+                    if not isinstance(progress, dict):
                         progress = {
                             "progress_percentage": 0,
                             "total_tasks": 0,
@@ -294,7 +306,18 @@ def render_enhanced_epic_cards():
                             "points_earned": 0
                         }
                     
-                    progress_pct = progress.get("progress_percentage", 0) / 100
+                    # Ensure all required keys exist
+                    required_keys = ["progress_percentage", "total_tasks", "completed_tasks", "in_progress_tasks", "points_earned"]
+                    for key in required_keys:
+                        if key not in progress:
+                            progress[key] = 0
+                    
+                    # Safe progress percentage calculation
+                    progress_percentage = progress.get("progress_percentage", 0)
+                    if isinstance(progress_percentage, (int, float)):
+                        progress_pct = progress_percentage / 100
+                    else:
+                        progress_pct = 0
                     
                     col1, col2, col3, col4 = st.columns([2, 1, 1, 1])
                     
@@ -303,49 +326,77 @@ def render_enhanced_epic_cards():
                         summary = epic.get('summary', epic.get('description', 'No description available'))
                         st.markdown(f"**Summary:** {summary[:100]}{'...' if len(summary) > 100 else ''}")
                         
-                        # Progress bar with custom styling
-                        st.progress(progress_pct)
-                        st.caption(f"Progress: {progress_pct*100:.1f}% • Status: {epic.get('status', 'Unknown').title()}")
+                        # Progress bar with error handling
+                        try:
+                            st.progress(progress_pct)
+                            st.caption(f"Progress: {progress_pct*100:.1f}% • Status: {epic.get('status', 'Unknown').title()}")
+                        except Exception as e:
+                            st.error(f"Progress display error: {e}")
                     
                     with col2:
                         # Tasks breakdown
-                        total_tasks = progress.get("total_tasks", 0)
-                        completed_tasks = progress.get("completed_tasks", 0)
-                        in_progress_tasks = progress.get("in_progress_tasks", 0)
-                        
-                        st.metric(
-                            label="Tasks Progress",
-                            value=f"{completed_tasks}/{total_tasks}",
-                            delta=f"{in_progress_tasks} in progress" if in_progress_tasks > 0 else "Ready to start"
-                        )
+                        try:
+                            total_tasks = progress.get("total_tasks", 0)
+                            completed_tasks = progress.get("completed_tasks", 0)
+                            in_progress_tasks = progress.get("in_progress_tasks", 0)
+                            
+                            st.metric(
+                                label="Tasks Progress",
+                                value=f"{completed_tasks}/{total_tasks}",
+                                delta=f"{in_progress_tasks} in progress" if in_progress_tasks > 0 else "Ready to start"
+                            )
+                        except Exception as e:
+                            st.error(f"Tasks breakdown error: {e}")
                     
                     with col3:
                         # Duration and timing
-                        duration = epic.get('duration_description', 'Not set')
-                        st.metric(
-                            label="Duration",
-                            value=duration if duration else "TBD",
-                            delta="Estimated"
-                        )
+                        try:
+                            duration = epic.get('duration_description', 'Not set')
+                            st.metric(
+                                label="Duration",
+                                value=duration if duration else "TBD",
+                                delta="Estimated"
+                            )
+                        except Exception as e:
+                            st.error(f"Duration display error: {e}")
                     
                     with col4:
                         # Epic stats and actions
-                        points = progress.get("points_earned", 0)
-                        st.metric(
-                            label="Points",
-                            value=points,
-                            delta="Earned!" if points > 0 else "Pending"
-                        )
-                        
-                        # Quick action button
-                        if st.button(f"View Epic {epic.get('epic_key', 'N/A')}", key=f"view_epic_{epic['id']}"):
-                            st.info(f"Navigate to epic {epic['name']} details")
+                        try:
+                            points = progress.get("points_earned", 0)
+                            
+                            st.metric(
+                                label="Points",
+                                value=points,
+                                delta="Earned!" if points > 0 else "Pending"
+                            )
+                            
+                            # Quick action button
+                            if st.button(f"View Epic {epic.get('epic_key', 'N/A')}", key=f"view_epic_{epic['id']}"):
+                                st.info(f"Navigate to epic {epic['name']} details")
+                        except Exception as e:
+                            st.error(f"Epic stats error: {e}")
                         
             except Exception as e:
-                st.error(f"❌ Error loading epic {epic.get('name', 'Unknown')}: {e}")
+                st.error(f"❌ Error loading epic {epic_name}: {e}")
+                
+                # Show detailed error info in debug mode
+                if st.session_state.get("show_debug_info", False):
+                    import traceback
+                    error_details = traceback.format_exc()
+                    with st.expander("🔧 Error Details", expanded=False):
+                        st.code(error_details)
                 
     except Exception as e:
         st.error(f"❌ Error loading epics: {e}")
+        
+        # Show detailed error info in debug mode
+        if st.session_state.get("show_debug_info", False):
+            import traceback
+            error_details = traceback.format_exc()
+            with st.expander("🔧 Critical Error Details", expanded=False):
+                st.code(error_details)
+        
         st.info("Please check database connection or refresh the page.")
 
 

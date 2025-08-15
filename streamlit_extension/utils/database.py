@@ -443,7 +443,8 @@ class DatabaseManager:
                     # Get epic info
                     epic_result = conn.execute(text("""
                         SELECT id, epic_key, name, status, points_earned
-                        FROM framework_epics WHERE id = :epic_id
+                        FROM framework_epics
+                        WHERE id = :epic_id AND deleted_at IS NULL
                     """), {"epic_id": epic_id})
                     epic_row = epic_result.fetchone()
                     if not epic_row:
@@ -456,7 +457,8 @@ class DatabaseManager:
                             COUNT(*) as total_tasks,
                             SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed_tasks,
                             SUM(CASE WHEN status = 'in_progress' THEN 1 ELSE 0 END) as in_progress_tasks
-                        FROM framework_tasks WHERE epic_id = :epic_id
+                        FROM framework_tasks
+                        WHERE epic_id = :epic_id AND deleted_at IS NULL
                     """), {"epic_id": epic_id})
                     task_row = task_result.fetchone()
                     if not task_row:
@@ -470,7 +472,7 @@ class DatabaseManager:
                     # Get epic info
                     cursor.execute("""
                         SELECT id, epic_key, name, status, points_earned
-                        FROM framework_epics WHERE id = ?
+                        FROM framework_epics WHERE id = ? AND deleted_at IS NULL
                     """, [epic_id])
                     epic_row = cursor.fetchone()
                     if not epic_row:
