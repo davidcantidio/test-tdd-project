@@ -17,6 +17,9 @@
 - [🔄 CI/CD Pipeline Issues](#-cicd-pipeline-issues)
 - [📱 VSCode Integration](#-vscode-integration)
 - [🌐 GitHub Pages Issues](#-github-pages-issues)
+- [🎯 Type Hints and Constants Issues](#-type-hints-and-constants-issues)
+- [🏗️ DRY Components Issues](#-dry-components-issues)
+- [🔒 Security and Validation Issues](#-security-and-validation-issues)
 - [📞 Getting Additional Help](#-getting-additional-help)
 
 ## 🚨 **Common Setup Issues**
@@ -772,6 +775,208 @@ echo "your-domain.com" > docs/CNAME
 
 # Verify domain
 gh repo edit --add-topic custom-domain
+```
+
+## 🎯 **Type Hints and Constants Issues**
+
+### **❌ Type Hint Coverage Analysis Fails**
+
+**Error:**
+```
+TypeError: 'NoneType' object has no attribute 'get_all_values'
+```
+
+**Solution:**
+```bash
+# Check if constants module is imported correctly
+python -c "from streamlit_extension.config.constants import TaskStatus; print(TaskStatus.get_all_values())"
+
+# Run the analysis tool
+python analysis_type_hints.py
+
+# If analysis shows low coverage, add type hints gradually
+# Focus on high-priority CRUD methods first
+```
+
+### **❌ Constants Import Errors**
+
+**Error:**
+```
+ImportError: No module named 'streamlit_extension.config.constants'
+```
+
+**Solution:**
+```bash
+# Verify constants module exists
+ls -la streamlit_extension/config/constants.py
+
+# Test constants functionality
+python test_constants.py
+
+# Check if __init__.py includes constants
+grep -n "constants" streamlit_extension/config/__init__.py
+
+# If missing, add to __init__.py:
+# from .constants import TaskStatus, EpicStatus, ...
+```
+
+### **❌ Enum Values Not Working**
+
+**Error:**
+```
+AttributeError: 'NoneType' object has no attribute 'value'
+```
+
+**Solution:**
+```bash
+# Test enum functionality
+python -c "
+from streamlit_extension.config.constants import TaskStatus
+print('All values:', TaskStatus.get_all_values())
+print('Active statuses:', TaskStatus.get_active_statuses())
+print('TODO value:', TaskStatus.TODO.value)
+"
+
+# Use graceful fallbacks in code:
+status_options = TaskStatus.get_all_values() if TaskStatus else ["todo", "in_progress", "completed"]
+```
+
+## 🏗️ **DRY Components Issues**
+
+### **❌ Form Components Import Error**
+
+**Error:**
+```
+ImportError: No module named 'streamlit_extension.components.form_components'
+```
+
+**Solution:**
+```bash
+# Check if form components exist
+ls -la streamlit_extension/components/form_components.py
+
+# Test form components
+python test_form_components.py
+
+# Verify dependencies are available
+python -c "import streamlit; print('Streamlit available')"
+```
+
+### **❌ DRY Form Validation Fails**
+
+**Error:**
+```
+TypeError: validate_and_submit() missing required arguments
+```
+
+**Solution:**
+```bash
+# Check form component usage pattern:
+# 1. Create form configuration
+config = FormConfig("form_id", "Form Title")
+
+# 2. Create form instance
+form = StandardForm(config)
+
+# 3. Use validation
+result = form.validate_and_submit(
+    form_data,
+    required_fields,
+    validation_func=custom_validation,
+    submit_func=submit_function
+)
+
+# Test form components thoroughly
+python test_form_components.py -v
+```
+
+### **❌ Modal Forms Not Displaying**
+
+**Error:**
+```
+Modal forms appear empty or don't respond to interactions
+```
+
+**Solution:**
+```bash
+# Check Streamlit version compatibility
+pip show streamlit
+
+# Ensure proper modal usage with context manager:
+with form.modal_form(width="large"):
+    # Form content here
+    pass
+
+# Check for session state conflicts
+# Use unique form IDs to avoid conflicts
+```
+
+## 🔒 **Security and Validation Issues**
+
+### **❌ CSRF Token Validation Fails**
+
+**Error:**
+```
+Security Error: Invalid CSRF token
+```
+
+**Solution:**
+```bash
+# Check if security manager is available
+python -c "
+try:
+    from streamlit_extension.utils.security import security_manager
+    print('Security manager available:', security_manager is not None)
+except ImportError as e:
+    print('Security import error:', e)
+"
+
+# Ensure CSRF tokens are generated and validated properly
+# In forms, check for:
+csrf_field = security_manager.get_csrf_form_field(form_id)
+csrf_valid, csrf_error = security_manager.require_csrf_protection(form_id, token)
+```
+
+### **❌ Rate Limiting Blocking Operations**
+
+**Error:**
+```
+Rate limited: Too many requests
+```
+
+**Solution:**
+```bash
+# Check rate limiting configuration
+python -c "
+from streamlit_extension.utils.security import check_rate_limit
+result, error = check_rate_limit('test_operation')
+print(f'Rate limit result: {result}, error: {error}')
+"
+
+# Adjust rate limits in security configuration if needed
+# Wait between operations or implement exponential backoff
+```
+
+### **❌ Validation Rules Not Applied**
+
+**Error:**
+```
+Invalid data passed validation checks
+```
+
+**Solution:**
+```bash
+# Test validation rules
+python -c "
+from streamlit_extension.config.constants import ValidationRules
+print('Max name length:', ValidationRules.MAX_NAME_LENGTH)
+print('Email pattern:', ValidationRules.EMAIL_PATTERN)
+"
+
+# Check validation implementation:
+# 1. Import validation functions correctly
+# 2. Apply business rules consistently  
+# 3. Use ValidationRules constants for limits
 ```
 
 ## 📞 **Getting Additional Help**

@@ -29,11 +29,21 @@ except ImportError:
 try:
     from streamlit_extension.utils.database import DatabaseManager
     from streamlit_extension.utils.validators import validate_client_data, validate_email_uniqueness, validate_client_key_uniqueness
+    from streamlit_extension.utils.auth import require_authentication
+    from streamlit_extension.utils.security import (
+        create_safe_client, sanitize_display, validate_form, check_rate_limit,
+        security_manager
+    )
     from streamlit_extension.config import load_config
+    from streamlit_extension.config.constants import (
+        GeneralStatus, ClientTier, CompanySize, UIConstants, FormFields
+    )
     DATABASE_UTILS_AVAILABLE = True
 except ImportError:
     DATABASE_UTILS_AVAILABLE = False
     DatabaseManager = validate_client_data = load_config = None
+    create_safe_client = sanitize_display = validate_form = None
+    GeneralStatus = ClientTier = CompanySize = UIConstants = FormFields = None
 
 
 def render_client_card(client: Dict[str, Any], db_manager: DatabaseManager):
@@ -44,10 +54,10 @@ def render_client_card(client: Dict[str, Any], db_manager: DatabaseManager):
     with st.container():
         # Card header with status indicator
         status_colors = {
-            "active": "🟢",
-            "inactive": "🟡", 
-            "suspended": "🔴",
-            "archived": "⚫"
+            GeneralStatus.ACTIVE.value if GeneralStatus else "active": "🟢",
+            GeneralStatus.INACTIVE.value if GeneralStatus else "inactive": "🟡", 
+            GeneralStatus.SUSPENDED.value if GeneralStatus else "suspended": "🔴",
+            GeneralStatus.ARCHIVED.value if GeneralStatus else "archived": "⚫"
         }
         status_emoji = status_colors.get(client.get("status", "active"), "⚪")
         
@@ -72,17 +82,21 @@ def render_client_card(client: Dict[str, Any], db_manager: DatabaseManager):
         
         with col1:
             if client.get('description'):
-                st.markdown(f"**Description:** {client['description']}")
+                safe_description = sanitize_display(client['description']) if sanitize_display else client['description']
+                st.markdown(f"**Description:** {safe_description}")
             
             # Contact information
             if client.get('primary_contact_name') or client.get('primary_contact_email'):
                 st.markdown("**Contact:**")
                 if client.get('primary_contact_name'):
-                    st.markdown(f"• **Name:** {client['primary_contact_name']}")
+                    safe_name = sanitize_display(client['primary_contact_name']) if sanitize_display else client['primary_contact_name']
+                    st.markdown(f"• **Name:** {safe_name}")
                 if client.get('primary_contact_email'):
-                    st.markdown(f"• **Email:** {client['primary_contact_email']}")
+                    safe_email = sanitize_display(client['primary_contact_email']) if sanitize_display else client['primary_contact_email']
+                    st.markdown(f"• **Email:** {safe_email}")
                 if client.get('primary_contact_phone'):
-                    st.markdown(f"• **Phone:** {client['primary_contact_phone']}")
+                    safe_phone = sanitize_display(client['primary_contact_phone']) if sanitize_display else client['primary_contact_phone']
+                    st.markdown(f"• **Phone:** {safe_phone}")
         
         with col2:
             # Business info
@@ -121,6 +135,10 @@ def render_edit_client_modal(client: Dict[str, Any], db_manager: DatabaseManager
         with st.form(f"edit_client_form_{client['id']}"):
             st.markdown("### 📝 Edit Client Information")
             
+            # Generate CSRF token for form protection
+            csrf_form_id = f"edit_client_form_{client['id']}"
+            csrf_field = security_manager.get_csrf_form_field(csrf_form_id) if security_manager else None
+            
             col1, col2 = st.columns(2)
             
             with col1:
@@ -130,9 +148,11 @@ def render_edit_client_modal(client: Dict[str, Any], db_manager: DatabaseManager
                 description = st.text_area("Description", value=client.get('description', ''))
                 
                 industry = st.text_input("Industry", value=client.get('industry', ''))
+                company_size_options = CompanySize.get_all_values() if CompanySize else ["startup", "small", "medium", "large", "enterprise"]
+                company_size_default = CompanySize.get_default() if CompanySize else 'startup'
                 company_size = st.selectbox("Company Size", 
-                    options=["startup", "small", "medium", "large", "enterprise"],
-                    index=["startup", "small", "medium", "large", "enterprise"].index(client.get('company_size', 'startup'))
+                    options=company_size_options,
+                    index=company_size_options.index(client.get('company_size', company_size_default))
                 )
             
             with col2:
@@ -142,13 +162,16 @@ def render_edit_client_modal(client: Dict[str, Any], db_manager: DatabaseManager
                 primary_contact_phone = st.text_input("Contact Phone", value=client.get('primary_contact_phone', ''))
                 
                 st.markdown("#### Business Settings")
+                status_options = GeneralStatus.get_all_values() if GeneralStatus else ["active", "inactive", "suspended", "archived"]
                 status = st.selectbox("Status", 
-                    options=["active", "inactive", "suspended", "archived"],
-                    index=["active", "inactive", "suspended", "archived"].index(client.get('status', 'active'))
+                    options=status_options,
+                    index=status_options.index(client.get('status', GeneralStatus.ACTIVE.value if GeneralStatus else 'active'))
                 )
+                tier_options = ClientTier.get_all_values() if ClientTier else ["basic", "standard", "premium", "enterprise"]
+                tier_default = ClientTier.get_default() if ClientTier else 'standard'
                 client_tier = st.selectbox("Client Tier",
-                    options=["basic", "standard", "premium", "enterprise"],
-                    index=["basic", "standard", "premium", "enterprise"].index(client.get('client_tier', 'standard'))
+                    options=tier_options,
+                    index=tier_options.index(client.get('client_tier', tier_default))
                 )
                 hourly_rate = st.number_input("Hourly Rate (R$)", value=float(client.get('hourly_rate', 0.0)), min_value=0.0)
             
@@ -156,8 +179,23 @@ def render_edit_client_modal(client: Dict[str, Any], db_manager: DatabaseManager
             
             with col1:
                 if st.form_submit_button("💾 Update Client", use_container_width=True):
-                    # Validate data
-                    client_data = {
+                    # CSRF Protection
+                    if csrf_field and security_manager:
+                        csrf_valid, csrf_error = security_manager.require_csrf_protection(
+                            csrf_form_id, csrf_field.get("token_value")
+                        )
+                        if not csrf_valid:
+                            st.error(f"🔒 Security Error: {csrf_error}")
+                            return
+                    
+                    # Check rate limit for form submission
+                    rate_allowed, rate_error = check_rate_limit("form_submit") if check_rate_limit else (True, None)
+                    if not rate_allowed:
+                        st.error(f"🚦 {rate_error}")
+                        return
+                    
+                    # Create raw data
+                    raw_data = {
                         'client_key': client_key,
                         'name': name,
                         'description': description,
@@ -171,6 +209,17 @@ def render_edit_client_modal(client: Dict[str, Any], db_manager: DatabaseManager
                         'hourly_rate': hourly_rate
                     }
                     
+                    # Security validation
+                    if validate_form:
+                        security_valid, security_errors = validate_form(raw_data)
+                        if not security_valid:
+                            for error in security_errors:
+                                st.error(f"🔒 Security: {error}")
+                            return
+                    
+                    # Sanitize data for security
+                    client_data = create_safe_client(raw_data) if create_safe_client else raw_data
+                    
                     is_valid, errors = validate_client_data(client_data)
                     
                     if is_valid:
@@ -183,6 +232,12 @@ def render_edit_client_modal(client: Dict[str, Any], db_manager: DatabaseManager
                         elif not validate_client_key_uniqueness(client_key, existing_clients, client['id']):
                             st.error("❌ Client key already exists")
                         else:
+                            # Check rate limit for database write
+                            db_rate_allowed, db_rate_error = check_rate_limit("db_write") if check_rate_limit else (True, None)
+                            if not db_rate_allowed:
+                                st.error(f"🚦 Database {db_rate_error}")
+                                return
+                            
                             # Update client
                             success = db_manager.update_client(client['id'], **client_data)
                             if success:
@@ -222,6 +277,12 @@ def render_delete_client_modal(client: Dict[str, Any], db_manager: DatabaseManag
         
         with col1:
             if st.button("🗑️ Delete Client", use_container_width=True):
+                # Check rate limit for database write
+                db_rate_allowed, db_rate_error = check_rate_limit("db_write") if check_rate_limit else (True, None)
+                if not db_rate_allowed:
+                    st.error(f"🚦 Database {db_rate_error}")
+                    return
+                
                 success = db_manager.delete_client(client['id'], soft_delete=True)
                 if success:
                     st.success("✅ Client deleted successfully!")
@@ -245,6 +306,10 @@ def render_create_client_form(db_manager: DatabaseManager):
         with st.form("create_client_form"):
             st.markdown("### 📝 New Client Information")
             
+            # Generate CSRF token for form protection
+            csrf_form_id = "create_client_form"
+            csrf_field = security_manager.get_csrf_form_field(csrf_form_id) if security_manager else None
+            
             col1, col2 = st.columns(2)
             
             with col1:
@@ -254,7 +319,8 @@ def render_create_client_form(db_manager: DatabaseManager):
                 description = st.text_area("Description", placeholder="Brief description of the client...")
                 
                 industry = st.text_input("Industry", placeholder="e.g., Technology")
-                company_size = st.selectbox("Company Size", options=["startup", "small", "medium", "large", "enterprise"])
+                company_size_options = CompanySize.get_all_values() if CompanySize else ["startup", "small", "medium", "large", "enterprise"]
+                company_size = st.selectbox("Company Size", options=company_size_options)
             
             with col2:
                 st.markdown("#### Contact Information")
@@ -263,13 +329,31 @@ def render_create_client_form(db_manager: DatabaseManager):
                 primary_contact_phone = st.text_input("Contact Phone", placeholder="+55 (11) 99999-9999")
                 
                 st.markdown("#### Business Settings")
-                status = st.selectbox("Status", options=["active", "inactive", "suspended", "archived"], index=0)
-                client_tier = st.selectbox("Client Tier", options=["basic", "standard", "premium", "enterprise"], index=1)
+                status_options = GeneralStatus.get_all_values() if GeneralStatus else ["active", "inactive", "suspended", "archived"]
+                status = st.selectbox("Status", options=status_options, index=0)
+                tier_options = ClientTier.get_all_values() if ClientTier else ["basic", "standard", "premium", "enterprise"]
+                tier_default_index = tier_options.index(ClientTier.get_default()) if ClientTier else 1
+                client_tier = st.selectbox("Client Tier", options=tier_options, index=tier_default_index)
                 hourly_rate = st.number_input("Hourly Rate (R$)", value=0.0, min_value=0.0)
             
             if st.form_submit_button("🚀 Create Client", use_container_width=True):
-                # Validate data
-                client_data = {
+                # CSRF Protection
+                if csrf_field and security_manager:
+                    csrf_valid, csrf_error = security_manager.require_csrf_protection(
+                        csrf_form_id, csrf_field.get("token_value")
+                    )
+                    if not csrf_valid:
+                        st.error(f"🔒 Security Error: {csrf_error}")
+                        return
+                
+                # Check rate limit for form submission
+                rate_allowed, rate_error = check_rate_limit("form_submit") if check_rate_limit else (True, None)
+                if not rate_allowed:
+                    st.error(f"🚦 {rate_error}")
+                    return
+                
+                # Create raw data
+                raw_data = {
                     'client_key': client_key,
                     'name': name,
                     'description': description,
@@ -283,6 +367,17 @@ def render_create_client_form(db_manager: DatabaseManager):
                     'hourly_rate': hourly_rate
                 }
                 
+                # Security validation
+                if validate_form:
+                    security_valid, security_errors = validate_form(raw_data)
+                    if not security_valid:
+                        for error in security_errors:
+                            st.error(f"🔒 Security: {error}")
+                        return
+                
+                # Sanitize data for security
+                client_data = create_safe_client(raw_data) if create_safe_client else raw_data
+                
                 is_valid, errors = validate_client_data(client_data)
                 
                 if is_valid:
@@ -295,6 +390,12 @@ def render_create_client_form(db_manager: DatabaseManager):
                     elif not validate_client_key_uniqueness(client_key, existing_clients):
                         st.error("❌ Client key already exists")
                     else:
+                        # Check rate limit for database write
+                        db_rate_allowed, db_rate_error = check_rate_limit("db_write") if check_rate_limit else (True, None)
+                        if not db_rate_allowed:
+                            st.error(f"🚦 Database {db_rate_error}")
+                            return
+                        
                         # Create client
                         client_id = db_manager.create_client(
                             client_key=client_key,
@@ -319,6 +420,7 @@ def render_create_client_form(db_manager: DatabaseManager):
                         st.error(f"❌ {error}")
 
 
+@require_authentication
 def render_clients_page():
     """Render the main clients management page."""
     if not STREAMLIT_AVAILABLE:
@@ -327,6 +429,13 @@ def render_clients_page():
     if not DATABASE_UTILS_AVAILABLE:
         st.error("❌ Database utilities not available")
         return {"error": "Database utilities not available"}
+    
+    # Check rate limit for page load
+    page_rate_allowed, page_rate_error = check_rate_limit("page_load") if check_rate_limit else (True, None)
+    if not page_rate_allowed:
+        st.error(f"🚦 {page_rate_error}")
+        st.info("Please wait before reloading the page.")
+        return {"error": "Rate limited"}
     
     st.title("👥 Client Management")
     st.markdown("Manage your clients, contacts, and business relationships")
@@ -350,14 +459,22 @@ def render_clients_page():
         search_name = st.text_input("🔍 Search by name", placeholder="Type client name...")
     
     with col2:
+        if GeneralStatus:
+            status_filter_options = ["all"] + GeneralStatus.get_all_values()
+        else:
+            status_filter_options = ["all", "active", "inactive", "suspended", "archived"]
         status_filter = st.selectbox("Status Filter", 
-            options=["all", "active", "inactive", "suspended", "archived"],
+            options=status_filter_options,
             index=0
         )
     
     with col3:
+        if ClientTier:
+            tier_filter_options = ["all"] + ClientTier.get_all_values()
+        else:
+            tier_filter_options = ["all", "basic", "standard", "premium", "enterprise"]
         tier_filter = st.selectbox("Tier Filter",
-            options=["all", "basic", "standard", "premium", "enterprise"],
+            options=tier_filter_options,
             index=0
         )
     
@@ -368,6 +485,12 @@ def render_clients_page():
     
     # Get clients with filters
     try:
+        # Check rate limit for database read
+        db_read_allowed, db_read_error = check_rate_limit("db_read") if check_rate_limit else (True, None)
+        if not db_read_allowed:
+            st.error(f"🚦 Database {db_read_error}")
+            return {"error": "Database rate limited"}
+        
         clients_result = db_manager.get_clients(include_inactive=True)
         all_clients = clients_result.get("data", []) if isinstance(clients_result, dict) else []
         
@@ -410,6 +533,7 @@ def render_clients_page():
 __all__ = ["render_clients_page"]
 
 # Execute when run as a Streamlit page
-if __name__ == "__main__" or True:  # Always execute for Streamlit multipage
+if __name__ == "__main__":
     if STREAMLIT_AVAILABLE:
         render_clients_page()
+
