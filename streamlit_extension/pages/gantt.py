@@ -64,7 +64,15 @@ except ImportError:
     GanttTracker = None
     GANTT_TRACKER_AVAILABLE = False
 
+from streamlit_extension.utils.exception_handler import (
+    handle_streamlit_exceptions,
+    streamlit_error_boundary,
+    safe_streamlit_operation,
+    get_error_statistics,
+)
 
+
+@handle_streamlit_exceptions(show_error=True, attempt_recovery=True)
 def render_gantt_page():
     """Render the Gantt chart page."""
     if not STREAMLIT_AVAILABLE:
@@ -93,22 +101,33 @@ def render_gantt_page():
         return
     
     # Initialize database manager
-    try:
-        config = load_config()
-        db_manager = DatabaseManager(
-            framework_db_path=str(config.get_database_path()),
-            timer_db_path=str(config.get_timer_database_path())
+    with streamlit_error_boundary("database_initialization"):
+        config = safe_streamlit_operation(
+            load_config,
+            default_return=None,
+            operation_name="load_config",
         )
-    except Exception as e:
-        st.error(f"❌ Database connection error: {e}")
-        return
+        if config is None:
+            st.error("❌ Configuration loading failed")
+            return
+
+        db_manager = safe_streamlit_operation(
+            DatabaseManager,
+            str(config.get_database_path()),
+            default_return=None,
+            operation_name="database_manager_init",
+        )
+        if db_manager is None:
+            st.error("❌ Database connection failed")
+            return
     
     # Sidebar controls
     _render_sidebar_controls()
     
     # Load data
-    with st.spinner("Loading project data..."):
-        gantt_data = _get_gantt_data(db_manager)
+    with streamlit_error_boundary("gantt_data_loading"):
+        with st.spinner("Loading project data..."):
+            gantt_data = _get_gantt_data(db_manager)
     
     if not gantt_data or not gantt_data.get("tasks"):
         st.warning("📝 No project data available for timeline view.")
@@ -116,7 +135,8 @@ def render_gantt_page():
         return
     
     # Render main Gantt chart
-    _render_gantt_chart(gantt_data)
+    with streamlit_error_boundary("gantt_chart_rendering"):
+        _render_gantt_chart(gantt_data)
     
     st.markdown("---")
     
@@ -124,14 +144,21 @@ def render_gantt_page():
     col1, col2 = st.columns(2)
     
     with col1:
-        _render_epic_timeline(gantt_data)
-    
+        with streamlit_error_boundary("epic_timeline"):
+            _render_epic_timeline(gantt_data)
+
     with col2:
-        _render_milestone_tracker(gantt_data)
+        with streamlit_error_boundary("milestone_tracker"):
+            _render_milestone_tracker(gantt_data)
     
     # Detailed tables
     with st.expander("📋 Detailed Timeline Data"):
-        _render_timeline_tables(gantt_data)
+        with streamlit_error_boundary("timeline_tables"):
+            _render_timeline_tables(gantt_data)
+
+    if st.session_state.get("show_debug_info", False):
+        with st.expander("🔧 Error Statistics", expanded=False):
+            st.json(get_error_statistics())
 
 
 def _render_sidebar_controls():
@@ -199,11 +226,14 @@ def _get_gantt_data(db_manager: DatabaseManager) -> Dict[str, Any]:
     
     # Try to use existing gantt_tracker first
     if GANTT_TRACKER_AVAILABLE:
-        try:
-            tracker = GanttTracker()
-            return tracker.generate_gantt_data()
-        except Exception as e:
-            st.warning(f"⚠️ Gantt tracker error: {e}. Using database fallback.")
+        data = safe_streamlit_operation(
+            lambda: GanttTracker().generate_gantt_data(),
+            default_return=None,
+            operation_name="gantt_tracker_generate",
+        )
+        if data is not None:
+            return data
+        st.warning("⚠️ Gantt tracker failed. Using database fallback.")
     
     # Fallback to database queries
     # Check rate limit for database read
@@ -324,8 +354,9 @@ def _render_epic_gantt(epics: List[Dict[str, Any]]):
         df = pd.DataFrame(df_data)
         
         # Create Gantt chart using plotly figure_factory
-        try:
-            fig = ff.create_gantt(
+        with streamlit_error_boundary("epic_gantt_rendering"):
+            fig = safe_streamlit_operation(
+                ff.create_gantt,
                 df,
                 colors=_get_status_colors(),
                 index_col="Resource",
@@ -333,20 +364,21 @@ def _render_epic_gantt(epics: List[Dict[str, Any]]):
                 group_tasks=True,
                 showgrid_x=True,
                 showgrid_y=True,
-                title="Epic Timeline"
+                title="Epic Timeline",
+                default_return=None,
+                operation_name="create_epic_gantt",
             )
-            
-            fig.update_layout(
-                height=max(400, len(epics) * 40),
-                xaxis_title="Timeline",
-                yaxis_title="Epics"
-            )
-            
-            st.plotly_chart(fig, use_container_width=True)
-            
-        except Exception as e:
-            st.error(f"Error rendering epic Gantt chart: {e}")
-            _render_fallback_timeline(epics, "Epic")
+
+            if fig:
+                fig.update_layout(
+                    height=max(400, len(epics) * 40),
+                    xaxis_title="Timeline",
+                    yaxis_title="Epics",
+                )
+
+                st.plotly_chart(fig, use_container_width=True)
+            else:
+                _render_fallback_timeline(epics, "Epic")
 
 
 def _render_task_gantt(tasks: List[Dict[str, Any]]):
@@ -377,11 +409,18 @@ def _render_task_gantt(tasks: List[Dict[str, Any]]):
     
     if PANDAS_AVAILABLE and df_data:
         df = pd.DataFrame(df_data)
-        
-        try:
-            colors = _get_dynamic_colors(color_by, [task[color_by.lower().replace(" ", "_")] for task in recent_tasks])
-            
-            fig = ff.create_gantt(
+
+        with streamlit_error_boundary("task_gantt_rendering"):
+            colors = safe_streamlit_operation(
+                _get_dynamic_colors,
+                color_by,
+                [task[color_by.lower().replace(" ", "_")] for task in recent_tasks],
+                default_return={},
+                operation_name="get_dynamic_colors",
+            )
+
+            fig = safe_streamlit_operation(
+                ff.create_gantt,
                 df,
                 colors=colors,
                 index_col="Resource",
@@ -389,20 +428,21 @@ def _render_task_gantt(tasks: List[Dict[str, Any]]):
                 group_tasks=True,
                 showgrid_x=True,
                 showgrid_y=True,
-                title=f"Task Timeline (Recent 20, Colored by {color_by})"
+                title=f"Task Timeline (Recent 20, Colored by {color_by})",
+                default_return=None,
+                operation_name="create_task_gantt",
             )
-            
-            fig.update_layout(
-                height=max(600, len(recent_tasks) * 25),
-                xaxis_title="Timeline",
-                yaxis_title="Tasks"
-            )
-            
-            st.plotly_chart(fig, use_container_width=True)
-            
-        except Exception as e:
-            st.error(f"Error rendering task Gantt chart: {e}")
-            _render_fallback_timeline(recent_tasks, "Task")
+
+            if fig:
+                fig.update_layout(
+                    height=max(600, len(recent_tasks) * 25),
+                    xaxis_title="Timeline",
+                    yaxis_title="Tasks",
+                )
+
+                st.plotly_chart(fig, use_container_width=True)
+            else:
+                _render_fallback_timeline(recent_tasks, "Task")
 
 
 def _render_combined_gantt(gantt_data: Dict[str, Any]):
@@ -447,16 +487,17 @@ def _render_combined_gantt(gantt_data: Dict[str, Any]):
     
     if PANDAS_AVAILABLE and combined_data:
         df = pd.DataFrame(combined_data)
-        
-        try:
+
+        with streamlit_error_boundary("combined_gantt_rendering"):
             colors = {
                 "Epic": "#1f77b4",
                 "todo": "#ff7f0e",
                 "in_progress": "#ffbb78",
-                "completed": "#2ca02c"
+                "completed": "#2ca02c",
             }
-            
-            fig = ff.create_gantt(
+
+            fig = safe_streamlit_operation(
+                ff.create_gantt,
                 df,
                 colors=colors,
                 index_col="Resource",
@@ -464,20 +505,21 @@ def _render_combined_gantt(gantt_data: Dict[str, Any]):
                 group_tasks=True,
                 showgrid_x=True,
                 showgrid_y=True,
-                title="Combined Project Timeline (Epics + Priority Tasks)"
+                title="Combined Project Timeline (Epics + Priority Tasks)",
+                default_return=None,
+                operation_name="create_combined_gantt",
             )
-            
-            fig.update_layout(
-                height=max(500, len(combined_data) * 30),
-                xaxis_title="Timeline",
-                yaxis_title="Project Items"
-            )
-            
-            st.plotly_chart(fig, use_container_width=True)
-            
-        except Exception as e:
-            st.error(f"Error rendering combined Gantt chart: {e}")
-            _render_fallback_combined_timeline(gantt_data)
+
+            if fig:
+                fig.update_layout(
+                    height=max(500, len(combined_data) * 30),
+                    xaxis_title="Timeline",
+                    yaxis_title="Project Items",
+                )
+
+                st.plotly_chart(fig, use_container_width=True)
+            else:
+                _render_fallback_combined_timeline(gantt_data)
 
 
 def _render_epic_timeline(gantt_data: Dict[str, Any]):
@@ -702,25 +744,20 @@ def _parse_date(date_string: Optional[str]) -> Optional[datetime]:
     if not date_string:
         return None
     
-    try:
-        # Try different date formats
-        formats = [
-            "%Y-%m-%d %H:%M:%S",
-            "%Y-%m-%dT%H:%M:%S",
-            "%Y-%m-%d",
-            "%Y/%m/%d",
-            "%m/%d/%Y"
-        ]
-        
-        for fmt in formats:
-            try:
-                return datetime.strptime(date_string, fmt)
-            except ValueError:
-                continue
-        
-        return None
-    except Exception:
-        return None
+    formats = [
+        "%Y-%m-%d %H:%M:%S",
+        "%Y-%m-%dT%H:%M:%S",
+        "%Y-%m-%d",
+        "%Y/%m/%d",
+        "%m/%d/%Y"
+    ]
+
+    for fmt in formats:
+        try:
+            return datetime.strptime(date_string, fmt)
+        except ValueError:
+            continue
+    return None
 
 
 def _calculate_task_progress(task: Dict[str, Any]) -> float:

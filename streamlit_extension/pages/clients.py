@@ -44,6 +44,20 @@ except ImportError:
     create_safe_client = sanitize_display = validate_form = None
     GeneralStatus = ClientTier = CompanySize = UIConstants = FormFields = None
 
+from streamlit_extension.utils.exception_handler import (
+    handle_streamlit_exceptions,
+    streamlit_error_boundary,
+    safe_streamlit_operation,
+    get_error_statistics,
+)
+
+try:
+    from streamlit_extension.utils.auth import require_authentication
+except ImportError:
+    # Fallback if auth module not available
+    def require_authentication(func):
+        return func
+
 
 def render_client_card(client: Dict[str, Any], db_manager: DatabaseManager):
     """Render an individual client card."""
@@ -105,14 +119,17 @@ def render_client_card(client: Dict[str, Any], db_manager: DatabaseManager):
                 st.markdown(f"**Size:** {client['company_size']}")
             if client.get('hourly_rate'):
                 st.markdown(f"**Rate:** R$ {client['hourly_rate']:.2f}/h")
-            
+
             # Project count
-            try:
-                projects = db_manager.get_projects(client_id=client['id'], include_inactive=True)
-                project_count = len(projects) if projects else 0
-                st.metric("Projects", project_count)
-            except:
-                st.metric("Projects", "Error")
+            projects = safe_streamlit_operation(
+                db_manager.get_projects,
+                client_id=client['id'],
+                include_inactive=True,
+                default_return=[],
+                operation_name="get_projects",
+            )
+            project_count = len(projects) if projects else 0
+            st.metric("Projects", project_count)
         
         # Handle edit modal
         if st.session_state.get(f"edit_client_{client['id']}", False):
@@ -265,12 +282,15 @@ def render_delete_client_modal(client: Dict[str, Any], db_manager: DatabaseManag
         st.warning(f"Are you sure you want to delete client **{client['name']}**?")
         
         # Show related projects warning
-        try:
-            projects = db_manager.get_projects(client_id=client['id'], include_inactive=True)
-            if projects:
-                st.error(f"⚠️ This client has {len(projects)} project(s). Deleting the client will affect these projects.")
-        except:
-            pass
+        projects = safe_streamlit_operation(
+            db_manager.get_projects,
+            client_id=client['id'],
+            include_inactive=True,
+            default_return=[],
+            operation_name="get_projects",
+        )
+        if projects:
+            st.error(f"⚠️ This client has {len(projects)} project(s). Deleting the client will affect these projects.")
         
         col1, col2 = st.columns(2)
         
@@ -419,6 +439,8 @@ def render_create_client_form(db_manager: DatabaseManager):
                         st.error(f"❌ {error}")
 
 
+@require_authentication
+@handle_streamlit_exceptions(show_error=True, attempt_recovery=True)
 def render_clients_page():
     """Render the main clients management page."""
     if not STREAMLIT_AVAILABLE:
@@ -440,15 +462,25 @@ def render_clients_page():
     st.markdown("---")
     
     # Initialize database manager
-    try:
-        config = load_config()
-        db_manager = DatabaseManager(
-            framework_db_path=str(config.get_database_path()),
-            timer_db_path=str(config.get_timer_database_path())
+    with streamlit_error_boundary("database_initialization"):
+        config = safe_streamlit_operation(
+            load_config,
+            default_return=None,
+            operation_name="load_config",
         )
-    except Exception as e:
-        st.error(f"❌ Database connection error: {e}")
-        return {"error": f"Database connection error: {e}"}
+        if config is None:
+            st.error("❌ Configuration loading failed")
+            return {"error": "config_load_failed"}
+
+        db_manager = safe_streamlit_operation(
+            DatabaseManager,
+            str(config.get_database_path()),
+            default_return=None,
+            operation_name="database_manager_init",
+        )
+        if db_manager is None:
+            st.error("❌ Database connection failed")
+            return {"error": "db_connection_failed"}
     
     # Filters and search
     col1, col2, col3 = st.columns([2, 1, 1])
@@ -482,48 +514,53 @@ def render_clients_page():
     st.markdown("---")
     
     # Get clients with filters
-    try:
+    with streamlit_error_boundary("client_loading"):
         # Check rate limit for database read
         db_read_allowed, db_read_error = check_rate_limit("db_read") if check_rate_limit else (True, None)
         if not db_read_allowed:
             st.error(f"🚦 Database {db_read_error}")
             return {"error": "Database rate limited"}
-        
-        clients_result = db_manager.get_clients(include_inactive=True)
+
+        clients_result = safe_streamlit_operation(
+            db_manager.get_clients,
+            include_inactive=True,
+            default_return={},
+            operation_name="get_clients",
+        )
         all_clients = clients_result.get("data", []) if isinstance(clients_result, dict) else []
-        
+
         if not all_clients:
             st.info("📝 No clients found. Create your first client using the form above!")
             return {"status": "no_clients"}
-        
+
         # Apply filters
         filtered_clients = all_clients
-        
+
         if search_name:
             filtered_clients = [c for c in filtered_clients if search_name.lower() in c.get('name', '').lower()]
-        
+
         if status_filter != "all":
             filtered_clients = [c for c in filtered_clients if c.get('status') == status_filter]
-        
+
         if tier_filter != "all":
             filtered_clients = [c for c in filtered_clients if c.get('client_tier') == tier_filter]
-        
+
         # Display results count
         total_count = clients_result.get("total", len(all_clients)) if isinstance(clients_result, dict) else len(all_clients)
         st.markdown(f"**Found {len(filtered_clients)} client(s) (of {total_count} total)**")
-        
+
         if not filtered_clients:
             st.warning("🔍 No clients match your current filters.")
             return {"status": "no_matches"}
-        
+
         # Display clients
         for client in filtered_clients:
             render_client_card(client, db_manager)
-    
-    except Exception as e:
-        st.error(f"❌ Error loading clients: {e}")
-        return {"error": f"Error loading clients: {e}"}
-    
+
+        if st.session_state.get("show_debug_info", False):
+            with st.expander("🔧 Error Statistics", expanded=False):
+                st.json(get_error_statistics())
+
     return {"status": "success", "clients_count": len(filtered_clients)}
 
 

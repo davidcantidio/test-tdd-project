@@ -9,55 +9,34 @@ Multi-page navigation system for TDD Framework:
 - Comprehensive settings and configuration
 """
 
-# Graceful imports for all pages
-try:
-    from .analytics import render_analytics_page
-    ANALYTICS_AVAILABLE = True
-except ImportError:
-    render_analytics_page = None
-    ANALYTICS_AVAILABLE = False
+from importlib import import_module
+from streamlit_extension.utils.exception_handler import (
+    handle_streamlit_exceptions,
+    streamlit_error_boundary,
+    safe_streamlit_operation,
+    get_error_statistics,
+)
 
-try:
-    from .kanban import render_kanban_page
-    KANBAN_AVAILABLE = True
-except ImportError:
-    render_kanban_page = None
-    KANBAN_AVAILABLE = False
 
-try:
-    from .gantt import render_gantt_page
-    GANTT_AVAILABLE = True
-except ImportError:
-    render_gantt_page = None
-    GANTT_AVAILABLE = False
+def _import_page(module_name: str, func_name: str):
+    module = safe_streamlit_operation(
+        import_module,
+        f"{__name__}.{module_name}",
+        default_return=None,
+        operation_name=f"import_{module_name}",
+    )
+    if module and hasattr(module, func_name):
+        return getattr(module, func_name), True
+    return None, False
 
-try:
-    from .timer import render_timer_page
-    TIMER_AVAILABLE = True
-except ImportError:
-    render_timer_page = None
-    TIMER_AVAILABLE = False
 
-try:
-    from .settings import render_settings_page
-    SETTINGS_AVAILABLE = True
-except ImportError:
-    render_settings_page = None
-    SETTINGS_AVAILABLE = False
-
-try:
-    from .clients import render_clients_page
-    CLIENTS_AVAILABLE = True
-except ImportError:
-    render_clients_page = None
-    CLIENTS_AVAILABLE = False
-
-try:
-    from .projects import render_projects_page
-    PROJECTS_AVAILABLE = True
-except ImportError:
-    render_projects_page = None
-    PROJECTS_AVAILABLE = False
+render_analytics_page, ANALYTICS_AVAILABLE = _import_page("analytics", "render_analytics_page")
+render_kanban_page, KANBAN_AVAILABLE = _import_page("kanban", "render_kanban_page")
+render_gantt_page, GANTT_AVAILABLE = _import_page("gantt", "render_gantt_page")
+render_timer_page, TIMER_AVAILABLE = _import_page("timer", "render_timer_page")
+render_settings_page, SETTINGS_AVAILABLE = _import_page("settings", "render_settings_page")
+render_clients_page, CLIENTS_AVAILABLE = _import_page("clients", "render_clients_page")
+render_projects_page, PROJECTS_AVAILABLE = _import_page("projects", "render_projects_page")
 
 
 # Page registry for navigation

@@ -33,14 +33,23 @@ try:
         create_safe_client, sanitize_display, validate_form, check_rate_limit,
         security_manager
     )
+    from streamlit_extension.config.streamlit_config import reload_config
     DATABASE_UTILS_AVAILABLE = True
 except ImportError:
-    DatabaseManager = load_config = create_streamlit_config_file = None
+    DatabaseManager = load_config = create_streamlit_config_file = reload_config = None
     create_safe_client = sanitize_display = validate_form = None
     check_rate_limit = security_manager = None
     DATABASE_UTILS_AVAILABLE = False
 
+from streamlit_extension.utils.exception_handler import (
+    handle_streamlit_exceptions,
+    streamlit_error_boundary,
+    safe_streamlit_operation,
+    get_error_statistics,
+)
 
+
+@handle_streamlit_exceptions(show_error=True, attempt_recovery=True)
 def render_settings_page():
     """Render the settings configuration page."""
     if not STREAMLIT_AVAILABLE:
@@ -61,11 +70,15 @@ def render_settings_page():
         return
     
     # Load current configuration
-    try:
-        config = load_config()
-    except Exception as e:
-        st.error(f"❌ Error loading configuration: {e}")
-        return
+    with streamlit_error_boundary("configuration_loading"):
+        config = safe_streamlit_operation(
+            load_config,
+            default_return=None,
+            operation_name="load_config",
+        )
+        if config is None:
+            st.error("❌ Error loading configuration")
+            return
     
     # Settings tabs
     tab1, tab2, tab3, tab4, tab5 = st.tabs([
@@ -90,6 +103,10 @@ def render_settings_page():
     
     with tab5:
         _render_backup_settings(config)
+
+    if st.session_state.get("show_debug_info", False):
+        with st.expander("🔧 Error Statistics", expanded=False):
+            st.json(get_error_statistics())
 
 
 def _render_timer_settings(config):
@@ -387,15 +404,21 @@ def _render_database_settings(config):
     st.markdown("### 🗄️ Database Configuration")
     
     # Initialize database manager to check health
-    try:
-        db_manager = DatabaseManager(
-            framework_db_path=str(config.get_database_path()),
-            timer_db_path=str(config.get_timer_database_path())
+    with streamlit_error_boundary("database_initialization"):
+        db_manager = safe_streamlit_operation(
+            DatabaseManager,
+            str(config.get_database_path()),
+            default_return=None,
+            operation_name="database_manager_init",
         )
-        health = db_manager.check_database_health()
-    except Exception as e:
-        st.error(f"❌ Database manager error: {e}")
-        return
+        if db_manager is None:
+            st.error("❌ Database manager error")
+            return
+        health = safe_streamlit_operation(
+            db_manager.check_database_health,
+            default_return={},
+            operation_name="check_database_health",
+        )
     
     col1, col2 = st.columns(2)
     
@@ -713,12 +736,17 @@ def _render_backup_settings(config):
     
     with col2:
         if st.button("🔄 Reload Configuration"):
-            try:
-                reload_config()
-                st.success("✅ Configuration reloaded from files")
-                st.rerun()
-            except Exception as e:
-                st.error(f"❌ Reload failed: {e}")
+            with streamlit_error_boundary("configuration_reload"):
+                success = safe_streamlit_operation(
+                    reload_config,
+                    default_return=False,
+                    operation_name="reload_config",
+                )
+                if success:
+                    st.success("✅ Configuration reloaded from files")
+                    st.rerun()
+                else:
+                    st.error("❌ Reload failed")
     
     with col3:
         config_json = json.dumps(config.to_dict(), indent=2)
@@ -770,17 +798,25 @@ def _backup_databases(config) -> bool:
 
 def _generate_streamlit_config(config, theme: str, port: int, upload_size: int) -> bool:
     """Generate Streamlit config file."""
-    try:
-        # Update config object (temporary)
-        config.streamlit_theme = theme
-        config.streamlit_port = port
-        config.streamlit_max_upload_size = upload_size
-        
-        # Create config file
-        create_streamlit_config_file(config)
-        return True
-    except Exception:
-        return False
+    return safe_streamlit_operation(
+        _generate_streamlit_config_inner,
+        config,
+        theme,
+        port,
+        upload_size,
+        default_return=False,
+        operation_name="generate_streamlit_config",
+    )
+
+
+def _generate_streamlit_config_inner(config, theme, port, upload_size):
+    """Internal helper for generating Streamlit config."""
+    # Update config object (temporary)
+    config.streamlit_theme = theme
+    config.streamlit_port = port
+    config.streamlit_max_upload_size = upload_size
+    create_streamlit_config_file(config)
+    return True
 
 
 def _export_data(options: List[str], format_type: str, config) -> tuple[bool, str]:

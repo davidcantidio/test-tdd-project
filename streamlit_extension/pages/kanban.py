@@ -42,7 +42,15 @@ except ImportError:
     TaskStatus = TDDPhase = Priority = UIConstants = None
     DATABASE_UTILS_AVAILABLE = False
 
+from streamlit_extension.utils.exception_handler import (
+    handle_streamlit_exceptions,
+    streamlit_error_boundary,
+    safe_streamlit_operation,
+    get_error_statistics,
+)
 
+
+@handle_streamlit_exceptions(show_error=True, attempt_recovery=True)
 def render_kanban_page():
     """Render the Kanban board page."""
     if not STREAMLIT_AVAILABLE:
@@ -63,15 +71,25 @@ def render_kanban_page():
         st.error("❌ Database utilities not available")
         return
     
-    try:
-        config = load_config()
-        db_manager = DatabaseManager(
-            framework_db_path=str(config.get_database_path()),
-            timer_db_path=str(config.get_timer_database_path())
+    with streamlit_error_boundary("database_initialization"):
+        config = safe_streamlit_operation(
+            load_config,
+            default_return=None,
+            operation_name="load_config",
         )
-    except Exception as e:
-        st.error(f"❌ Database connection error: {e}")
-        return
+        if config is None:
+            st.error("❌ Configuration loading failed")
+            return
+
+        db_manager = safe_streamlit_operation(
+            DatabaseManager,
+            str(config.get_database_path()),
+            default_return=None,
+            operation_name="database_manager_init",
+        )
+        if db_manager is None:
+            st.error("❌ Database connection failed")
+            return
     
     # Sidebar filters
     _render_sidebar_filters(db_manager)
@@ -84,9 +102,18 @@ def render_kanban_page():
         return {"error": "Rate limited"}
     
     # Load data
-    with st.spinner("Loading tasks..."):
-        tasks = db_manager.get_tasks()
-        epics = db_manager.get_epics()
+    with streamlit_error_boundary("task_loading"):
+        with st.spinner("Loading tasks..."):
+            tasks = safe_streamlit_operation(
+                db_manager.get_tasks,
+                default_return=[],
+                operation_name="get_tasks",
+            )
+            epics = safe_streamlit_operation(
+                db_manager.get_epics,
+                default_return=[],
+                operation_name="get_epics",
+            )
     
     # Apply filters
     filtered_tasks = _apply_filters(tasks, epics)
@@ -97,11 +124,17 @@ def render_kanban_page():
         return
     
     # Render board
-    _render_kanban_board(filtered_tasks, db_manager, epics)
+    with streamlit_error_boundary("ui_rendering"):
+        _render_kanban_board(filtered_tasks, db_manager, epics)
     
     # Task creation form
     with st.expander("➕ Create New Task", expanded=False):
-        _render_create_task_form(db_manager, epics)
+        with streamlit_error_boundary("form_rendering"):
+            _render_create_task_form(db_manager, epics)
+
+    if st.session_state.get("show_debug_info", False):
+        with st.expander("🔧 Error Statistics", expanded=False):
+            st.json(get_error_statistics())
 
 
 def _render_sidebar_filters(db_manager: DatabaseManager):
@@ -622,60 +655,59 @@ def _show_edit_task_modal(task: Dict[str, Any], db_manager: DatabaseManager, epi
                 st.rerun()
 
 
-def _create_task(title: str, epic_id: Optional[int], tdd_phase: str, db_manager: DatabaseManager, 
+def _create_task(title: str, epic_id: Optional[int], tdd_phase: str, db_manager: DatabaseManager,
                 description: str = "", priority: int = 2, estimate_minutes: int = 0) -> bool:
     """Create a new task in the database."""
-    
-    try:
-        task_id = db_manager.create_task(
-            title=title,
-            epic_id=epic_id,
-            description=description,
-            tdd_phase=tdd_phase,
-            priority=priority,
-            estimate_minutes=estimate_minutes
-        )
-        return task_id is not None
-    except Exception as e:
-        print(f"Error creating task: {e}")
-        return False
+    task_id = safe_streamlit_operation(
+        db_manager.create_task,
+        title=title,
+        epic_id=epic_id,
+        description=description,
+        tdd_phase=tdd_phase,
+        priority=priority,
+        estimate_minutes=estimate_minutes,
+        default_return=None,
+        operation_name="create_task",
+    )
+    return task_id is not None
 
 
 def _update_task_status(task_id: int, new_status: str, db_manager: DatabaseManager) -> bool:
     """Update task status."""
-    
-    try:
-        return db_manager.update_task_status(task_id, new_status)
-    except Exception:
-        return False
+    return safe_streamlit_operation(
+        db_manager.update_task_status,
+        task_id,
+        new_status,
+        default_return=False,
+        operation_name="update_task_status",
+    )
 
 
-def _update_task(task_id: int, title: str, description: str, tdd_phase: str, 
+def _update_task(task_id: int, title: str, description: str, tdd_phase: str,
                 priority: int, estimate_minutes: int, db_manager: DatabaseManager) -> bool:
     """Update task details."""
-    
-    try:
-        return db_manager.update_task(
-            task_id=task_id,
-            title=title,
-            description=description,
-            tdd_phase=tdd_phase,
-            priority=priority,
-            estimate_minutes=estimate_minutes
-        )
-    except Exception as e:
-        print(f"Error updating task {task_id}: {e}")
-        return False
+    return safe_streamlit_operation(
+        db_manager.update_task,
+        task_id=task_id,
+        title=title,
+        description=description,
+        tdd_phase=tdd_phase,
+        priority=priority,
+        estimate_minutes=estimate_minutes,
+        default_return=False,
+        operation_name="update_task",
+    )
 
 
 def _delete_task(task_id: int, db_manager: DatabaseManager) -> bool:
     """Delete a task."""
-    
-    try:
-        return db_manager.delete_task(task_id, soft_delete=True)
-    except Exception as e:
-        print(f"Error deleting task {task_id}: {e}")
-        return False
+    return safe_streamlit_operation(
+        db_manager.delete_task,
+        task_id,
+        soft_delete=True,
+        default_return=False,
+        operation_name="delete_task",
+    )
 
 
 if __name__ == "__main__":
