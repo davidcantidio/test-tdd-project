@@ -1,0 +1,693 @@
+ (cd "$(git rev-parse --show-toplevel)" && git apply --3way <<'EOF' 
+diff --git a/streamlit_extension/components/pagination.py b/streamlit_extension/components/pagination.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..e68ca82009b9f32113275a37445abae9c418d2e8
+--- /dev/null
++++ b/streamlit_extension/components/pagination.py
+@@ -0,0 +1,167 @@
++"""
++Pagination Component for Streamlit
++Provides consistent pagination across all list views
++"""
++
++import math
++from dataclasses import dataclass
++from typing import Any, Callable, Dict, List, Optional, Tuple
++
++import streamlit as st
++
++
++@dataclass
++class PaginationConfig:
++    """Configuration for pagination component"""
++
++    page_size: int = 20
++    show_page_size_selector: bool = True
++    page_size_options: Optional[List[int]] = None
++    show_total_count: bool = True
++    show_navigation_info: bool = True
++
++    def __post_init__(self) -> None:
++        if self.page_size_options is None:
++            self.page_size_options = [10, 20, 50, 100]
++
++
++@dataclass
++class PaginationState:
++    """Current pagination state"""
++
++    current_page: int = 1
++    page_size: int = 20
++    total_items: int = 0
++    total_pages: int = 0
++    offset: int = 0
++
++    def calculate_pagination(
++        self, total_items: int, page_size: int, current_page: int = 1
++    ) -> "PaginationState":
++        """Calculate pagination values"""
++        self.total_items = total_items
++        self.page_size = page_size
++        self.total_pages = math.ceil(total_items / page_size) if page_size > 0 else 1
++        self.current_page = max(1, min(current_page, self.total_pages))
++        self.offset = (self.current_page - 1) * page_size
++        return self
++
++
++class PaginationComponent:
++    """Reusable pagination component for Streamlit"""
++
++    def __init__(self, key_prefix: str, config: Optional[PaginationConfig] = None) -> None:
++        self.key_prefix = key_prefix
++        self.config = config or PaginationConfig()
++
++    def _get_session_key(self, suffix: str) -> str:
++        """Generate session state key"""
++        return f"{self.key_prefix}_{suffix}"
++
++    def _init_session_state(self) -> None:
++        """Initialize session state if needed"""
++        if self._get_session_key("page") not in st.session_state:
++            st.session_state[self._get_session_key("page")] = 1
++        if self._get_session_key("page_size") not in st.session_state:
++            st.session_state[self._get_session_key("page_size")] = self.config.page_size
++
++    def get_pagination_state(self, total_items: int) -> PaginationState:
++        """Get current pagination state"""
++        self._init_session_state()
++        current_page = st.session_state[self._get_session_key("page")]
++        page_size = st.session_state[self._get_session_key("page_size")]
++        state = PaginationState()
++        return state.calculate_pagination(total_items, page_size, current_page)
++
++    def render_pagination_controls(self, state: PaginationState) -> PaginationState:
++        """Render pagination controls"""
++        if state.total_items == 0:
++            st.info("📭 Nenhum item encontrado")
++            return state
++
++        col1, col2, col3, col4 = st.columns([2, 1, 2, 1])
++
++        with col1:
++            if self.config.show_total_count:
++                st.caption(f"📊 Total: {state.total_items} itens")
++
++        with col2:
++            if self.config.show_page_size_selector:
++                new_page_size = st.selectbox(
++                    "Itens/página",
++                    self.config.page_size_options,
++                    index=self.config.page_size_options.index(state.page_size)
++                    if state.page_size in self.config.page_size_options
++                    else 0,
++                    key=self._get_session_key("page_size_select"),
++                )
++                if new_page_size != state.page_size:
++                    st.session_state[self._get_session_key("page_size")] = new_page_size
++                    st.session_state[self._get_session_key("page")] = 1
++                    st.rerun()
++
++        with col3:
++            if state.total_pages > 1:
++                nav_col1, nav_col2, nav_col3, nav_col4 = st.columns(4)
++                with nav_col1:
++                    if st.button(
++                        "⏮️",
++                        disabled=state.current_page <= 1,
++                        key=self._get_session_key("first"),
++                    ):
++                        st.session_state[self._get_session_key("page")] = 1
++                        st.rerun()
++                with nav_col2:
++                    if st.button(
++                        "◀️",
++                        disabled=state.current_page <= 1,
++                        key=self._get_session_key("prev"),
++                    ):
++                        st.session_state[self._get_session_key("page")] = state.current_page - 1
++                        st.rerun()
++                with nav_col3:
++                    if st.button(
++                        "▶️",
++                        disabled=state.current_page >= state.total_pages,
++                        key=self._get_session_key("next"),
++                    ):
++                        st.session_state[self._get_session_key("page")] = state.current_page + 1
++                        st.rerun()
++                with nav_col4:
++                    if st.button(
++                        "⏭️",
++                        disabled=state.current_page >= state.total_pages,
++                        key=self._get_session_key("last"),
++                    ):
++                        st.session_state[self._get_session_key("page")] = state.total_pages
++                        st.rerun()
++
++        with col4:
++            if self.config.show_navigation_info and state.total_pages > 1:
++                st.caption(f"📄 Página {state.current_page} de {state.total_pages}")
++
++        return state
++
++    def paginate_data(
++        self, data_fetcher: Callable, *args: Any, **kwargs: Any
++    ) -> Tuple[List[Any], PaginationState]:
++        """Paginate data using a data fetcher function"""
++        state = self.get_pagination_state(0)
++        try:
++            data, total_count = data_fetcher(
++                state.page_size, state.offset, *args, **kwargs
++            )
++            state = state.calculate_pagination(
++                total_count, state.page_size, state.current_page
++            )
++            return data, state
++        except Exception as e:  # pragma: no cover - streamlit error reporting
++            st.error(f"❌ Erro ao carregar dados: {e}")
++            return [], state
++
++
++def create_pagination_wrapper(
++    key_prefix: str, config: Optional[PaginationConfig] = None
++) -> PaginationComponent:
++    """Factory function to create pagination component"""
++    return PaginationComponent(key_prefix, config)
+diff --git a/streamlit_extension/pages/clients.py b/streamlit_extension/pages/clients.py
+index 5c5f019d33cf6b5cbf2596afac5d7bb8d16ce4db..c94e1c44817aadff339bb243e6dc235e0e4fd9ba 100644
+--- a/streamlit_extension/pages/clients.py
++++ b/streamlit_extension/pages/clients.py
+@@ -17,50 +17,51 @@ from datetime import datetime
+ # Add parent directory to path
+ sys.path.append(str(Path(__file__).parent.parent.parent))
+ 
+ # Graceful imports
+ try:
+     import streamlit as st
+     STREAMLIT_AVAILABLE = True
+ except ImportError:
+     STREAMLIT_AVAILABLE = False
+     st = None
+ 
+ # Local imports
+ try:
+     from streamlit_extension.utils.database import DatabaseManager
+     from streamlit_extension.utils.validators import validate_client_data, validate_email_uniqueness, validate_client_key_uniqueness
+     from streamlit_extension.utils.security import (
+         create_safe_client, sanitize_display, validate_form, check_rate_limit,
+         security_manager
+     )
+     from streamlit_extension.config import load_config
+     from streamlit_extension.config.constants import (
+         GeneralStatus, ClientTier, CompanySize, UIConstants, FormFields
+     )
+     # Import authentication middleware
+     from streamlit_extension.auth.middleware import init_protected_page
++    
++    # Safe import of pagination component
++    try:
++        from ..components.pagination import create_pagination_wrapper, PaginationConfig
++        PAGINATION_AVAILABLE = True
++    except ImportError:
++        PAGINATION_AVAILABLE = False
++        create_pagination_wrapper = None
++        PaginationConfig = None
++        
+     DATABASE_UTILS_AVAILABLE = True
+ except ImportError:
+     DATABASE_UTILS_AVAILABLE = False
++    PAGINATION_AVAILABLE = False
+     DatabaseManager = validate_client_data = load_config = None
+     create_safe_client = sanitize_display = validate_form = None
+     GeneralStatus = ClientTier = CompanySize = UIConstants = FormFields = None
+     init_protected_page = None
++    create_pagination_wrapper = None
++    PaginationConfig = None
+ 
+ from streamlit_extension.utils.exception_handler import (
+     handle_streamlit_exceptions,
+     streamlit_error_boundary,
+     safe_streamlit_operation,
+     get_error_statistics,
+ )
+ 
+ 
+ def render_client_card(client: Dict[str, Any], db_manager: DatabaseManager):
+     """Render an individual client card."""
+     if not STREAMLIT_AVAILABLE:
+         return
+     
+     with st.container():
+         # Card header with status indicator
+         status_colors = {
+             GeneralStatus.ACTIVE.value if GeneralStatus else "active": "🟢",
+@@ -542,32 +543,113 @@ def render_clients_page():
+             filtered_clients = [c for c in filtered_clients if c.get('status') == status_filter]
+ 
+         if tier_filter != "all":
+             filtered_clients = [c for c in filtered_clients if c.get('client_tier') == tier_filter]
+ 
+         # Display results count
+         total_count = clients_result.get("total", len(all_clients)) if isinstance(clients_result, dict) else len(all_clients)
+         st.markdown(f"**Found {len(filtered_clients)} client(s) (of {total_count} total)**")
+ 
+         if not filtered_clients:
+             st.warning("🔍 No clients match your current filters.")
+             return {"status": "no_matches"}
+ 
+         # Display clients
+         for client in filtered_clients:
+             render_client_card(client, db_manager)
+ 
+         if st.session_state.get("show_debug_info", False):
+             with st.expander("🔧 Error Statistics", expanded=False):
+                 st.json(get_error_statistics())
+ 
+     return {"status": "success", "clients_count": len(filtered_clients)}
+ 
+ 
+ # Export the main function
+-__all__ = ["render_clients_page"]
++def render_paginated_clients() -> None:
++    """Render clients list with pagination"""
++    if not STREAMLIT_AVAILABLE:
++        return
++        
++    if not PAGINATION_AVAILABLE or not create_pagination_wrapper or not PaginationConfig:
++        st.error("❌ Componente de paginação não disponível")
++        return
++
++    pagination = create_pagination_wrapper(
++        "clients_list", PaginationConfig(page_size=20, show_page_size_selector=True)
++    )
++
++    def fetch_clients_paginated(
++        limit: int, offset: int, search_term: str = ""
++    ) -> Tuple[List[Dict[str, Any]], int]:
++        db_manager = DatabaseManager()
++        if search_term:
++            count_query = (
++                "SELECT COUNT(*) as count FROM framework_clients "
++                "WHERE name LIKE ? OR primary_contact_email LIKE ?"
++            )
++            total_count = db_manager.execute_query(
++                count_query, [f"%{search_term}%", f"%{search_term}%"]
++            )[0]["count"]
++            query = (
++                "SELECT id, name, primary_contact_email as email, "
++                "primary_contact_phone as phone, created_at, client_tier as tier "
++                "FROM framework_clients "
++                "WHERE name LIKE ? OR primary_contact_email LIKE ? "
++                "ORDER BY created_at DESC LIMIT ? OFFSET ?"
++            )
++            clients = db_manager.execute_query(
++                query,
++                [
++                    f"%{search_term}%",
++                    f"%{search_term}%",
++                    limit,
++                    offset,
++                ],
++            )
++        else:
++            count_query = "SELECT COUNT(*) as count FROM framework_clients"
++            total_count = db_manager.execute_query(count_query)[0]["count"]
++            query = (
++                "SELECT id, name, primary_contact_email as email, "
++                "primary_contact_phone as phone, created_at, client_tier as tier "
++                "FROM framework_clients ORDER BY created_at DESC LIMIT ? OFFSET ?"
++            )
++            clients = db_manager.execute_query(query, [limit, offset])
++        return clients, total_count
++
++    search_term = st.text_input(
++        "🔍 Buscar clientes", placeholder="Nome ou email..."
++    )
++    clients_data, pagination_state = pagination.paginate_data(
++        fetch_clients_paginated, search_term
++    )
++    pagination.render_pagination_controls(pagination_state)
++
++    if clients_data:
++        st.write(
++            f"📋 Exibindo {len(clients_data)} de {pagination_state.total_items} clientes"
++        )
++        for client in clients_data:
++            with st.container():
++                col1, col2, col3 = st.columns([3, 2, 1])
++                with col1:
++                    st.write(f"**{client['name']}**")
++                    st.caption(client.get("email", ""))
++                with col2:
++                    st.write(f"📞 {client.get('phone', 'N/A')}")
++                    st.caption(f"Tier: {client.get('tier', 'Standard')}")
++                with col3:
++                    if st.button("📝", key=f"edit_client_{client['id']}"):
++                        st.session_state.selected_client_id = client["id"]
++                        st.rerun()
++                st.divider()
++    else:
++        st.info("📭 Nenhum cliente encontrado")
++
++    if pagination_state.total_pages > 1:
++        pagination.render_pagination_controls(pagination_state)
++
++
++__all__ = ["render_clients_page", "render_paginated_clients"]
+ 
+ # Execute when run as a Streamlit page
+ if __name__ == "__main__":
+     if STREAMLIT_AVAILABLE:
+-        render_clients_page()
++        render_paginated_clients()
+ 
+diff --git a/streamlit_extension/pages/epics.py b/streamlit_extension/pages/epics.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..8ee7471acd8ec44aa689cc509d964c842889afd7
+--- /dev/null
++++ b/streamlit_extension/pages/epics.py
+@@ -0,0 +1,107 @@
++"""
++🎯 Epics Listing Page
++
++Simple listing of epics with reusable pagination component.
++"""
++
++import sys
++from pathlib import Path
++from typing import Any, Dict, List, Tuple
++
++# Add parent directory to path
++sys.path.append(str(Path(__file__).parent.parent.parent))
++
++try:
++    import streamlit as st
++    STREAMLIT_AVAILABLE = True
++except ImportError:
++    STREAMLIT_AVAILABLE = False
++    st = None
++
++try:
++    from streamlit_extension.utils.database import DatabaseManager
++    DATABASE_UTILS_AVAILABLE = True
++except ImportError:
++    DATABASE_UTILS_AVAILABLE = False
++    DatabaseManager = None  # type: ignore
++
++# Safe import of pagination component
++try:
++    from ..components.pagination import create_pagination_wrapper, PaginationConfig
++    PAGINATION_AVAILABLE = True
++except ImportError:
++    PAGINATION_AVAILABLE = False
++    create_pagination_wrapper = None
++    PaginationConfig = None
++
++
++def render_paginated_epics() -> None:
++    """Render epics list with pagination."""
++    if not (STREAMLIT_AVAILABLE and DATABASE_UTILS_AVAILABLE):
++        return
++        
++    if not PAGINATION_AVAILABLE or not create_pagination_wrapper or not PaginationConfig:
++        st.error("❌ Componente de paginação não disponível")
++        return
++
++    pagination = create_pagination_wrapper(
++        "epics_list", PaginationConfig(page_size=20, show_page_size_selector=True)
++    )
++
++    def fetch_epics_paginated(
++        limit: int, offset: int, search_term: str = ""
++    ) -> Tuple[List[Dict[str, Any]], int]:
++        db_manager = DatabaseManager()
++        if search_term:
++            count_query = (
++                "SELECT COUNT(*) as count FROM framework_epics "
++                "WHERE name LIKE ? OR epic_key LIKE ?"
++            )
++            total_count = db_manager.execute_query(
++                count_query, [f"%{search_term}%", f"%{search_term}%"]
++            )[0]["count"]
++            data_query = (
++                "SELECT id, name, epic_key, status, created_at, priority "
++                "FROM framework_epics WHERE name LIKE ? OR epic_key LIKE ? "
++                "ORDER BY created_at DESC LIMIT ? OFFSET ?"
++            )
++            epics = db_manager.execute_query(
++                data_query,
++                [f"%{search_term}%", f"%{search_term}%", limit, offset],
++            )
++        else:
++            total_count = db_manager.execute_query(
++                "SELECT COUNT(*) as count FROM framework_epics"
++            )[0]["count"]
++            data_query = (
++                "SELECT id, name, epic_key, status, created_at, priority "
++                "FROM framework_epics ORDER BY created_at DESC LIMIT ? OFFSET ?"
++            )
++            epics = db_manager.execute_query(data_query, [limit, offset])
++        return epics, total_count
++
++    search_term = st.text_input(
++        "🔍 Buscar épicos", placeholder="Nome ou chave..."
++    )
++    epics_data, pagination_state = pagination.paginate_data(
++        fetch_epics_paginated, search_term
++    )
++    pagination.render_pagination_controls(pagination_state)
++
++    if epics_data:
++        st.write(
++            f"📋 Exibindo {len(epics_data)} de {pagination_state.total_items} épicos"
++        )
++        for epic in epics_data:
++            with st.container():
++                col1, col2, col3 = st.columns([3, 2, 1])
++                with col1:
++                    st.write(f"**{epic['name']}**")
++                    st.caption(f"Key: {epic.get('epic_key', 'N/A')}")
++                with col2:
++                    st.write(f"📌 {epic.get('status', 'N/A').title()}")
++                    st.caption(f"Priority: {epic.get('priority', 'N/A')}")
++                with col3:
++                    pass
++                st.divider()
++    else:
++        st.info("📭 Nenhum épico encontrado")
++
++    if pagination_state.total_pages > 1:
++        pagination.render_pagination_controls(pagination_state)
++
++
++__all__ = ["render_paginated_epics"]
++
++if __name__ == "__main__":
++    if STREAMLIT_AVAILABLE:
++        render_paginated_epics()
+diff --git a/streamlit_extension/pages/projects.py b/streamlit_extension/pages/projects.py
+index b66b1445ac231dc846284a86cd58a896f72b8bc8..50d842be9a34c13af6d3c893c6660845dbb78906 100644
+--- a/streamlit_extension/pages/projects.py
++++ b/streamlit_extension/pages/projects.py
+@@ -17,50 +17,52 @@ from datetime import datetime, date
+ # Add parent directory to path
+ sys.path.append(str(Path(__file__).parent.parent.parent))
+ 
+ # Update typing imports to include Tuple for Python < 3.10 compatibility
+-from typing import Any, Dict, List, Union
++from typing import Any, Dict, List, Union, Tuple
+ 
+ # Graceful imports
+ try:
+     import streamlit as st
+     STREAMLIT_AVAILABLE = True
+ except ImportError:
+     STREAMLIT_AVAILABLE = False
+     st = None
+ 
+ # Local imports
+ try:
+     from streamlit_extension.utils.database import DatabaseManager
+     from streamlit_extension.utils.validators import validate_project_data, validate_project_key_uniqueness
+     from streamlit_extension.utils.security import (
+         create_safe_project, sanitize_display, validate_form, check_rate_limit,
+         security_manager
+     )
+     from streamlit_extension.utils.exception_handler import (
+         handle_streamlit_exceptions, streamlit_error_boundary, safe_streamlit_operation
+     )
+     from streamlit_extension.config import load_config
+     # Import authentication middleware
+     from streamlit_extension.auth.middleware import init_protected_page
++    
++    # Safe import of pagination component
++    try:
++        from ..components.pagination import create_pagination_wrapper, PaginationConfig
++        PAGINATION_AVAILABLE = True
++    except ImportError:
++        PAGINATION_AVAILABLE = False
++        create_pagination_wrapper = None
++        PaginationConfig = None
++        
+     DATABASE_UTILS_AVAILABLE = True
+ except ImportError:
+     DATABASE_UTILS_AVAILABLE = False
++    PAGINATION_AVAILABLE = False
+     DatabaseManager = validate_project_data = load_config = None
+     create_safe_project = sanitize_display = validate_form = None
+     handle_streamlit_exceptions = streamlit_error_boundary = safe_streamlit_operation = None
+     init_protected_page = None
++    create_pagination_wrapper = None
++    PaginationConfig = None
+ 
+ 
+ 
+ def render_project_card(project: Dict[str, Any], db_manager: DatabaseManager, clients_map: Dict[int, str]):
+     """Render an individual project card."""
+     if not STREAMLIT_AVAILABLE:
+         return
+     
+     with st.container():
+         # Card header with status indicator
+         status_colors = {
+             "planning": "🟡",
+             "in_progress": "🟢", 
+             "completed": "✅",
+             "on_hold": "⏸️",
+             "cancelled": "🔴"
+         }
+         status_emoji = status_colors.get(project.get("status", "planning"), "⚪")
+@@ -622,32 +623,125 @@ def render_projects_page():
+     
+     # Display results count
+     st.markdown(f"**Found {len(filtered_projects)} project(s)**")
+     
+     if not filtered_projects:
+         st.warning("🔍 No projects match your current filters.")
+         return {"status": "no_matches"}
+     
+     # Display projects with error boundary protection
+     if handle_streamlit_exceptions:
+         for project in filtered_projects:
+             with streamlit_error_boundary(f"rendering_project_{project.get('id', 'unknown')}"):
+                 render_project_card(project, db_manager, clients_map)
+     else:
+         # Fallback without error boundary
+         for project in filtered_projects:
+             try:
+                 render_project_card(project, db_manager, clients_map)
+             except Exception as e:
+                 st.error(f"❌ Error rendering project {project.get('name', 'Unknown')}: {e}")
+     
+     return {"status": "success", "projects_count": len(filtered_projects)}
+ 
+ 
+ # Export the main function
+-__all__ = ["render_projects_page"]
++def render_paginated_projects() -> None:
++    """Render projects list with pagination"""
++    if not STREAMLIT_AVAILABLE:
++        return
++        
++    if not PAGINATION_AVAILABLE or not create_pagination_wrapper or not PaginationConfig:
++        st.error("❌ Componente de paginação não disponível")
++        return
++
++    pagination = create_pagination_wrapper(
++        "projects_list", PaginationConfig(page_size=15, show_page_size_selector=True)
++    )
++
++    def fetch_projects_paginated(
++        limit: int,
++        offset: int,
++        client_filter: str = "",
++        search_term: str = "",
++    ) -> Tuple[List[Dict[str, Any]], int]:
++        db_manager = DatabaseManager()
++        where_conditions: List[str] = []
++        params: List[Any] = []
++
++        if client_filter and client_filter != "Todos":
++            where_conditions.append("fc.name = ?")
++            params.append(client_filter)
++
++        if search_term:
++            where_conditions.append("(fp.name LIKE ? OR fp.description LIKE ?)")
++            params.extend([f"%{search_term}%", f"%{search_term}%"])
++
++        where_clause = " AND ".join(where_conditions) if where_conditions else "1=1"
++
++        count_query = (
++            "SELECT COUNT(*) as count FROM framework_projects fp "
++            "LEFT JOIN framework_clients fc ON fp.client_id = fc.id "
++            f"WHERE {where_clause}"
++        )
++        total_count = db_manager.execute_query(count_query, params)[0]["count"]
++
++        data_query = (
++            "SELECT fp.id, fp.name, fp.description, fp.status, fp.created_at, "
++            "fc.name as client_name FROM framework_projects fp "
++            "LEFT JOIN framework_clients fc ON fp.client_id = fc.id "
++            f"WHERE {where_clause} ORDER BY fp.created_at DESC LIMIT ? OFFSET ?"
++        )
++        projects = db_manager.execute_query(data_query, params + [limit, offset])
++        return projects, total_count
++
++    col1, col2 = st.columns(2)
++    with col1:
++        client_filter = st.selectbox("🏢 Cliente", ["Todos"] + get_client_names())
++    with col2:
++        search_term = st.text_input(
++            "🔍 Buscar projetos", placeholder="Nome ou descrição..."
++        )
++
++    projects_data, pagination_state = pagination.paginate_data(
++        fetch_projects_paginated, client_filter, search_term
++    )
++
++    pagination.render_pagination_controls(pagination_state)
++
++    if projects_data:
++        st.write(
++            f"📋 Exibindo {len(projects_data)} de {pagination_state.total_items} projetos"
++        )
++        for project in projects_data:
++            with st.container():
++                col1, col2, col3 = st.columns([3, 2, 1])
++                with col1:
++                    st.write(f"**{project['name']}**")
++                    st.caption(project.get("description", "Sem descrição"))
++                with col2:
++                    st.write(f"🏢 {project.get('client_name', 'N/A')}")
++                    st.caption(f"Status: {project.get('status', 'Ativo')}")
++                with col3:
++                    if st.button("📝", key=f"edit_project_{project['id']}"):
++                        st.session_state.selected_project_id = project["id"]
++                        st.rerun()
++                st.divider()
++    else:
++        st.info("📭 Nenhum projeto encontrado")
++
++    if pagination_state.total_pages > 1:
++        pagination.render_pagination_controls(pagination_state)
++
++
++def get_client_names() -> List[str]:
++    """Helper to get client names for filter"""
++    db_manager = DatabaseManager()
++    clients = db_manager.execute_query(
++        "SELECT name FROM framework_clients ORDER BY name"
++    )
++    return [client["name"] for client in clients]
++
++
++__all__ = ["render_projects_page", "render_paginated_projects"]
+ 
+ # Execute when run as a Streamlit page
+ if __name__ == "__main__":
+     if STREAMLIT_AVAILABLE:
+-        render_projects_page()
++        render_paginated_projects()
+ 
+ 
+EOF
+)
