@@ -37,6 +37,7 @@ try:
     from streamlit_extension.utils.exception_handler import (
         handle_streamlit_exceptions, streamlit_error_boundary, safe_streamlit_operation
     )
+    from streamlit_extension.config.constants import ErrorMessages, UIConstants, TaskStatus
     # Import authentication middleware
     from streamlit_extension.auth.middleware import init_protected_page
     DATABASE_UTILS_AVAILABLE = True
@@ -44,7 +45,7 @@ except ImportError:
     DatabaseManager = load_config = TimerComponent = None
     create_safe_client = sanitize_display = validate_form = None
     check_rate_limit = security_manager = None
-    init_protected_page = None
+    init_protected_page = ErrorMessages = UIConstants = TaskStatus = None
     DATABASE_UTILS_AVAILABLE = False
 
 
@@ -55,7 +56,7 @@ def render_timer_page():
         return {"error": "Streamlit not available"}
     
     # Initialize protected page with authentication
-    current_user = init_protected_page("⏱️ Focus Timer - TDAH Edition")
+    current_user = init_protected_page(UIConstants.TIMER_PAGE_TITLE)
     if not current_user:
         return {"error": "Authentication required"}
     
@@ -69,7 +70,11 @@ def render_timer_page():
     st.markdown("---")
     
     if not DATABASE_UTILS_AVAILABLE:
-        st.error("❌ Database utilities not available")
+        st.error(
+            ErrorMessages.LOADING_ERROR.format(
+                entity="database utilities", error="not available"
+            )
+        )
         return
     
     # Initialize components
@@ -87,7 +92,7 @@ def render_timer_page():
         timer_component = st.session_state.timer_component
         
     except Exception as e:
-        st.error(f"❌ Initialization error: {e}")
+        st.error(ErrorMessages.LOADING_ERROR.format(entity="initialization", error=e))
         return
     
     # Sidebar for timer settings
@@ -198,7 +203,16 @@ def _render_main_timer(timer_component, db_manager: DatabaseManager, config):
     # Task selection with error handling
     try:
         tasks = db_manager.get_tasks()
-        active_tasks = [t for t in tasks if t.get("status") in ["todo", "pending", "in_progress"]]
+        active_tasks = [
+            t
+            for t in tasks
+            if t.get("status")
+            in [
+                TaskStatus.TODO.value,
+                TaskStatus.PENDING.value,
+                TaskStatus.IN_PROGRESS.value,
+            ]
+        ]
         
         if active_tasks:
             task_options = ["No specific task"] + [f"{t['title']} ({t.get('epic_name', 'No Epic')})" for t in active_tasks]
@@ -224,10 +238,14 @@ def _render_main_timer(timer_component, db_manager: DatabaseManager, config):
             else:
                 st.session_state.current_task = None
         else:
-            st.info("📝 No active tasks found. Create tasks in the Kanban board to start tracking!")
+            st.info(ErrorMessages.NO_ITEMS_FOUND.format(entity="active tasks"))
             st.session_state.current_task = None
     except Exception as e:
-        st.error(f"❌ Error loading tasks for timer: {e}")
+        st.error(
+            ErrorMessages.LOADING_ERROR.format(
+                entity="tasks for timer", error=e
+            )
+        )
         st.session_state.current_task = None
     
     # Main timer display
@@ -241,7 +259,7 @@ def _render_main_timer(timer_component, db_manager: DatabaseManager, config):
             if st.button("▶️ Start Timer", type="primary", use_container_width=True):
                 _start_timer_session(timer_component, db_manager)
         else:
-            if st.button("⏸️ Pause", use_container_width=True):
+            if st.button(f"{UIConstants.ICON_ON_HOLD} Pause", use_container_width=True):
                 timer_component.pause_session()
                 st.rerun()
     
@@ -289,7 +307,7 @@ def _render_main_timer(timer_component, db_manager: DatabaseManager, config):
         st.info(f"🎯 **{session_type}** in progress...")
         
         if timer_state.get("paused"):
-            st.warning("⏸️ **Timer is paused**")
+            st.warning(f"{UIConstants.ICON_ON_HOLD} **Timer is paused**")
 
 
 def _render_session_stats(db_manager: DatabaseManager):
@@ -345,7 +363,7 @@ def _render_session_history(db_manager: DatabaseManager):
     recent_sessions = db_manager.get_timer_sessions(days=7)
     
     if not recent_sessions:
-        st.info("📝 No recent sessions found. Start a timer to see history here.")
+        st.info(ErrorMessages.NO_ITEMS_FOUND.format(entity="recent sessions"))
         return
     
     # Session history table
@@ -522,7 +540,7 @@ def _end_timer_session(timer_component, db_manager: DatabaseManager):
     # End the session
     timer_component.end_session(**post_session_data)
     
-    st.success("✅ Session completed! Great work!")
+    st.success(f"{UIConstants.ICON_COMPLETED} Session completed! Great work!")
     st.rerun()
 
 

@@ -1,182 +1,300 @@
  (cd "$(git rev-parse --show-toplevel)" && git apply --3way <<'EOF' 
-diff --git a/streamlit_extension/components/pagination.py b/streamlit_extension/components/pagination.py
-new file mode 100644
-index 0000000000000000000000000000000000000000..e68ca82009b9f32113275a37445abae9c418d2e8
---- /dev/null
-+++ b/streamlit_extension/components/pagination.py
-@@ -0,0 +1,167 @@
-+"""
-+Pagination Component for Streamlit
-+Provides consistent pagination across all list views
-+"""
+diff --git a/streamlit_extension/config/constants.py b/streamlit_extension/config/constants.py
+index 7548899c8e45376d09ab0a06dfa066d4a1a25f0a..a9620982be7f46a9a087d4c815167297a6bd732b 100644
+--- a/streamlit_extension/config/constants.py
++++ b/streamlit_extension/config/constants.py
+@@ -1,43 +1,149 @@
+ """
+ 📋 Application Constants and Enums
+ 
+ Centralized hard-coded strings to improve maintainability and reduce
+ magic strings throughout the codebase. Addresses report.md requirement:
+ "Centralize hard-coded strings in enums/config"
+ 
+ This module provides:
+ - Status enums for different entity types
+ - Configuration constants
+ - UI text constants
+ - Database field names
+ """
+ 
+ from enum import Enum
+ from typing import List, Dict, Any
+ 
+ 
++class StatusValues(Enum):
++    """Centralized status values for all entities"""
++    ACTIVE = "active"
++    INACTIVE = "inactive"
++    PENDING = "pending"
++    COMPLETED = "completed"
++    PLANNING = "planning"
++    IN_PROGRESS = "in_progress"
++    ON_HOLD = "on_hold"
++    CANCELLED = "cancelled"
++    RED = "red"
++    GREEN = "green"
++    REFACTOR = "refactor"
++    BLOCKED = "blocked"
++    DRAFT = "draft"
++    REVIEW = "review"
++    APPROVED = "approved"
++    REJECTED = "rejected"
++    SUSPENDED = "suspended"
++    ARCHIVED = "archived"
 +
-+import math
-+from dataclasses import dataclass
-+from typing import Any, Callable, Dict, List, Optional, Tuple
-+
-+import streamlit as st
-+
-+
-+@dataclass
-+class PaginationConfig:
-+    """Configuration for pagination component"""
-+
-+    page_size: int = 20
-+    show_page_size_selector: bool = True
-+    page_size_options: Optional[List[int]] = None
-+    show_total_count: bool = True
-+    show_navigation_info: bool = True
-+
-+    def __post_init__(self) -> None:
-+        if self.page_size_options is None:
-+            self.page_size_options = [10, 20, 50, 100]
-+
-+
-+@dataclass
-+class PaginationState:
-+    """Current pagination state"""
-+
-+    current_page: int = 1
-+    page_size: int = 20
-+    total_items: int = 0
-+    total_pages: int = 0
-+    offset: int = 0
-+
-+    def calculate_pagination(
-+        self, total_items: int, page_size: int, current_page: int = 1
-+    ) -> "PaginationState":
-+        """Calculate pagination values"""
-+        self.total_items = total_items
-+        self.page_size = page_size
-+        self.total_pages = math.ceil(total_items / page_size) if page_size > 0 else 1
-+        self.current_page = max(1, min(current_page, self.total_pages))
-+        self.offset = (self.current_page - 1) * page_size
-+        return self
++    @classmethod
++    def get_all_values(cls) -> List[str]:
++        """Get all status values as a list."""
++        return [status.value for status in cls]
 +
 +
-+class PaginationComponent:
-+    """Reusable pagination component for Streamlit"""
++class TDDPhases(Enum):
++    """TDD cycle phases"""
++    RED = "red"
++    GREEN = "green"
++    REFACTOR = "refactor"
++    BLOCKED = "blocked"
 +
-+    def __init__(self, key_prefix: str, config: Optional[PaginationConfig] = None) -> None:
-+        self.key_prefix = key_prefix
-+        self.config = config or PaginationConfig()
-+
-+    def _get_session_key(self, suffix: str) -> str:
-+        """Generate session state key"""
-+        return f"{self.key_prefix}_{suffix}"
-+
-+    def _init_session_state(self) -> None:
-+        """Initialize session state if needed"""
-+        if self._get_session_key("page") not in st.session_state:
-+            st.session_state[self._get_session_key("page")] = 1
-+        if self._get_session_key("page_size") not in st.session_state:
-+            st.session_state[self._get_session_key("page_size")] = self.config.page_size
-+
-+    def get_pagination_state(self, total_items: int) -> PaginationState:
-+        """Get current pagination state"""
-+        self._init_session_state()
-+        current_page = st.session_state[self._get_session_key("page")]
-+        page_size = st.session_state[self._get_session_key("page_size")]
-+        state = PaginationState()
-+        return state.calculate_pagination(total_items, page_size, current_page)
-+
-+    def render_pagination_controls(self, state: PaginationState) -> PaginationState:
-+        """Render pagination controls"""
-+        if state.total_items == 0:
-+            st.info("📭 Nenhum item encontrado")
-+            return state
-+
-+        col1, col2, col3, col4 = st.columns([2, 1, 2, 1])
-+
-+        with col1:
-+            if self.config.show_total_count:
-+                st.caption(f"📊 Total: {state.total_items} itens")
-+
-+        with col2:
-+            if self.config.show_page_size_selector:
-+                new_page_size = st.selectbox(
-+                    "Itens/página",
-+                    self.config.page_size_options,
-+                    index=self.config.page_size_options.index(state.page_size)
-+                    if state.page_size in self.config.page_size_options
-+                    else 0,
-+                    key=self._get_session_key("page_size_select"),
-+                )
-+                if new_page_size != state.page_size:
-+                    st.session_state[self._get_session_key("page_size")] = new_page_size
-+                    st.session_state[self._get_session_key("page")] = 1
-+                    st.rerun()
-+
-+        with col3:
-+            if state.total_pages > 1:
-+                nav_col1, nav_col2, nav_col3, nav_col4 = st.columns(4)
-+                with nav_col1:
-+                    if st.button(
-+                        "⏮️",
-+                        disabled=state.current_page <= 1,
-+                        key=self._get_session_key("first"),
-+                    ):
-+                        st.session_state[self._get_session_key("page")] = 1
-+                        st.rerun()
-+                with nav_col2:
-+                    if st.button(
-+                        "◀️",
-+                        disabled=state.current_page <= 1,
-+                        key=self._get_session_key("prev"),
-+                    ):
-+                        st.session_state[self._get_session_key("page")] = state.current_page - 1
-+                        st.rerun()
-+                with nav_col3:
-+                    if st.button(
-+                        "▶️",
-+                        disabled=state.current_page >= state.total_pages,
-+                        key=self._get_session_key("next"),
-+                    ):
-+                        st.session_state[self._get_session_key("page")] = state.current_page + 1
-+                        st.rerun()
-+                with nav_col4:
-+                    if st.button(
-+                        "⏭️",
-+                        disabled=state.current_page >= state.total_pages,
-+                        key=self._get_session_key("last"),
-+                    ):
-+                        st.session_state[self._get_session_key("page")] = state.total_pages
-+                        st.rerun()
-+
-+        with col4:
-+            if self.config.show_navigation_info and state.total_pages > 1:
-+                st.caption(f"📄 Página {state.current_page} de {state.total_pages}")
-+
-+        return state
-+
-+    def paginate_data(
-+        self, data_fetcher: Callable, *args: Any, **kwargs: Any
-+    ) -> Tuple[List[Any], PaginationState]:
-+        """Paginate data using a data fetcher function"""
-+        state = self.get_pagination_state(0)
-+        try:
-+            data, total_count = data_fetcher(
-+                state.page_size, state.offset, *args, **kwargs
-+            )
-+            state = state.calculate_pagination(
-+                total_count, state.page_size, state.current_page
-+            )
-+            return data, state
-+        except Exception as e:  # pragma: no cover - streamlit error reporting
-+            st.error(f"❌ Erro ao carregar dados: {e}")
-+            return [], state
++    @classmethod
++    def get_all_values(cls) -> List[str]:
++        """Get all phase values as a list."""
++        return [phase.value for phase in cls]
 +
 +
-+def create_pagination_wrapper(
-+    key_prefix: str, config: Optional[PaginationConfig] = None
-+) -> PaginationComponent:
-+    """Factory function to create pagination component"""
-+    return PaginationComponent(key_prefix, config)
++class ClientTiers(Enum):
++    """Client tier classifications"""
++    FREE_TRIAL = "free_trial"
++    STANDARD = "standard"
++    PREMIUM = "premium"
++    ENTERPRISE = "enterprise"
++
++    @classmethod
++    def get_all_values(cls) -> List[str]:
++        """Get all tier values as a list."""
++        return [tier.value for tier in cls]
++
++    @classmethod
++    def get_default(cls) -> str:
++        """Get default client tier."""
++        return cls.STANDARD.value
++
++
++class CompanySizes(Enum):
++    """Company size categories"""
++    STARTUP = "startup"
++    SMALL = "small"
++    MEDIUM = "medium"
++    LARGE = "large"
++    ENTERPRISE = "enterprise"
++    SIZE_1_10 = "1-10"
++    SIZE_11_50 = "11-50"
++    SIZE_51_200 = "51-200"
++    SIZE_201_1000 = "201-1000"
++    SIZE_1000_PLUS = "1000+"
++
++    @classmethod
++    def get_all_values(cls) -> List[str]:
++        """Get all company size values as a list."""
++        return [size.value for size in cls]
++
++    @classmethod
++    def get_default(cls) -> str:
++        """Get default company size."""
++        return cls.STARTUP.value
++
++
++class ErrorMessages:
++    """Centralized error message templates"""
++    # Client errors
++    CLIENT_LOAD_ERROR = "❌ Error loading clients: {error}"
++    CLIENT_CREATE_ERROR = "❌ Error creating client: {error}"
++    CLIENT_UPDATE_ERROR = "❌ Error updating client: {error}"
++    CLIENT_DELETE_ERROR = "❌ Error deleting client: {error}"
++    CLIENT_NOT_FOUND = "❌ Client not found"
++    CLIENT_CREATE_SUCCESS = "✅ Client created successfully!"
++    CLIENT_UPDATE_SUCCESS = "✅ Client updated successfully!"
++    CLIENT_DELETE_SUCCESS = "✅ Client deleted successfully!"
++
++    # Project errors
++    PROJECT_LOAD_ERROR = "❌ Error loading projects: {error}"
++    PROJECT_CREATE_ERROR = "❌ Error creating project: {error}"
++    PROJECT_UPDATE_ERROR = "❌ Error updating project: {error}"
++    PROJECT_DELETE_ERROR = "❌ Error deleting project: {error}"
++
++    # Generic errors
++    NO_MATCHES_FILTER = "⚠️ No {entity} match your current filters."
++    NO_ITEMS_FOUND = "🔍 No {entity} found"
++    LOADING_ERROR = "❌ Error loading {entity}: {error}"
++
++
+ class TaskStatus(Enum):
+     """Task status options."""
+     TODO = "todo"
+     IN_PROGRESS = "in_progress"
+     COMPLETED = "completed"
+     BLOCKED = "blocked"
+     PENDING = "pending"
+     
+     @classmethod
+     def get_all_values(cls) -> List[str]:
+         """Get all status values as a list."""
+         return [status.value for status in cls]
+     
+     @classmethod
+     def get_active_statuses(cls) -> List[str]:
+         """Get statuses considered 'active' (not completed)."""
+         return [cls.TODO.value, cls.IN_PROGRESS.value, cls.BLOCKED.value, cls.PENDING.value]
+ 
+ 
+ class EpicStatus(Enum):
+     """Epic status options."""
+     PLANNING = "planning"
+     ACTIVE = "active"
+     ON_HOLD = "on_hold"
+     COMPLETED = "completed"
+@@ -177,68 +283,98 @@ class FieldNames:
+     UPDATED_AT = "updated_at"
+     DELETED_AT = "deleted_at"
+     COMPLETED_AT = "completed_at"
+     EPIC_ID = "epic_id"
+     TASK_ID = "task_id"
+     USER_ID = "user_id"
+     PROJECT_ID = "project_id"
+     CLIENT_ID = "client_id"
+     EPIC_KEY = "epic_key"
+     TASK_TITLE = "title"
+     TDD_PHASE = "tdd_phase"
+     PRIORITY = "priority"
+     POINTS_EARNED = "points_earned"
+     DIFFICULTY_LEVEL = "difficulty_level"
+ 
+ 
+ # UI Constants
+ class UIConstants:
+     """User interface constants."""
+     # Page titles
+     CLIENTS_PAGE_TITLE = "👥 Client Management"
+     PROJECTS_PAGE_TITLE = "📁 Project Management"
+     ANALYTICS_PAGE_TITLE = "📊 Analytics Dashboard"
+     KANBAN_PAGE_TITLE = "📋 Kanban Board"
+     TIMER_PAGE_TITLE = "⏱️ Task Timer"
+-    
++
+     # Button text
+     EDIT_BUTTON = "✏️ Edit"
+     DELETE_BUTTON = "🗑️ Delete"
+     CREATE_BUTTON = "🚀 Create"
+     SAVE_BUTTON = "💾 Save"
+     CANCEL_BUTTON = "❌ Cancel"
+     UPDATE_BUTTON = "💾 Update"
+     
+     # Messages
+     SUCCESS_CREATE = "✅ Created successfully!"
+     SUCCESS_UPDATE = "✅ Updated successfully!"
+     SUCCESS_DELETE = "✅ Deleted successfully!"
+     ERROR_GENERIC = "❌ An error occurred"
+     ERROR_NOT_FOUND = "❌ Item not found"
+     ERROR_INVALID_DATA = "❌ Invalid data provided"
+     ERROR_DUPLICATE = "❌ Item already exists"
+-    
++
++    # Status icons
++    ICON_ACTIVE = "🟢"
++    ICON_INACTIVE = "🔴"
++    ICON_PENDING = "🟡"
++    ICON_COMPLETED = "✅"
++    ICON_PLANNING = "🟡"
++    ICON_IN_PROGRESS = "🟢"
++    ICON_ON_HOLD = "⏸️"
++    ICON_CANCELLED = "🔴"
++    ICON_UNKNOWN = "⚪"
++    ICON_REFACTOR = "🔵"
++
++    # Generic icons
++    ICON_EPIC = "📋"
++    ICON_TASK = "📝"
++    ICON_SEARCH = "🔍"
++    ICON_TOTAL = "📊"
++    ICON_PAGE = "📄"
++    ICON_EMPTY = "📭"
++
++    # Common text
++    TEXT_ALL = "Todos"
++    TEXT_SELECT = "Selecionar..."
++    TEXT_FILTER_BY = "Filtrar por"
++    TEXT_SEARCH = "Buscar"
++    TEXT_TOTAL = "📊 Total:"
++    TEXT_PAGE = "📄 Página"
++    TEXT_EMPTY = "📭 Nenhum"
++    TEXT_NO_ITEMS = "{icon} Nenhum {entity} encontrado"
++
+     # Modal widths
+     MODAL_SMALL = "small"
+     MODAL_MEDIUM = "medium"
+     MODAL_LARGE = "large"
+ 
+ 
+ # Form Field Configurations
+ class FormFields:
+     """Form field configurations."""
+     
+     CLIENT_FIELDS = {
+         "client_key": {
+             "label": "Client Key*",
+             "placeholder": "e.g., client_xyz",
+             "required": True
+         },
+         "name": {
+             "label": "Client Name*",
+             "placeholder": "e.g., Company ABC",
+             "required": True
+         },
+         "description": {
+             "label": "Description",
+             "placeholder": "Brief description of the client...",
+             "required": False
+@@ -324,29 +460,30 @@ class ValidationRules:
+     
+     # String length limits
+     MAX_NAME_LENGTH = 100
+     MAX_DESCRIPTION_LENGTH = 1000
+     MAX_EMAIL_LENGTH = 255
+     MAX_PHONE_LENGTH = 20
+     MIN_KEY_LENGTH = 3
+     MAX_KEY_LENGTH = 50
+     
+     # Numeric limits
+     MIN_PRIORITY = 1
+     MAX_PRIORITY = 3
+     MIN_HOURLY_RATE = 0.0
+     MAX_HOURLY_RATE = 10000.0
+     MIN_DURATION_MINUTES = 1
+     MAX_DURATION_MINUTES = 480  # 8 hours
+     
+     # Regex patterns
+     EMAIL_PATTERN = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+     PHONE_PATTERN = r'^[\+]?[1-9][\d]{0,15}$'
+     KEY_PATTERN = r'^[a-zA-Z][a-zA-Z0-9_]*$'
+ 
+ 
+ # Export all enums and constants for easy import
+ __all__ = [
++    'StatusValues', 'TDDPhases', 'ClientTiers', 'CompanySizes', 'ErrorMessages',
+     'TaskStatus', 'EpicStatus', 'ProjectStatus', 'GeneralStatus', 'TDDPhase',
+     'ClientTier', 'CompanySize', 'Priority', 'TableNames', 'FieldNames',
+     'UIConstants', 'FormFields', 'CacheConfig', 'FilterOptions', 'ValidationRules'
+ ]
+\ No newline at end of file
 diff --git a/streamlit_extension/pages/clients.py b/streamlit_extension/pages/clients.py
-index 5c5f019d33cf6b5cbf2596afac5d7bb8d16ce4db..c94e1c44817aadff339bb243e6dc235e0e4fd9ba 100644
+index 5c5f019d33cf6b5cbf2596afac5d7bb8d16ce4db..73759d28173e613900066bdb92c946a67fb438d2 100644
 --- a/streamlit_extension/pages/clients.py
 +++ b/streamlit_extension/pages/clients.py
-@@ -17,50 +17,51 @@ from datetime import datetime
+@@ -13,98 +13,100 @@ import sys
+ from pathlib import Path
+ from typing import Dict, Any, List, Optional
+ from datetime import datetime
+ 
  # Add parent directory to path
  sys.path.append(str(Path(__file__).parent.parent.parent))
  
@@ -198,30 +316,19 @@ index 5c5f019d33cf6b5cbf2596afac5d7bb8d16ce4db..c94e1c44817aadff339bb243e6dc235e
      )
      from streamlit_extension.config import load_config
      from streamlit_extension.config.constants import (
-         GeneralStatus, ClientTier, CompanySize, UIConstants, FormFields
+-        GeneralStatus, ClientTier, CompanySize, UIConstants, FormFields
++        StatusValues, ClientTiers, CompanySizes, ErrorMessages, UIConstants, FormFields
      )
      # Import authentication middleware
      from streamlit_extension.auth.middleware import init_protected_page
-+    
-+    # Safe import of pagination component
-+    try:
-+        from ..components.pagination import create_pagination_wrapper, PaginationConfig
-+        PAGINATION_AVAILABLE = True
-+    except ImportError:
-+        PAGINATION_AVAILABLE = False
-+        create_pagination_wrapper = None
-+        PaginationConfig = None
-+        
      DATABASE_UTILS_AVAILABLE = True
  except ImportError:
      DATABASE_UTILS_AVAILABLE = False
-+    PAGINATION_AVAILABLE = False
      DatabaseManager = validate_client_data = load_config = None
      create_safe_client = sanitize_display = validate_form = None
-     GeneralStatus = ClientTier = CompanySize = UIConstants = FormFields = None
+-    GeneralStatus = ClientTier = CompanySize = UIConstants = FormFields = None
++    StatusValues = ClientTiers = CompanySizes = ErrorMessages = UIConstants = FormFields = None
      init_protected_page = None
-+    create_pagination_wrapper = None
-+    PaginationConfig = None
  
  from streamlit_extension.utils.exception_handler import (
      handle_streamlit_exceptions,
@@ -239,8 +346,560 @@ index 5c5f019d33cf6b5cbf2596afac5d7bb8d16ce4db..c94e1c44817aadff339bb243e6dc235e
      with st.container():
          # Card header with status indicator
          status_colors = {
-             GeneralStatus.ACTIVE.value if GeneralStatus else "active": "🟢",
-@@ -542,32 +543,113 @@ def render_clients_page():
+-            GeneralStatus.ACTIVE.value if GeneralStatus else "active": "🟢",
+-            GeneralStatus.INACTIVE.value if GeneralStatus else "inactive": "🟡", 
+-            GeneralStatus.SUSPENDED.value if GeneralStatus else "suspended": "🔴",
+-            GeneralStatus.ARCHIVED.value if GeneralStatus else "archived": "⚫"
++            StatusValues.ACTIVE.value: UIConstants.ICON_ACTIVE,
++            StatusValues.INACTIVE.value: UIConstants.ICON_INACTIVE,
++            StatusValues.SUSPENDED.value: UIConstants.ICON_CANCELLED,
++            StatusValues.ARCHIVED.value: UIConstants.ICON_UNKNOWN,
+         }
+-        status_emoji = status_colors.get(client.get("status", "active"), "⚪")
++        status_emoji = status_colors.get(
++            client.get("status", StatusValues.ACTIVE.value), UIConstants.ICON_UNKNOWN
++        )
+         
+         col1, col2, col3 = st.columns([3, 1, 1])
+         
+         with col1:
+             st.markdown(f"### {status_emoji} {client['name']}")
+             st.caption(f"**Key:** {client.get('client_key', 'N/A')} | **Tier:** {client.get('client_tier', 'standard').title()}")
+         
+         with col2:
+-            if st.button("✏️ Edit", key=f"edit_client_{client['id']}", use_container_width=True):
++            if st.button(UIConstants.EDIT_BUTTON, key=f"edit_client_{client['id']}", use_container_width=True):
+                 st.session_state[f"edit_client_{client['id']}"] = True
+                 st.rerun()
+-        
++
+         with col3:
+-            if st.button("🗑️ Delete", key=f"delete_client_{client['id']}", use_container_width=True):
++            if st.button(UIConstants.DELETE_BUTTON, key=f"delete_client_{client['id']}", use_container_width=True):
+                 st.session_state[f"delete_client_{client['id']}"] = True
+                 st.rerun()
+         
+         # Client details
+         col1, col2 = st.columns([2, 1])
+         
+         with col1:
+             if client.get('description'):
+                 safe_description = sanitize_display(client['description']) if sanitize_display else client['description']
+                 st.markdown(f"**Description:** {safe_description}")
+             
+             # Contact information
+             if client.get('primary_contact_name') or client.get('primary_contact_email'):
+                 st.markdown("**Contact:**")
+                 if client.get('primary_contact_name'):
+                     safe_name = sanitize_display(client['primary_contact_name']) if sanitize_display else client['primary_contact_name']
+                     st.markdown(f"• **Name:** {safe_name}")
+                 if client.get('primary_contact_email'):
+                     safe_email = sanitize_display(client['primary_contact_email']) if sanitize_display else client['primary_contact_email']
+                     st.markdown(f"• **Email:** {safe_email}")
+                 if client.get('primary_contact_phone'):
+                     safe_phone = sanitize_display(client['primary_contact_phone']) if sanitize_display else client['primary_contact_phone']
+                     st.markdown(f"• **Phone:** {safe_phone}")
+         
+         with col2:
+@@ -123,451 +125,487 @@ def render_client_card(client: Dict[str, Any], db_manager: DatabaseManager):
+                 include_inactive=True,
+                 default_return=[],
+                 operation_name="get_projects",
+             )
+             project_count = len(projects) if projects else 0
+             st.metric("Projects", project_count)
+         
+         # Handle edit modal
+         if st.session_state.get(f"edit_client_{client['id']}", False):
+             render_edit_client_modal(client, db_manager)
+         
+         # Handle delete confirmation
+         if st.session_state.get(f"delete_client_{client['id']}", False):
+             render_delete_client_modal(client, db_manager)
+         
+         st.divider()
+ 
+ 
+ def render_edit_client_modal(client: Dict[str, Any], db_manager: DatabaseManager):
+     """Render the edit client modal."""
+     if not STREAMLIT_AVAILABLE:
+         return
+     
+     with st.modal(f"Edit Client: {client['name']}", width="large"):
+         with st.form(f"edit_client_form_{client['id']}"):
+-            st.markdown("### 📝 Edit Client Information")
++            st.markdown(f"### {UIConstants.ICON_TASK} Edit Client Information")
+             
+             # Generate CSRF token for form protection
+             csrf_form_id = f"edit_client_form_{client['id']}"
+             csrf_field = security_manager.get_csrf_form_field(csrf_form_id) if security_manager else None
+             
+             col1, col2 = st.columns(2)
+             
+             with col1:
+                 st.markdown("#### Basic Information")
+                 client_key = st.text_input("Client Key*", value=client.get('client_key', ''))
+                 name = st.text_input("Client Name*", value=client.get('name', ''))
+                 description = st.text_area("Description", value=client.get('description', ''))
+                 
+                 industry = st.text_input("Industry", value=client.get('industry', ''))
+-                company_size_options = CompanySize.get_all_values() if CompanySize else ["startup", "small", "medium", "large", "enterprise"]
+-                company_size_default = CompanySize.get_default() if CompanySize else 'startup'
++                company_size_options = CompanySizes.get_all_values()
++                company_size_default = CompanySizes.get_default()
+                 company_size = st.selectbox("Company Size", 
+                     options=company_size_options,
+                     index=company_size_options.index(client.get('company_size', company_size_default))
+                 )
+             
+             with col2:
+                 st.markdown("#### Contact Information")
+                 primary_contact_name = st.text_input("Contact Name", value=client.get('primary_contact_name', ''))
+                 primary_contact_email = st.text_input("Contact Email*", value=client.get('primary_contact_email', ''))
+                 primary_contact_phone = st.text_input("Contact Phone", value=client.get('primary_contact_phone', ''))
+                 
+                 st.markdown("#### Business Settings")
+-                status_options = GeneralStatus.get_all_values() if GeneralStatus else ["active", "inactive", "suspended", "archived"]
+-                status = st.selectbox("Status", 
++                status_options = StatusValues.get_all_values()
++                status = st.selectbox(
++                    "Status",
+                     options=status_options,
+-                    index=status_options.index(client.get('status', GeneralStatus.ACTIVE.value if GeneralStatus else 'active'))
++                    index=status_options.index(
++                        client.get('status', StatusValues.ACTIVE.value)
++                    ),
+                 )
+-                tier_options = ClientTier.get_all_values() if ClientTier else ["basic", "standard", "premium", "enterprise"]
+-                tier_default = ClientTier.get_default() if ClientTier else 'standard'
++                tier_options = ClientTiers.get_all_values()
++                tier_default = ClientTiers.get_default()
+                 client_tier = st.selectbox("Client Tier",
+                     options=tier_options,
+                     index=tier_options.index(client.get('client_tier', tier_default))
+                 )
+                 hourly_rate = st.number_input("Hourly Rate (R$)", value=float(client.get('hourly_rate', 0.0)), min_value=0.0)
+             
+             col1, col2, col3 = st.columns([1, 1, 1])
+             
+             with col1:
+-                if st.form_submit_button("💾 Update Client", use_container_width=True):
++                if st.form_submit_button(UIConstants.UPDATE_BUTTON + " Client", use_container_width=True):
+                     # CSRF Protection
+                     if csrf_field and security_manager:
+                         csrf_valid, csrf_error = security_manager.require_csrf_protection(
+                             csrf_form_id, csrf_field.get("token_value")
+                         )
+                         if not csrf_valid:
+                             st.error(f"🔒 Security Error: {csrf_error}")
+                             return
+                     
+                     # Check rate limit for form submission
+                     rate_allowed, rate_error = check_rate_limit("form_submit") if check_rate_limit else (True, None)
+                     if not rate_allowed:
+                         st.error(f"🚦 {rate_error}")
+                         return
+                     
+                     # Create raw data
+                     raw_data = {
+                         'client_key': client_key,
+                         'name': name,
+                         'description': description,
+                         'industry': industry,
+                         'company_size': company_size,
+                         'primary_contact_name': primary_contact_name,
+                         'primary_contact_email': primary_contact_email,
+                         'primary_contact_phone': primary_contact_phone,
+                         'status': status,
+                         'client_tier': client_tier,
+                         'hourly_rate': hourly_rate
+                     }
+                     
+                     # Security validation
+                     if validate_form:
+                         security_valid, security_errors = validate_form(raw_data)
+                         if not security_valid:
+                             for error in security_errors:
+                                 st.error(f"🔒 Security: {error}")
+                             return
+                     
+                     # Sanitize data for security
+                     client_data = create_safe_client(raw_data) if create_safe_client else raw_data
+                     
+                     is_valid, errors = validate_client_data(client_data)
+                     
+                     if is_valid:
+                         # Check uniqueness (excluding current client)
+                         existing_clients_result = db_manager.get_clients(include_inactive=True)
+                         existing_clients = existing_clients_result.get("data", []) if isinstance(existing_clients_result, dict) else []
+                         
+                         if not validate_email_uniqueness(primary_contact_email, existing_clients, client['id']):
+-                            st.error("❌ Email already exists for another client")
++                            st.error(UIConstants.ERROR_DUPLICATE)
+                         elif not validate_client_key_uniqueness(client_key, existing_clients, client['id']):
+-                            st.error("❌ Client key already exists")
++                            st.error(UIConstants.ERROR_DUPLICATE)
+                         else:
+                             # Check rate limit for database write
+                             db_rate_allowed, db_rate_error = check_rate_limit("db_write") if check_rate_limit else (True, None)
+                             if not db_rate_allowed:
+                                 st.error(f"🚦 Database {db_rate_error}")
+                                 return
+                             
+                             # Update client
+                             success = db_manager.update_client(client['id'], **client_data)
+                             if success:
+-                                st.success("✅ Client updated successfully!")
++                                st.success(ErrorMessages.CLIENT_UPDATE_SUCCESS)
+                                 st.session_state[f"edit_client_{client['id']}"] = False
+                                 st.rerun()
+                             else:
+-                                st.error("❌ Failed to update client")
++                                st.error(
++                                    ErrorMessages.CLIENT_UPDATE_ERROR.format(
++                                        error="Failed to update client"
++                                    )
++                                )
+                     else:
+                         for error in errors:
+-                            st.error(f"❌ {error}")
++                            st.error(
++                                ErrorMessages.CLIENT_UPDATE_ERROR.format(
++                                    error=error
++                                )
++                            )
+             
+             with col2:
+-                if st.form_submit_button("❌ Cancel", use_container_width=True):
++                if st.form_submit_button(UIConstants.CANCEL_BUTTON, use_container_width=True):
+                     st.session_state[f"edit_client_{client['id']}"] = False
+                     st.rerun()
+ 
+ 
+ def render_delete_client_modal(client: Dict[str, Any], db_manager: DatabaseManager):
+     """Render the delete client confirmation modal."""
+     if not STREAMLIT_AVAILABLE:
+         return
+     
+     with st.modal(f"Delete Client: {client['name']}", width="medium"):
+         st.markdown("### ⚠️ Confirm Deletion")
+         st.warning(f"Are you sure you want to delete client **{client['name']}**?")
+         
+         # Show related projects warning
+         projects = safe_streamlit_operation(
+             db_manager.get_projects,
+             client_id=client['id'],
+             include_inactive=True,
+             default_return=[],
+             operation_name="get_projects",
+         )
+         if projects:
+             st.error(f"⚠️ This client has {len(projects)} project(s). Deleting the client will affect these projects.")
+         
+         col1, col2 = st.columns(2)
+         
+         with col1:
+-            if st.button("🗑️ Delete Client", use_container_width=True):
++            if st.button(UIConstants.DELETE_BUTTON + " Client", use_container_width=True):
+                 # Check rate limit for database write
+                 db_rate_allowed, db_rate_error = check_rate_limit("db_write") if check_rate_limit else (True, None)
+                 if not db_rate_allowed:
+                     st.error(f"🚦 Database {db_rate_error}")
+                     return
+                 
+                 success = db_manager.delete_client(client['id'], soft_delete=True)
+                 if success:
+-                    st.success("✅ Client deleted successfully!")
++                    st.success(ErrorMessages.CLIENT_DELETE_SUCCESS)
+                     st.session_state[f"delete_client_{client['id']}"] = False
+                     st.rerun()
+                 else:
+-                    st.error("❌ Failed to delete client")
++                    st.error(
++                        ErrorMessages.CLIENT_DELETE_ERROR.format(
++                            error="Failed to delete client"
++                        )
++                    )
+         
+         with col2:
+-            if st.button("❌ Cancel", use_container_width=True):
++            if st.button(UIConstants.CANCEL_BUTTON, use_container_width=True):
+                 st.session_state[f"delete_client_{client['id']}"] = False
+                 st.rerun()
+ 
+ 
+ def render_create_client_form(db_manager: DatabaseManager):
+     """Render the create new client form."""
+     if not STREAMLIT_AVAILABLE:
+         return
+     
+     with st.expander("➕ Create New Client", expanded=False):
+         with st.form("create_client_form"):
+-            st.markdown("### 📝 New Client Information")
++            st.markdown(f"### {UIConstants.ICON_TASK} New Client Information")
+             
+             # Generate CSRF token for form protection
+             csrf_form_id = "create_client_form"
+             csrf_field = security_manager.get_csrf_form_field(csrf_form_id) if security_manager else None
+             
+             col1, col2 = st.columns(2)
+             
+             with col1:
+                 st.markdown("#### Basic Information")
+                 client_key = st.text_input("Client Key*", placeholder="e.g., client_xyz")
+                 name = st.text_input("Client Name*", placeholder="e.g., Company ABC")
+                 description = st.text_area("Description", placeholder="Brief description of the client...")
+                 
+                 industry = st.text_input("Industry", placeholder="e.g., Technology")
+-                company_size_options = CompanySize.get_all_values() if CompanySize else ["startup", "small", "medium", "large", "enterprise"]
++                company_size_options = CompanySizes.get_all_values()
+                 company_size = st.selectbox("Company Size", options=company_size_options)
+             
+             with col2:
+                 st.markdown("#### Contact Information")
+                 primary_contact_name = st.text_input("Contact Name", placeholder="e.g., John Doe")
+                 primary_contact_email = st.text_input("Contact Email*", placeholder="john@company.com")
+                 primary_contact_phone = st.text_input("Contact Phone", placeholder="+55 (11) 99999-9999")
+                 
+                 st.markdown("#### Business Settings")
+-                status_options = GeneralStatus.get_all_values() if GeneralStatus else ["active", "inactive", "suspended", "archived"]
++                status_options = StatusValues.get_all_values()
+                 status = st.selectbox("Status", options=status_options, index=0)
+-                tier_options = ClientTier.get_all_values() if ClientTier else ["basic", "standard", "premium", "enterprise"]
+-                tier_default_index = tier_options.index(ClientTier.get_default()) if ClientTier else 1
++                tier_options = ClientTiers.get_all_values()
++                tier_default_index = tier_options.index(ClientTiers.get_default())
+                 client_tier = st.selectbox("Client Tier", options=tier_options, index=tier_default_index)
+                 hourly_rate = st.number_input("Hourly Rate (R$)", value=0.0, min_value=0.0)
+             
+-            if st.form_submit_button("🚀 Create Client", use_container_width=True):
++            if st.form_submit_button(UIConstants.CREATE_BUTTON + " Client", use_container_width=True):
+                 # CSRF Protection
+                 if csrf_field and security_manager:
+                     csrf_valid, csrf_error = security_manager.require_csrf_protection(
+                         csrf_form_id, csrf_field.get("token_value")
+                     )
+                     if not csrf_valid:
+                         st.error(f"🔒 Security Error: {csrf_error}")
+                         return
+                 
+                 # Check rate limit for form submission
+                 rate_allowed, rate_error = check_rate_limit("form_submit") if check_rate_limit else (True, None)
+                 if not rate_allowed:
+                     st.error(f"🚦 {rate_error}")
+                     return
+                 
+                 # Create raw data
+                 raw_data = {
+                     'client_key': client_key,
+                     'name': name,
+                     'description': description,
+                     'industry': industry,
+                     'company_size': company_size,
+                     'primary_contact_name': primary_contact_name,
+                     'primary_contact_email': primary_contact_email,
+                     'primary_contact_phone': primary_contact_phone,
+                     'status': status,
+                     'client_tier': client_tier,
+                     'hourly_rate': hourly_rate
+                 }
+                 
+                 # Security validation
+                 if validate_form:
+                     security_valid, security_errors = validate_form(raw_data)
+                     if not security_valid:
+                         for error in security_errors:
+                             st.error(f"🔒 Security: {error}")
+                         return
+                 
+                 # Sanitize data for security
+                 client_data = create_safe_client(raw_data) if create_safe_client else raw_data
+                 
+                 is_valid, errors = validate_client_data(client_data)
+                 
+                 if is_valid:
+                     # Check uniqueness
+                     existing_clients_result = db_manager.get_clients(include_inactive=True)
+                     existing_clients = existing_clients_result.get("data", []) if isinstance(existing_clients_result, dict) else []
+                     
+                     if not validate_email_uniqueness(primary_contact_email, existing_clients):
+-                        st.error("❌ Email already exists for another client")
++                        st.error(UIConstants.ERROR_DUPLICATE)
+                     elif not validate_client_key_uniqueness(client_key, existing_clients):
+-                        st.error("❌ Client key already exists")
++                        st.error(UIConstants.ERROR_DUPLICATE)
+                     else:
+                         # Check rate limit for database write
+                         db_rate_allowed, db_rate_error = check_rate_limit("db_write") if check_rate_limit else (True, None)
+                         if not db_rate_allowed:
+                             st.error(f"🚦 Database {db_rate_error}")
+                             return
+                         
+                         # Create client
+                         client_id = db_manager.create_client(
+                             client_key=client_key,
+                             name=name,
+                             description=description,
+                             industry=industry,
+                             company_size=company_size,
+                             primary_contact_name=primary_contact_name,
+                             primary_contact_email=primary_contact_email,
+                             status=status,
+                             client_tier=client_tier,
+                             hourly_rate=hourly_rate
+                         )
+                         
+                         if client_id:
+-                            st.success("✅ Client created successfully!")
++                            st.success(ErrorMessages.CLIENT_CREATE_SUCCESS)
+                             st.rerun()
+                         else:
+-                            st.error("❌ Failed to create client")
++                            st.error(
++                                ErrorMessages.CLIENT_CREATE_ERROR.format(
++                                    error="Failed to create client"
++                                )
++                            )
+                 else:
+                     for error in errors:
+-                        st.error(f"❌ {error}")
++                        st.error(
++                            ErrorMessages.LOADING_ERROR.format(
++                                entity="client", error=error
++                            )
++                        )
+ 
+ 
+ @handle_streamlit_exceptions(show_error=True, attempt_recovery=True)
+ def render_clients_page():
+     """Render the main clients management page."""
+     if not STREAMLIT_AVAILABLE:
+         return {"error": "Streamlit not available"}
+     
+     if not DATABASE_UTILS_AVAILABLE:
+-        st.error("❌ Database utilities not available")
++        st.error(
++            ErrorMessages.LOADING_ERROR.format(
++                entity="database utilities", error="not available"
++            )
++        )
+         return {"error": "Database utilities not available"}
+     
+     # Initialize protected page with authentication
+     current_user = init_protected_page("👥 Client Management")
+     if not current_user:
+         return {"error": "Authentication required"}
+     
+     # Check rate limit for page load
+     page_rate_allowed, page_rate_error = check_rate_limit("page_load") if check_rate_limit else (True, None)
+     if not page_rate_allowed:
+         st.error(f"🚦 {page_rate_error}")
+         st.info("Please wait before reloading the page.")
+         return {"error": "Rate limited"}
+     
+     st.markdown("Manage your clients, contacts, and business relationships")
+     st.markdown("---")
+     
+     # Initialize database manager
+     with streamlit_error_boundary("database_initialization"):
+         config = safe_streamlit_operation(
+             load_config,
+             default_return=None,
+             operation_name="load_config",
+         )
+         if config is None:
+-            st.error("❌ Configuration loading failed")
++            st.error(
++                ErrorMessages.LOADING_ERROR.format(
++                    entity="configuration", error="loading failed"
++                )
++            )
+             return {"error": "config_load_failed"}
+ 
+         db_manager = safe_streamlit_operation(
+             DatabaseManager,
+             str(config.get_database_path()),
+             default_return=None,
+             operation_name="database_manager_init",
+         )
+         if db_manager is None:
+-            st.error("❌ Database connection failed")
++            st.error(
++                ErrorMessages.LOADING_ERROR.format(
++                    entity="database connection", error="failed"
++                )
++            )
+             return {"error": "db_connection_failed"}
+     
+     # Filters and search
+     col1, col2, col3 = st.columns([2, 1, 1])
+     
+     with col1:
+-        search_name = st.text_input("🔍 Search by name", placeholder="Type client name...")
++        search_name = st.text_input(
++            f"{UIConstants.ICON_SEARCH} Search by name",
++            placeholder="Type client name...",
++        )
+     
+     with col2:
+-        if GeneralStatus:
+-            status_filter_options = ["all"] + GeneralStatus.get_all_values()
+-        else:
+-            status_filter_options = ["all", "active", "inactive", "suspended", "archived"]
+-        status_filter = st.selectbox("Status Filter", 
++        status_filter_options = ["all"] + StatusValues.get_all_values()
++        status_filter = st.selectbox(
++            "Status Filter",
+             options=status_filter_options,
+-            index=0
++            index=0,
+         )
+     
+     with col3:
+-        if ClientTier:
+-            tier_filter_options = ["all"] + ClientTier.get_all_values()
++        if ClientTiers:
++            tier_filter_options = ["all"] + ClientTiers.get_all_values()
+         else:
+             tier_filter_options = ["all", "basic", "standard", "premium", "enterprise"]
+         tier_filter = st.selectbox("Tier Filter",
+             options=tier_filter_options,
+             index=0
+         )
+     
+     # Create new client form
+     render_create_client_form(db_manager)
+     
+     st.markdown("---")
+     
+     # Get clients with filters
+     with streamlit_error_boundary("client_loading"):
+         # Check rate limit for database read
+         db_read_allowed, db_read_error = check_rate_limit("db_read") if check_rate_limit else (True, None)
+         if not db_read_allowed:
+             st.error(f"🚦 Database {db_read_error}")
+             return {"error": "Database rate limited"}
+ 
+         clients_result = safe_streamlit_operation(
+             db_manager.get_clients,
+             include_inactive=True,
+             default_return={},
+             operation_name="get_clients",
+         )
+         all_clients = clients_result.get("data", []) if isinstance(clients_result, dict) else []
+ 
+         if not all_clients:
+-            st.info("📝 No clients found. Create your first client using the form above!")
++            st.info(ErrorMessages.NO_ITEMS_FOUND.format(entity="clients"))
+             return {"status": "no_clients"}
+ 
+         # Apply filters
+         filtered_clients = all_clients
+ 
+         if search_name:
+             filtered_clients = [c for c in filtered_clients if search_name.lower() in c.get('name', '').lower()]
+ 
+         if status_filter != "all":
              filtered_clients = [c for c in filtered_clients if c.get('status') == status_filter]
  
          if tier_filter != "all":
@@ -251,7 +910,8 @@ index 5c5f019d33cf6b5cbf2596afac5d7bb8d16ce4db..c94e1c44817aadff339bb243e6dc235e
          st.markdown(f"**Found {len(filtered_clients)} client(s) (of {total_count} total)**")
  
          if not filtered_clients:
-             st.warning("🔍 No clients match your current filters.")
+-            st.warning("🔍 No clients match your current filters.")
++            st.warning(ErrorMessages.NO_MATCHES_FILTER.format(entity="clients"))
              return {"status": "no_matches"}
  
          # Display clients
@@ -266,235 +926,661 @@ index 5c5f019d33cf6b5cbf2596afac5d7bb8d16ce4db..c94e1c44817aadff339bb243e6dc235e
  
  
  # Export the main function
--__all__ = ["render_clients_page"]
-+def render_paginated_clients() -> None:
-+    """Render clients list with pagination"""
-+    if not STREAMLIT_AVAILABLE:
-+        return
-+        
-+    if not PAGINATION_AVAILABLE or not create_pagination_wrapper or not PaginationConfig:
-+        st.error("❌ Componente de paginação não disponível")
-+        return
-+
-+    pagination = create_pagination_wrapper(
-+        "clients_list", PaginationConfig(page_size=20, show_page_size_selector=True)
-+    )
-+
-+    def fetch_clients_paginated(
-+        limit: int, offset: int, search_term: str = ""
-+    ) -> Tuple[List[Dict[str, Any]], int]:
-+        db_manager = DatabaseManager()
-+        if search_term:
-+            count_query = (
-+                "SELECT COUNT(*) as count FROM framework_clients "
-+                "WHERE name LIKE ? OR primary_contact_email LIKE ?"
-+            )
-+            total_count = db_manager.execute_query(
-+                count_query, [f"%{search_term}%", f"%{search_term}%"]
-+            )[0]["count"]
-+            query = (
-+                "SELECT id, name, primary_contact_email as email, "
-+                "primary_contact_phone as phone, created_at, client_tier as tier "
-+                "FROM framework_clients "
-+                "WHERE name LIKE ? OR primary_contact_email LIKE ? "
-+                "ORDER BY created_at DESC LIMIT ? OFFSET ?"
-+            )
-+            clients = db_manager.execute_query(
-+                query,
-+                [
-+                    f"%{search_term}%",
-+                    f"%{search_term}%",
-+                    limit,
-+                    offset,
-+                ],
-+            )
-+        else:
-+            count_query = "SELECT COUNT(*) as count FROM framework_clients"
-+            total_count = db_manager.execute_query(count_query)[0]["count"]
-+            query = (
-+                "SELECT id, name, primary_contact_email as email, "
-+                "primary_contact_phone as phone, created_at, client_tier as tier "
-+                "FROM framework_clients ORDER BY created_at DESC LIMIT ? OFFSET ?"
-+            )
-+            clients = db_manager.execute_query(query, [limit, offset])
-+        return clients, total_count
-+
-+    search_term = st.text_input(
-+        "🔍 Buscar clientes", placeholder="Nome ou email..."
-+    )
-+    clients_data, pagination_state = pagination.paginate_data(
-+        fetch_clients_paginated, search_term
-+    )
-+    pagination.render_pagination_controls(pagination_state)
-+
-+    if clients_data:
-+        st.write(
-+            f"📋 Exibindo {len(clients_data)} de {pagination_state.total_items} clientes"
-+        )
-+        for client in clients_data:
-+            with st.container():
-+                col1, col2, col3 = st.columns([3, 2, 1])
-+                with col1:
-+                    st.write(f"**{client['name']}**")
-+                    st.caption(client.get("email", ""))
-+                with col2:
-+                    st.write(f"📞 {client.get('phone', 'N/A')}")
-+                    st.caption(f"Tier: {client.get('tier', 'Standard')}")
-+                with col3:
-+                    if st.button("📝", key=f"edit_client_{client['id']}"):
-+                        st.session_state.selected_client_id = client["id"]
-+                        st.rerun()
-+                st.divider()
-+    else:
-+        st.info("📭 Nenhum cliente encontrado")
-+
-+    if pagination_state.total_pages > 1:
-+        pagination.render_pagination_controls(pagination_state)
-+
-+
-+__all__ = ["render_clients_page", "render_paginated_clients"]
+ __all__ = ["render_clients_page"]
  
  # Execute when run as a Streamlit page
  if __name__ == "__main__":
      if STREAMLIT_AVAILABLE:
--        render_clients_page()
-+        render_paginated_clients()
+         render_clients_page()
  
-diff --git a/streamlit_extension/pages/epics.py b/streamlit_extension/pages/epics.py
-new file mode 100644
-index 0000000000000000000000000000000000000000..8ee7471acd8ec44aa689cc509d964c842889afd7
---- /dev/null
-+++ b/streamlit_extension/pages/epics.py
-@@ -0,0 +1,107 @@
-+"""
-+🎯 Epics Listing Page
-+
-+Simple listing of epics with reusable pagination component.
-+"""
-+
-+import sys
-+from pathlib import Path
-+from typing import Any, Dict, List, Tuple
-+
-+# Add parent directory to path
-+sys.path.append(str(Path(__file__).parent.parent.parent))
-+
-+try:
-+    import streamlit as st
-+    STREAMLIT_AVAILABLE = True
-+except ImportError:
-+    STREAMLIT_AVAILABLE = False
-+    st = None
-+
-+try:
-+    from streamlit_extension.utils.database import DatabaseManager
-+    DATABASE_UTILS_AVAILABLE = True
-+except ImportError:
-+    DATABASE_UTILS_AVAILABLE = False
-+    DatabaseManager = None  # type: ignore
-+
-+# Safe import of pagination component
-+try:
-+    from ..components.pagination import create_pagination_wrapper, PaginationConfig
-+    PAGINATION_AVAILABLE = True
-+except ImportError:
-+    PAGINATION_AVAILABLE = False
-+    create_pagination_wrapper = None
-+    PaginationConfig = None
-+
-+
-+def render_paginated_epics() -> None:
-+    """Render epics list with pagination."""
-+    if not (STREAMLIT_AVAILABLE and DATABASE_UTILS_AVAILABLE):
-+        return
-+        
-+    if not PAGINATION_AVAILABLE or not create_pagination_wrapper or not PaginationConfig:
-+        st.error("❌ Componente de paginação não disponível")
-+        return
-+
-+    pagination = create_pagination_wrapper(
-+        "epics_list", PaginationConfig(page_size=20, show_page_size_selector=True)
-+    )
-+
-+    def fetch_epics_paginated(
-+        limit: int, offset: int, search_term: str = ""
-+    ) -> Tuple[List[Dict[str, Any]], int]:
-+        db_manager = DatabaseManager()
-+        if search_term:
-+            count_query = (
-+                "SELECT COUNT(*) as count FROM framework_epics "
-+                "WHERE name LIKE ? OR epic_key LIKE ?"
-+            )
-+            total_count = db_manager.execute_query(
-+                count_query, [f"%{search_term}%", f"%{search_term}%"]
-+            )[0]["count"]
-+            data_query = (
-+                "SELECT id, name, epic_key, status, created_at, priority "
-+                "FROM framework_epics WHERE name LIKE ? OR epic_key LIKE ? "
-+                "ORDER BY created_at DESC LIMIT ? OFFSET ?"
-+            )
-+            epics = db_manager.execute_query(
-+                data_query,
-+                [f"%{search_term}%", f"%{search_term}%", limit, offset],
-+            )
-+        else:
-+            total_count = db_manager.execute_query(
-+                "SELECT COUNT(*) as count FROM framework_epics"
-+            )[0]["count"]
-+            data_query = (
-+                "SELECT id, name, epic_key, status, created_at, priority "
-+                "FROM framework_epics ORDER BY created_at DESC LIMIT ? OFFSET ?"
-+            )
-+            epics = db_manager.execute_query(data_query, [limit, offset])
-+        return epics, total_count
-+
-+    search_term = st.text_input(
-+        "🔍 Buscar épicos", placeholder="Nome ou chave..."
-+    )
-+    epics_data, pagination_state = pagination.paginate_data(
-+        fetch_epics_paginated, search_term
-+    )
-+    pagination.render_pagination_controls(pagination_state)
-+
-+    if epics_data:
-+        st.write(
-+            f"📋 Exibindo {len(epics_data)} de {pagination_state.total_items} épicos"
-+        )
-+        for epic in epics_data:
-+            with st.container():
-+                col1, col2, col3 = st.columns([3, 2, 1])
-+                with col1:
-+                    st.write(f"**{epic['name']}**")
-+                    st.caption(f"Key: {epic.get('epic_key', 'N/A')}")
-+                with col2:
-+                    st.write(f"📌 {epic.get('status', 'N/A').title()}")
-+                    st.caption(f"Priority: {epic.get('priority', 'N/A')}")
-+                with col3:
-+                    pass
-+                st.divider()
-+    else:
-+        st.info("📭 Nenhum épico encontrado")
-+
-+    if pagination_state.total_pages > 1:
-+        pagination.render_pagination_controls(pagination_state)
-+
-+
-+__all__ = ["render_paginated_epics"]
-+
-+if __name__ == "__main__":
-+    if STREAMLIT_AVAILABLE:
-+        render_paginated_epics()
-diff --git a/streamlit_extension/pages/projects.py b/streamlit_extension/pages/projects.py
-index b66b1445ac231dc846284a86cd58a896f72b8bc8..50d842be9a34c13af6d3c893c6660845dbb78906 100644
---- a/streamlit_extension/pages/projects.py
-+++ b/streamlit_extension/pages/projects.py
-@@ -17,50 +17,52 @@ from datetime import datetime, date
+diff --git a/streamlit_extension/pages/kanban.py b/streamlit_extension/pages/kanban.py
+index 82a1ea11d029a77e51a8b602ad89d2c05a753e81..cc2e17ed59c4c12cd746bb09b850f076567e9590 100644
+--- a/streamlit_extension/pages/kanban.py
++++ b/streamlit_extension/pages/kanban.py
+@@ -1,153 +1,165 @@
+ """
+-📋 Kanban Board Page
++Kanban Board Page
+ 
+ Interactive task management with drag-and-drop Kanban board:
+ - Visual task organization by status
+ - TDD phase tracking
+ - Epic grouping and filtering
+ - Real-time updates
+ - Task editing and creation
+ """
+ 
+ import sys
+ from pathlib import Path
+ from typing import Dict, Any, List, Optional
+ from datetime import datetime
+ 
  # Add parent directory to path
  sys.path.append(str(Path(__file__).parent.parent.parent))
  
- # Update typing imports to include Tuple for Python < 3.10 compatibility
--from typing import Any, Dict, List, Union
-+from typing import Any, Dict, List, Union, Tuple
+ # Graceful imports
+ try:
+     import streamlit as st
+     STREAMLIT_AVAILABLE = True
+ except ImportError:
+     STREAMLIT_AVAILABLE = False
+     st = None
+ 
+ # Local imports
+ try:
+     from streamlit_extension.utils.database import DatabaseManager
+     from streamlit_extension.utils.security import (
+         security_manager, validate_form, check_rate_limit, sanitize_display
+     )
+     from streamlit_extension.config import load_config
+     from streamlit_extension.config.constants import (
+-        TaskStatus, TDDPhase, Priority, UIConstants
++        TaskStatus, TDDPhases, Priority, UIConstants, ErrorMessages
+     )
+     # Import authentication middleware
+     from streamlit_extension.auth.middleware import init_protected_page
+     DATABASE_UTILS_AVAILABLE = True
+ except ImportError:
+     DatabaseManager = load_config = security_manager = None
+     validate_form = check_rate_limit = sanitize_display = None
+-    TaskStatus = TDDPhase = Priority = UIConstants = None
++    TaskStatus = TDDPhases = Priority = UIConstants = ErrorMessages = None
+     init_protected_page = None
+     DATABASE_UTILS_AVAILABLE = False
+ 
+ from streamlit_extension.utils.exception_handler import (
+     handle_streamlit_exceptions,
+     streamlit_error_boundary,
+     safe_streamlit_operation,
+     get_error_statistics,
+ )
+ 
+ @handle_streamlit_exceptions(show_error=True, attempt_recovery=True)
+ def render_kanban_page():
+     """Render the Kanban board page."""
+     if not STREAMLIT_AVAILABLE:
+         return {"error": "Streamlit not available"}
+     
+     # Initialize protected page with authentication
+-    current_user = init_protected_page("📋 Kanban Board")
++    current_user = init_protected_page(UIConstants.KANBAN_PAGE_TITLE)
+     if not current_user:
+         return {"error": "Authentication required"}
+     
+     # Page load rate limiting
+     page_rate_allowed, page_rate_error = check_rate_limit("page_load") if check_rate_limit else (True, None)
+     if not page_rate_allowed:
+         st.error(f"🚦 {page_rate_error}")
+         st.info("Please wait before reloading the page.")
+         return {"error": "Rate limited"}
+     
+     st.markdown("---")
+     
+     # Initialize database manager
+     if not DATABASE_UTILS_AVAILABLE:
+-        st.error("❌ Database utilities not available")
++        st.error(
++            ErrorMessages.LOADING_ERROR.format(
++                entity="database utilities", error="not available"
++            )
++        )
+         return
+     
+     with streamlit_error_boundary("database_initialization"):
+         config = safe_streamlit_operation(
+             load_config,
+             default_return=None,
+             operation_name="load_config",
+         )
+         if config is None:
+-            st.error("❌ Configuration loading failed")
++            st.error(
++                ErrorMessages.LOADING_ERROR.format(
++                    entity="configuration", error="loading failed"
++                )
++            )
+             return
+ 
+         db_manager = safe_streamlit_operation(
+             DatabaseManager,
+             str(config.get_database_path()),
+             default_return=None,
+             operation_name="database_manager_init",
+         )
+         if db_manager is None:
+-            st.error("❌ Database connection failed")
++            st.error(
++                ErrorMessages.LOADING_ERROR.format(
++                    entity="database connection", error="failed"
++                )
++            )
+             return
+     
+     # Sidebar filters
+     _render_sidebar_filters(db_manager)
+     
+     # Database read rate limiting
+     db_read_allowed, db_read_error = check_rate_limit("db_read") if check_rate_limit else (True, None)
+     if not db_read_allowed:
+         st.error(f"🚦 Database {db_read_error}")
+         st.info("Please wait before refreshing the data.")
+         return {"error": "Rate limited"}
+     
+     # Load data
+     with streamlit_error_boundary("task_loading"):
+         with st.spinner("Loading tasks..."):
+             tasks = safe_streamlit_operation(
+                 db_manager.get_tasks,
+                 default_return=[],
+                 operation_name="get_tasks",
+             )
+             epics = safe_streamlit_operation(
+                 db_manager.get_epics,
+                 default_return=[],
+                 operation_name="get_epics",
+             )
+     
+     # Apply filters
+     filtered_tasks = _apply_filters(tasks, epics)
+     
+     if not filtered_tasks:
+-        st.info("📝 No tasks found for the selected filters.")
++        st.info(ErrorMessages.NO_ITEMS_FOUND.format(entity="tasks"))
+         _render_create_task_form(db_manager, epics)
+         return
+     
+     # Render board
+     with streamlit_error_boundary("ui_rendering"):
+         _render_kanban_board(filtered_tasks, db_manager, epics)
+     
+     # Task creation form
+     with st.expander("➕ Create New Task", expanded=False):
+         with streamlit_error_boundary("form_rendering"):
+             _render_create_task_form(db_manager, epics)
+ 
+     if st.session_state.get("show_debug_info", False):
+         with st.expander("🔧 Error Statistics", expanded=False):
+             st.json(get_error_statistics())
+ 
+ 
+ def _render_sidebar_filters(db_manager: DatabaseManager):
+     """Render sidebar filters for the Kanban board."""
+     
+     st.sidebar.markdown("## 🔍 Filters")
+     
+     # Epic filter
+     epics = db_manager.get_epics()
+     epic_options = ["All Epics"] + [f"{epic['epic_key']}: {epic['name']}" for epic in epics]
+@@ -213,53 +225,62 @@ def _apply_filters(tasks: List[Dict[str, Any]], epics: List[Dict[str, Any]]) ->
+         
+         if epic_id:
+             filtered_tasks = [t for t in filtered_tasks if t.get("epic_id") == epic_id]
+     
+     # TDD Phase filter
+     phase_filter = st.session_state.get("kanban_phase_filter")
+     if phase_filter:
+         if phase_filter == "unknown":
+             filtered_tasks = [t for t in filtered_tasks if not t.get("tdd_phase") or t.get("tdd_phase") == ""]
+         else:
+             filtered_tasks = [t for t in filtered_tasks if t.get("tdd_phase", "").lower() == phase_filter]
+     
+     # Priority filter
+     priority_filter = st.session_state.get("kanban_priority_filter")
+     if priority_filter:
+         filtered_tasks = [t for t in filtered_tasks if str(t.get("priority", "")).lower() == priority_filter]
+     
+     return filtered_tasks
+ 
+ 
+ def _render_kanban_board(tasks: List[Dict[str, Any]], db_manager: DatabaseManager, epics: List[Dict[str, Any]]):
+     """Render the main Kanban board."""
+     
+     # Define board columns
+     columns = {
+-        "todo": {"title": "📝 To Do", "color": "#FFE4E1"},
+-        "in_progress": {"title": "🟡 In Progress", "color": "#FFF8DC"},
+-        "completed": {"title": "✅ Completed", "color": "#E8F5E8"}
++        TaskStatus.TODO.value: {
++            "title": f"{UIConstants.ICON_TASK} To Do",
++            "color": "#FFE4E1",
++        },
++        TaskStatus.IN_PROGRESS.value: {
++            "title": f"{UIConstants.ICON_PENDING} In Progress",
++            "color": "#FFF8DC",
++        },
++        TaskStatus.COMPLETED.value: {
++            "title": f"{UIConstants.ICON_COMPLETED} Completed",
++            "color": "#E8F5E8",
++        },
+     }
+     
+     # Group tasks by status
+     task_groups = {status: [] for status in columns.keys()}
+     for task in tasks:
+         status = task.get("status", "todo")
+         if status in task_groups:
+             task_groups[status].append(task)
+     
+     # Render columns
+     cols = st.columns(len(columns))
+     
+     for idx, (status, column_info) in enumerate(columns.items()):
+         with cols[idx]:
+             st.markdown(f"### {column_info['title']}")
+             st.markdown(f"*{len(task_groups[status])} tasks*")
+             
+             # Column container
+             with st.container():
+                 st.markdown(f"<div style='background-color: {column_info['color']}; padding: 10px; border-radius: 5px; min-height: 400px;'>", unsafe_allow_html=True)
+                 
+                 # Render tasks in this column
+                 for task in task_groups[status]:
+                     _render_task_card(task, db_manager, epics, status)
+                 
+@@ -279,130 +300,163 @@ def _render_task_card(task: Dict[str, Any], db_manager: DatabaseManager, epics:
+     epic_name = task.get("epic_name", "No Epic")
+     tdd_phase = task.get("tdd_phase", "")
+     estimate = task.get("estimate_minutes", 0)
+     priority = task.get("priority", 1)
+     
+     # Task card container
+     with st.container():
+         # Card styling
+         priority_colors = {1: "#FFB3BA", 2: "#FFDFBA", 3: "#BAFFC9"}  # High, Medium, Low
+         card_color = priority_colors.get(priority, "#F0F0F0")
+         
+         st.markdown(f"""
+         <div style='background-color: {card_color}; padding: 10px; margin: 5px 0; border-radius: 5px; border-left: 4px solid #333;'>
+             <div style='font-weight: bold; margin-bottom: 5px;'>{task_title}</div>
+             <div style='font-size: 12px; color: #666;'>{epic_name}</div>
+         </div>
+         """, unsafe_allow_html=True)
+         
+         # Task details in expander
+         with st.expander(f"Details: {task_title}", expanded=False):
+             col1, col2 = st.columns(2)
+             
+             with col1:
+                 st.write(f"**Epic:** {epic_name}")
+                 if st.session_state.get("kanban_show_tdd_phases", True) and tdd_phase:
+-                    phase_colors = {"red": "🔴", "green": "🟢", "refactor": "🔵"}
+-                    phase_emoji = phase_colors.get(tdd_phase.lower(), "⚪")
++                    phase_colors = {
++                        TDDPhases.RED.value: UIConstants.ICON_CANCELLED,
++                        TDDPhases.GREEN.value: UIConstants.ICON_ACTIVE,
++                        TDDPhases.REFACTOR.value: UIConstants.ICON_REFACTOR,
++                        TDDPhases.BLOCKED.value: UIConstants.ICON_CANCELLED,
++                    }
++                    phase_emoji = phase_colors.get(
++                        tdd_phase.lower(), UIConstants.ICON_UNKNOWN
++                    )
+                     st.write(f"**TDD Phase:** {phase_emoji} {tdd_phase.title()}")
+                 
+                 if st.session_state.get("kanban_show_estimates", True) and estimate:
+                     st.write(f"**Estimate:** {estimate} minutes")
+             
+             with col2:
+                 priority_names = {1: "High", 2: "Medium", 3: "Low"}
+                 st.write(f"**Priority:** {priority_names.get(priority, 'Unknown')}")
+                 
+                 if task.get("description"):
+                     st.write(f"**Description:** {task['description']}")
+             
+             # Task actions
+             st.markdown("**Actions:**")
+             action_cols = st.columns(3)
+             
+             with action_cols[0]:
+                 if st.button("✏️ Edit", key=f"edit_{task_id}"):
+                     _show_edit_task_modal(task, db_manager, epics)
+             
+             with action_cols[1]:
+                 # Smart status movement buttons
+                 status_flow = {
+-                    "todo": ("in_progress", "🚀 Start"),
+-                    "in_progress": ("completed", "✅ Complete"),
+-                    "completed": ("todo", "🔄 Reopen")
++                    TaskStatus.TODO.value: (
++                        TaskStatus.IN_PROGRESS.value,
++                        f"{UIConstants.CREATE_BUTTON.split()[0]} Start",
++                    ),
++                    TaskStatus.IN_PROGRESS.value: (
++                        TaskStatus.COMPLETED.value,
++                        f"{UIConstants.ICON_COMPLETED} Complete",
++                    ),
++                    TaskStatus.COMPLETED.value: (
++                        TaskStatus.TODO.value,
++                        f"{UIConstants.ICON_TASK} Reopen",
++                    ),
+                 }
+-                
+-                next_status, button_text = status_flow.get(current_status, ("todo", "📝 To Do"))
++
++                next_status, button_text = status_flow.get(
++                    current_status, (TaskStatus.TODO.value, f"{UIConstants.ICON_TASK} To Do")
++                )
+                 
+                 if st.button(button_text, key=f"move_{task_id}_{next_status}"):
+                     success = _update_task_status(task_id, next_status, db_manager)
+                     if success:
+                         st.success(f"Task moved to {next_status.replace('_', ' ').title()}!")
+                         st.rerun()
+                     else:
+-                        st.error("Failed to update task status")
++                        st.error(
++                            ErrorMessages.LOADING_ERROR.format(
++                                entity="task status", error="update failed"
++                            )
++                        )
+                 
+                 # Additional status options in a smaller button
+-                other_statuses = [s for s in ["todo", "in_progress", "completed"] 
+-                                if s not in [current_status, next_status]]
++                other_statuses = [
++                    s
++                    for s in [TaskStatus.TODO.value, TaskStatus.IN_PROGRESS.value, TaskStatus.COMPLETED.value]
++                    if s not in [current_status, next_status]
++                ]
+                 
+                 if other_statuses and st.button("⚙️ Other", key=f"other_{task_id}"):
+                     st.session_state[f"show_other_status_{task_id}"] = True
+                 
+                 if st.session_state.get(f"show_other_status_{task_id}"):
+                     for status in other_statuses:
+-                        status_names = {"todo": "📝 To Do", "in_progress": "🟡 In Progress", "completed": "✅ Completed"}
++                        status_names = {
++                            TaskStatus.TODO.value: f"{UIConstants.ICON_TASK} To Do",
++                            TaskStatus.IN_PROGRESS.value: f"{UIConstants.ICON_PENDING} In Progress",
++                            TaskStatus.COMPLETED.value: f"{UIConstants.ICON_COMPLETED} Completed",
++                        }
+                         if st.button(status_names[status], key=f"alt_move_{task_id}_{status}"):
+                             success = _update_task_status(task_id, status, db_manager)
+                             if success:
+                                 st.success(f"Task moved to {status.replace('_', ' ').title()}!")
+                                 st.session_state[f"show_other_status_{task_id}"] = False
+                                 st.rerun()
+                             else:
+-                                st.error("Failed to update task status")
++                                st.error(
++                                    ErrorMessages.LOADING_ERROR.format(
++                                        entity="task status", error="update failed"
++                                    )
++                                )
+             
+             with action_cols[2]:
+                 if not st.session_state.get(f"confirm_delete_{task_id}"):
+                     if st.button("🗑️ Delete", key=f"delete_{task_id}"):
+                         st.session_state[f"confirm_delete_{task_id}"] = True
+                         st.rerun()
+                 else:
+                     st.warning("⚠️ Confirm deletion?")
+                     col_confirm, col_cancel = st.columns(2)
+                     
+                     with col_confirm:
+-                        if st.button("✅ Yes", key=f"confirm_yes_{task_id}"):
++                        if st.button(UIConstants.ICON_COMPLETED + " Yes", key=f"confirm_yes_{task_id}"):
+                             success = _delete_task(task_id, db_manager)
+                             if success:
+                                 st.success("Task deleted successfully!")
+                                 st.session_state[f"confirm_delete_{task_id}"] = False
+                                 st.rerun()
+                             else:
+                                 st.error("Failed to delete task")
+                     
+                     with col_cancel:
+-                        if st.button("❌ No", key=f"confirm_no_{task_id}"):
++                        if st.button(UIConstants.CANCEL_BUTTON.split()[0] + " No", key=f"confirm_no_{task_id}"):
+                             st.session_state[f"confirm_delete_{task_id}"] = False
+                             st.rerun()
+ 
+ 
+ def _show_quick_add_modal(db_manager: DatabaseManager, epics: List[Dict[str, Any]]):
+     """Show quick add task modal."""
+     
+     st.session_state.show_quick_add = True
+     
+     if st.session_state.get("show_quick_add"):
+         with st.form("quick_add_task"):
+             st.markdown("### ➕ Quick Add Task")
+             
+             # Generate CSRF token for form protection
+             csrf_form_id = "quick_add_task_form"
+             csrf_field = security_manager.get_csrf_form_field(csrf_form_id) if security_manager else None
+             
+             title = st.text_input("Task Title*", placeholder="Enter task title...")
+             
+             col1, col2 = st.columns(2)
+             with col1:
+                 epic_options = ["Select Epic"] + [f"{e['epic_key']}: {e['name']}" for e in epics]
+                 selected_epic = st.selectbox("Epic", epic_options)
+             
+             with col2:
+@@ -437,55 +491,59 @@ def _show_quick_add_modal(db_manager: DatabaseManager, epics: List[Dict[str, Any
+                     security_valid, security_errors = validate_form(raw_data)
+                     if not security_valid:
+                         for error in security_errors:
+                             st.error(f"🔒 Security: {error}")
+                         return
+                 
+                 # Get epic ID
+                 epic_id = None
+                 if selected_epic != "Select Epic":
+                     epic_key = selected_epic.split(":")[0]
+                     for epic in epics:
+                         if epic.get("epic_key") == epic_key:
+                             epic_id = epic.get("id")
+                             break
+                 
+                 # Database write rate limiting
+                 db_rate_allowed, db_rate_error = check_rate_limit("db_write") if check_rate_limit else (True, None)
+                 if not db_rate_allowed:
+                     st.error(f"🚦 Database {db_rate_error}")
+                     return
+                 
+                 # Create task (simplified - would need proper database insertion)
+                 success = _create_task(title, epic_id, tdd_phase, db_manager)
+                 
+                 if success:
+-                    st.success("✅ Task created successfully!")
++                    st.success(UIConstants.SUCCESS_CREATE)
+                     st.session_state.show_quick_add = False
+                     st.rerun()
+                 else:
+-                    st.error("❌ Failed to create task")
++                    st.error(
++                        ErrorMessages.LOADING_ERROR.format(
++                            entity="task", error="creation failed"
++                        )
++                    )
+ 
+ 
+ def _render_create_task_form(db_manager: DatabaseManager, epics: List[Dict[str, Any]]):
+     """Render detailed task creation form."""
+     
+     with st.form("create_task"):
+         st.markdown("### ➕ Create New Task")
+         
+         # Generate CSRF token for form protection
+         csrf_form_id = "create_task_form"
+         csrf_field = security_manager.get_csrf_form_field(csrf_form_id) if security_manager else None
+         
+         col1, col2 = st.columns(2)
+         
+         with col1:
+             title = st.text_input("Task Title*", placeholder="Enter a descriptive title...")
+             description = st.text_area("Description", placeholder="Optional task description...")
+             
+             epic_options = ["Select Epic"] + [f"{e['epic_key']}: {e['name']}" for e in epics]
+             selected_epic = st.selectbox("Epic*", epic_options)
+         
+         with col2:
+             tdd_phase = st.selectbox("TDD Phase", ["", "red", "green", "refactor"])
+             priority = st.selectbox("Priority", [1, 2, 3], format_func=lambda x: {1: "High", 2: "Medium", 3: "Low"}[x])
+             estimate = st.number_input("Estimate (minutes)", min_value=0, value=0, step=15)
+@@ -504,84 +562,88 @@ def _render_create_task_form(db_manager: DatabaseManager, epics: List[Dict[str,
+                 csrf_valid, csrf_error = security_manager.require_csrf_protection(
+                     csrf_form_id, csrf_field.get("token_value")
+                 )
+                 if not csrf_valid:
+                     st.error(f"🔒 Security Error: {csrf_error}")
+                     return
+             
+             # Form validation for security
+             raw_data = {
+                 "title": title,
+                 "description": description,
+                 "epic": selected_epic,
+                 "tdd_phase": tdd_phase,
+                 "priority": priority,
+                 "estimate": estimate
+             }
+             
+             if validate_form:
+                 security_valid, security_errors = validate_form(raw_data)
+                 if not security_valid:
+                     for error in security_errors:
+                         st.error(f"🔒 Security: {error}")
+                     return
+             
+             if not title:
+-                st.error("❌ Task title is required")
++                st.error(UIConstants.ERROR_INVALID_DATA)
+             elif selected_epic == "Select Epic":
+-                st.error("❌ Please select an epic")
++                st.error(UIConstants.ERROR_INVALID_DATA)
+             else:
+                 # Get epic ID
+                 epic_id = None
+                 epic_key = selected_epic.split(":")[0]
+                 for epic in epics:
+                     if epic.get("epic_key") == epic_key:
+                         epic_id = epic.get("id")
+                         break
+                 
+                 # Database write rate limiting
+                 db_rate_allowed, db_rate_error = check_rate_limit("db_write") if check_rate_limit else (True, None)
+                 if not db_rate_allowed:
+                     st.error(f"🚦 Database {db_rate_error}")
+                     return
+                 
+                 # Create task
+                 success = _create_task(
+                     title=title,
+                     epic_id=epic_id,
+                     tdd_phase=tdd_phase,
+                     db_manager=db_manager,
+                     description=description,
+                     priority=priority,
+                     estimate_minutes=estimate
+                 )
+                 
+                 if success:
+-                    st.success("✅ Task created successfully!")
++                    st.success(UIConstants.SUCCESS_CREATE)
+                     st.rerun()
+                 else:
+-                    st.error("❌ Failed to create task")
++                    st.error(
++                        ErrorMessages.LOADING_ERROR.format(
++                            entity="task", error="creation failed"
++                        )
++                    )
+ 
+ 
+ def _show_edit_task_modal(task: Dict[str, Any], db_manager: DatabaseManager, epics: List[Dict[str, Any]]):
+     """Show edit task modal."""
+     
+     task_id = task.get("id")
+     st.session_state[f"editing_task_{task_id}"] = True
+     
+     if st.session_state.get(f"editing_task_{task_id}"):
+         with st.form(f"edit_task_{task_id}"):
+             st.markdown(f"### ✏️ Edit Task: {task.get('title', 'Unknown')}")
+             
+             # Generate CSRF token for form protection
+             csrf_form_id = f"edit_task_form_{task_id}"
+             csrf_field = security_manager.get_csrf_form_field(csrf_form_id) if security_manager else None
+             
+             col1, col2 = st.columns(2)
+             
+             with col1:
+                 title = st.text_input("Title", value=task.get("title", ""))
+                 description = st.text_area("Description", value=task.get("description", ""))
+             
+             with col2:
+                 current_phase = task.get("tdd_phase", "")
+                 phase_index = ["", "red", "green", "refactor"].index(current_phase) if current_phase in ["", "red", "green", "refactor"] else 0
+@@ -628,55 +690,59 @@ def _show_edit_task_modal(task: Dict[str, Any], db_manager: DatabaseManager, epi
+                 if validate_form:
+                     security_valid, security_errors = validate_form(raw_data)
+                     if not security_valid:
+                         for error in security_errors:
+                             st.error(f"🔒 Security: {error}")
+                         return
+                 
+                 # Database write rate limiting
+                 db_rate_allowed, db_rate_error = check_rate_limit("db_write") if check_rate_limit else (True, None)
+                 if not db_rate_allowed:
+                     st.error(f"🚦 Database {db_rate_error}")
+                     return
+                 
+                 # Update task
+                 success = _update_task(
+                     task_id=task_id,
+                     title=title,
+                     description=description,
+                     tdd_phase=tdd_phase,
+                     priority=priority,
+                     estimate_minutes=estimate,
+                     db_manager=db_manager
+                 )
+                 
+                 if success:
+-                    st.success("✅ Task updated successfully!")
++                    st.success(UIConstants.SUCCESS_UPDATE)
+                     st.session_state[f"editing_task_{task_id}"] = False
+                     st.rerun()
+                 else:
+-                    st.error("❌ Failed to update task")
++                    st.error(
++                        ErrorMessages.LOADING_ERROR.format(
++                            entity="task", error="update failed"
++                        )
++                    )
+             
+             if cancelled:
+                 st.session_state[f"editing_task_{task_id}"] = False
+                 st.rerun()
+ 
+ 
+ def _create_task(title: str, epic_id: Optional[int], tdd_phase: str, db_manager: DatabaseManager,
+                 description: str = "", priority: int = 2, estimate_minutes: int = 0) -> bool:
+     """Create a new task in the database."""
+     task_id = safe_streamlit_operation(
+         db_manager.create_task,
+         title=title,
+         epic_id=epic_id,
+         description=description,
+         tdd_phase=tdd_phase,
+         priority=priority,
+         estimate_minutes=estimate_minutes,
+         default_return=None,
+         operation_name="create_task",
+     )
+     return task_id is not None
+ 
+ 
+ def _update_task_status(task_id: int, new_status: str, db_manager: DatabaseManager) -> bool:
+     """Update task status."""
+diff --git a/streamlit_extension/pages/projects.py b/streamlit_extension/pages/projects.py
+index b66b1445ac231dc846284a86cd58a896f72b8bc8..8e245dd9d8e93134b0108be45c29b106e32da902 100644
+--- a/streamlit_extension/pages/projects.py
++++ b/streamlit_extension/pages/projects.py
+@@ -15,163 +15,170 @@ from typing import Dict, Any, List, Optional
+ from datetime import datetime, date
+ 
+ # Add parent directory to path
+ sys.path.append(str(Path(__file__).parent.parent.parent))
  
  # Graceful imports
  try:
@@ -516,28 +1602,17 @@ index b66b1445ac231dc846284a86cd58a896f72b8bc8..50d842be9a34c13af6d3c893c6660845
          handle_streamlit_exceptions, streamlit_error_boundary, safe_streamlit_operation
      )
      from streamlit_extension.config import load_config
++    from streamlit_extension.config.constants import StatusValues, ErrorMessages, UIConstants
      # Import authentication middleware
      from streamlit_extension.auth.middleware import init_protected_page
-+    
-+    # Safe import of pagination component
-+    try:
-+        from ..components.pagination import create_pagination_wrapper, PaginationConfig
-+        PAGINATION_AVAILABLE = True
-+    except ImportError:
-+        PAGINATION_AVAILABLE = False
-+        create_pagination_wrapper = None
-+        PaginationConfig = None
-+        
      DATABASE_UTILS_AVAILABLE = True
  except ImportError:
      DATABASE_UTILS_AVAILABLE = False
-+    PAGINATION_AVAILABLE = False
      DatabaseManager = validate_project_data = load_config = None
      create_safe_project = sanitize_display = validate_form = None
      handle_streamlit_exceptions = streamlit_error_boundary = safe_streamlit_operation = None
-     init_protected_page = None
-+    create_pagination_wrapper = None
-+    PaginationConfig = None
+-    init_protected_page = None
++    StatusValues = ErrorMessages = UIConstants = init_protected_page = None
  
  
  
@@ -549,20 +1624,680 @@ index b66b1445ac231dc846284a86cd58a896f72b8bc8..50d842be9a34c13af6d3c893c6660845
      with st.container():
          # Card header with status indicator
          status_colors = {
-             "planning": "🟡",
-             "in_progress": "🟢", 
-             "completed": "✅",
-             "on_hold": "⏸️",
-             "cancelled": "🔴"
+-            "planning": "🟡",
+-            "in_progress": "🟢", 
+-            "completed": "✅",
+-            "on_hold": "⏸️",
+-            "cancelled": "🔴"
++            StatusValues.PLANNING.value: UIConstants.ICON_PLANNING,
++            StatusValues.IN_PROGRESS.value: UIConstants.ICON_IN_PROGRESS,
++            StatusValues.COMPLETED.value: UIConstants.ICON_COMPLETED,
++            StatusValues.ON_HOLD.value: UIConstants.ICON_ON_HOLD,
++            StatusValues.CANCELLED.value: UIConstants.ICON_CANCELLED,
          }
-         status_emoji = status_colors.get(project.get("status", "planning"), "⚪")
-@@ -622,32 +623,125 @@ def render_projects_page():
+-        status_emoji = status_colors.get(project.get("status", "planning"), "⚪")
++        status_emoji = status_colors.get(
++            project.get("status", StatusValues.PLANNING.value), UIConstants.ICON_UNKNOWN
++        )
+         
+         col1, col2, col3 = st.columns([3, 1, 1])
+         
+         with col1:
+             client_name = clients_map.get(project.get('client_id'), 'Unknown Client')
+             st.markdown(f"### {status_emoji} {project['name']}")
+             st.caption(f"**Client:** {client_name} | **Key:** {project.get('project_key', 'N/A')}")
+         
+         with col2:
+-            if st.button("✏️ Edit", key=f"edit_project_{project['id']}", use_container_width=True):
++            if st.button(UIConstants.EDIT_BUTTON, key=f"edit_project_{project['id']}", use_container_width=True):
+                 st.session_state[f"edit_project_{project['id']}"] = True
+                 st.rerun()
+-        
++
+         with col3:
+-            if st.button("🗑️ Delete", key=f"delete_project_{project['id']}", use_container_width=True):
++            if st.button(UIConstants.DELETE_BUTTON, key=f"delete_project_{project['id']}", use_container_width=True):
+                 st.session_state[f"delete_project_{project['id']}"] = True
+                 st.rerun()
+         
+         # Project details
+         col1, col2, col3 = st.columns([2, 1, 1])
+         
+         with col1:
+             if project.get('description'):
+                 safe_description = sanitize_display(project['description']) if sanitize_display else project['description']
+                 st.markdown(f"**Description:** {safe_description}")
+             
+             # Project info
+             if project.get('project_type'):
+                 st.markdown(f"**Type:** {project['project_type'].title()}")
+             if project.get('methodology'):
+                 st.markdown(f"**Methodology:** {project['methodology'].title()}")
+         
+         with col2:
+             # Timeline
+             st.markdown("**Timeline:**")
+             if project.get('planned_start_date'):
+                 start_date = project['planned_start_date']
+                 if isinstance(start_date, str):
+                     start_date = start_date[:10]  # Get date part
+                 st.markdown(f"• **Start:** {start_date}")
+             
+             if project.get('planned_end_date'):
+                 end_date = project['planned_end_date']
+                 if isinstance(end_date, str):
+                     end_date = end_date[:10]  # Get date part
+                 st.markdown(f"• **End:** {end_date}")
+             
+             # Progress
+             completion = project.get('completion_percentage', 0)
+             st.progress(completion / 100)
+             st.caption(f"Progress: {completion:.1f}%")
+         
+         with col3:
+             # Budget and metrics
+             if project.get('budget_amount'):
+                 currency = project.get('budget_currency', 'BRL')
+                 st.metric("Budget", f"{currency} {project['budget_amount']:,.2f}")
+             
+             if project.get('estimated_hours'):
+                 st.metric("Est. Hours", f"{project['estimated_hours']:.1f}h")
+             
+             # Health status
+-            health_colors = {"green": "🟢", "yellow": "🟡", "red": "🔴"}
++            health_colors = {
++                "green": UIConstants.ICON_ACTIVE,
++                "yellow": UIConstants.ICON_PENDING,
++                "red": UIConstants.ICON_CANCELLED,
++            }
+             health = project.get('health_status', 'green')
+-            health_emoji = health_colors.get(health, "⚪")
++            health_emoji = health_colors.get(health, UIConstants.ICON_UNKNOWN)
+             st.markdown(f"**Health:** {health_emoji} {health.title()}")
+         
+         # Handle edit modal
+         if st.session_state.get(f"edit_project_{project['id']}", False):
+             render_edit_project_modal(project, db_manager, clients_map)
+         
+         # Handle delete confirmation
+         if st.session_state.get(f"delete_project_{project['id']}", False):
+             render_delete_project_modal(project, db_manager, clients_map)
+         
+         st.divider()
+ 
+ 
+ def render_edit_project_modal(project: Dict[str, Any], db_manager: DatabaseManager, clients_map: Dict[int, str]):
+     """Render the edit project modal."""
+     if not STREAMLIT_AVAILABLE:
+         return
+     
+     with st.modal(f"Edit Project: {project['name']}", width="large"):
+         with st.form(f"edit_project_form_{project['id']}"):
+-            st.markdown("### 📝 Edit Project Information")
++            st.markdown(f"### {UIConstants.ICON_TASK} Edit Project Information")
+             
+             # Generate CSRF token for form protection
+             csrf_form_id = f"edit_project_form_{project['id']}"
+             csrf_field = security_manager.get_csrf_form_field(csrf_form_id) if security_manager else None
+             
+             col1, col2 = st.columns(2)
+             
+             with col1:
+                 st.markdown("#### Basic Information")
+                 
+                 # Client selection
+                 clients = [(id, name) for id, name in clients_map.items()]
+                 client_options = [name for _, name in clients]
+                 current_client_index = 0
+                 for i, (id, _) in enumerate(clients):
+                     if id == project.get('client_id'):
+                         current_client_index = i
+                         break
+                 
+                 selected_client = st.selectbox("Client*", options=client_options, index=current_client_index)
+                 selected_client_id = next(id for id, name in clients if name == selected_client)
+                 
+                 project_key = st.text_input("Project Key*", value=project.get('project_key', ''))
+                 name = st.text_input("Project Name*", value=project.get('name', ''))
+                 description = st.text_area("Description", value=project.get('description', ''))
+@@ -189,66 +196,76 @@ def render_edit_project_modal(project: Dict[str, Any], db_manager: DatabaseManag
+                 st.markdown("#### Timeline & Budget")
+                 
+                 # Dates
+                 start_date = project.get('planned_start_date')
+                 if isinstance(start_date, str):
+                     start_date = datetime.fromisoformat(start_date.replace('Z', '+00:00')).date()
+                 elif start_date is None:
+                     start_date = date.today()
+                 
+                 end_date = project.get('planned_end_date')
+                 if isinstance(end_date, str):
+                     end_date = datetime.fromisoformat(end_date.replace('Z', '+00:00')).date()
+                 elif end_date is None:
+                     end_date = date.today()
+                 
+                 planned_start_date = st.date_input("Planned Start Date*", value=start_date)
+                 planned_end_date = st.date_input("Planned End Date*", value=end_date)
+                 
+                 # Budget
+                 budget_amount = st.number_input("Budget Amount", value=float(project.get('budget_amount', 0.0)), min_value=0.0)
+                 budget_currency = st.selectbox("Currency", options=["BRL", "USD", "EUR"], 
+                     index=["BRL", "USD", "EUR"].index(project.get('budget_currency', 'BRL')))
+                 estimated_hours = st.number_input("Estimated Hours", value=float(project.get('estimated_hours', 0.0)), min_value=0.0)
+                 
+                 # Status
+-                status = st.selectbox("Status*", 
+-                    options=["planning", "in_progress", "completed", "on_hold", "cancelled"],
+-                    index=["planning", "in_progress", "completed", "on_hold", "cancelled"].index(project.get('status', 'planning'))
++                status_options = [
++                    StatusValues.PLANNING.value,
++                    StatusValues.IN_PROGRESS.value,
++                    StatusValues.COMPLETED.value,
++                    StatusValues.ON_HOLD.value,
++                    StatusValues.CANCELLED.value,
++                ]
++                status = st.selectbox(
++                    "Status*",
++                    options=status_options,
++                    index=status_options.index(
++                        project.get('status', StatusValues.PLANNING.value)
++                    ),
+                 )
+                 
+                 health_status = st.selectbox("Health Status",
+                     options=["green", "yellow", "red"],
+                     index=["green", "yellow", "red"].index(project.get('health_status', 'green'))
+                 )
+                 
+                 completion_percentage = st.slider("Completion %", 0.0, 100.0, float(project.get('completion_percentage', 0.0)))
+             
+             col1, col2, col3 = st.columns([1, 1, 1])
+             
+             with col1:
+-                if st.form_submit_button("💾 Update Project", use_container_width=True):
++                if st.form_submit_button(UIConstants.UPDATE_BUTTON + " Project", use_container_width=True):
+                     # CSRF Protection
+                     if csrf_field and security_manager:
+                         csrf_valid, csrf_error = security_manager.require_csrf_protection(
+                             csrf_form_id, csrf_field.get("token_value")
+                         )
+                         if not csrf_valid:
+                             st.error(f"🔒 Security Error: {csrf_error}")
+                             return
+                     
+                     # Check rate limit for form submission
+                     rate_allowed, rate_error = check_rate_limit("form_submit") if check_rate_limit else (True, None)
+                     if not rate_allowed:
+                         st.error(f"🚦 {rate_error}")
+                         return
+                     
+                     # Create raw data
+                     raw_data = {
+                         'client_id': selected_client_id,
+                         'project_key': project_key,
+                         'name': name,
+                         'description': description,
+                         'project_type': project_type,
+                         'methodology': methodology,
+                         'planned_start_date': planned_start_date.isoformat(),
+                         'planned_end_date': planned_end_date.isoformat(),
+@@ -256,174 +273,194 @@ def render_edit_project_modal(project: Dict[str, Any], db_manager: DatabaseManag
+                         'budget_currency': budget_currency,
+                         'estimated_hours': estimated_hours,
+                         'status': status,
+                         'health_status': health_status,
+                         'completion_percentage': completion_percentage
+                     }
+                     
+                     # Security validation
+                     if validate_form:
+                         security_valid, security_errors = validate_form(raw_data)
+                         if not security_valid:
+                             for error in security_errors:
+                                 st.error(f"🔒 Security: {error}")
+                             return
+                     
+                     # Sanitize data for security
+                     project_data = create_safe_project(raw_data) if create_safe_project else raw_data
+                     
+                     is_valid, errors = validate_project_data(project_data)
+                     
+                     if is_valid:
+                         # Check uniqueness (excluding current project)
+                         existing_projects = db_manager.get_projects(include_inactive=True)
+                         
+                         if not validate_project_key_uniqueness(project_key, selected_client_id, existing_projects, project['id']):
+-                            st.error("❌ Project key already exists for this client")
++                            st.error(UIConstants.ERROR_DUPLICATE)
+                         else:
+                             # Check rate limit for database write
+                             db_rate_allowed, db_rate_error = check_rate_limit("db_write") if check_rate_limit else (True, None)
+                             if not db_rate_allowed:
+                                 st.error(f"🚦 Database {db_rate_error}")
+                                 return
+                             
+                             # Update project
+                             success = db_manager.update_project(project['id'], **project_data)
+                             if success:
+-                                st.success("✅ Project updated successfully!")
++                                st.success(UIConstants.SUCCESS_UPDATE)
+                                 st.session_state[f"edit_project_{project['id']}"] = False
+                                 st.rerun()
+                             else:
+-                                st.error("❌ Failed to update project")
++                                st.error(
++                                    ErrorMessages.PROJECT_UPDATE_ERROR.format(
++                                        error="Failed to update project"
++                                    )
++                                )
+                     else:
+                         for error in errors:
+-                            st.error(f"❌ {error}")
++                            st.error(
++                                ErrorMessages.PROJECT_UPDATE_ERROR.format(
++                                    error=error
++                                )
++                            )
+             
+             with col2:
+-                if st.form_submit_button("❌ Cancel", use_container_width=True):
++                if st.form_submit_button(UIConstants.CANCEL_BUTTON, use_container_width=True):
+                     st.session_state[f"edit_project_{project['id']}"] = False
+                     st.rerun()
+ 
+ 
+ def render_delete_project_modal(project: Dict[str, Any], db_manager: DatabaseManager, clients_map: Dict[int, str]):
+     """Render the delete project confirmation modal."""
+     if not STREAMLIT_AVAILABLE:
+         return
+     
+     with st.modal(f"Delete Project: {project['name']}", width="medium"):
+         st.markdown("### ⚠️ Confirm Deletion")
+         client_name = clients_map.get(project.get('client_id'), 'Unknown Client')
+         st.warning(f"Are you sure you want to delete project **{project['name']}** from client **{client_name}**?")
+         
+         # Show related epics warning
+         try:
+             epics = db_manager.get_epics()
+             project_epics = [e for e in epics if e.get('project_id') == project['id']]
+             if project_epics:
+                 st.error(f"⚠️ This project has {len(project_epics)} epic(s). Deleting the project will affect these epics.")
+         except:
+             pass
+         
+         col1, col2 = st.columns(2)
+         
+         with col1:
+-            if st.button("🗑️ Delete Project", use_container_width=True):
++            if st.button(UIConstants.DELETE_BUTTON + " Project", use_container_width=True):
+                 success = db_manager.delete_project(project['id'], soft_delete=True)
+                 if success:
+-                    st.success("✅ Project deleted successfully!")
++                    st.success(UIConstants.SUCCESS_DELETE)
+                     st.session_state[f"delete_project_{project['id']}"] = False
+                     st.rerun()
+                 else:
+-                    st.error("❌ Failed to delete project")
++                    st.error(
++                        ErrorMessages.PROJECT_DELETE_ERROR.format(
++                            error="Failed to delete project"
++                        )
++                    )
+         
+         with col2:
+-            if st.button("❌ Cancel", use_container_width=True):
++            if st.button(UIConstants.CANCEL_BUTTON, use_container_width=True):
+                 st.session_state[f"delete_project_{project['id']}"] = False
+                 st.rerun()
+ 
+ 
+ def render_create_project_form(db_manager: DatabaseManager, clients_map: Dict[int, str]):
+     """Render the create new project form."""
+     if not STREAMLIT_AVAILABLE:
+         return
+     
+     with st.expander("➕ Create New Project", expanded=False):
+         with st.form("create_project_form"):
+-            st.markdown("### 📝 New Project Information")
++            st.markdown(f"### {UIConstants.ICON_TASK} New Project Information")
+             
+             # Generate CSRF token for form protection
+             csrf_form_id = "create_project_form"
+             csrf_field = security_manager.get_csrf_form_field(csrf_form_id) if security_manager else None
+             
+             col1, col2 = st.columns(2)
+             
+             with col1:
+                 st.markdown("#### Basic Information")
+                 
+                 # Client selection
+                 if not clients_map:
+-                    st.error("❌ No clients available. Please create a client first.")
++                    st.error(ErrorMessages.NO_ITEMS_FOUND.format(entity="clients"))
+                     return
+                 
+                 client_options = list(clients_map.values())
+                 selected_client_name = st.selectbox("Client*", options=client_options)
+                 selected_client_id = next(id for id, name in clients_map.items() if name == selected_client_name)
+                 
+                 project_key = st.text_input("Project Key*", placeholder="e.g., project_abc")
+                 name = st.text_input("Project Name*", placeholder="e.g., Website Development")
+                 description = st.text_area("Description", placeholder="Brief description of the project...")
+                 
+                 project_type = st.selectbox("Project Type", 
+                     options=["development", "maintenance", "consulting", "research", "support"],
+                     index=0
+                 )
+                 methodology = st.selectbox("Methodology",
+                     options=["agile", "waterfall", "kanban", "scrum", "lean", "hybrid"],
+                     index=0
+                 )
+             
+             with col2:
+                 st.markdown("#### Timeline & Budget")
+                 
+                 planned_start_date = st.date_input("Planned Start Date*", value=date.today())
+                 planned_end_date = st.date_input("Planned End Date*", value=date.today())
+                 
+                 budget_amount = st.number_input("Budget Amount", value=0.0, min_value=0.0)
+                 budget_currency = st.selectbox("Currency", options=["BRL", "USD", "EUR"], index=0)
+                 estimated_hours = st.number_input("Estimated Hours", value=0.0, min_value=0.0)
+                 
+-                status = st.selectbox("Status*", 
+-                    options=["planning", "in_progress", "completed", "on_hold", "cancelled"],
+-                    index=0
++                status_options = [
++                    StatusValues.PLANNING.value,
++                    StatusValues.IN_PROGRESS.value,
++                    StatusValues.COMPLETED.value,
++                    StatusValues.ON_HOLD.value,
++                    StatusValues.CANCELLED.value,
++                ]
++                status = st.selectbox(
++                    "Status*",
++                    options=status_options,
++                    index=0,
+                 )
+                 
+                 health_status = st.selectbox("Health Status",
+                     options=["green", "yellow", "red"],
+                     index=0
+                 )
+             
+-            if st.form_submit_button("🚀 Create Project", use_container_width=True):
++            if st.form_submit_button(UIConstants.CREATE_BUTTON + " Project", use_container_width=True):
+                 # CSRF Protection
+                 if csrf_field and security_manager:
+                     csrf_valid, csrf_error = security_manager.require_csrf_protection(
+                         csrf_form_id, csrf_field.get("token_value")
+                     )
+                     if not csrf_valid:
+                         st.error(f"🔒 Security Error: {csrf_error}")
+                         return
+                 
+                 # Check rate limit for form submission
+                 rate_allowed, rate_error = check_rate_limit("form_submit") if check_rate_limit else (True, None)
+                 if not rate_allowed:
+                     st.error(f"🚦 {rate_error}")
+                     return
+                 
+                 # Create raw data
+                 raw_data = {
+                     'client_id': selected_client_id,
+                     'project_key': project_key,
+                     'name': name,
+                     'description': description,
+                     'project_type': project_type,
+                     'methodology': methodology,
+                     'planned_start_date': planned_start_date.isoformat(),
+                     'planned_end_date': planned_end_date.isoformat(),
+@@ -431,223 +468,257 @@ def render_create_project_form(db_manager: DatabaseManager, clients_map: Dict[in
+                     'budget_currency': budget_currency,
+                     'estimated_hours': estimated_hours,
+                     'status': status,
+                     'health_status': health_status,
+                     'completion_percentage': 0.0
+                 }
+                 
+                 # Security validation
+                 if validate_form:
+                     security_valid, security_errors = validate_form(raw_data)
+                     if not security_valid:
+                         for error in security_errors:
+                             st.error(f"🔒 Security: {error}")
+                         return
+                 
+                 # Sanitize data for security
+                 project_data = create_safe_project(raw_data) if create_safe_project else raw_data
+                 
+                 is_valid, errors = validate_project_data(project_data)
+                 
+                 if is_valid:
+                     # Check uniqueness
+                     existing_projects = db_manager.get_projects(include_inactive=True)
+                     
+                     if not validate_project_key_uniqueness(project_key, selected_client_id, existing_projects):
+-                        st.error("❌ Project key already exists for this client")
++                        st.error(UIConstants.ERROR_DUPLICATE)
+                     else:
+                         # Check rate limit for database write
+                         db_rate_allowed, db_rate_error = check_rate_limit("db_write") if check_rate_limit else (True, None)
+                         if not db_rate_allowed:
+                             st.error(f"🚦 Database {db_rate_error}")
+                             return
+                         
+                         # Create project
+                         project_id = db_manager.create_project(
+                             client_id=selected_client_id,
+                             project_key=project_key,
+                             name=name,
+                             description=description,
+                             project_type=project_type,
+                             methodology=methodology
+                         )
+                         
+                         if project_id:
+                             # Update additional fields
+                             additional_fields = {
+                                 'planned_start_date': planned_start_date.isoformat(),
+                                 'planned_end_date': planned_end_date.isoformat(),
+                                 'budget_amount': budget_amount,
+                                 'budget_currency': budget_currency,
+                                 'estimated_hours': estimated_hours,
+                                 'status': status,
+                                 'health_status': health_status
+                             }
+                             db_manager.update_project(project_id, **additional_fields)
+                             
+-                            st.success("✅ Project created successfully!")
++                            st.success(UIConstants.SUCCESS_CREATE)
+                             st.rerun()
+                         else:
+-                            st.error("❌ Failed to create project")
++                            st.error(
++                                ErrorMessages.PROJECT_CREATE_ERROR.format(
++                                    error="Failed to create project"
++                                )
++                            )
+                 else:
+                     for error in errors:
+-                        st.error(f"❌ {error}")
++                        st.error(
++                            ErrorMessages.PROJECT_CREATE_ERROR.format(error=error)
++                        )
+ 
+ 
+ @handle_streamlit_exceptions(show_error=True, attempt_recovery=True)
+ def render_projects_page():
+     """Render the main projects management page."""
+     if not STREAMLIT_AVAILABLE:
+         return {"error": "Streamlit not available"}
+     
+     if not DATABASE_UTILS_AVAILABLE:
+-        st.error("❌ Database utilities not available")
++        st.error(
++            ErrorMessages.LOADING_ERROR.format(
++                entity="database utilities", error="not available"
++            )
++        )
+         return {"error": "Database utilities not available"}
+     
+     # Initialize protected page with authentication
+-    current_user = init_protected_page("📁 Project Management")
++    current_user = init_protected_page(UIConstants.PROJECTS_PAGE_TITLE)
+     if not current_user:
+         return {"error": "Authentication required"}
+     
+     # Check rate limit for page load
+     page_rate_allowed, page_rate_error = check_rate_limit("page_load") if check_rate_limit else (True, None)
+     if not page_rate_allowed:
+         st.error(f"🚦 {page_rate_error}")
+         st.info("Please wait before reloading the page.")
+         return {"error": "Rate limited"}
+     
+     st.markdown("Manage your projects, timelines, and deliverables")
+     st.markdown("---")
+     
+     # Initialize database manager
+     try:
+         config = load_config()
+         db_manager = DatabaseManager(
+             framework_db_path=str(config.get_database_path()),
+             timer_db_path=str(config.get_timer_database_path())
+         )
+     except Exception as e:
+-        st.error(f"❌ Database connection error: {e}")
++        st.error(
++            ErrorMessages.LOADING_ERROR.format(
++                entity="database connection", error=e
++            )
++        )
+         return {"error": f"Database connection error: {e}"}
+     
+     # Get clients for mapping with error boundary
+     clients_map = {}
+     if handle_streamlit_exceptions:
+         with streamlit_error_boundary("loading_clients"):
+             clients_result = db_manager.get_clients(include_inactive=False)
+             clients = clients_result.get("data", []) if isinstance(clients_result, dict) else []
+             clients_map = {client['id']: client['name'] for client in clients} if clients else {}
+             
+             if not clients_map:
+-                st.warning("⚠️ No active clients found. Please create clients first before creating projects.")
++                st.warning(
++                    ErrorMessages.NO_ITEMS_FOUND.format(entity="active clients")
++                )
+                 return {"status": "no_clients"}
+     else:
+         # Fallback for when exception handler is not available
+         try:
+             clients_result = db_manager.get_clients(include_inactive=False)
+             clients = clients_result.get("data", []) if isinstance(clients_result, dict) else []
+             clients_map = {client['id']: client['name'] for client in clients} if clients else {}
+             
+             if not clients_map:
+-                st.warning("⚠️ No active clients found. Please create clients first before creating projects.")
++                st.warning(
++                    ErrorMessages.NO_ITEMS_FOUND.format(entity="active clients")
++                )
+                 return {"status": "no_clients"}
+         except Exception as e:
+-            st.error(f"❌ Error loading clients: {e}")
+-            return {"error": f"Error loading clients: {e}"}
++            st.error(ErrorMessages.CLIENT_LOAD_ERROR.format(error=e))
++            return {"error": ErrorMessages.CLIENT_LOAD_ERROR.format(error=e)}
+     
+     # Filters and search
+     col1, col2, col3 = st.columns([2, 1, 1])
+     
+     with col1:
+-        search_name = st.text_input("🔍 Search by name", placeholder="Type project name...")
++        search_name = st.text_input(
++            f"{UIConstants.ICON_SEARCH} Search by name",
++            placeholder="Type project name...",
++        )
+     
+     with col2:
+-        status_filter = st.selectbox("Status Filter", 
+-            options=["all", "planning", "in_progress", "completed", "on_hold", "cancelled"],
+-            index=0
++        status_filter_options = [
++            "all",
++            StatusValues.PLANNING.value,
++            StatusValues.IN_PROGRESS.value,
++            StatusValues.COMPLETED.value,
++            StatusValues.ON_HOLD.value,
++            StatusValues.CANCELLED.value,
++        ]
++        status_filter = st.selectbox(
++            "Status Filter",
++            options=status_filter_options,
++            index=0,
+         )
+     
+     with col3:
+         client_filter = st.selectbox("Client Filter",
+             options=["all"] + list(clients_map.values()),
+             index=0
+         )
+     
+     # Create new project form
+     render_create_project_form(db_manager, clients_map)
+     
+     st.markdown("---")
+     
+     # Get projects with filters using error boundary
+     all_projects = []
+     if handle_streamlit_exceptions:
+         with streamlit_error_boundary("loading_projects"):
+             # Check rate limit for database read
+             db_read_allowed, db_read_error = check_rate_limit("db_read") if check_rate_limit else (True, None)
+             if not db_read_allowed:
+                 st.error(f"🚦 Database {db_read_error}")
+                 return {"error": "Database rate limited"}
+             
+             all_projects = db_manager.get_projects(include_inactive=True)
+     else:
+         # Fallback for when exception handler is not available
+         try:
+             # Check rate limit for database read
+             db_read_allowed, db_read_error = check_rate_limit("db_read") if check_rate_limit else (True, None)
+             if not db_read_allowed:
+                 st.error(f"🚦 Database {db_read_error}")
+                 return {"error": "Database rate limited"}
+             
+             all_projects = db_manager.get_projects(include_inactive=True)
+         except Exception as e:
+-            st.error(f"❌ Error loading projects: {e}")
+-            return {"error": f"Error loading projects: {e}"}
++            st.error(ErrorMessages.PROJECT_LOAD_ERROR.format(error=e))
++            return {"error": ErrorMessages.PROJECT_LOAD_ERROR.format(error=e)}
+     
+     if not all_projects:
+-        st.info("📝 No projects found. Create your first project using the form above!")
++        st.info(ErrorMessages.NO_ITEMS_FOUND.format(entity="projects"))
+         return {"status": "no_projects"}
+     
+     # Apply filters
+     filtered_projects = all_projects
+     
+     if search_name:
+         filtered_projects = [p for p in filtered_projects if search_name.lower() in p.get('name', '').lower()]
+     
+     if status_filter != "all":
+         filtered_projects = [p for p in filtered_projects if p.get('status') == status_filter]
+     
+     if client_filter != "all":
+         client_id = next((id for id, name in clients_map.items() if name == client_filter), None)
+         if client_id:
+             filtered_projects = [p for p in filtered_projects if p.get('client_id') == client_id]
      
      # Display results count
      st.markdown(f"**Found {len(filtered_projects)} project(s)**")
      
      if not filtered_projects:
-         st.warning("🔍 No projects match your current filters.")
+-        st.warning("🔍 No projects match your current filters.")
++        st.warning(ErrorMessages.NO_MATCHES_FILTER.format(entity="projects"))
          return {"status": "no_matches"}
      
      # Display projects with error boundary protection
@@ -576,117 +2311,405 @@ index b66b1445ac231dc846284a86cd58a896f72b8bc8..50d842be9a34c13af6d3c893c6660845
              try:
                  render_project_card(project, db_manager, clients_map)
              except Exception as e:
-                 st.error(f"❌ Error rendering project {project.get('name', 'Unknown')}: {e}")
+-                st.error(f"❌ Error rendering project {project.get('name', 'Unknown')}: {e}")
++                st.error(
++                    ErrorMessages.LOADING_ERROR.format(
++                        entity=f"project {project.get('name', 'Unknown')}", error=e
++                    )
++                )
      
      return {"status": "success", "projects_count": len(filtered_projects)}
  
  
  # Export the main function
--__all__ = ["render_projects_page"]
-+def render_paginated_projects() -> None:
-+    """Render projects list with pagination"""
-+    if not STREAMLIT_AVAILABLE:
-+        return
-+        
-+    if not PAGINATION_AVAILABLE or not create_pagination_wrapper or not PaginationConfig:
-+        st.error("❌ Componente de paginação não disponível")
-+        return
-+
-+    pagination = create_pagination_wrapper(
-+        "projects_list", PaginationConfig(page_size=15, show_page_size_selector=True)
-+    )
-+
-+    def fetch_projects_paginated(
-+        limit: int,
-+        offset: int,
-+        client_filter: str = "",
-+        search_term: str = "",
-+    ) -> Tuple[List[Dict[str, Any]], int]:
-+        db_manager = DatabaseManager()
-+        where_conditions: List[str] = []
-+        params: List[Any] = []
-+
-+        if client_filter and client_filter != "Todos":
-+            where_conditions.append("fc.name = ?")
-+            params.append(client_filter)
-+
-+        if search_term:
-+            where_conditions.append("(fp.name LIKE ? OR fp.description LIKE ?)")
-+            params.extend([f"%{search_term}%", f"%{search_term}%"])
-+
-+        where_clause = " AND ".join(where_conditions) if where_conditions else "1=1"
-+
-+        count_query = (
-+            "SELECT COUNT(*) as count FROM framework_projects fp "
-+            "LEFT JOIN framework_clients fc ON fp.client_id = fc.id "
-+            f"WHERE {where_clause}"
-+        )
-+        total_count = db_manager.execute_query(count_query, params)[0]["count"]
-+
-+        data_query = (
-+            "SELECT fp.id, fp.name, fp.description, fp.status, fp.created_at, "
-+            "fc.name as client_name FROM framework_projects fp "
-+            "LEFT JOIN framework_clients fc ON fp.client_id = fc.id "
-+            f"WHERE {where_clause} ORDER BY fp.created_at DESC LIMIT ? OFFSET ?"
-+        )
-+        projects = db_manager.execute_query(data_query, params + [limit, offset])
-+        return projects, total_count
-+
-+    col1, col2 = st.columns(2)
-+    with col1:
-+        client_filter = st.selectbox("🏢 Cliente", ["Todos"] + get_client_names())
-+    with col2:
-+        search_term = st.text_input(
-+            "🔍 Buscar projetos", placeholder="Nome ou descrição..."
-+        )
-+
-+    projects_data, pagination_state = pagination.paginate_data(
-+        fetch_projects_paginated, client_filter, search_term
-+    )
-+
-+    pagination.render_pagination_controls(pagination_state)
-+
-+    if projects_data:
-+        st.write(
-+            f"📋 Exibindo {len(projects_data)} de {pagination_state.total_items} projetos"
-+        )
-+        for project in projects_data:
-+            with st.container():
-+                col1, col2, col3 = st.columns([3, 2, 1])
-+                with col1:
-+                    st.write(f"**{project['name']}**")
-+                    st.caption(project.get("description", "Sem descrição"))
-+                with col2:
-+                    st.write(f"🏢 {project.get('client_name', 'N/A')}")
-+                    st.caption(f"Status: {project.get('status', 'Ativo')}")
-+                with col3:
-+                    if st.button("📝", key=f"edit_project_{project['id']}"):
-+                        st.session_state.selected_project_id = project["id"]
-+                        st.rerun()
-+                st.divider()
-+    else:
-+        st.info("📭 Nenhum projeto encontrado")
-+
-+    if pagination_state.total_pages > 1:
-+        pagination.render_pagination_controls(pagination_state)
-+
-+
-+def get_client_names() -> List[str]:
-+    """Helper to get client names for filter"""
-+    db_manager = DatabaseManager()
-+    clients = db_manager.execute_query(
-+        "SELECT name FROM framework_clients ORDER BY name"
-+    )
-+    return [client["name"] for client in clients]
-+
-+
-+__all__ = ["render_projects_page", "render_paginated_projects"]
+ __all__ = ["render_projects_page"]
  
  # Execute when run as a Streamlit page
  if __name__ == "__main__":
      if STREAMLIT_AVAILABLE:
--        render_projects_page()
-+        render_paginated_projects()
+         render_projects_page()
+ 
+diff --git a/streamlit_extension/pages/timer.py b/streamlit_extension/pages/timer.py
+index 27d476f0e0473f45c3859d6296d1ee54f98839d4..1299d04a0c0cf339bfffc015ec11b27865a9707f 100644
+--- a/streamlit_extension/pages/timer.py
++++ b/streamlit_extension/pages/timer.py
+@@ -15,101 +15,106 @@ from typing import Dict, Any, List, Optional
+ from datetime import datetime, timedelta
+ 
+ # Add parent directory to path
+ sys.path.append(str(Path(__file__).parent.parent.parent))
+ 
+ # Graceful imports
+ try:
+     import streamlit as st
+     STREAMLIT_AVAILABLE = True
+ except ImportError:
+     STREAMLIT_AVAILABLE = False
+     st = None
+ 
+ # Local imports
+ try:
+     from streamlit_extension.utils.database import DatabaseManager
+     from streamlit_extension.config import load_config
+     from streamlit_extension.components.timer import TimerComponent
+     from streamlit_extension.utils.security import (
+         create_safe_client, sanitize_display, validate_form, check_rate_limit,
+         security_manager
+     )
+     from streamlit_extension.utils.exception_handler import (
+         handle_streamlit_exceptions, streamlit_error_boundary, safe_streamlit_operation
+     )
++    from streamlit_extension.config.constants import ErrorMessages, UIConstants, TaskStatus
+     # Import authentication middleware
+     from streamlit_extension.auth.middleware import init_protected_page
+     DATABASE_UTILS_AVAILABLE = True
+ except ImportError:
+     DatabaseManager = load_config = TimerComponent = None
+     create_safe_client = sanitize_display = validate_form = None
+     check_rate_limit = security_manager = None
+-    init_protected_page = None
++    init_protected_page = ErrorMessages = UIConstants = TaskStatus = None
+     DATABASE_UTILS_AVAILABLE = False
+ 
+ 
+ @handle_streamlit_exceptions(show_error=True, attempt_recovery=True)
+ def render_timer_page():
+     """Render the dedicated timer page."""
+     if not STREAMLIT_AVAILABLE:
+         return {"error": "Streamlit not available"}
+     
+     # Initialize protected page with authentication
+-    current_user = init_protected_page("⏱️ Focus Timer - TDAH Edition")
++    current_user = init_protected_page(UIConstants.TIMER_PAGE_TITLE)
+     if not current_user:
+         return {"error": "Authentication required"}
+     
+     # Check rate limit for page load
+     page_rate_allowed, page_rate_error = check_rate_limit("page_load") if check_rate_limit else (True, None)
+     if not page_rate_allowed:
+         st.error(f"🚦 {page_rate_error}")
+         st.info("Please wait before reloading the page.")
+         return {"error": "Rate limited"}
+     
+     st.markdown("---")
+     
+     if not DATABASE_UTILS_AVAILABLE:
+-        st.error("❌ Database utilities not available")
++        st.error(
++            ErrorMessages.LOADING_ERROR.format(
++                entity="database utilities", error="not available"
++            )
++        )
+         return
+     
+     # Initialize components
+     try:
+         config = load_config()
+         db_manager = DatabaseManager(
+             framework_db_path=str(config.get_database_path()),
+             timer_db_path=str(config.get_timer_database_path())
+         )
+         
+         # Initialize timer component if not in session state
+         if "timer_component" not in st.session_state:
+             st.session_state.timer_component = TimerComponent()
+         
+         timer_component = st.session_state.timer_component
+         
+     except Exception as e:
+-        st.error(f"❌ Initialization error: {e}")
++        st.error(ErrorMessages.LOADING_ERROR.format(entity="initialization", error=e))
+         return
+     
+     # Sidebar for timer settings
+     _render_timer_sidebar(config)
+     
+     # Main timer interface
+     col1, col2 = st.columns([2, 1])
+     
+     with col1:
+         _render_main_timer(timer_component, db_manager, config)
+     
+     with col2:
+         _render_session_stats(db_manager)
+     
+     st.markdown("---")
+     
+     # Session history and analytics
+     _render_session_history(db_manager)
+     
+     # TDAH-specific insights
+     _render_tdah_insights(db_manager)
+ 
+ 
+ def _render_timer_sidebar(config):
+     """Render timer configuration sidebar."""
+@@ -176,142 +181,155 @@ def _render_timer_sidebar(config):
+     
+     # Sound settings
+     st.sidebar.markdown("## 🔊 Alerts")
+     
+     st.session_state.timer_sound_alerts = st.sidebar.checkbox(
+         "Sound Alerts", 
+         value=config.enable_sound_alerts,
+         help="Play sound when timer completes"
+     )
+     
+     st.session_state.timer_notifications = st.sidebar.checkbox(
+         "Browser Notifications", 
+         value=config.enable_notifications,
+         help="Show browser notifications"
+     )
+ 
+ 
+ def _render_main_timer(timer_component, db_manager: DatabaseManager, config):
+     """Render the main timer interface."""
+     
+     st.markdown("### 🎯 Current Session")
+     
+     # Task selection with error handling
+     try:
+         tasks = db_manager.get_tasks()
+-        active_tasks = [t for t in tasks if t.get("status") in ["todo", "pending", "in_progress"]]
++        active_tasks = [
++            t
++            for t in tasks
++            if t.get("status")
++            in [
++                TaskStatus.TODO.value,
++                TaskStatus.PENDING.value,
++                TaskStatus.IN_PROGRESS.value,
++            ]
++        ]
+         
+         if active_tasks:
+             task_options = ["No specific task"] + [f"{t['title']} ({t.get('epic_name', 'No Epic')})" for t in active_tasks]
+             selected_task_option = st.selectbox("Working on:", task_options)
+             
+             if selected_task_option != "No specific task":
+                 # Find selected task
+                 selected_task = None
+                 for task in active_tasks:
+                     task_display = f"{task['title']} ({task.get('epic_name', 'No Epic')})"
+                     if task_display == selected_task_option:
+                         selected_task = task
+                         break
+                 
+                 if selected_task:
+                     st.session_state.current_task = selected_task
+                     st.info(f"🎯 **Task:** {selected_task['title']}")
+                     if selected_task.get('description'):
+                         st.caption(f"Description: {selected_task['description']}")
+                     # Show epic info
+                     if selected_task.get('epic_name'):
+                         st.caption(f"📊 Epic: {selected_task['epic_name']}")
+             else:
+                 st.session_state.current_task = None
+         else:
+-            st.info("📝 No active tasks found. Create tasks in the Kanban board to start tracking!")
++            st.info(ErrorMessages.NO_ITEMS_FOUND.format(entity="active tasks"))
+             st.session_state.current_task = None
+     except Exception as e:
+-        st.error(f"❌ Error loading tasks for timer: {e}")
++        st.error(
++            ErrorMessages.LOADING_ERROR.format(
++                entity="tasks for timer", error=e
++            )
++        )
+         st.session_state.current_task = None
+     
+     # Main timer display
+     timer_state = timer_component.render()
+     
+     # Session controls
+     col1, col2, col3, col4 = st.columns(4)
+     
+     with col1:
+         if not timer_state.get("current_session"):
+             if st.button("▶️ Start Timer", type="primary", use_container_width=True):
+                 _start_timer_session(timer_component, db_manager)
+         else:
+-            if st.button("⏸️ Pause", use_container_width=True):
++            if st.button(f"{UIConstants.ICON_ON_HOLD} Pause", use_container_width=True):
+                 timer_component.pause_session()
+                 st.rerun()
+     
+     with col2:
+         if timer_state.get("current_session"):
+             if st.button("⏹️ Stop", use_container_width=True):
+                 _end_timer_session(timer_component, db_manager)
+             
+     with col3:
+         if timer_state.get("current_session") and timer_state.get("paused"):
+             if st.button("▶️ Resume", use_container_width=True):
+                 timer_component.resume_session()
+                 st.rerun()
+         elif timer_state.get("current_session"):
+             if st.button("⏭️ Skip", use_container_width=True):
+                 _skip_timer_session(timer_component, db_manager)
+     
+     with col4:
+         if st.button("🔄 Reset", use_container_width=True):
+             timer_component.reset_session()
+             if "current_task" in st.session_state:
+                 del st.session_state.current_task
+             st.rerun()
+     
+     # Session progress and info
+     if timer_state.get("current_session"):
+         session = timer_state["current_session"]
+         elapsed_minutes = timer_state.get("elapsed_minutes", 0)
+         total_minutes = session.planned_duration_minutes
+         progress = min(elapsed_minutes / total_minutes, 1.0) if total_minutes > 0 else 0
+         
+         st.progress(progress)
+         
+         col1, col2, col3 = st.columns(3)
+         with col1:
+             st.metric("Elapsed", f"{elapsed_minutes:.0f}min")
+         with col2:
+             st.metric("Target", f"{total_minutes}min")
+         with col3:
+             remaining = max(0, total_minutes - elapsed_minutes)
+             st.metric("Remaining", f"{remaining:.0f}min")
+         
+         # Session type indicator
+         session_type = st.session_state.get("timer_type", "focus_session").replace("_", " ").title()
+         st.info(f"🎯 **{session_type}** in progress...")
+         
+         if timer_state.get("paused"):
+-            st.warning("⏸️ **Timer is paused**")
++            st.warning(f"{UIConstants.ICON_ON_HOLD} **Timer is paused**")
+ 
+ 
+ def _render_session_stats(db_manager: DatabaseManager):
+     """Render session statistics in the sidebar."""
+     
+     st.markdown("### 📊 Today's Stats")
+     
+     # Get today's sessions
+     today_sessions = _get_todays_sessions(db_manager)
+     
+     if today_sessions:
+         total_time = sum(s.get("planned_duration_minutes", 0) for s in today_sessions)
+         completed_sessions = len([s for s in today_sessions if s.get("ended_at")])
+         avg_focus = _calculate_avg_focus_rating(today_sessions)
+         total_interruptions = sum(s.get("interruptions_count", 0) for s in today_sessions)
+         
+         col1, col2 = st.columns(2)
+         with col1:
+             st.metric("Focus Time", f"{total_time}min")
+             st.metric("Sessions", completed_sessions)
+         
+         with col2:
+             st.metric("Avg Focus", f"{avg_focus:.1f}/10" if avg_focus > 0 else "N/A")
+             st.metric("Interruptions", total_interruptions)
+         
+@@ -323,51 +341,51 @@ def _render_session_stats(db_manager: DatabaseManager):
+             
+             for i, session in enumerate(today_sessions):
+                 session_times.append(f"S{i+1}")
+                 session_ratings.append(session.get("focus_rating", 0))
+             
+             # Simple bar chart using st.bar_chart
+             if any(session_ratings):
+                 import pandas as pd
+                 chart_data = pd.DataFrame({
+                     "Focus Rating": session_ratings
+                 }, index=session_times)
+                 st.bar_chart(chart_data)
+         
+     else:
+         st.info("🌅 Start your first session of the day!")
+ 
+ 
+ def _render_session_history(db_manager: DatabaseManager):
+     """Render recent session history."""
+     
+     st.markdown("### 📅 Recent Sessions")
+     
+     recent_sessions = db_manager.get_timer_sessions(days=7)
+     
+     if not recent_sessions:
+-        st.info("📝 No recent sessions found. Start a timer to see history here.")
++        st.info(ErrorMessages.NO_ITEMS_FOUND.format(entity="recent sessions"))
+         return
+     
+     # Session history table
+     col1, col2 = st.columns([3, 1])
+     
+     with col1:
+         # Show last 10 sessions
+         for session in recent_sessions[:10]:
+             with st.container():
+                 # Session header
+                 started_at = session.get("started_at", "Unknown")
+                 task_ref = session.get("task_reference", "General focus")
+                 duration = session.get("planned_duration_minutes", 0)
+                 
+                 col_info, col_metrics = st.columns([2, 1])
+                 
+                 with col_info:
+                     date_str = started_at[:16] if len(started_at) >= 16 else started_at
+                     st.markdown(f"**{date_str}** - {task_ref}")
+                     st.caption(f"Duration: {duration} minutes")
+                 
+                 with col_metrics:
+                     focus_rating = session.get("focus_rating")
+                     if focus_rating:
+                         st.metric("Focus", f"{focus_rating}/10")
+@@ -500,51 +518,51 @@ def _start_timer_session(timer_component, db_manager: DatabaseManager):
+     st.success(f"⏱️ Started {duration}-minute {session_type.replace('_', ' ')} session!")
+     st.rerun()
+ 
+ 
+ def _end_timer_session(timer_component, db_manager: DatabaseManager):
+     """End the current timer session with TDAH metrics."""
+     
+     if not timer_component.current_session:
+         return
+     
+     # Collect post-session metrics
+     post_session_data = {}
+     
+     if st.session_state.get("timer_track_focus"):
+         post_session_data["focus_rating"] = _get_focus_rating()
+     
+     if st.session_state.get("timer_track_interruptions"):
+         post_session_data["interruptions_count"] = _get_interruption_count()
+     
+     if st.session_state.get("timer_track_mood"):
+         post_session_data["post_mood"] = _get_quick_mood_rating()
+     
+     # End the session
+     timer_component.end_session(**post_session_data)
+     
+-    st.success("✅ Session completed! Great work!")
++    st.success(f"{UIConstants.ICON_COMPLETED} Session completed! Great work!")
+     st.rerun()
+ 
+ 
+ def _skip_timer_session(timer_component, db_manager: DatabaseManager):
+     """Skip the current session (early completion)."""
+     
+     if not timer_component.current_session:
+         return
+     
+     # Still collect some metrics
+     post_session_data = {}
+     
+     if st.session_state.get("timer_track_focus"):
+         post_session_data["focus_rating"] = _get_focus_rating()
+     
+     if st.session_state.get("timer_track_interruptions"):
+         post_session_data["interruptions_count"] = _get_interruption_count()
+     
+     # End session early
+     timer_component.end_session(**post_session_data)
+     
+     st.info("⏭️ Session skipped. Every bit of progress counts!")
+     st.rerun()
+ 
  
  
 EOF

@@ -1015,6 +1015,11 @@ streamlit run streamlit_extension/streamlit_app.py
 - ✅ **Cache Management**: Comprehensive cleanup with automated tools
 - ✅ **Repository Optimized**: Clean structure ready for enterprise deployment
 
+### 🧹 **Repository Cache Maintenance**
+- `python cleanup_cache.py --dry-run` to preview files and directories that would be removed
+- `python cleanup_cache.py` to delete cache artifacts and temporary files
+- `python validate_gitignore.py` to verify ignore patterns remain effective
+
 *Next: Phase 3 - Service Layer Implementation*
 - Sempre leia o arquivo antes de tentar edita-lo.
 Claude (Dev Sênior + Tech Leader)

@@ -1,404 +1,277 @@
  (cd "$(git rev-parse --show-toplevel)" && git apply --3way <<'EOF' 
-diff --git a/streamlit_extension/decorators/__init__.py b/streamlit_extension/decorators/__init__.py
-new file mode 100644
-index 0000000000000000000000000000000000000000..e69de29bb2d1d6434b8b29ae775ad8c2e48c5391
-diff --git a/streamlit_extension/decorators/rate_limiting.py b/streamlit_extension/decorators/rate_limiting.py
-new file mode 100644
-index 0000000000000000000000000000000000000000..46321095b77f4cae0a28f2d0dfdaf7966530bfed
---- /dev/null
-+++ b/streamlit_extension/decorators/rate_limiting.py
-@@ -0,0 +1,124 @@
-+"""
-+Rate Limiting Decorators for Streamlit
-+Integrates with existing security.py rate limiting
-+"""
-+
-+import time
-+from functools import wraps
-+from typing import Callable, Optional
-+
-+# Safe imports
-+try:
-+    import streamlit as st
-+    STREAMLIT_AVAILABLE = True
-+except ImportError:
-+    STREAMLIT_AVAILABLE = False
-+    st = None
-+
-+# Import existing rate limiting from security
-+try:
-+    from ..utils.security import security_manager
-+    SECURITY_AVAILABLE = True
-+    
-+    # Check if RateLimitExceededException exists
-+    try:
-+        from ..utils.security import RateLimitExceededException
-+    except ImportError:
-+        class RateLimitExceededException(Exception):
-+            pass
-+            
-+except ImportError:
-+    SECURITY_AVAILABLE = False
-+    security_manager = None
-+    
-+    class RateLimitExceededException(Exception):
-+        pass
-+
-+def rate_limit(operation: str, max_attempts: Optional[int] = None, window_minutes: Optional[int] = None):
-+    """
-+    Rate limiting decorator for Streamlit functions
-+    
-+    Args:
-+        operation: Operation name for rate limiting
-+        max_attempts: Max attempts in window (uses security manager default if None)
-+        window_minutes: Time window in minutes (uses security manager default if None)
-+    """
-+    
-+    def decorator(func: Callable) -> Callable:
-+        @wraps(func)
-+        def wrapper(*args, **kwargs):
-+            
-+            if not SECURITY_AVAILABLE or security_manager is None:
-+                # If security manager not available, proceed without rate limiting
-+                if STREAMLIT_AVAILABLE and st:
-+                    st.warning("⚠️ Rate limiting não configurado")
-+                return func(*args, **kwargs)
-+            
-+            try:
-+                # Check rate limit using existing security manager
-+                if hasattr(security_manager, 'check_rate_limit'):
-+                    is_allowed = security_manager.check_rate_limit(
-+                        operation,
-+                        max_attempts=max_attempts,
-+                        window_minutes=window_minutes
-+                    )
-+                    
-+                    if not is_allowed:
-+                        raise RateLimitExceededException(f"Rate limit exceeded for operation: {operation}")
-+                
-+                # Execute function if rate limit allows
-+                return func(*args, **kwargs)
-+                
-+            except RateLimitExceededException:
-+                # Show user-friendly rate limit message
-+                if STREAMLIT_AVAILABLE and st:
-+                    st.error(f"""
-+                    🚫 **Limite de Tentativas Excedido**
-+                    
-+                    Você está fazendo muitas tentativas. 
-+                    Aguarde alguns minutos antes de tentar novamente.
-+                    
-+                    *Operação: {operation}*
-+                    """)
-+                    
-+                    # Optional: Show cooldown timer
-+                    if hasattr(security_manager, 'get_rate_limit_cooldown'):
-+                        cooldown = security_manager.get_rate_limit_cooldown(operation)
-+                        if cooldown > 0:
-+                            st.info(f"⏱️ Tente novamente em {cooldown} segundos")
-+                
-+                return None
-+                
-+            except Exception:
-+                # Let other exceptions bubble up to global handler
-+                raise
-+                
-+        return wrapper
-+    return decorator
-+
-+# Specific decorators for common operations
-+def rate_limit_login(func: Callable) -> Callable:
-+    """Rate limit login attempts"""
-+    return rate_limit("login", max_attempts=5, window_minutes=15)(func)
-+
-+def rate_limit_form_submission(func: Callable) -> Callable:
-+    """Rate limit form submissions"""  
-+    return rate_limit("form_submission", max_attempts=20, window_minutes=5)(func)
-+
-+def rate_limit_api_call(func: Callable) -> Callable:
-+    """Rate limit API calls"""
-+    return rate_limit("api_call", max_attempts=100, window_minutes=1)(func)
-+
-+def rate_limit_search(func: Callable) -> Callable:
-+    """Rate limit search operations"""
-+    return rate_limit("search", max_attempts=50, window_minutes=1)(func)
-+
-+def rate_limit_file_upload(func: Callable) -> Callable:
-+    """Rate limit file uploads"""
-+    return rate_limit("file_upload", max_attempts=10, window_minutes=10)(func)
-+
-+# Helper function to show rate limit status
-+def show_rate_limit_status(operation: str):
-+    """Show current rate limit status for operation"""
-+    
-+    if SECURITY_AVAILABLE and security_manager and hasattr(security_manager, 'get_rate_limit_status'):
-+        status = security_manager.get_rate_limit_status(operation)
-+        
-+        if status and STREAMLIT_AVAILABLE and st:
-+            remaining = status.get('remaining_attempts', 0)
-+            window_end = status.get('window_end', 0)
-+            
-+            if remaining < 5:  # Show warning when few attempts remain
-+                time_left = max(0, window_end - time.time())
-+                st.warning(f"⚠️ {remaining} tentativas restantes para {operation} (reset em {int(time_left/60)} min)")
-diff --git a/streamlit_extension/utils/global_exception_handler.py b/streamlit_extension/utils/global_exception_handler.py
-new file mode 100644
-index 0000000000000000000000000000000000000000..20fe2f7c4f7bcc4838ccb7a8ea84d173763ad40e
---- /dev/null
-+++ b/streamlit_extension/utils/global_exception_handler.py
-@@ -0,0 +1,236 @@
-+"""
-+Global Exception Handler for Streamlit Application
-+Prevents raw error messages from reaching users
-+"""
-+
-+import os
-+import hashlib
-+import logging
-+import traceback
-+from datetime import datetime
-+from functools import wraps
-+from typing import Any, Callable, Dict, Optional
-+
-+# Safe imports
-+try:
-+    import streamlit as st
-+    STREAMLIT_AVAILABLE = True
-+except ImportError:
-+    STREAMLIT_AVAILABLE = False
-+    st = None
-+
-+# Ensure logs directory exists
-+os.makedirs('logs', exist_ok=True)
-+
-+# Configure logging
-+logging.basicConfig(
-+    level=logging.ERROR,
-+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-+    handlers=[
-+        logging.FileHandler('logs/application_errors.log'),
-+        logging.StreamHandler()
-+    ]
-+)
-+
-+logger = logging.getLogger(__name__)
-+
-+class ExceptionCategory:
-+    """Exception categories for user-friendly messages"""
-+    
-+    DATABASE_ERROR = "database"
-+    VALIDATION_ERROR = "validation"
-+    AUTHENTICATION_ERROR = "auth"
-+    PERMISSION_ERROR = "permission"
-+    NETWORK_ERROR = "network"
-+    FILE_ERROR = "file"
-+    UNKNOWN_ERROR = "unknown"
-+
-+class UserFriendlyMessages:
-+    """User-friendly error messages by category"""
-+    
-+    MESSAGES = {
-+        ExceptionCategory.DATABASE_ERROR: {
-+            "title": "🗄️ Erro de Banco de Dados",
-+            "message": "Não foi possível conectar ao banco de dados. Tente novamente em alguns minutos.",
-+            "action": "Se o problema persistir, entre em contato com o suporte."
-+        },
-+        ExceptionCategory.VALIDATION_ERROR: {
-+            "title": "✏️ Dados Inválidos",
-+            "message": "Alguns campos não foram preenchidos corretamente.",
-+            "action": "Verifique os dados informados e tente novamente."
-+        },
-+        ExceptionCategory.AUTHENTICATION_ERROR: {
-+            "title": "🔐 Erro de Autenticação",
-+            "message": "Sua sessão expirou ou você não tem permissão para esta ação.",
-+            "action": "Faça login novamente."
-+        },
-+        ExceptionCategory.PERMISSION_ERROR: {
-+            "title": "🚫 Acesso Negado", 
-+            "message": "Você não tem permissão para executar esta ação.",
-+            "action": "Entre em contato com o administrador se necessário."
-+        },
-+        ExceptionCategory.NETWORK_ERROR: {
-+            "title": "🌐 Erro de Conexão",
-+            "message": "Problema de conectividade detectado.",
-+            "action": "Verifique sua conexão e tente novamente."
-+        },
-+        ExceptionCategory.FILE_ERROR: {
-+            "title": "📁 Erro de Arquivo",
-+            "message": "Não foi possível processar o arquivo.",
-+            "action": "Verifique se o arquivo não está corrompido."
-+        },
-+        ExceptionCategory.UNKNOWN_ERROR: {
-+            "title": "⚠️ Erro Inesperado",
-+            "message": "Algo deu errado. Nossa equipe foi notificada.",
-+            "action": "Tente novamente ou entre em contato com o suporte."
-+        }
-+    }
-+
-+class GlobalExceptionHandler:
-+    """Global exception handler for Streamlit apps"""
-+    
-+    def __init__(self):
-+        self.error_counts = {}
-+        
-+    def categorize_exception(self, exception: Exception) -> str:
-+        """Categorize exception type"""
-+        
-+        exception_name = type(exception).__name__.lower()
-+        exception_message = str(exception).lower()
-+        
-+        # Database related
-+        if any(keyword in exception_name for keyword in ['sqlite', 'database', 'sql', 'connection']):
-+            return ExceptionCategory.DATABASE_ERROR
-+            
-+        if any(keyword in exception_message for keyword in ['database', 'connection', 'sqlite']):
-+            return ExceptionCategory.DATABASE_ERROR
-+            
-+        # Validation related
-+        if any(keyword in exception_name for keyword in ['validation', 'value', 'type', 'attribute']):
-+            return ExceptionCategory.VALIDATION_ERROR
-+            
-+        # Authentication related
-+        if any(keyword in exception_name for keyword in ['auth', 'permission', 'unauthorized']):
-+            return ExceptionCategory.AUTHENTICATION_ERROR
-+            
-+        # File related
-+        if any(keyword in exception_name for keyword in ['file', 'io', 'path']):
-+            return ExceptionCategory.FILE_ERROR
-+            
-+        # Network related
-+        if any(keyword in exception_name for keyword in ['connection', 'timeout', 'network']):
-+            return ExceptionCategory.NETWORK_ERROR
-+            
-+        return ExceptionCategory.UNKNOWN_ERROR
-+    
-+    def generate_error_id(self, exception: Exception) -> str:
-+        """Generate unique error ID for tracking"""
-+        error_content = f"{type(exception).__name__}:{str(exception)[:100]}"
-+        return hashlib.md5(error_content.encode()).hexdigest()[:8]
-+    
-+    def log_exception(self, exception: Exception, context: Dict[str, Any] = None):
-+        """Log exception with context"""
-+        error_id = self.generate_error_id(exception)
-+        category = self.categorize_exception(exception)
-+        
-+        log_data = {
-+            "error_id": error_id,
-+            "category": category,
-+            "exception_type": type(exception).__name__,
-+            "exception_message": str(exception),
-+            "traceback": traceback.format_exc(),
-+            "timestamp": datetime.now().isoformat(),
-+            "context": context or {}
-+        }
-+        
-+        # Track error frequency
-+        self.error_counts[error_id] = self.error_counts.get(error_id, 0) + 1
-+        log_data["occurrence_count"] = self.error_counts[error_id]
-+        
-+        logger.error(f"Application Error: {log_data}")
-+        
-+        return error_id, category
-+    
-+    def show_user_error(self, category: str, error_id: str, context: Dict[str, Any] = None):
-+        """Show user-friendly error message"""
-+        
-+        if not STREAMLIT_AVAILABLE or not st:
-+            return
-+            
-+        message_config = UserFriendlyMessages.MESSAGES.get(
-+            category, 
-+            UserFriendlyMessages.MESSAGES[ExceptionCategory.UNKNOWN_ERROR]
-+        )
-+        
-+        with st.container():
-+            st.error(f"""
-+            **{message_config['title']}**
-+            
-+            {message_config['message']}
-+            
-+            *{message_config['action']}*
-+            
-+            🔍 **ID do Erro:** `{error_id}`
-+            """)
-+            
-+            # Show additional context in expander
-+            if context and hasattr(st, 'session_state') and st.session_state.get('show_debug', False):
-+                with st.expander("🔧 Detalhes Técnicos (Debug)"):
-+                    st.json(context)
-+
-+def handle_exceptions(func: Callable = None, *, context: Dict[str, Any] = None, show_in_ui: bool = True):
-+    """
-+    Decorator to handle exceptions globally
-+    
-+    Args:
-+        func: Function to wrap
-+        context: Additional context for logging
-+        show_in_ui: Whether to show error in Streamlit UI
-+    """
-+    
-+    def decorator(f: Callable) -> Callable:
-+        @wraps(f)
-+        def wrapper(*args, **kwargs):
-+            try:
-+                return f(*args, **kwargs)
-+            except Exception as e:
-+                handler = GlobalExceptionHandler()
-+                
-+                # Prepare context
-+                error_context = {
-+                    "function_name": f.__name__,
-+                    "args_count": len(args),
-+                    "kwargs": list(kwargs.keys()),
-+                    **(context or {})
-+                }
-+                
-+                # Log exception
-+                error_id, category = handler.log_exception(e, error_context)
-+                
-+                # Show in UI if requested
-+                if show_in_ui:
-+                    handler.show_user_error(category, error_id, error_context)
-+                    return None
-+                else:
-+                    # Re-raise for programmatic handling
-+                    raise
-+                    
-+        return wrapper
-+    
-+    # Support both @handle_exceptions and @handle_exceptions()
-+    if func is None:
-+        return decorator
-+    else:
-+        return decorator(func)
-+
-+# Global handler instance
-+global_handler = GlobalExceptionHandler()
-+
-+def setup_streamlit_exception_handling():
-+    """Setup global exception handling for Streamlit"""
-+    
-+    if not STREAMLIT_AVAILABLE or not st:
-+        return
-+    
-+    # Enable debug mode with query parameter
-+    try:
-+        query_params = st.query_params
-+        if "debug" in query_params:
-+            st.session_state['show_debug'] = True
-+            st.sidebar.info("🔧 Debug mode ativo")
-+    except:
-+        pass
-+    
-+    # Custom CSS for better error display
-+    st.markdown("""
-+    <style>
-+    .stAlert > div {
-+        padding: 1rem;
-+        border-radius: 0.5rem;
-+    }
-+    </style>
-+    """, unsafe_allow_html=True)
-
+diff --git a/streamlit_extension/utils/database.py b/streamlit_extension/utils/database.py
+index 6f5446a0d2da38f12f5f1c89d17e174eebb7cdc2..91715543554136d5ee3203c01c260eca36c9b33b 100644
+--- a/streamlit_extension/utils/database.py
++++ b/streamlit_extension/utils/database.py
+@@ -1,49 +1,54 @@
+ """
+ 🗄️ Database Management Utilities
+ 
+ Streamlit-optimized database operations with:
+ - Connection pooling
+ - Caching strategies
+ - SQLAlchemy integration
+ - Error handling
+ """
+ 
+ import sqlite3
+ import time
+ from pathlib import Path
+ from typing import (
++    Union,
+     Optional,
++    List,
+     Dict,
+     Any,
+-    List,
+-    Union,
+-    Iterator,
+     Tuple,
++    Callable,
++    Iterator,
++    ContextManager,
+     Generator,
++    TypeVar,
++    Generic,
+     NamedTuple,
+ )
++from sqlite3 import Connection as SQLiteConnection
+ from contextlib import contextmanager
+ from datetime import datetime
+ from enum import Enum
+ import json
+ import logging
+ 
+ # Graceful imports
+ try:
+     import sqlalchemy as sa
+     from sqlalchemy import create_engine, text
+     from sqlalchemy.pool import StaticPool
+     from sqlalchemy.engine import Connection, Result
+     SQLALCHEMY_AVAILABLE = True
+ except ImportError:
+     sa = None
+     create_engine = None
+     text = None
+     StaticPool = None
+     Connection = None
+     Result = Any  # type: ignore[assignment]
+     SQLALCHEMY_AVAILABLE = False
+ 
+ try:
+     import pandas as pd
+     PANDAS_AVAILABLE = True
+@@ -366,51 +371,51 @@ class DatabaseManager(PerformancePaginationMixin):
+ 
+     This class provides a centralized interface for database operations with:
+     - Connection pooling for performance
+     - Transaction management
+     - Error handling and logging
+     - Circuit breaker integration
+     - Health monitoring
+ 
+     Examples:
+         Basic usage:
+         >>> db = DatabaseManager()
+         >>> with db.get_connection() as conn:
+         ...     result = conn.execute("SELECT * FROM users")
+ 
+         Transaction usage:
+         >>> with db.get_connection() as conn:
+         ...     with db.transaction(conn):
+         ...         conn.execute("INSERT INTO users ...")
+ 
+     Attributes:
+         connection_pool (SQLAlchemy.pool): Database connection pool
+         circuit_breaker (CircuitBreaker): Circuit breaker for resilience
+         health_monitor (HealthMonitor): Connection health monitoring
+     """
+ 
+-    def __init__(self, framework_db_path: str = "framework.db", timer_db_path: str = "task_timer.db"):
++    def __init__(self, framework_db_path: str = "framework.db", timer_db_path: str = "task_timer.db") -> None:
+         """Initialize database manager with connection paths.
+ 
+         Creates SQLAlchemy engines for both databases when available and sets up
+         internal structures required for caching and performance monitoring.
+ 
+         Args:
+             framework_db_path: Path to framework SQLite database file.
+             timer_db_path: Path to timer database file. Timer functionality is
+                 disabled if the file does not exist.
+ 
+         Raises:
+             DatabaseError: If engine initialization fails.
+ 
+         Example:
+             >>> db_manager = DatabaseManager("/app/data/framework.db")
+             >>> db_manager = DatabaseManager("./framework.db", "./timer.db")
+         """
+         self.framework_db_path = Path(framework_db_path)
+         self.timer_db_path = Path(timer_db_path)
+         self.engines = {}
+ 
+         if SQLALCHEMY_AVAILABLE:
+             self._initialize_engines()
+     
+     def _initialize_engines(self) -> None:
+@@ -425,92 +430,92 @@ class DatabaseManager(PerformancePaginationMixin):
+                 framework_url,
+                 poolclass=StaticPool,
+                 connect_args={
+                     "check_same_thread": False,
+                     "timeout": 20
+                 },
+                 echo=False
+             )
+         
+         # Timer database engine  
+         if self.timer_db_path.exists():
+             timer_url = f"sqlite:///{self.timer_db_path}"
+             self.engines["timer"] = create_engine(
+                 timer_url,
+                 poolclass=StaticPool,
+                 connect_args={
+                     "check_same_thread": False,
+                     "timeout": 20
+                 },
+                 echo=False
+             )
+     
+     @contextmanager
+     def get_connection(
+         self, database_name: str = "framework"
+-    ) -> Generator[Union[Connection, sqlite3.Connection], None, None]:
++    ) -> Iterator[Union[Connection, SQLiteConnection]]:
+         """
+         Get a database connection from the pool.
+ 
+         Args:
+             database_name (str): Name of the database to connect to.
+                 Defaults to "framework".
+ 
+         Returns:
+             Connection: SQLAlchemy connection object with context manager support.
+ 
+         Raises:
+             ConnectionError: If unable to establish connection after retries.
+             CircuitBreakerOpenError: If circuit breaker is open.
+ 
+         Examples:
+             >>> db = DatabaseManager()
+             >>> with db.get_connection() as conn:
+             ...     result = conn.execute("SELECT COUNT(*) FROM users")
+             ...     print(result.fetchone()[0])
+         """
+         if SQLALCHEMY_AVAILABLE and database_name in self.engines:
+             conn = self.engines[database_name].connect()
+             try:
+                 conn.execute(text("PRAGMA foreign_keys = ON"))
+                 yield conn
+             finally:
+                 conn.close()
+         else:
+             db_path = self.framework_db_path if database_name == "framework" else self.timer_db_path
+             if not db_path.exists():
+                 raise FileNotFoundError(f"Database not found: {db_path}")
+ 
+             conn = sqlite3.connect(str(db_path), timeout=20)
+             conn.row_factory = sqlite3.Row
+             conn.execute("PRAGMA foreign_keys = ON")
+             try:
+                 yield conn
+             finally:
+                 conn.close()
+ 
+-    def release_connection(self, connection: Union[Connection, sqlite3.Connection]) -> None:
++    def release_connection(self, connection: Union[Connection, SQLiteConnection]) -> None:
+         """Return connection to pool with cleanup.
+ 
+         This method is provided for cases where a connection obtained via
+         :meth:`get_connection` needs to be closed manually instead of using the
+         context manager protocol.
+ 
+         Args:
+             connection: Connection instance to be returned.
+ 
+         Example:
+             >>> conn = next(db_manager.get_connection())
+             >>> db_manager.release_connection(conn)
+         """
+         try:
+             connection.close()
+         except Exception:  # pragma: no cover - best effort
+             logger.warning("Failed to close connection", exc_info=True)
+ 
+     def execute_query(
+         self,
+         query: str,
+         params: Optional[Dict[str, Any]] = None,
+         database_name: str = "framework",
+     ) -> Union[Result, List[Dict[str, Any]]]:
+         """Execute a raw SQL query.
+@@ -1707,53 +1712,59 @@ class DatabaseManager(PerformancePaginationMixin):
+                                datetime('now'), datetime('now'))
+                     """), {
+                         "title": title,
+                         "description": description,
+                         "epic_id": epic_id,
+                         "tdd_phase": tdd_phase,
+                         "priority": priority,
+                         "estimate_minutes": estimate_minutes
+                     })
+                     conn.commit()
+                     return result.lastrowid
+                 else:
+                     cursor = conn.cursor()
+                     cursor.execute("""
+                         INSERT INTO framework_tasks 
+                         (title, description, epic_id, tdd_phase, priority, 
+                          estimate_minutes, status, created_at, updated_at)
+                         VALUES (?, ?, ?, ?, ?, ?, 'todo', datetime('now'), datetime('now'))
+                     """, (title, description, epic_id, tdd_phase, priority, estimate_minutes))
+                     conn.commit()
+                     return cursor.lastrowid
+         except Exception as e:
+             print(f"Error creating task: {e}")
+             return None
+     
+-    def update_task(self, task_id: int, title: str = None, description: str = None,
+-                   tdd_phase: str = None, priority: int = None, 
+-                   estimate_minutes: int = None) -> bool:
++    def update_task(
++        self,
++        task_id: int,
++        title: Optional[str] = None,
++        description: Optional[str] = None,
++        tdd_phase: Optional[str] = None,
++        priority: Optional[int] = None,
++        estimate_minutes: Optional[int] = None,
++    ) -> bool:
+         """Update task details.
+         
+         Args:
+             task_id: ID of the task to update
+             title: New title (optional)
+             description: New description (optional)
+             tdd_phase: New TDD phase (optional)
+             priority: New priority (optional)
+             estimate_minutes: New estimate (optional)
+             
+         Returns:
+             True if successful, False otherwise
+         """
+         try:
+             # Build dynamic update query
+             updates = []
+             params = {"task_id": task_id}
+             
+             if title is not None:
+                 updates.append("title = :title")
+                 params["title"] = title
+             
+             if description is not None:
+                 updates.append("description = :description")
+                 params["description"] = description
+ 
 EOF
 )

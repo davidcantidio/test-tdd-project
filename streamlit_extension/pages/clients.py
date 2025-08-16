@@ -35,7 +35,7 @@ try:
     )
     from streamlit_extension.config import load_config
     from streamlit_extension.config.constants import (
-        GeneralStatus, ClientTier, CompanySize, UIConstants, FormFields
+        StatusValues, ClientTiers, CompanySizes, ErrorMessages, UIConstants, FormFields
     )
     # Import authentication middleware
     from streamlit_extension.auth.middleware import init_protected_page
@@ -44,7 +44,7 @@ except ImportError:
     DATABASE_UTILS_AVAILABLE = False
     DatabaseManager = validate_client_data = load_config = None
     create_safe_client = sanitize_display = validate_form = None
-    GeneralStatus = ClientTier = CompanySize = UIConstants = FormFields = None
+    StatusValues = ClientTiers = CompanySizes = ErrorMessages = UIConstants = FormFields = None
     init_protected_page = None
 
 from streamlit_extension.utils.exception_handler import (
@@ -63,12 +63,14 @@ def render_client_card(client: Dict[str, Any], db_manager: DatabaseManager):
     with st.container():
         # Card header with status indicator
         status_colors = {
-            GeneralStatus.ACTIVE.value if GeneralStatus else "active": "🟢",
-            GeneralStatus.INACTIVE.value if GeneralStatus else "inactive": "🟡", 
-            GeneralStatus.SUSPENDED.value if GeneralStatus else "suspended": "🔴",
-            GeneralStatus.ARCHIVED.value if GeneralStatus else "archived": "⚫"
+            StatusValues.ACTIVE.value: UIConstants.ICON_ACTIVE,
+            StatusValues.INACTIVE.value: UIConstants.ICON_INACTIVE,
+            StatusValues.SUSPENDED.value: UIConstants.ICON_CANCELLED,
+            StatusValues.ARCHIVED.value: UIConstants.ICON_UNKNOWN,
         }
-        status_emoji = status_colors.get(client.get("status", "active"), "⚪")
+        status_emoji = status_colors.get(
+            client.get("status", StatusValues.ACTIVE.value), UIConstants.ICON_UNKNOWN
+        )
         
         col1, col2, col3 = st.columns([3, 1, 1])
         
@@ -77,12 +79,12 @@ def render_client_card(client: Dict[str, Any], db_manager: DatabaseManager):
             st.caption(f"**Key:** {client.get('client_key', 'N/A')} | **Tier:** {client.get('client_tier', 'standard').title()}")
         
         with col2:
-            if st.button("✏️ Edit", key=f"edit_client_{client['id']}", use_container_width=True):
+            if st.button(UIConstants.EDIT_BUTTON, key=f"edit_client_{client['id']}", use_container_width=True):
                 st.session_state[f"edit_client_{client['id']}"] = True
                 st.rerun()
-        
+
         with col3:
-            if st.button("🗑️ Delete", key=f"delete_client_{client['id']}", use_container_width=True):
+            if st.button(UIConstants.DELETE_BUTTON, key=f"delete_client_{client['id']}", use_container_width=True):
                 st.session_state[f"delete_client_{client['id']}"] = True
                 st.rerun()
         
@@ -145,7 +147,7 @@ def render_edit_client_modal(client: Dict[str, Any], db_manager: DatabaseManager
     
     with st.modal(f"Edit Client: {client['name']}", width="large"):
         with st.form(f"edit_client_form_{client['id']}"):
-            st.markdown("### 📝 Edit Client Information")
+            st.markdown(f"### {UIConstants.ICON_TASK} Edit Client Information")
             
             # Generate CSRF token for form protection
             csrf_form_id = f"edit_client_form_{client['id']}"
@@ -160,8 +162,8 @@ def render_edit_client_modal(client: Dict[str, Any], db_manager: DatabaseManager
                 description = st.text_area("Description", value=client.get('description', ''))
                 
                 industry = st.text_input("Industry", value=client.get('industry', ''))
-                company_size_options = CompanySize.get_all_values() if CompanySize else ["startup", "small", "medium", "large", "enterprise"]
-                company_size_default = CompanySize.get_default() if CompanySize else 'startup'
+                company_size_options = CompanySizes.get_all_values()
+                company_size_default = CompanySizes.get_default()
                 company_size = st.selectbox("Company Size", 
                     options=company_size_options,
                     index=company_size_options.index(client.get('company_size', company_size_default))
@@ -174,13 +176,16 @@ def render_edit_client_modal(client: Dict[str, Any], db_manager: DatabaseManager
                 primary_contact_phone = st.text_input("Contact Phone", value=client.get('primary_contact_phone', ''))
                 
                 st.markdown("#### Business Settings")
-                status_options = GeneralStatus.get_all_values() if GeneralStatus else ["active", "inactive", "suspended", "archived"]
-                status = st.selectbox("Status", 
+                status_options = StatusValues.get_all_values()
+                status = st.selectbox(
+                    "Status",
                     options=status_options,
-                    index=status_options.index(client.get('status', GeneralStatus.ACTIVE.value if GeneralStatus else 'active'))
+                    index=status_options.index(
+                        client.get('status', StatusValues.ACTIVE.value)
+                    ),
                 )
-                tier_options = ClientTier.get_all_values() if ClientTier else ["basic", "standard", "premium", "enterprise"]
-                tier_default = ClientTier.get_default() if ClientTier else 'standard'
+                tier_options = ClientTiers.get_all_values()
+                tier_default = ClientTiers.get_default()
                 client_tier = st.selectbox("Client Tier",
                     options=tier_options,
                     index=tier_options.index(client.get('client_tier', tier_default))
@@ -190,7 +195,7 @@ def render_edit_client_modal(client: Dict[str, Any], db_manager: DatabaseManager
             col1, col2, col3 = st.columns([1, 1, 1])
             
             with col1:
-                if st.form_submit_button("💾 Update Client", use_container_width=True):
+                if st.form_submit_button(UIConstants.UPDATE_BUTTON + " Client", use_container_width=True):
                     # CSRF Protection
                     if csrf_field and security_manager:
                         csrf_valid, csrf_error = security_manager.require_csrf_protection(
@@ -240,9 +245,9 @@ def render_edit_client_modal(client: Dict[str, Any], db_manager: DatabaseManager
                         existing_clients = existing_clients_result.get("data", []) if isinstance(existing_clients_result, dict) else []
                         
                         if not validate_email_uniqueness(primary_contact_email, existing_clients, client['id']):
-                            st.error("❌ Email already exists for another client")
+                            st.error(UIConstants.ERROR_DUPLICATE)
                         elif not validate_client_key_uniqueness(client_key, existing_clients, client['id']):
-                            st.error("❌ Client key already exists")
+                            st.error(UIConstants.ERROR_DUPLICATE)
                         else:
                             # Check rate limit for database write
                             db_rate_allowed, db_rate_error = check_rate_limit("db_write") if check_rate_limit else (True, None)
@@ -253,17 +258,25 @@ def render_edit_client_modal(client: Dict[str, Any], db_manager: DatabaseManager
                             # Update client
                             success = db_manager.update_client(client['id'], **client_data)
                             if success:
-                                st.success("✅ Client updated successfully!")
+                                st.success(ErrorMessages.CLIENT_UPDATE_SUCCESS)
                                 st.session_state[f"edit_client_{client['id']}"] = False
                                 st.rerun()
                             else:
-                                st.error("❌ Failed to update client")
+                                st.error(
+                                    ErrorMessages.CLIENT_UPDATE_ERROR.format(
+                                        error="Failed to update client"
+                                    )
+                                )
                     else:
                         for error in errors:
-                            st.error(f"❌ {error}")
+                            st.error(
+                                ErrorMessages.CLIENT_UPDATE_ERROR.format(
+                                    error=error
+                                )
+                            )
             
             with col2:
-                if st.form_submit_button("❌ Cancel", use_container_width=True):
+                if st.form_submit_button(UIConstants.CANCEL_BUTTON, use_container_width=True):
                     st.session_state[f"edit_client_{client['id']}"] = False
                     st.rerun()
 
@@ -291,7 +304,7 @@ def render_delete_client_modal(client: Dict[str, Any], db_manager: DatabaseManag
         col1, col2 = st.columns(2)
         
         with col1:
-            if st.button("🗑️ Delete Client", use_container_width=True):
+            if st.button(UIConstants.DELETE_BUTTON + " Client", use_container_width=True):
                 # Check rate limit for database write
                 db_rate_allowed, db_rate_error = check_rate_limit("db_write") if check_rate_limit else (True, None)
                 if not db_rate_allowed:
@@ -300,14 +313,18 @@ def render_delete_client_modal(client: Dict[str, Any], db_manager: DatabaseManag
                 
                 success = db_manager.delete_client(client['id'], soft_delete=True)
                 if success:
-                    st.success("✅ Client deleted successfully!")
+                    st.success(ErrorMessages.CLIENT_DELETE_SUCCESS)
                     st.session_state[f"delete_client_{client['id']}"] = False
                     st.rerun()
                 else:
-                    st.error("❌ Failed to delete client")
+                    st.error(
+                        ErrorMessages.CLIENT_DELETE_ERROR.format(
+                            error="Failed to delete client"
+                        )
+                    )
         
         with col2:
-            if st.button("❌ Cancel", use_container_width=True):
+            if st.button(UIConstants.CANCEL_BUTTON, use_container_width=True):
                 st.session_state[f"delete_client_{client['id']}"] = False
                 st.rerun()
 
@@ -319,7 +336,7 @@ def render_create_client_form(db_manager: DatabaseManager):
     
     with st.expander("➕ Create New Client", expanded=False):
         with st.form("create_client_form"):
-            st.markdown("### 📝 New Client Information")
+            st.markdown(f"### {UIConstants.ICON_TASK} New Client Information")
             
             # Generate CSRF token for form protection
             csrf_form_id = "create_client_form"
@@ -334,7 +351,7 @@ def render_create_client_form(db_manager: DatabaseManager):
                 description = st.text_area("Description", placeholder="Brief description of the client...")
                 
                 industry = st.text_input("Industry", placeholder="e.g., Technology")
-                company_size_options = CompanySize.get_all_values() if CompanySize else ["startup", "small", "medium", "large", "enterprise"]
+                company_size_options = CompanySizes.get_all_values()
                 company_size = st.selectbox("Company Size", options=company_size_options)
             
             with col2:
@@ -344,14 +361,14 @@ def render_create_client_form(db_manager: DatabaseManager):
                 primary_contact_phone = st.text_input("Contact Phone", placeholder="+55 (11) 99999-9999")
                 
                 st.markdown("#### Business Settings")
-                status_options = GeneralStatus.get_all_values() if GeneralStatus else ["active", "inactive", "suspended", "archived"]
+                status_options = StatusValues.get_all_values()
                 status = st.selectbox("Status", options=status_options, index=0)
-                tier_options = ClientTier.get_all_values() if ClientTier else ["basic", "standard", "premium", "enterprise"]
-                tier_default_index = tier_options.index(ClientTier.get_default()) if ClientTier else 1
+                tier_options = ClientTiers.get_all_values()
+                tier_default_index = tier_options.index(ClientTiers.get_default())
                 client_tier = st.selectbox("Client Tier", options=tier_options, index=tier_default_index)
                 hourly_rate = st.number_input("Hourly Rate (R$)", value=0.0, min_value=0.0)
             
-            if st.form_submit_button("🚀 Create Client", use_container_width=True):
+            if st.form_submit_button(UIConstants.CREATE_BUTTON + " Client", use_container_width=True):
                 # CSRF Protection
                 if csrf_field and security_manager:
                     csrf_valid, csrf_error = security_manager.require_csrf_protection(
@@ -401,9 +418,9 @@ def render_create_client_form(db_manager: DatabaseManager):
                     existing_clients = existing_clients_result.get("data", []) if isinstance(existing_clients_result, dict) else []
                     
                     if not validate_email_uniqueness(primary_contact_email, existing_clients):
-                        st.error("❌ Email already exists for another client")
+                        st.error(UIConstants.ERROR_DUPLICATE)
                     elif not validate_client_key_uniqueness(client_key, existing_clients):
-                        st.error("❌ Client key already exists")
+                        st.error(UIConstants.ERROR_DUPLICATE)
                     else:
                         # Check rate limit for database write
                         db_rate_allowed, db_rate_error = check_rate_limit("db_write") if check_rate_limit else (True, None)
@@ -426,13 +443,21 @@ def render_create_client_form(db_manager: DatabaseManager):
                         )
                         
                         if client_id:
-                            st.success("✅ Client created successfully!")
+                            st.success(ErrorMessages.CLIENT_CREATE_SUCCESS)
                             st.rerun()
                         else:
-                            st.error("❌ Failed to create client")
+                            st.error(
+                                ErrorMessages.CLIENT_CREATE_ERROR.format(
+                                    error="Failed to create client"
+                                )
+                            )
                 else:
                     for error in errors:
-                        st.error(f"❌ {error}")
+                        st.error(
+                            ErrorMessages.LOADING_ERROR.format(
+                                entity="client", error=error
+                            )
+                        )
 
 
 @handle_streamlit_exceptions(show_error=True, attempt_recovery=True)
@@ -442,7 +467,11 @@ def render_clients_page():
         return {"error": "Streamlit not available"}
     
     if not DATABASE_UTILS_AVAILABLE:
-        st.error("❌ Database utilities not available")
+        st.error(
+            ErrorMessages.LOADING_ERROR.format(
+                entity="database utilities", error="not available"
+            )
+        )
         return {"error": "Database utilities not available"}
     
     # Initialize protected page with authentication
@@ -468,7 +497,11 @@ def render_clients_page():
             operation_name="load_config",
         )
         if config is None:
-            st.error("❌ Configuration loading failed")
+            st.error(
+                ErrorMessages.LOADING_ERROR.format(
+                    entity="configuration", error="loading failed"
+                )
+            )
             return {"error": "config_load_failed"}
 
         db_manager = safe_streamlit_operation(
@@ -478,28 +511,33 @@ def render_clients_page():
             operation_name="database_manager_init",
         )
         if db_manager is None:
-            st.error("❌ Database connection failed")
+            st.error(
+                ErrorMessages.LOADING_ERROR.format(
+                    entity="database connection", error="failed"
+                )
+            )
             return {"error": "db_connection_failed"}
     
     # Filters and search
     col1, col2, col3 = st.columns([2, 1, 1])
     
     with col1:
-        search_name = st.text_input("🔍 Search by name", placeholder="Type client name...")
+        search_name = st.text_input(
+            f"{UIConstants.ICON_SEARCH} Search by name",
+            placeholder="Type client name...",
+        )
     
     with col2:
-        if GeneralStatus:
-            status_filter_options = ["all"] + GeneralStatus.get_all_values()
-        else:
-            status_filter_options = ["all", "active", "inactive", "suspended", "archived"]
-        status_filter = st.selectbox("Status Filter", 
+        status_filter_options = ["all"] + StatusValues.get_all_values()
+        status_filter = st.selectbox(
+            "Status Filter",
             options=status_filter_options,
-            index=0
+            index=0,
         )
     
     with col3:
-        if ClientTier:
-            tier_filter_options = ["all"] + ClientTier.get_all_values()
+        if ClientTiers:
+            tier_filter_options = ["all"] + ClientTiers.get_all_values()
         else:
             tier_filter_options = ["all", "basic", "standard", "premium", "enterprise"]
         tier_filter = st.selectbox("Tier Filter",
@@ -529,7 +567,7 @@ def render_clients_page():
         all_clients = clients_result.get("data", []) if isinstance(clients_result, dict) else []
 
         if not all_clients:
-            st.info("📝 No clients found. Create your first client using the form above!")
+            st.info(ErrorMessages.NO_ITEMS_FOUND.format(entity="clients"))
             return {"status": "no_clients"}
 
         # Apply filters
@@ -549,7 +587,7 @@ def render_clients_page():
         st.markdown(f"**Found {len(filtered_clients)} client(s) (of {total_count} total)**")
 
         if not filtered_clients:
-            st.warning("🔍 No clients match your current filters.")
+            st.warning(ErrorMessages.NO_MATCHES_FILTER.format(entity="clients"))
             return {"status": "no_matches"}
 
         # Display clients

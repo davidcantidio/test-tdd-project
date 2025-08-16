@@ -37,6 +37,7 @@ try:
         handle_streamlit_exceptions, streamlit_error_boundary, safe_streamlit_operation
     )
     from streamlit_extension.config import load_config
+    from streamlit_extension.config.constants import StatusValues, ErrorMessages, UIConstants
     # Import authentication middleware
     from streamlit_extension.auth.middleware import init_protected_page
     DATABASE_UTILS_AVAILABLE = True
@@ -45,7 +46,7 @@ except ImportError:
     DatabaseManager = validate_project_data = load_config = None
     create_safe_project = sanitize_display = validate_form = None
     handle_streamlit_exceptions = streamlit_error_boundary = safe_streamlit_operation = None
-    init_protected_page = None
+    StatusValues = ErrorMessages = UIConstants = init_protected_page = None
 
 
 
@@ -57,13 +58,15 @@ def render_project_card(project: Dict[str, Any], db_manager: DatabaseManager, cl
     with st.container():
         # Card header with status indicator
         status_colors = {
-            "planning": "🟡",
-            "in_progress": "🟢", 
-            "completed": "✅",
-            "on_hold": "⏸️",
-            "cancelled": "🔴"
+            StatusValues.PLANNING.value: UIConstants.ICON_PLANNING,
+            StatusValues.IN_PROGRESS.value: UIConstants.ICON_IN_PROGRESS,
+            StatusValues.COMPLETED.value: UIConstants.ICON_COMPLETED,
+            StatusValues.ON_HOLD.value: UIConstants.ICON_ON_HOLD,
+            StatusValues.CANCELLED.value: UIConstants.ICON_CANCELLED,
         }
-        status_emoji = status_colors.get(project.get("status", "planning"), "⚪")
+        status_emoji = status_colors.get(
+            project.get("status", StatusValues.PLANNING.value), UIConstants.ICON_UNKNOWN
+        )
         
         col1, col2, col3 = st.columns([3, 1, 1])
         
@@ -73,12 +76,12 @@ def render_project_card(project: Dict[str, Any], db_manager: DatabaseManager, cl
             st.caption(f"**Client:** {client_name} | **Key:** {project.get('project_key', 'N/A')}")
         
         with col2:
-            if st.button("✏️ Edit", key=f"edit_project_{project['id']}", use_container_width=True):
+            if st.button(UIConstants.EDIT_BUTTON, key=f"edit_project_{project['id']}", use_container_width=True):
                 st.session_state[f"edit_project_{project['id']}"] = True
                 st.rerun()
-        
+
         with col3:
-            if st.button("🗑️ Delete", key=f"delete_project_{project['id']}", use_container_width=True):
+            if st.button(UIConstants.DELETE_BUTTON, key=f"delete_project_{project['id']}", use_container_width=True):
                 st.session_state[f"delete_project_{project['id']}"] = True
                 st.rerun()
         
@@ -126,9 +129,13 @@ def render_project_card(project: Dict[str, Any], db_manager: DatabaseManager, cl
                 st.metric("Est. Hours", f"{project['estimated_hours']:.1f}h")
             
             # Health status
-            health_colors = {"green": "🟢", "yellow": "🟡", "red": "🔴"}
+            health_colors = {
+                "green": UIConstants.ICON_ACTIVE,
+                "yellow": UIConstants.ICON_PENDING,
+                "red": UIConstants.ICON_CANCELLED,
+            }
             health = project.get('health_status', 'green')
-            health_emoji = health_colors.get(health, "⚪")
+            health_emoji = health_colors.get(health, UIConstants.ICON_UNKNOWN)
             st.markdown(f"**Health:** {health_emoji} {health.title()}")
         
         # Handle edit modal
@@ -149,7 +156,7 @@ def render_edit_project_modal(project: Dict[str, Any], db_manager: DatabaseManag
     
     with st.modal(f"Edit Project: {project['name']}", width="large"):
         with st.form(f"edit_project_form_{project['id']}"):
-            st.markdown("### 📝 Edit Project Information")
+            st.markdown(f"### {UIConstants.ICON_TASK} Edit Project Information")
             
             # Generate CSRF token for form protection
             csrf_form_id = f"edit_project_form_{project['id']}"
@@ -211,9 +218,19 @@ def render_edit_project_modal(project: Dict[str, Any], db_manager: DatabaseManag
                 estimated_hours = st.number_input("Estimated Hours", value=float(project.get('estimated_hours', 0.0)), min_value=0.0)
                 
                 # Status
-                status = st.selectbox("Status*", 
-                    options=["planning", "in_progress", "completed", "on_hold", "cancelled"],
-                    index=["planning", "in_progress", "completed", "on_hold", "cancelled"].index(project.get('status', 'planning'))
+                status_options = [
+                    StatusValues.PLANNING.value,
+                    StatusValues.IN_PROGRESS.value,
+                    StatusValues.COMPLETED.value,
+                    StatusValues.ON_HOLD.value,
+                    StatusValues.CANCELLED.value,
+                ]
+                status = st.selectbox(
+                    "Status*",
+                    options=status_options,
+                    index=status_options.index(
+                        project.get('status', StatusValues.PLANNING.value)
+                    ),
                 )
                 
                 health_status = st.selectbox("Health Status",
@@ -226,7 +243,7 @@ def render_edit_project_modal(project: Dict[str, Any], db_manager: DatabaseManag
             col1, col2, col3 = st.columns([1, 1, 1])
             
             with col1:
-                if st.form_submit_button("💾 Update Project", use_container_width=True):
+                if st.form_submit_button(UIConstants.UPDATE_BUTTON + " Project", use_container_width=True):
                     # CSRF Protection
                     if csrf_field and security_manager:
                         csrf_valid, csrf_error = security_manager.require_csrf_protection(
@@ -278,7 +295,7 @@ def render_edit_project_modal(project: Dict[str, Any], db_manager: DatabaseManag
                         existing_projects = db_manager.get_projects(include_inactive=True)
                         
                         if not validate_project_key_uniqueness(project_key, selected_client_id, existing_projects, project['id']):
-                            st.error("❌ Project key already exists for this client")
+                            st.error(UIConstants.ERROR_DUPLICATE)
                         else:
                             # Check rate limit for database write
                             db_rate_allowed, db_rate_error = check_rate_limit("db_write") if check_rate_limit else (True, None)
@@ -289,17 +306,25 @@ def render_edit_project_modal(project: Dict[str, Any], db_manager: DatabaseManag
                             # Update project
                             success = db_manager.update_project(project['id'], **project_data)
                             if success:
-                                st.success("✅ Project updated successfully!")
+                                st.success(UIConstants.SUCCESS_UPDATE)
                                 st.session_state[f"edit_project_{project['id']}"] = False
                                 st.rerun()
                             else:
-                                st.error("❌ Failed to update project")
+                                st.error(
+                                    ErrorMessages.PROJECT_UPDATE_ERROR.format(
+                                        error="Failed to update project"
+                                    )
+                                )
                     else:
                         for error in errors:
-                            st.error(f"❌ {error}")
+                            st.error(
+                                ErrorMessages.PROJECT_UPDATE_ERROR.format(
+                                    error=error
+                                )
+                            )
             
             with col2:
-                if st.form_submit_button("❌ Cancel", use_container_width=True):
+                if st.form_submit_button(UIConstants.CANCEL_BUTTON, use_container_width=True):
                     st.session_state[f"edit_project_{project['id']}"] = False
                     st.rerun()
 
@@ -326,17 +351,21 @@ def render_delete_project_modal(project: Dict[str, Any], db_manager: DatabaseMan
         col1, col2 = st.columns(2)
         
         with col1:
-            if st.button("🗑️ Delete Project", use_container_width=True):
+            if st.button(UIConstants.DELETE_BUTTON + " Project", use_container_width=True):
                 success = db_manager.delete_project(project['id'], soft_delete=True)
                 if success:
-                    st.success("✅ Project deleted successfully!")
+                    st.success(UIConstants.SUCCESS_DELETE)
                     st.session_state[f"delete_project_{project['id']}"] = False
                     st.rerun()
                 else:
-                    st.error("❌ Failed to delete project")
+                    st.error(
+                        ErrorMessages.PROJECT_DELETE_ERROR.format(
+                            error="Failed to delete project"
+                        )
+                    )
         
         with col2:
-            if st.button("❌ Cancel", use_container_width=True):
+            if st.button(UIConstants.CANCEL_BUTTON, use_container_width=True):
                 st.session_state[f"delete_project_{project['id']}"] = False
                 st.rerun()
 
@@ -348,7 +377,7 @@ def render_create_project_form(db_manager: DatabaseManager, clients_map: Dict[in
     
     with st.expander("➕ Create New Project", expanded=False):
         with st.form("create_project_form"):
-            st.markdown("### 📝 New Project Information")
+            st.markdown(f"### {UIConstants.ICON_TASK} New Project Information")
             
             # Generate CSRF token for form protection
             csrf_form_id = "create_project_form"
@@ -361,7 +390,7 @@ def render_create_project_form(db_manager: DatabaseManager, clients_map: Dict[in
                 
                 # Client selection
                 if not clients_map:
-                    st.error("❌ No clients available. Please create a client first.")
+                    st.error(ErrorMessages.NO_ITEMS_FOUND.format(entity="clients"))
                     return
                 
                 client_options = list(clients_map.values())
@@ -391,9 +420,17 @@ def render_create_project_form(db_manager: DatabaseManager, clients_map: Dict[in
                 budget_currency = st.selectbox("Currency", options=["BRL", "USD", "EUR"], index=0)
                 estimated_hours = st.number_input("Estimated Hours", value=0.0, min_value=0.0)
                 
-                status = st.selectbox("Status*", 
-                    options=["planning", "in_progress", "completed", "on_hold", "cancelled"],
-                    index=0
+                status_options = [
+                    StatusValues.PLANNING.value,
+                    StatusValues.IN_PROGRESS.value,
+                    StatusValues.COMPLETED.value,
+                    StatusValues.ON_HOLD.value,
+                    StatusValues.CANCELLED.value,
+                ]
+                status = st.selectbox(
+                    "Status*",
+                    options=status_options,
+                    index=0,
                 )
                 
                 health_status = st.selectbox("Health Status",
@@ -401,7 +438,7 @@ def render_create_project_form(db_manager: DatabaseManager, clients_map: Dict[in
                     index=0
                 )
             
-            if st.form_submit_button("🚀 Create Project", use_container_width=True):
+            if st.form_submit_button(UIConstants.CREATE_BUTTON + " Project", use_container_width=True):
                 # CSRF Protection
                 if csrf_field and security_manager:
                     csrf_valid, csrf_error = security_manager.require_csrf_protection(
@@ -453,7 +490,7 @@ def render_create_project_form(db_manager: DatabaseManager, clients_map: Dict[in
                     existing_projects = db_manager.get_projects(include_inactive=True)
                     
                     if not validate_project_key_uniqueness(project_key, selected_client_id, existing_projects):
-                        st.error("❌ Project key already exists for this client")
+                        st.error(UIConstants.ERROR_DUPLICATE)
                     else:
                         # Check rate limit for database write
                         db_rate_allowed, db_rate_error = check_rate_limit("db_write") if check_rate_limit else (True, None)
@@ -484,13 +521,19 @@ def render_create_project_form(db_manager: DatabaseManager, clients_map: Dict[in
                             }
                             db_manager.update_project(project_id, **additional_fields)
                             
-                            st.success("✅ Project created successfully!")
+                            st.success(UIConstants.SUCCESS_CREATE)
                             st.rerun()
                         else:
-                            st.error("❌ Failed to create project")
+                            st.error(
+                                ErrorMessages.PROJECT_CREATE_ERROR.format(
+                                    error="Failed to create project"
+                                )
+                            )
                 else:
                     for error in errors:
-                        st.error(f"❌ {error}")
+                        st.error(
+                            ErrorMessages.PROJECT_CREATE_ERROR.format(error=error)
+                        )
 
 
 @handle_streamlit_exceptions(show_error=True, attempt_recovery=True)
@@ -500,11 +543,15 @@ def render_projects_page():
         return {"error": "Streamlit not available"}
     
     if not DATABASE_UTILS_AVAILABLE:
-        st.error("❌ Database utilities not available")
+        st.error(
+            ErrorMessages.LOADING_ERROR.format(
+                entity="database utilities", error="not available"
+            )
+        )
         return {"error": "Database utilities not available"}
     
     # Initialize protected page with authentication
-    current_user = init_protected_page("📁 Project Management")
+    current_user = init_protected_page(UIConstants.PROJECTS_PAGE_TITLE)
     if not current_user:
         return {"error": "Authentication required"}
     
@@ -526,7 +573,11 @@ def render_projects_page():
             timer_db_path=str(config.get_timer_database_path())
         )
     except Exception as e:
-        st.error(f"❌ Database connection error: {e}")
+        st.error(
+            ErrorMessages.LOADING_ERROR.format(
+                entity="database connection", error=e
+            )
+        )
         return {"error": f"Database connection error: {e}"}
     
     # Get clients for mapping with error boundary
@@ -538,7 +589,9 @@ def render_projects_page():
             clients_map = {client['id']: client['name'] for client in clients} if clients else {}
             
             if not clients_map:
-                st.warning("⚠️ No active clients found. Please create clients first before creating projects.")
+                st.warning(
+                    ErrorMessages.NO_ITEMS_FOUND.format(entity="active clients")
+                )
                 return {"status": "no_clients"}
     else:
         # Fallback for when exception handler is not available
@@ -548,22 +601,36 @@ def render_projects_page():
             clients_map = {client['id']: client['name'] for client in clients} if clients else {}
             
             if not clients_map:
-                st.warning("⚠️ No active clients found. Please create clients first before creating projects.")
+                st.warning(
+                    ErrorMessages.NO_ITEMS_FOUND.format(entity="active clients")
+                )
                 return {"status": "no_clients"}
         except Exception as e:
-            st.error(f"❌ Error loading clients: {e}")
-            return {"error": f"Error loading clients: {e}"}
+            st.error(ErrorMessages.CLIENT_LOAD_ERROR.format(error=e))
+            return {"error": ErrorMessages.CLIENT_LOAD_ERROR.format(error=e)}
     
     # Filters and search
     col1, col2, col3 = st.columns([2, 1, 1])
     
     with col1:
-        search_name = st.text_input("🔍 Search by name", placeholder="Type project name...")
+        search_name = st.text_input(
+            f"{UIConstants.ICON_SEARCH} Search by name",
+            placeholder="Type project name...",
+        )
     
     with col2:
-        status_filter = st.selectbox("Status Filter", 
-            options=["all", "planning", "in_progress", "completed", "on_hold", "cancelled"],
-            index=0
+        status_filter_options = [
+            "all",
+            StatusValues.PLANNING.value,
+            StatusValues.IN_PROGRESS.value,
+            StatusValues.COMPLETED.value,
+            StatusValues.ON_HOLD.value,
+            StatusValues.CANCELLED.value,
+        ]
+        status_filter = st.selectbox(
+            "Status Filter",
+            options=status_filter_options,
+            index=0,
         )
     
     with col3:
@@ -599,11 +666,11 @@ def render_projects_page():
             
             all_projects = db_manager.get_projects(include_inactive=True)
         except Exception as e:
-            st.error(f"❌ Error loading projects: {e}")
-            return {"error": f"Error loading projects: {e}"}
+            st.error(ErrorMessages.PROJECT_LOAD_ERROR.format(error=e))
+            return {"error": ErrorMessages.PROJECT_LOAD_ERROR.format(error=e)}
     
     if not all_projects:
-        st.info("📝 No projects found. Create your first project using the form above!")
+        st.info(ErrorMessages.NO_ITEMS_FOUND.format(entity="projects"))
         return {"status": "no_projects"}
     
     # Apply filters
@@ -624,7 +691,7 @@ def render_projects_page():
     st.markdown(f"**Found {len(filtered_projects)} project(s)**")
     
     if not filtered_projects:
-        st.warning("🔍 No projects match your current filters.")
+        st.warning(ErrorMessages.NO_MATCHES_FILTER.format(entity="projects"))
         return {"status": "no_matches"}
     
     # Display projects with error boundary protection
@@ -638,7 +705,11 @@ def render_projects_page():
             try:
                 render_project_card(project, db_manager, clients_map)
             except Exception as e:
-                st.error(f"❌ Error rendering project {project.get('name', 'Unknown')}: {e}")
+                st.error(
+                    ErrorMessages.LOADING_ERROR.format(
+                        entity=f"project {project.get('name', 'Unknown')}", error=e
+                    )
+                )
     
     return {"status": "success", "projects_count": len(filtered_projects)}
 

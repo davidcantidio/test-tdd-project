@@ -16,6 +16,112 @@ from enum import Enum
 from typing import List, Dict, Any
 
 
+class StatusValues(Enum):
+    """Centralized status values for all entities"""
+    ACTIVE = "active"
+    INACTIVE = "inactive"
+    PENDING = "pending"
+    COMPLETED = "completed"
+    PLANNING = "planning"
+    IN_PROGRESS = "in_progress"
+    ON_HOLD = "on_hold"
+    CANCELLED = "cancelled"
+    RED = "red"
+    GREEN = "green"
+    REFACTOR = "refactor"
+    BLOCKED = "blocked"
+    DRAFT = "draft"
+    REVIEW = "review"
+    APPROVED = "approved"
+    REJECTED = "rejected"
+    SUSPENDED = "suspended"
+    ARCHIVED = "archived"
+
+    @classmethod
+    def get_all_values(cls) -> List[str]:
+        """Get all status values as a list."""
+        return [status.value for status in cls]
+
+
+class TDDPhases(Enum):
+    """TDD cycle phases"""
+    RED = "red"
+    GREEN = "green"
+    REFACTOR = "refactor"
+    BLOCKED = "blocked"
+
+    @classmethod
+    def get_all_values(cls) -> List[str]:
+        """Get all phase values as a list."""
+        return [phase.value for phase in cls]
+
+
+class ClientTiers(Enum):
+    """Client tier classifications"""
+    FREE_TRIAL = "free_trial"
+    STANDARD = "standard"
+    PREMIUM = "premium"
+    ENTERPRISE = "enterprise"
+
+    @classmethod
+    def get_all_values(cls) -> List[str]:
+        """Get all tier values as a list."""
+        return [tier.value for tier in cls]
+
+    @classmethod
+    def get_default(cls) -> str:
+        """Get default client tier."""
+        return cls.STANDARD.value
+
+
+class CompanySizes(Enum):
+    """Company size categories"""
+    STARTUP = "startup"
+    SMALL = "small"
+    MEDIUM = "medium"
+    LARGE = "large"
+    ENTERPRISE = "enterprise"
+    SIZE_1_10 = "1-10"
+    SIZE_11_50 = "11-50"
+    SIZE_51_200 = "51-200"
+    SIZE_201_1000 = "201-1000"
+    SIZE_1000_PLUS = "1000+"
+
+    @classmethod
+    def get_all_values(cls) -> List[str]:
+        """Get all company size values as a list."""
+        return [size.value for size in cls]
+
+    @classmethod
+    def get_default(cls) -> str:
+        """Get default company size."""
+        return cls.STARTUP.value
+
+
+class ErrorMessages:
+    """Centralized error message templates"""
+    # Client errors
+    CLIENT_LOAD_ERROR = "❌ Error loading clients: {error}"
+    CLIENT_CREATE_ERROR = "❌ Error creating client: {error}"
+    CLIENT_UPDATE_ERROR = "❌ Error updating client: {error}"
+    CLIENT_DELETE_ERROR = "❌ Error deleting client: {error}"
+    CLIENT_NOT_FOUND = "❌ Client not found"
+    CLIENT_CREATE_SUCCESS = "✅ Client created successfully!"
+    CLIENT_UPDATE_SUCCESS = "✅ Client updated successfully!"
+    CLIENT_DELETE_SUCCESS = "✅ Client deleted successfully!"
+
+    # Project errors
+    PROJECT_LOAD_ERROR = "❌ Error loading projects: {error}"
+    PROJECT_CREATE_ERROR = "❌ Error creating project: {error}"
+    PROJECT_UPDATE_ERROR = "❌ Error updating project: {error}"
+    PROJECT_DELETE_ERROR = "❌ Error deleting project: {error}"
+
+    # Generic errors
+    NO_MATCHES_FILTER = "⚠️ No {entity} match your current filters."
+    NO_ITEMS_FOUND = "🔍 No {entity} found"
+    LOADING_ERROR = "❌ Error loading {entity}: {error}"
+
+
 class TaskStatus(Enum):
     """Task status options."""
     TODO = "todo"
@@ -199,7 +305,7 @@ class UIConstants:
     ANALYTICS_PAGE_TITLE = "📊 Analytics Dashboard"
     KANBAN_PAGE_TITLE = "📋 Kanban Board"
     TIMER_PAGE_TITLE = "⏱️ Task Timer"
-    
+
     # Button text
     EDIT_BUTTON = "✏️ Edit"
     DELETE_BUTTON = "🗑️ Delete"
@@ -216,7 +322,37 @@ class UIConstants:
     ERROR_NOT_FOUND = "❌ Item not found"
     ERROR_INVALID_DATA = "❌ Invalid data provided"
     ERROR_DUPLICATE = "❌ Item already exists"
-    
+
+    # Status icons
+    ICON_ACTIVE = "🟢"
+    ICON_INACTIVE = "🔴"
+    ICON_PENDING = "🟡"
+    ICON_COMPLETED = "✅"
+    ICON_PLANNING = "🟡"
+    ICON_IN_PROGRESS = "🟢"
+    ICON_ON_HOLD = "⏸️"
+    ICON_CANCELLED = "🔴"
+    ICON_UNKNOWN = "⚪"
+    ICON_REFACTOR = "🔵"
+
+    # Generic icons
+    ICON_EPIC = "📋"
+    ICON_TASK = "📝"
+    ICON_SEARCH = "🔍"
+    ICON_TOTAL = "📊"
+    ICON_PAGE = "📄"
+    ICON_EMPTY = "📭"
+
+    # Common text
+    TEXT_ALL = "Todos"
+    TEXT_SELECT = "Selecionar..."
+    TEXT_FILTER_BY = "Filtrar por"
+    TEXT_SEARCH = "Buscar"
+    TEXT_TOTAL = "📊 Total:"
+    TEXT_PAGE = "📄 Página"
+    TEXT_EMPTY = "📭 Nenhum"
+    TEXT_NO_ITEMS = "{icon} Nenhum {entity} encontrado"
+
     # Modal widths
     MODAL_SMALL = "small"
     MODAL_MEDIUM = "medium"
@@ -346,6 +482,7 @@ class ValidationRules:
 
 # Export all enums and constants for easy import
 __all__ = [
+    'StatusValues', 'TDDPhases', 'ClientTiers', 'CompanySizes', 'ErrorMessages',
     'TaskStatus', 'EpicStatus', 'ProjectStatus', 'GeneralStatus', 'TDDPhase',
     'ClientTier', 'CompanySize', 'Priority', 'TableNames', 'FieldNames',
     'UIConstants', 'FormFields', 'CacheConfig', 'FilterOptions', 'ValidationRules'

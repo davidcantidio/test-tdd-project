@@ -1,786 +1,454 @@
  (cd "$(git rev-parse --show-toplevel)" && git apply --3way <<'EOF' 
-diff --git a/streamlit_extension/utils/database.py b/streamlit_extension/utils/database.py
-index 6f5446a0d2da38f12f5f1c89d17e174eebb7cdc2..f5d72d42a83e185e0325533dc9cec51a97920be5 100644
---- a/streamlit_extension/utils/database.py
-+++ b/streamlit_extension/utils/database.py
-@@ -488,70 +488,85 @@ class DatabaseManager(PerformancePaginationMixin):
-             finally:
-                 conn.close()
+diff --git a/.gitignore b/.gitignore
+index c8bc9a888a42cbd5f5b17834e9651c7c72001707..f52bfc0b3047b0bd3bd7adac3fcaa20d4eb2332a 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -162,25 +162,160 @@ dmypy.json
+ # PyCharm
+ .idea/
  
-     def release_connection(self, connection: Union[Connection, sqlite3.Connection]) -> None:
-         """Return connection to pool with cleanup.
+ # Archives
+ *.tar.gz
+ *.zip
+ *.rar
  
-         This method is provided for cases where a connection obtained via
-         :meth:`get_connection` needs to be closed manually instead of using the
-         context manager protocol.
+ # Custom project files
+ patches_backup/
+ old_versions/
+ deprecated/
  
-         Args:
-             connection: Connection instance to be returned.
+ # Docker
+ docker-compose.override.yml
+ .dockerignore
  
-         Example:
-             >>> conn = next(db_manager.get_connection())
-             >>> db_manager.release_connection(conn)
-         """
-         try:
-             connection.close()
-         except Exception:  # pragma: no cover - best effort
-             logger.warning("Failed to close connection", exc_info=True)
+ # Monitoring
+ prometheus_data/
+ grafana_data/
  
-     def execute_query(
-         self,
-         query: str,
--        params: Optional[Dict[str, Any]] = None,
-+        params: Optional[Union[Dict[str, Any], List[Any], Tuple[Any, ...]]] = None,
-+        fetch_all: bool = True,
-+        return_id: bool = False,
-         database_name: str = "framework",
--    ) -> Union[Result, List[Dict[str, Any]]]:
--        """Execute a raw SQL query.
-+    ) -> Union[List[Dict[str, Any]], Dict[str, Any], int, None]:
-+        """Execute a SQL query with optional result handling.
- 
-         Args:
-             query: SQL query string to execute.
--            params: Optional mapping of parameters.
-+            params: Optional mapping or sequence of parameters.
-+            fetch_all: Return all rows for SELECT queries. Defaults to ``True``.
-+            return_id: Return last inserted ID for INSERT queries. Defaults to ``False``.
-             database_name: Database identifier, defaults to ``framework``.
- 
-         Returns:
--            SQLAlchemy ``Result`` when available or list of row dictionaries.
-+            Query results, affected row count, or last inserted ID depending on options.
-         """
-+        # Backward compatibility: detect old vs new calling style
-+        if params is None:
-+            params = {}
-+        
-+        # Legacy mode: if fetch_all and return_id are default, behave like old method
-+        if fetch_all is True and return_id is False and isinstance(params, dict):
-+            # Legacy behavior - always return list of dicts
-+            with self.get_connection(database_name) as conn:
-+                if SQLALCHEMY_AVAILABLE:
-+                    return conn.execute(text(query), params)
-+                cursor = conn.cursor()
-+                cursor.execute(query, params)
-+                return [dict(row) for row in cursor.fetchall()]
-+        
-+        # New enhanced behavior
-+        if isinstance(params, dict):
-+            # Convert dict params to list for SQLite if needed
-+            params = params or {}
-+        else:
-+            params = params or []
-+            
-         with self.get_connection(database_name) as conn:
-+            if SQLALCHEMY_AVAILABLE and isinstance(conn, Connection):
-+                result = conn.exec_driver_sql(query, params)
-+                if return_id:
-+                    conn.commit()
-+                    return result.lastrowid if hasattr(result, "lastrowid") else None
-+                if fetch_all:
-+                    return [dict(row) for row in result.mappings().all()]
-+                return result.rowcount
-             cursor = conn.cursor()
-             cursor.execute(query, params)
-+            if return_id:
-+                conn.commit()
-+                return cursor.lastrowid
-+            if fetch_all:
-+                return [dict(row) for row in cursor.fetchall()]
-+            return cursor.rowcount
-     
-     @cache_database_query("get_epics", ttl=300) if CACHE_AVAILABLE else lambda f: f
-     def get_epics(
-         self,
-         page: int = 1,
-         page_size: int = 50,
-         status_filter: Optional[Union[EpicStatus, str]] = None,
-         project_id: Optional[int] = None,
-     ) -> Dict[str, Any]:
-         """Get epics with intelligent caching and pagination.
-         
-         Args:
-             page: Page number (1-based)
-             page_size: Number of items per page
-             status_filter: Filter by specific status
-             project_id: Filter by specific project ID
-             
-         Returns:
-             Dictionary with 'data' (list of epics), 'total', 'page', 'total_pages'
-         """
-         try:
-             with self.get_connection("framework") as conn:
-                 # Build WHERE conditions
-                 where_conditions = ["deleted_at IS NULL"]
-                 params: Dict[str, Any] = {}
-@@ -2238,166 +2253,63 @@ class DatabaseManager(PerformancePaginationMixin):
-                         WHERE epic_id = :epic_id AND deleted_at IS NULL
-                         ORDER BY priority ASC, created_at ASC
-                     """), {"epic_id": epic_id})
-                     return [dict(row._mapping) for row in result]
-                 else:
-                     cursor = conn.cursor()
-                     cursor.execute("""
-                         SELECT id, title, status, tdd_phase, estimate_minutes,
-                                created_at, updated_at, completed_at, priority
-                         FROM framework_tasks 
-                         WHERE epic_id = ? AND deleted_at IS NULL
-                         ORDER BY priority ASC, created_at ASC
-                     """, (epic_id,))
-                     
-                     return [dict(zip([col[0] for col in cursor.description], row)) 
-                            for row in cursor.fetchall()]
-                            
-         except Exception:
-             return []
-     
-     # ==================================================================================
-     # HIERARCHY SYSTEM METHODS (CLIENT → PROJECT → EPIC → TASK) - SCHEMA V6
-     # ==================================================================================
-     
-     @cache_database_query("get_clients", ttl=300) if CACHE_AVAILABLE else lambda f: f
-+    def get_clients_simple(self, limit: Optional[int] = None, offset: Optional[int] = 0) -> List[Dict[str, Any]]:
-+        """Get clients with optional pagination using query builder."""
-+        from .query_builders import select_from
+ # Local development
+ local_config.yaml
+ development.db
+ test_output/
 +
-+        query, params = (
-+            select_from(TableNames.CLIENTS)
-+            .columns("*")
-+            .from_table()
-+            .limit(limit or 1000, offset)
-+            .build()
-+        )
++# ===================================================
++# STREAMLIT CACHE AND ARTIFACTS
++# ===================================================
++.streamlit/
++**/.streamlit_cache/
++**/streamlit_cache/
++__streamlit__/
++.streamlit_cache*
++streamlit-*.log
++streamlit_app.log*
 +
-+        return self.execute_query(query, params, fetch_all=True)  # type: ignore[arg-type]
++# ===================================================  
++# PYTHON CACHE AND BUILD ARTIFACTS
++# ===================================================
++__pycache__/
++*.py[cod]
++*$py.class
++*.so
 +
-+    def get_clients(
-+        self,
-+        include_inactive: bool = True,
-+        page: int = 1,
-+        page_size: int = 20,
-+        name_filter: str = "",
-+        status_filter: Optional[Union[ClientStatus, str]] = None,
-+    ) -> Dict[str, Any]:
--        """Retrieve clients with filtering and pagination support.
--
--        Performs optimized client queries with multiple filter options and
--        pagination. Results are cached for performance.
--
--        Args:
--            include_inactive: Include inactive clients. Defaults to ``True``.
--            page: Page number (1-based).
--            page_size: Number of items per page.
--            name_filter: Search term for client name using ``LIKE`` matching.
--            status_filter: Filter by client status (e.g. ``"active"``).
--
--        Returns:
--            Dict[str, Any]: Dictionary containing:
--                - ``data`` (List[Dict]): List of client records.
--                - ``total`` (int): Total count of matching clients.
--                - ``page`` (int): Current page number.
--                - ``page_size`` (int): Results per page.
--                - ``total_pages`` (int): Total pages available.
--
--        Raises:
--            DatabaseError: If query execution fails.
--
--        Performance:
--            - Cached results: ~1ms response time.
--            - Uncached results: ~10-50ms depending on dataset size.
--
--        Thread Safety:
--            This method is thread-safe and can be called concurrently.
--
--        Example:
--            >>> result = db_manager.get_clients(include_inactive=False, page=1)
--            >>> clients = result["data"]
--        """
--        try:
--            with self.get_connection("framework") as conn:
--                # Build WHERE conditions
--                where_conditions = ["deleted_at IS NULL"]
--                params: Dict[str, Any] = {}
--
--                if not include_inactive:
--                    where_conditions.append(f"{FieldNames.STATUS} = :status")
--                    params["status"] = ClientStatus.ACTIVE.value
--
--                if name_filter:
--                    where_conditions.append("name LIKE :name_filter")
--                    params["name_filter"] = f"%{name_filter}%"
-+    def get_clients(self, limit: Optional[int] = None, offset: Optional[int] = 0) -> List[Dict[str, Any]]:
-+        """Get clients with optional pagination using query builder."""
-+        from .query_builders import select_from
++# Distribution / packaging
++.Python
++build/
++develop-eggs/
++dist/
++downloads/
++eggs/
++.eggs/
++lib/
++lib64/
++parts/
++sdist/
++var/
++wheels/
++*.egg-info/
++.installed.cfg
++*.egg
++MANIFEST
 +
-+        query, params = (
-+            select_from(TableNames.CLIENTS)
-+            .columns("*")
-+            .from_table()
-+            .limit(limit or 1000, offset)
-+            .build()
-+        )
++# PyInstaller
++*.manifest
++*.spec
++
++# Installer logs
++pip-log.txt
++pip-delete-this-directory.txt
++
++# Unit test / coverage reports
++htmlcov/
++.tox/
++.nox/
++.coverage
++.coverage.*
++.cache
++nosetests.xml
++coverage.xml
++*.cover
++.hypothesis/
++.pytest_cache/
++
++# ===================================================
++# DATABASE ARTIFACTS
++# ===================================================
++*.db-journal
++*.db-wal
++*.db-shm
++*.sqlite-journal
++*.sqlite-wal
++*.sqlite-shm
++
++# ===================================================
++# LOGS AND TEMPORARY FILES  
++# ===================================================
++logs/
++*.log
++temp/
++tmp/
++cache/
++.cache/
++
++# ===================================================
++# IDE AND EDITOR FILES
++# ===================================================
++.vscode/
++.idea/
++*.swp
++*.swo
++*~
++.project
++.pydevproject
++
++# ===================================================
++# OS GENERATED FILES
++# ===================================================
++.DS_Store
++.DS_Store?
++._*
++.Spotlight-V100
++.Trashes
++ehthumbs.db
++Thumbs.db
++
++# ===================================================
++# ENVIRONMENT AND CONFIG
++# ===================================================
++.env
++.env.local
++.env.*.local
++.venv
++env/
++venv/
++ENV/
++env.bak/
++venv.bak/
++
++# ===================================================
++# PROJECT SPECIFIC
++# ===================================================
++# Backup files
++*.bak
++*.backup
++*.old
++
++# Archive files
++*.zip
++*.tar.gz
++*.rar
++
++# Temporary migration files
++migration_backup/
++temp_migrations/
++
++# Local configuration overrides
++local_config.py
++local_settings.py
+diff --git a/CLAUDE.md b/CLAUDE.md
+index fb610d149c1885bde2d6782c2405cf996c21d7fd..2baff833e1b6ac6900a5b134ab11bb7e1d93c0dd 100644
+--- a/CLAUDE.md
++++ b/CLAUDE.md
+@@ -993,50 +993,55 @@ streamlit run streamlit_extension/streamlit_app.py
+ - ✅ **Foundation Established** - 47.2% files centralized (infrastructure ready)
+ - ✅ **Client Page Refactored** - Demonstration of enum usage patterns
  
--                if status_filter:
--                    where_conditions.append(f"{FieldNames.STATUS} = :status_filter")
--                    params["status_filter"] = (
--                        status_filter.value if isinstance(status_filter, ClientStatus) else status_filter
--                    )
--                
--                where_clause = " AND ".join(where_conditions)
--                
--                # Count total records
--                count_query = f"SELECT COUNT(*) FROM {TableNames.CLIENTS} WHERE {where_clause}"  # nosec B608
--                
--                if SQLALCHEMY_AVAILABLE:
--                    count_result = conn.execute(text(count_query), params)
--                    total = count_result.scalar()
--                else:
--                    cursor = conn.cursor()
--                    cursor.execute(count_query, params)
--                    total = cursor.fetchone()[0]
--                
--                # Calculate pagination
--                total_pages = (total + page_size - 1) // page_size
--                offset = (page - 1) * page_size
--                
--                # Get paginated data
--                data_query = f"""
--                    SELECT id, client_key, name, description, industry, company_size,
--                           primary_contact_name, primary_contact_email,
--                           timezone, currency, preferred_language,
--                           hourly_rate, contract_type, status, client_tier,
--                           priority_level, account_manager_id, technical_lead_id,
--                           created_at, updated_at, last_contact_date
--                    FROM {TableNames.CLIENTS}
--                    WHERE {where_clause}
--                    ORDER BY priority_level DESC, name ASC
--                    LIMIT :limit OFFSET :offset
--                """  # nosec B608
--                params["limit"] = page_size
--                params["offset"] = offset
--                
--                if SQLALCHEMY_AVAILABLE:
--                    result = conn.execute(text(data_query), params)
--                    data = [dict(row._mapping) for row in result]
--                else:
--                    cursor = conn.cursor()
--                    cursor.execute(data_query, params)
--                    data = [dict(row) for row in cursor.fetchall()]
--                
--                return {
--                    "data": data,
--                    "total": total,
--                    "page": page,
--                    "page_size": page_size,
--                    "total_pages": total_pages
--                }
--                
--        except Exception as e:
--            logger.error(f"Error loading clients: {e}")
--            if STREAMLIT_AVAILABLE and st:
--                st.error(f"❌ Error loading clients: {e}")
--            return {"data": [], "total": 0, "page": 1, "page_size": page_size, "total_pages": 0}
-+        return self.execute_query(query, params, fetch_all=True)  # type: ignore[arg-type]
+ ### 📊 **PHASE 2 FINAL METRICS**
+ - **Type Hints Coverage:** 98.1% (A+ Grade)
+ - **Code Duplication Reduction:** 75% in form components
+ - **Constants System:** 12 enums + 5 config classes
+ - **Test Coverage:** 525+ tests (100% success rate)
+ - **Code Quality:** Production-ready maintainable architecture
  
-     def get_client(self, client_id: int) -> Optional[Dict[str, Any]]:
-         """Retrieve single client by ID.
+ *Last updated: 2025-08-16 by Claude*  
+ *Phase 2 (Code Quality) **COMPLETE** ✅*  
+ *Type Safety: **A+ GRADE** | DRY Architecture: **75% REDUCTION** | Constants: **CENTRALIZED***  
+ *Security Status: **ZERO CRITICAL VULNERABILITIES** - 100% database access patterns secured*  
+ *Total Tests: **525+** (100% passing) | Runtime: **<10s***  
+ *Status: **PRODUCTION-READY CODE QUALITY** - Enterprise maintainability achieved*  
  
-         Args:
-             client_id: Unique client identifier. Must be a positive integer.
+ ### 🧹 **PROJECT CLEANUP COMPLETED (2025-08-16)**
+ - ✅ **Enterprise Structure**: docs/ and scripts/ organization implemented
+ - ✅ **Documentation Organized**: 28+ .md files categorized (archive/development/security)
+ - ✅ **Scripts Organized**: Maintenance, migration, analysis, setup, testing
+ - ✅ **Patches Consolidated**: Valid patches 1-6 organized in patches_applied/
+ - ✅ **Cache Management**: Comprehensive cleanup with automated tools
+ - ✅ **Repository Optimized**: Clean structure ready for enterprise deployment
  
-         Returns:
-             Optional[Dict[str, Any]]: Client record dictionary or ``None`` if
-                 not found.
++### 🧹 **Repository Cache Maintenance**
++- `python cleanup_cache.py --dry-run` to preview files and directories that would be removed
++- `python cleanup_cache.py` to delete cache artifacts and temporary files
++- `python validate_gitignore.py` to verify ignore patterns remain effective
++
+ *Next: Phase 3 - Service Layer Implementation*
+ - Sempre leia o arquivo antes de tentar edita-lo.
+ Claude (Dev Sênior + Tech Leader)
  
-         Raises:
-             ValueError: If ``client_id`` is not positive.
-             DatabaseError: If query execution fails.
+ Atua como Desenvolvedor Sênior:
  
-         Performance:
-             - Primary key lookup: ~1ms.
-             - Result cached for subsequent calls.
+ Executa tarefas complexas, que envolvem arquitetura, múltiplos arquivos interdependentes ou decisões de design de sistema.
  
-         Example:
-             >>> client = db_manager.get_client(123)
-             >>> if client:
-             ...     print(client["name"])
-         """
-         if client_id <= 0:
-@@ -2779,141 +2691,58 @@ class DatabaseManager(PerformancePaginationMixin):
-                 if project_id:
-                     query += " AND project_id = ?"
-                     params.append(project_id)
-                 elif client_id:
-                     query += " AND client_id = ?"
-                     params.append(client_id)
-                 
-                 query += " ORDER BY client_name, project_name"
-                 
-                 if SQLALCHEMY_AVAILABLE:
-                     result = conn.execute(text(query), params)
-                     return [dict(row._mapping) for row in result]
-                 else:
-                     cursor = conn.cursor()
-                     cursor.execute(query, params)
-                     return [dict(row) for row in cursor.fetchall()]
-         except Exception as e:
-             logger.error(f"Error loading project dashboard: {e}")
-             return []
-     
-     # ==================================================================================
-     # HIERARCHY CRUD OPERATIONS
-     # ==================================================================================
-     
-     @invalidate_cache_on_change("db_query:get_clients:", "db_query:get_client_dashboard:") if CACHE_AVAILABLE else lambda f: f
--    def create_client(
--        self,
--        client_key: str,
--        name: str,
--        description: str = "",
--        industry: str = "",
--        company_size: str = "startup",
--        primary_contact_name: str = "",
--        primary_contact_email: str = "",
--        hourly_rate: float = 0.0,
--        **kwargs: Any,
--    ) -> Optional[int]:
--        """Create new client record.
--
--        Creates client with full validation and automatic timestamp assignment.
--        Invalidates related caches and triggers audit logging.
--
--        Args:
--            client_key: Unique client identifier string (3-20 chars).
--            name: Client display name (1-100 characters).
--            description: Client description (max 500 chars).
--            industry: Industry classification.
--            company_size: Company size category.
--            primary_contact_name: Primary contact name.
--            primary_contact_email: Primary contact email.
--            hourly_rate: Billing rate per hour.
--            **kwargs: Additional optional fields like ``status`` or
--                ``client_tier``.
--
--        Returns:
--            Optional[int]: New client ID if successful, ``None`` if failed.
--
--        Raises:
--            ValueError: If required fields are missing or invalid.
--            IntegrityError: If ``client_key`` already exists.
--            DatabaseError: If insert operation fails.
-+    def create_client(self, client_data: Dict[str, Any]) -> Optional[int]:
-+        """Create a new client using query builder."""
-+        from .query_builders import insert_into
+ Assume atividades que exigem juízo crítico, escolhas de padrões e boas práticas.
  
--        Side Effects:
--            - Invalidates client list caches.
--            - Creates audit log entry.
--
--        Performance:
--            - Insert operation: ~5ms.
--
--        Example:
--            >>> client_id = db_manager.create_client(
--            ...     client_key="acme_corp", name="ACME Corporation"
--            ... )
--        """
-         try:
--            client_data = {
--                'client_key': client_key,
--                'name': name,
--                'description': description,
--                'industry': industry,
--                'company_size': company_size,
--                'primary_contact_name': primary_contact_name,
--                'primary_contact_email': primary_contact_email,
--                'hourly_rate': hourly_rate,
--                'status': kwargs.get('status', ClientStatus.ACTIVE.value),
--                'client_tier': kwargs.get('client_tier', 'standard'),
--                'priority_level': kwargs.get('priority_level', 5),
--                'timezone': kwargs.get('timezone', 'America/Sao_Paulo'),
--                'currency': kwargs.get('currency', 'BRL'),
--                'preferred_language': kwargs.get('preferred_language', 'pt-BR'),
--                'contract_type': kwargs.get('contract_type', 'time_and_materials'),
--                'created_by': kwargs.get('created_by', 1)
--            }
--            
--            with self.get_connection("framework") as conn:
--                placeholders = ', '.join(['?' for _ in client_data])
--                columns = ', '.join(client_data.keys())
--                
--                if SQLALCHEMY_AVAILABLE:
--                    # Convert to named parameters for SQLAlchemy
--                    named_placeholders = ', '.join([f':{key}' for key in client_data.keys()])
--                    result = conn.execute(
--                        text(f"INSERT INTO {TableNames.CLIENTS} ({columns}) VALUES ({named_placeholders})"),  # nosec B608
--                        client_data
--                    )
--                    conn.commit()
--                    return result.lastrowid
--                else:
--                    cursor = conn.cursor()
--                    cursor.execute(
--                        f"INSERT INTO {TableNames.CLIENTS} ({columns}) VALUES ({placeholders})",  # nosec B608
--                        list(client_data.values())
--                    )
--                    conn.commit()
--                    return cursor.lastrowid
--                    
-+            query, params = insert_into(TableNames.CLIENTS).values(**client_data).build()
-+            result = self.execute_query(query, params, return_id=True)
-+            return int(result) if result is not None else None
-         except Exception as e:
-             logger.error(f"Error creating client: {e}")
-             if STREAMLIT_AVAILABLE and st:
-                 st.error(f"❌ Error creating client: {e}")
-             return None
-     
-     @invalidate_cache_on_change(
-         "db_query:get_projects:",
-         "db_query:get_hierarchy_overview:",
-         "db_query:get_client_dashboard:",
-         "db_query:get_project_dashboard:"
-     ) if CACHE_AVAILABLE else lambda f: f
-     def create_project(
-         self,
-         client_id: int,
-         project_key: str,
-         name: str,
-         description: str = "",
-         project_type: str = "development",
-         methodology: str = "agile",
-         **kwargs: Any,
-     ) -> Optional[int]:
-         """Create a new project.
-         
-         Args:
-@@ -3064,188 +2893,78 @@ class DatabaseManager(PerformancePaginationMixin):
-         """
-         try:
-             with self.get_connection("framework") as conn:
-                 if SQLALCHEMY_AVAILABLE:
-                     result = conn.execute(text("""
-                         SELECT * FROM framework_projects 
-                         WHERE client_id = :client_id AND project_key = :project_key 
-                         AND deleted_at IS NULL
-                     """), {"client_id": client_id, "project_key": project_key})
-                     row = result.fetchone()
-                     return dict(row._mapping) if row else None
-                 else:
-                     cursor = conn.cursor()
-                     cursor.execute("""
-                         SELECT * FROM framework_projects 
-                         WHERE client_id = ? AND project_key = ? AND deleted_at IS NULL
-                     """, (client_id, project_key))
-                     row = cursor.fetchone()
-                     return dict(row) if row else None
-                     
-         except Exception as e:
-             logger.error(f"Error getting project by key: {e}")
-             return None
-     
-     @invalidate_cache_on_change("db_query:get_clients:", "db_query:get_client_dashboard:") if CACHE_AVAILABLE else lambda f: f
--    def update_client(self, client_id: int, **fields: Any) -> bool:
--        """Update existing client record.
--
--        Updates specified fields while preserving others. Validates all input
--        and maintains data integrity. Supports partial updates.
-+    def update_client(self, client_id: int, client_data: Dict[str, Any]) -> bool:
-+        """Update client record using query builder."""
-+        from .query_builders import update_table
+ Atua como Tech Leader:
  
--        Args:
--            client_id: Client ID to update. Must exist.
--            **fields: Fields to update. Same validation as ``create_client``.
--
--        Returns:
--            bool: ``True`` if update successful, ``False`` if failed or no
--                changes.
--
--        Raises:
--            ValueError: If ``client_id`` invalid or field validation fails.
--            DatabaseError: If update operation fails.
--
--        Side Effects:
--            - Invalidates client caches for this client.
--            - Updates ``updated_at`` timestamp.
--
--        Performance:
--            - Update operation: ~3ms.
--
--        Example:
--            >>> db_manager.update_client(123, name="New Name")
--        """
-         try:
--            if not fields:
--                return True
--                
--            # Add updated_at timestamp
--            fields['updated_at'] = 'CURRENT_TIMESTAMP'
--            
--            # Build SET clause
--            set_clauses = []
--            values = {}
--            
--            for key, value in fields.items():
--                if key == 'updated_at':
--                    set_clauses.append(f"{key} = CURRENT_TIMESTAMP")
--                else:
--                    set_clauses.append(f"{key} = :{key}")
--                    values[key] = value
--            
--            values['client_id'] = client_id
--            
--            with self.get_connection("framework") as conn:
--                if SQLALCHEMY_AVAILABLE:
--                    conn.execute(text(f"""
--                        UPDATE {TableNames.CLIENTS}
--                        SET {', '.join(set_clauses)}
--                        WHERE id = :client_id AND deleted_at IS NULL
--                    """), values)  # nosec B608
--                    conn.commit()
--                else:
--                    cursor = conn.cursor()
--                    # Convert to positional parameters for sqlite
--                    positional_values = [values[key] for key in values.keys() if key != 'client_id']
--                    positional_values.append(client_id)
--                    
--                    sqlite_clauses = [clause.replace(f':{key}', '?') for clause in set_clauses if f':{key}' in clause]
--                    sqlite_clauses.extend([clause for clause in set_clauses if '?' not in clause and ':' not in clause])
--                    
--                    cursor.execute(f"""
--                        UPDATE {TableNames.CLIENTS}
--                        SET {', '.join(sqlite_clauses)}
--                        WHERE id = ? AND deleted_at IS NULL
--                    """, positional_values)  # nosec B608
--                    conn.commit()
--                
--                return True
--                
-+            query, params = (
-+                update_table(TableNames.CLIENTS)
-+                .set(**client_data)
-+                .where("id = ?", client_id)
-+                .build()
-+            )
-+            result = self.execute_query(query, params, fetch_all=False)
-+            return result is not None
-         except Exception as e:
-             logger.error(f"Error updating client: {e}")
-             if STREAMLIT_AVAILABLE and st:
-                 st.error(f"❌ Error updating client: {e}")
-             return False
-     
-     @invalidate_cache_on_change("db_query:get_clients:", "db_query:get_client_dashboard:") if CACHE_AVAILABLE else lambda f: f
--    def delete_client(self, client_id: int, soft_delete: bool = True) -> bool:
--        """Delete client record (soft or hard delete).
--
--        Removes client from active use. Soft delete preserves data for audit
--        purposes. Hard delete permanently removes all data.
--
--        Args:
--            client_id: Client ID to delete. Must exist.
--            soft_delete: Use soft delete. Defaults to ``True``.
--
--        Returns:
--            bool: ``True`` if deletion successful, ``False`` if failed.
--
--        Raises:
--            ValueError: If ``client_id`` invalid.
--            DatabaseError: If delete operation fails.
--
--        Side Effects:
--            - Invalidates all client-related caches.
--
--        Performance:
--            - Soft delete: ~2ms.
--            - Hard delete: ~10-100ms (depends on related data).
-+    def delete_client(self, client_id: int) -> bool:
-+        """Delete a client using query builder."""
-+        from .query_builders import delete_from
+ Define o escopo das tarefas antes de delegar ao Codex.
  
--        Example:
--            >>> db_manager.delete_client(123, soft_delete=True)
--        """
-         try:
--            with self.get_connection("framework") as conn:
--                if soft_delete:
--                    if SQLALCHEMY_AVAILABLE:
--                        conn.execute(text("""
--                            UPDATE {TableNames.CLIENTS}
--                            SET deleted_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
--                            WHERE id = :client_id
--                        """), {"client_id": client_id})
--                        conn.commit()
--                    else:
--                        cursor = conn.cursor()
--                        cursor.execute("""
--                            UPDATE {TableNames.CLIENTS}
--                            SET deleted_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
--                            WHERE id = ?
--                        """, (client_id,))
--                        conn.commit()
--                else:
--                    if SQLALCHEMY_AVAILABLE:
--                        conn.execute(text(f"DELETE FROM {TableNames.CLIENTS} WHERE id = :client_id"),
--                                   {"client_id": client_id})
--                        conn.commit()
--                    else:
--                        cursor = conn.cursor()
--                        cursor.execute(f"DELETE FROM {TableNames.CLIENTS} WHERE id = ?", (client_id,))
--                        conn.commit()
--                
--                return True
--                
-+            query, params = delete_from(TableNames.CLIENTS).where("id = ?", client_id).build()
-+            result = self.execute_query(query, params, fetch_all=False)
-+            return result is not None
-         except Exception as e:
-             logger.error(f"Error deleting client: {e}")
-             if STREAMLIT_AVAILABLE and st:
-                 st.error(f"❌ Error deleting client: {e}")
-             return False
-     
-     @invalidate_cache_on_change(
-         "db_query:get_projects:",
-         "db_query:get_hierarchy_overview:",
-         "db_query:get_client_dashboard:",
-         "db_query:get_project_dashboard:"
-     ) if CACHE_AVAILABLE else lambda f: f
-     def update_project(self, project_id: int, **fields: Any) -> bool:
-         """Update an existing project.
-         
-         Args:
-             project_id: ID of the project to update
-             **fields: Fields to update
-             
-         Returns:
-             True if successful, False otherwise
-         """
-         try:
-             if not fields:
-                 return True
-diff --git a/streamlit_extension/utils/query_builders.py b/streamlit_extension/utils/query_builders.py
-new file mode 100644
-index 0000000000000000000000000000000000000000..92044f0962a639e372443d1f388e7d151fdb1ea1
+ Evita conflitos de código distribuindo prompts que atuem em arquivos diferentes ou blocos independentes.
+ 
+ Revisa, ajusta e valida os patches gerados pelo Codex antes de integração.
+ 
+ Garante que as entregas sigam a visão geral do projeto e o Definition of Done.
+ 
+ Codex (Dev Júnior)
+ 
+ Executa tarefas braçais, repetitivas e bem definidas.
+ 
+ É eficiente para:
+diff --git a/cleanup_cache.py b/cleanup_cache.py
+new file mode 100755
+index 0000000000000000000000000000000000000000..a8f052601a4e90d4dd5be13c8e72c2cf6294cff4
 --- /dev/null
-+++ b/streamlit_extension/utils/query_builders.py
-@@ -0,0 +1,114 @@
-+from typing import Dict, List, Any, Optional, Tuple
++++ b/cleanup_cache.py
+@@ -0,0 +1,159 @@
++#!/usr/bin/env python3
++"""
++Repository Cache Cleanup Script
++Removes Streamlit cache artifacts and other temporary files
++"""
 +
-+class BaseQueryBuilder:
-+    def __init__(self):
-+        self.query_parts: List[str] = []
-+        self.parameters: List[Any] = []
++import os
++import shutil
++from pathlib import Path
++from typing import List, Tuple
 +
-+    def build(self) -> Tuple[str, List[Any]]:
-+        """Retorna (query_string, parameters)"""
-+        return " ".join(self.query_parts), self.parameters
 +
-+    def add_where_condition(self, condition: str, *params: Any):
-+        """Adiciona condição WHERE com parameters"""
-+        if params:
-+            self.parameters.extend(params)
-+        return self
++class RepositoryCleanup:
++    """Repository cleanup utility"""
 +
-+class SelectQueryBuilder(BaseQueryBuilder):
-+    def __init__(self, table: str):
-+        super().__init__()
-+        self.query_parts = ["SELECT"]
-+        self.table = table
++    def __init__(self, repo_root: str = "."):
++        self.repo_root = Path(repo_root).resolve()
++        self.removed_files: List[str] = []
++        self.removed_dirs: List[str] = []
++        self.errors: List[str] = []
 +
-+    def columns(self, *cols: str) -> "SelectQueryBuilder":
-+        self.query_parts.append(", ".join(cols))
-+        return self
++    def _should_skip(self, path: Path) -> bool:
++        """Return True if path is inside .git directory."""
++        return ".git" in path.parts
 +
-+    def from_table(self) -> "SelectQueryBuilder":
-+        self.query_parts.extend(["FROM", self.table])
-+        return self
++    def find_cache_artifacts(self) -> List[Path]:
++        """Find all cache artifacts in repository"""
++        patterns = [
++            "**/.streamlit_cache/",
++            "**/streamlit_cache/",
++            "**/__streamlit__/",
++            "**/.streamlit/",
++            "**/__pycache__/",
++            "**/*.pyc",
++            "**/*.pyo",
++            "**/*.pyd",
++            "**/logs/",
++            "**/temp/",
++            "**/tmp/",
++            "**/.cache/",
++            "**/*.log",
++            "**/*~",
++            "**/.DS_Store",
++            "**/Thumbs.db",
++        ]
 +
-+    def where(self, condition: str, *params: Any) -> "SelectQueryBuilder":
-+        if "WHERE" not in self.query_parts:
-+            self.query_parts.append("WHERE")
++        artifacts: List[Path] = []
++        for pattern in patterns:
++            matches = list(self.repo_root.glob(pattern))
++            artifacts.extend(matches)
++        return artifacts
++
++    def clean_cache_files(self, dry_run: bool = False) -> Tuple[int, int]:
++        """Clean cache files and directories"""
++        artifacts = self.find_cache_artifacts()
++        files_removed = 0
++        dirs_removed = 0
++
++        for artifact in artifacts:
++            if self._should_skip(artifact):
++                continue
++            try:
++                if artifact.is_file():
++                    if not dry_run:
++                        artifact.unlink()
++                        self.removed_files.append(str(artifact))
++                    files_removed += 1
++                    print(f"{'[DRY RUN] Would remove' if dry_run else 'Removed'} file: {artifact}")
++                elif artifact.is_dir():
++                    if not dry_run:
++                        shutil.rmtree(artifact)
++                        self.removed_dirs.append(str(artifact))
++                    dirs_removed += 1
++                    print(f"{'[DRY RUN] Would remove' if dry_run else 'Removed'} directory: {artifact}")
++            except Exception as e:
++                error_msg = f"Error removing {artifact}: {e}"
++                self.errors.append(error_msg)
++                print(f"❌ {error_msg}")
++
++        return files_removed, dirs_removed
++
++    def clean_database_artifacts(self, dry_run: bool = False) -> int:
++        """Clean database temporary files"""
++        db_patterns = ["**/*.db-journal", "**/*.db-wal", "**/*.db-shm"]
++
++        removed = 0
++        for pattern in db_patterns:
++            matches = list(self.repo_root.glob(pattern))
++            for match in matches:
++                if self._should_skip(match):
++                    continue
++                try:
++                    if not dry_run:
++                        match.unlink()
++                        self.removed_files.append(str(match))
++                    removed += 1
++                    print(f"{'[DRY RUN] Would remove' if dry_run else 'Removed'} DB artifact: {match}")
++                except Exception as e:
++                    self.errors.append(f"Error removing {match}: {e}")
++        return removed
++
++    def generate_report(self) -> str:
++        """Generate cleanup report"""
++        report = f"""
++🧹 REPOSITORY CLEANUP REPORT
++{'='*50}
++
++📊 SUMMARY:
++- Files removed: {len(self.removed_files)}
++- Directories removed: {len(self.removed_dirs)}
++- Errors encountered: {len(self.errors)}
++
++📁 REMOVED FILES:
++{chr(10).join(f"  - {f}" for f in self.removed_files[:10])}
++{'  - ... and more' if len(self.removed_files) > 10 else ''}
++
++📂 REMOVED DIRECTORIES:
++{chr(10).join(f"  - {d}" for d in self.removed_dirs)}
++
++❌ ERRORS:
++{chr(10).join(f"  - {e}" for e in self.errors)}
++
++✅ CLEANUP COMPLETE!
++"""
++        return report
++
++
++def main() -> None:
++    """Main cleanup script"""
++    import argparse
++
++    parser = argparse.ArgumentParser(description="Repository Cache Cleanup")
++    parser.add_argument("--dry-run", action="store_true", help="Show what would be removed")
++    parser.add_argument("--repo", default=".", help="Repository root path")
++    args = parser.parse_args()
++
++    print("🧹 Repository Cache Cleanup Starting...")
++    print("=" * 50)
++
++    cleanup = RepositoryCleanup(args.repo)
++
++    # Clean cache artifacts
++    files, dirs = cleanup.clean_cache_files(dry_run=args.dry_run)
++
++    # Clean database artifacts
++    db_files = cleanup.clean_database_artifacts(dry_run=args.dry_run)
++
++    # Generate report
++    print(cleanup.generate_report())
++
++    if args.dry_run:
++        print("🔍 DRY RUN COMPLETE - No files were actually removed")
++        print("Run without --dry-run to perform actual cleanup")
++    else:
++        print("✅ CLEANUP COMPLETE")
++
++
++if __name__ == "__main__":
++    main()
+diff --git a/validate_gitignore.py b/validate_gitignore.py
+new file mode 100755
+index 0000000000000000000000000000000000000000..979a2c2a5bac8580e0ef15671184ac964bad39a4
+--- /dev/null
++++ b/validate_gitignore.py
+@@ -0,0 +1,54 @@
++#!/usr/bin/env python3
++"""
++Validate .gitignore patterns are working correctly
++"""
++
++import subprocess
++import sys
++from pathlib import Path
++
++
++def test_gitignore_patterns() -> bool:
++    """Test that gitignore patterns work correctly"""
++
++    test_files = [
++        ".streamlit_cache/test.txt",
++        "__pycache__/test.pyc",
++        "logs/test.log",
++        ".DS_Store",
++        "temp/test.tmp",
++    ]
++
++    for test_file in test_files:
++        Path(test_file).parent.mkdir(parents=True, exist_ok=True)
++        Path(test_file).touch()
++
++    result = subprocess.run([
++        "git",
++        "status",
++        "--porcelain",
++    ], capture_output=True, text=True)
++
++    ignored_count = 0
++    for test_file in test_files:
++        if test_file not in result.stdout:
++            ignored_count += 1
++            print(f"✅ {test_file} - properly ignored")
 +        else:
-+            self.query_parts.append("AND")
-+        self.add_where_condition(condition, *params)
-+        return self
++            print(f"❌ {test_file} - NOT ignored")
 +
-+    def limit(self, count: int, offset: Optional[int] = None) -> "SelectQueryBuilder":
-+        self.query_parts.append(f"LIMIT {count}")
-+        if offset:
-+            self.query_parts.append(f"OFFSET {offset}")
-+        return self
++    for test_file in test_files:
++        p = Path(test_file)
++        if p.exists():
++            p.unlink()
++        parent = p.parent
++        if parent.exists() and not any(parent.iterdir()):
++            parent.rmdir()
 +
-+class InsertQueryBuilder(BaseQueryBuilder):
-+    def __init__(self, table: str):
-+        super().__init__()
-+        self.table = table
-+        self.columns_list: List[str] = []
-+        self.values_list: List[Any] = []
++    print(f"\n📊 GITIGNORE VALIDATION: {ignored_count}/{len(test_files)} patterns working")
++    return ignored_count == len(test_files)
 +
-+    def values(self, **kwargs: Any) -> "InsertQueryBuilder":
-+        self.columns_list = list(kwargs.keys())
-+        self.values_list = list(kwargs.values())
-+        self.parameters.extend(self.values_list)
-+        return self
 +
-+    def build(self) -> Tuple[str, List[Any]]:
-+        placeholders = ", ".join(["?" for _ in self.columns_list])
-+        columns_str = ", ".join(self.columns_list)
-+        query = f"INSERT INTO {self.table} ({columns_str}) VALUES ({placeholders})"
-+        return query, self.parameters
-+
-+class UpdateQueryBuilder(BaseQueryBuilder):
-+    def __init__(self, table: str):
-+        super().__init__()
-+        self.table = table
-+        self.set_clauses: List[str] = []
-+
-+    def set(self, **kwargs: Any) -> "UpdateQueryBuilder":
-+        for key, value in kwargs.items():
-+            self.set_clauses.append(f"{key} = ?")
-+            self.parameters.append(value)
-+        return self
-+
-+    def where(self, condition: str, *params: Any) -> "UpdateQueryBuilder":
-+        self.add_where_condition(condition, *params)
-+        return self
-+
-+    def build(self) -> Tuple[str, List[Any]]:
-+        set_clause = ", ".join(self.set_clauses)
-+        query_parts = [f"UPDATE {self.table} SET {set_clause}"]
-+        if self.query_parts:
-+            query_parts.append("WHERE " + " ".join(self.query_parts))
-+        return " ".join(query_parts), self.parameters
-+
-+class DeleteQueryBuilder(BaseQueryBuilder):
-+    def __init__(self, table: str):
-+        super().__init__()
-+        self.table = table
-+
-+    def where(self, condition: str, *params: Any) -> "DeleteQueryBuilder":
-+        self.add_where_condition(condition, *params)
-+        return self
-+
-+    def build(self) -> Tuple[str, List[Any]]:
-+        query_parts = [f"DELETE FROM {self.table}"]
-+        if self.query_parts:
-+            query_parts.append("WHERE " + " ".join(self.query_parts))
-+        return " ".join(query_parts), self.parameters
-+
-+# Factory Functions
-+def select_from(table: str) -> SelectQueryBuilder:
-+    return SelectQueryBuilder(table)
-+
-+def insert_into(table: str) -> InsertQueryBuilder:
-+    return InsertQueryBuilder(table)
-+
-+def update_table(table: str) -> UpdateQueryBuilder:
-+    return UpdateQueryBuilder(table)
-+
-+def delete_from(table: str) -> DeleteQueryBuilder:
-+    return DeleteQueryBuilder(table)
++if __name__ == "__main__":
++    success = test_gitignore_patterns()
++    sys.exit(0 if success else 1)
  
 EOF
 )

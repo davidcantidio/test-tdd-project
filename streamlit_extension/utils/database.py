@@ -12,16 +12,21 @@ import sqlite3
 import time
 from pathlib import Path
 from typing import (
+    Union,
     Optional,
+    List,
     Dict,
     Any,
-    List,
-    Union,
-    Iterator,
     Tuple,
+    Callable,
+    Iterator,
+    ContextManager,
     Generator,
+    TypeVar,
+    Generic,
     NamedTuple,
 )
+from sqlite3 import Connection as SQLiteConnection
 from contextlib import contextmanager
 from datetime import datetime
 from enum import Enum
@@ -388,7 +393,7 @@ class DatabaseManager(PerformancePaginationMixin):
         health_monitor (HealthMonitor): Connection health monitoring
     """
 
-    def __init__(self, framework_db_path: str = "framework.db", timer_db_path: str = "task_timer.db"):
+    def __init__(self, framework_db_path: str = "framework.db", timer_db_path: str = "task_timer.db") -> None:
         """Initialize database manager with connection paths.
 
         Creates SQLAlchemy engines for both databases when available and sets up
@@ -447,7 +452,7 @@ class DatabaseManager(PerformancePaginationMixin):
     @contextmanager
     def get_connection(
         self, database_name: str = "framework"
-    ) -> Generator[Union[Connection, sqlite3.Connection], None, None]:
+    ) -> Iterator[Union[Connection, SQLiteConnection]]:
         """
         Get a database connection from the pool.
 
@@ -488,7 +493,7 @@ class DatabaseManager(PerformancePaginationMixin):
             finally:
                 conn.close()
 
-    def release_connection(self, connection: Union[Connection, sqlite3.Connection]) -> None:
+    def release_connection(self, connection: Union[Connection, SQLiteConnection]) -> None:
         """Return connection to pool with cleanup.
 
         This method is provided for cases where a connection obtained via
@@ -1729,9 +1734,15 @@ class DatabaseManager(PerformancePaginationMixin):
             print(f"Error creating task: {e}")
             return None
     
-    def update_task(self, task_id: int, title: str = None, description: str = None,
-                   tdd_phase: str = None, priority: int = None, 
-                   estimate_minutes: int = None) -> bool:
+    def update_task(
+        self,
+        task_id: int,
+        title: Optional[str] = None,
+        description: Optional[str] = None,
+        tdd_phase: Optional[str] = None,
+        priority: Optional[int] = None,
+        estimate_minutes: Optional[int] = None,
+    ) -> bool:
         """Update task details.
         
         Args:

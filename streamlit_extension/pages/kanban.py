@@ -1,5 +1,5 @@
 """
-📋 Kanban Board Page
+Kanban Board Page
 
 Interactive task management with drag-and-drop Kanban board:
 - Visual task organization by status
@@ -33,7 +33,7 @@ try:
     )
     from streamlit_extension.config import load_config
     from streamlit_extension.config.constants import (
-        TaskStatus, TDDPhase, Priority, UIConstants
+        TaskStatus, TDDPhases, Priority, UIConstants, ErrorMessages
     )
     # Import authentication middleware
     from streamlit_extension.auth.middleware import init_protected_page
@@ -41,7 +41,7 @@ try:
 except ImportError:
     DatabaseManager = load_config = security_manager = None
     validate_form = check_rate_limit = sanitize_display = None
-    TaskStatus = TDDPhase = Priority = UIConstants = None
+    TaskStatus = TDDPhases = Priority = UIConstants = ErrorMessages = None
     init_protected_page = None
     DATABASE_UTILS_AVAILABLE = False
 
@@ -59,7 +59,7 @@ def render_kanban_page():
         return {"error": "Streamlit not available"}
     
     # Initialize protected page with authentication
-    current_user = init_protected_page("📋 Kanban Board")
+    current_user = init_protected_page(UIConstants.KANBAN_PAGE_TITLE)
     if not current_user:
         return {"error": "Authentication required"}
     
@@ -74,7 +74,11 @@ def render_kanban_page():
     
     # Initialize database manager
     if not DATABASE_UTILS_AVAILABLE:
-        st.error("❌ Database utilities not available")
+        st.error(
+            ErrorMessages.LOADING_ERROR.format(
+                entity="database utilities", error="not available"
+            )
+        )
         return
     
     with streamlit_error_boundary("database_initialization"):
@@ -84,7 +88,11 @@ def render_kanban_page():
             operation_name="load_config",
         )
         if config is None:
-            st.error("❌ Configuration loading failed")
+            st.error(
+                ErrorMessages.LOADING_ERROR.format(
+                    entity="configuration", error="loading failed"
+                )
+            )
             return
 
         db_manager = safe_streamlit_operation(
@@ -94,7 +102,11 @@ def render_kanban_page():
             operation_name="database_manager_init",
         )
         if db_manager is None:
-            st.error("❌ Database connection failed")
+            st.error(
+                ErrorMessages.LOADING_ERROR.format(
+                    entity="database connection", error="failed"
+                )
+            )
             return
     
     # Sidebar filters
@@ -125,7 +137,7 @@ def render_kanban_page():
     filtered_tasks = _apply_filters(tasks, epics)
     
     if not filtered_tasks:
-        st.info("📝 No tasks found for the selected filters.")
+        st.info(ErrorMessages.NO_ITEMS_FOUND.format(entity="tasks"))
         _render_create_task_form(db_manager, epics)
         return
     
@@ -235,9 +247,18 @@ def _render_kanban_board(tasks: List[Dict[str, Any]], db_manager: DatabaseManage
     
     # Define board columns
     columns = {
-        "todo": {"title": "📝 To Do", "color": "#FFE4E1"},
-        "in_progress": {"title": "🟡 In Progress", "color": "#FFF8DC"},
-        "completed": {"title": "✅ Completed", "color": "#E8F5E8"}
+        TaskStatus.TODO.value: {
+            "title": f"{UIConstants.ICON_TASK} To Do",
+            "color": "#FFE4E1",
+        },
+        TaskStatus.IN_PROGRESS.value: {
+            "title": f"{UIConstants.ICON_PENDING} In Progress",
+            "color": "#FFF8DC",
+        },
+        TaskStatus.COMPLETED.value: {
+            "title": f"{UIConstants.ICON_COMPLETED} Completed",
+            "color": "#E8F5E8",
+        },
     }
     
     # Group tasks by status
@@ -301,8 +322,15 @@ def _render_task_card(task: Dict[str, Any], db_manager: DatabaseManager, epics: 
             with col1:
                 st.write(f"**Epic:** {epic_name}")
                 if st.session_state.get("kanban_show_tdd_phases", True) and tdd_phase:
-                    phase_colors = {"red": "🔴", "green": "🟢", "refactor": "🔵"}
-                    phase_emoji = phase_colors.get(tdd_phase.lower(), "⚪")
+                    phase_colors = {
+                        TDDPhases.RED.value: UIConstants.ICON_CANCELLED,
+                        TDDPhases.GREEN.value: UIConstants.ICON_ACTIVE,
+                        TDDPhases.REFACTOR.value: UIConstants.ICON_REFACTOR,
+                        TDDPhases.BLOCKED.value: UIConstants.ICON_CANCELLED,
+                    }
+                    phase_emoji = phase_colors.get(
+                        tdd_phase.lower(), UIConstants.ICON_UNKNOWN
+                    )
                     st.write(f"**TDD Phase:** {phase_emoji} {tdd_phase.title()}")
                 
                 if st.session_state.get("kanban_show_estimates", True) and estimate:
@@ -326,12 +354,23 @@ def _render_task_card(task: Dict[str, Any], db_manager: DatabaseManager, epics: 
             with action_cols[1]:
                 # Smart status movement buttons
                 status_flow = {
-                    "todo": ("in_progress", "🚀 Start"),
-                    "in_progress": ("completed", "✅ Complete"),
-                    "completed": ("todo", "🔄 Reopen")
+                    TaskStatus.TODO.value: (
+                        TaskStatus.IN_PROGRESS.value,
+                        f"{UIConstants.CREATE_BUTTON.split()[0]} Start",
+                    ),
+                    TaskStatus.IN_PROGRESS.value: (
+                        TaskStatus.COMPLETED.value,
+                        f"{UIConstants.ICON_COMPLETED} Complete",
+                    ),
+                    TaskStatus.COMPLETED.value: (
+                        TaskStatus.TODO.value,
+                        f"{UIConstants.ICON_TASK} Reopen",
+                    ),
                 }
-                
-                next_status, button_text = status_flow.get(current_status, ("todo", "📝 To Do"))
+
+                next_status, button_text = status_flow.get(
+                    current_status, (TaskStatus.TODO.value, f"{UIConstants.ICON_TASK} To Do")
+                )
                 
                 if st.button(button_text, key=f"move_{task_id}_{next_status}"):
                     success = _update_task_status(task_id, next_status, db_manager)
@@ -339,18 +378,29 @@ def _render_task_card(task: Dict[str, Any], db_manager: DatabaseManager, epics: 
                         st.success(f"Task moved to {next_status.replace('_', ' ').title()}!")
                         st.rerun()
                     else:
-                        st.error("Failed to update task status")
+                        st.error(
+                            ErrorMessages.LOADING_ERROR.format(
+                                entity="task status", error="update failed"
+                            )
+                        )
                 
                 # Additional status options in a smaller button
-                other_statuses = [s for s in ["todo", "in_progress", "completed"] 
-                                if s not in [current_status, next_status]]
+                other_statuses = [
+                    s
+                    for s in [TaskStatus.TODO.value, TaskStatus.IN_PROGRESS.value, TaskStatus.COMPLETED.value]
+                    if s not in [current_status, next_status]
+                ]
                 
                 if other_statuses and st.button("⚙️ Other", key=f"other_{task_id}"):
                     st.session_state[f"show_other_status_{task_id}"] = True
                 
                 if st.session_state.get(f"show_other_status_{task_id}"):
                     for status in other_statuses:
-                        status_names = {"todo": "📝 To Do", "in_progress": "🟡 In Progress", "completed": "✅ Completed"}
+                        status_names = {
+                            TaskStatus.TODO.value: f"{UIConstants.ICON_TASK} To Do",
+                            TaskStatus.IN_PROGRESS.value: f"{UIConstants.ICON_PENDING} In Progress",
+                            TaskStatus.COMPLETED.value: f"{UIConstants.ICON_COMPLETED} Completed",
+                        }
                         if st.button(status_names[status], key=f"alt_move_{task_id}_{status}"):
                             success = _update_task_status(task_id, status, db_manager)
                             if success:
@@ -358,7 +408,11 @@ def _render_task_card(task: Dict[str, Any], db_manager: DatabaseManager, epics: 
                                 st.session_state[f"show_other_status_{task_id}"] = False
                                 st.rerun()
                             else:
-                                st.error("Failed to update task status")
+                                st.error(
+                                    ErrorMessages.LOADING_ERROR.format(
+                                        entity="task status", error="update failed"
+                                    )
+                                )
             
             with action_cols[2]:
                 if not st.session_state.get(f"confirm_delete_{task_id}"):
@@ -370,7 +424,7 @@ def _render_task_card(task: Dict[str, Any], db_manager: DatabaseManager, epics: 
                     col_confirm, col_cancel = st.columns(2)
                     
                     with col_confirm:
-                        if st.button("✅ Yes", key=f"confirm_yes_{task_id}"):
+                        if st.button(UIConstants.ICON_COMPLETED + " Yes", key=f"confirm_yes_{task_id}"):
                             success = _delete_task(task_id, db_manager)
                             if success:
                                 st.success("Task deleted successfully!")
@@ -380,7 +434,7 @@ def _render_task_card(task: Dict[str, Any], db_manager: DatabaseManager, epics: 
                                 st.error("Failed to delete task")
                     
                     with col_cancel:
-                        if st.button("❌ No", key=f"confirm_no_{task_id}"):
+                        if st.button(UIConstants.CANCEL_BUTTON.split()[0] + " No", key=f"confirm_no_{task_id}"):
                             st.session_state[f"confirm_delete_{task_id}"] = False
                             st.rerun()
 
@@ -459,11 +513,15 @@ def _show_quick_add_modal(db_manager: DatabaseManager, epics: List[Dict[str, Any
                 success = _create_task(title, epic_id, tdd_phase, db_manager)
                 
                 if success:
-                    st.success("✅ Task created successfully!")
+                    st.success(UIConstants.SUCCESS_CREATE)
                     st.session_state.show_quick_add = False
                     st.rerun()
                 else:
-                    st.error("❌ Failed to create task")
+                    st.error(
+                        ErrorMessages.LOADING_ERROR.format(
+                            entity="task", error="creation failed"
+                        )
+                    )
 
 
 def _render_create_task_form(db_manager: DatabaseManager, epics: List[Dict[str, Any]]):
@@ -526,9 +584,9 @@ def _render_create_task_form(db_manager: DatabaseManager, epics: List[Dict[str, 
                     return
             
             if not title:
-                st.error("❌ Task title is required")
+                st.error(UIConstants.ERROR_INVALID_DATA)
             elif selected_epic == "Select Epic":
-                st.error("❌ Please select an epic")
+                st.error(UIConstants.ERROR_INVALID_DATA)
             else:
                 # Get epic ID
                 epic_id = None
@@ -556,10 +614,14 @@ def _render_create_task_form(db_manager: DatabaseManager, epics: List[Dict[str, 
                 )
                 
                 if success:
-                    st.success("✅ Task created successfully!")
+                    st.success(UIConstants.SUCCESS_CREATE)
                     st.rerun()
                 else:
-                    st.error("❌ Failed to create task")
+                    st.error(
+                        ErrorMessages.LOADING_ERROR.format(
+                            entity="task", error="creation failed"
+                        )
+                    )
 
 
 def _show_edit_task_modal(task: Dict[str, Any], db_manager: DatabaseManager, epics: List[Dict[str, Any]]):
@@ -650,11 +712,15 @@ def _show_edit_task_modal(task: Dict[str, Any], db_manager: DatabaseManager, epi
                 )
                 
                 if success:
-                    st.success("✅ Task updated successfully!")
+                    st.success(UIConstants.SUCCESS_UPDATE)
                     st.session_state[f"editing_task_{task_id}"] = False
                     st.rerun()
                 else:
-                    st.error("❌ Failed to update task")
+                    st.error(
+                        ErrorMessages.LOADING_ERROR.format(
+                            entity="task", error="update failed"
+                        )
+                    )
             
             if cancelled:
                 st.session_state[f"editing_task_{task_id}"] = False
