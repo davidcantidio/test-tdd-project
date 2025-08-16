@@ -41,7 +41,10 @@ except ImportError:
     check_rate_limit = security_manager = None
     DATABASE_UTILS_AVAILABLE = False
 
+from streamlit_extension.auth import require_auth
 
+
+@require_auth()
 def render_timer_page():
     """Render the dedicated timer page."""
     if not STREAMLIT_AVAILABLE:

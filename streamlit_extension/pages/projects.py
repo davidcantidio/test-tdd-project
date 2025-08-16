@@ -40,6 +40,8 @@ except ImportError:
     DatabaseManager = validate_project_data = load_config = None
     create_safe_project = sanitize_display = validate_form = None
 
+from streamlit_extension.auth import require_auth
+
 
 def render_project_card(project: Dict[str, Any], db_manager: DatabaseManager, clients_map: Dict[int, str]):
     """Render an individual project card."""
@@ -485,6 +487,7 @@ def render_create_project_form(db_manager: DatabaseManager, clients_map: Dict[in
                         st.error(f"❌ {error}")
 
 
+@require_auth()
 def render_projects_page():
     """Render the main projects management page."""
     if not STREAMLIT_AVAILABLE:

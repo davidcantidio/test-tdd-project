@@ -49,8 +49,11 @@ from streamlit_extension.utils.exception_handler import (
     get_error_statistics,
 )
 
+from streamlit_extension.auth import require_auth
+
 
 @handle_streamlit_exceptions(show_error=True, attempt_recovery=True)
+@require_auth()
 def render_kanban_page():
     """Render the Kanban board page."""
     if not STREAMLIT_AVAILABLE:

@@ -49,7 +49,7 @@ try:
         create_safe_client, sanitize_display, validate_form, check_rate_limit,
         security_manager
     )
-    from streamlit_extension.config import load_config
+from streamlit_extension.config import load_config
     DATABASE_UTILS_AVAILABLE = True
 except ImportError:
     DatabaseManager = load_config = None
@@ -73,6 +73,9 @@ except ImportError:
     functools = hashlib = None
     PERFORMANCE_UTILS_AVAILABLE = False
 
+
+# Authentication
+from streamlit_extension.auth import require_auth
 
 # Performance optimization functions
 class AnalyticsCache:
@@ -235,6 +238,7 @@ def optimize_database_queries(db_manager: DatabaseManager, days: int, filters: D
         }
 
 
+@require_auth()
 def render_analytics_page():
     """Render the analytics dashboard page."""
     if not STREAMLIT_AVAILABLE:

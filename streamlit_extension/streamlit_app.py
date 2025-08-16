@@ -74,7 +74,8 @@ try:
         NotificationToast, NotificationData, QuickActionButton
     )
     from streamlit_extension.utils.database import DatabaseManager
-    from streamlit_extension.utils.auth import GoogleOAuthManager, require_authentication, render_user_menu, get_authenticated_user
+    from streamlit_extension.auth import auth_middleware, is_authenticated, get_current_user
+    from streamlit_extension.auth.login_page import render_login_page
     from streamlit_extension.config import load_config, load_config
     
     # Import global exception handler
@@ -143,8 +144,8 @@ def render_enhanced_header():
     """Render the enhanced main application header with welcome message and quick stats."""
     
     # Get authenticated user for personalized greeting
-    user = get_authenticated_user()
-    username = user.get('name', 'Developer') if user else 'Developer'
+    user = get_current_user()
+    username = user.username if user else 'Developer'
     
     # Welcome header with dynamic greeting
     WelcomeHeader.render(username=username)
@@ -699,36 +700,25 @@ def render_debug_panel():
 @handle_streamlit_exceptions(show_error=True, attempt_recovery=True)
 def main():
     """Main application entry point with centralized authentication gateway."""
-    
+
+    # Authentication middleware
+    current_user = auth_middleware()
+    if not is_authenticated():
+        render_login_page()
+        return
+
+    if current_user and current_user.is_admin:
+        pass
+
     # Check if running in headless mode
     if not STREAMLIT_AVAILABLE:
         print("📊 Dashboard functions available for testing")
         print("Run 'streamlit run streamlit_app.py' for full UI")
         return
-    
+
     # Initialize session state with error boundary
     with streamlit_error_boundary("session_initialization"):
         initialize_session_state()
-    
-    # Initialize authentication manager
-    with streamlit_error_boundary("authentication_initialization"):
-        auth_manager = safe_streamlit_operation(
-            GoogleOAuthManager,
-            default_return=None,
-            operation_name="auth_manager_init"
-        )
-        
-        if auth_manager is None:
-            st.error("❌ Authentication initialization failed")
-            st.stop()
-    
-    # 🔐 CENTRALIZED AUTHENTICATION GATEWAY
-    # Check authentication status - if not authenticated, show login page
-    if not auth_manager.is_authenticated():
-        render_landing_login_page(auth_manager)
-        return
-    
-    # ✅ USER IS AUTHENTICATED - Proceed with full application
     
     # Check database connectivity
     with streamlit_error_boundary("database_health_validation"):
@@ -749,14 +739,6 @@ def main():
             render_sidebar,
             default_return={},
             operation_name="render_sidebar"
-        )
-    
-    # Render user menu in sidebar
-    with streamlit_error_boundary("user_menu_rendering"):
-        safe_streamlit_operation(
-            render_user_menu,
-            auth_manager,
-            operation_name="render_user_menu"
         )
     
     # Page navigation logic

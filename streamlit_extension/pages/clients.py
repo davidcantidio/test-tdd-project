@@ -50,13 +50,7 @@ from streamlit_extension.utils.exception_handler import (
     safe_streamlit_operation,
     get_error_statistics,
 )
-
-try:
-    from streamlit_extension.utils.auth import require_authentication
-except ImportError:
-    # Fallback if auth module not available
-    def require_authentication(func):
-        return func
+from streamlit_extension.auth import require_auth
 
 
 def render_client_card(client: Dict[str, Any], db_manager: DatabaseManager):
@@ -439,8 +433,8 @@ def render_create_client_form(db_manager: DatabaseManager):
                         st.error(f"❌ {error}")
 
 
-@require_authentication
 @handle_streamlit_exceptions(show_error=True, attempt_recovery=True)
+@require_auth()
 def render_clients_page():
     """Render the main clients management page."""
     if not STREAMLIT_AVAILABLE:

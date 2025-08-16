@@ -71,8 +71,11 @@ from streamlit_extension.utils.exception_handler import (
     get_error_statistics,
 )
 
+from streamlit_extension.auth import require_auth
+
 
 @handle_streamlit_exceptions(show_error=True, attempt_recovery=True)
+@require_auth()
 def render_gantt_page():
     """Render the Gantt chart page."""
     if not STREAMLIT_AVAILABLE:
