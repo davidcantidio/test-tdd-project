@@ -60,7 +60,7 @@ except ImportError:
     DatabaseManager = load_config = None
     create_safe_client = sanitize_display = validate_form = None
     check_rate_limit = security_manager = None
-    init_protected_page = None
+    init_protected_page = handle_streamlit_exceptions = streamlit_error_boundary = safe_streamlit_operation = None
     DATABASE_UTILS_AVAILABLE = False
 
 try:
@@ -244,27 +244,45 @@ def optimize_database_queries(db_manager: DatabaseManager, days: int, filters: D
 
 
 @handle_streamlit_exceptions(show_error=True, attempt_recovery=True)
+
 def render_analytics_page():
-    """Render the analytics dashboard page."""
+    """Main analytics page with modular architecture."""
     if not STREAMLIT_AVAILABLE:
         return {"error": "Streamlit not available"}
-
-    # Initialize protected page with authentication
     current_user = init_protected_page("📊 Analytics Dashboard")
     if not current_user:
         return {"error": "Authentication required"}
+    if not _check_rate_limit():
+        return {"error": "Rate limited"}
+    st.title("📊 Analytics Dashboard")
+    st.markdown("---")
+    if not _check_dependencies():
+        return
+    db_manager, analytics_engine = _initialize_analytics_engine()
+    if not db_manager:
+        return
+    filters = _render_analytics_filters(db_manager)
+    analytics_data = _fetch_analytics_data(db_manager, analytics_engine, filters)
+    if not analytics_data:
+        st.warning("📝 No data available for the selected time range.")
+        return
+    _render_analytics_header(analytics_data)
+    _render_analytics_tabs(analytics_data)
+    _render_analytics_footer(analytics_data)
 
-    # Check rate limit for page load
+
+def _check_rate_limit() -> bool:
+    """Check rate limit for page load."""
     page_rate_allowed, page_rate_error = check_rate_limit("page_load") if check_rate_limit else (True, None)
     if not page_rate_allowed:
         st.error(f"🚦 {page_rate_error}")
         st.info("Please wait before reloading the page.")
-        return {"error": "Rate limited"}
+        return False
+    return True
 
-    st.title("📊 Analytics Dashboard")
-    st.markdown("---")
 
-    # Check if required dependencies are available
+def _check_dependencies() -> bool:
+    """Verify required dependencies are available."""
     missing_deps = []
     if not PLOTLY_AVAILABLE:
         missing_deps.append("plotly")
@@ -272,36 +290,97 @@ def render_analytics_page():
         missing_deps.append("pandas")
     if not DATABASE_UTILS_AVAILABLE:
         missing_deps.append("database utilities")
-
     if missing_deps:
         st.error(f"❌ Missing dependencies: {', '.join(missing_deps)}")
         st.info("Install with: `pip install plotly pandas`")
-        return
+        return False
+    return True
 
-    # Initialize database manager and analytics engine
+
+def _initialize_analytics_engine():
+    """Initialize analytics engine and database manager."""
     try:
         config = load_config()
         db_manager = DatabaseManager(
             framework_db_path=str(config.get_database_path()),
-            timer_db_path=str(config.get_timer_database_path())
+            timer_db_path=str(config.get_timer_database_path()),
         )
-
-        # Initialize analytics engine
         if ANALYTICS_ENGINE_AVAILABLE:
             analytics_engine = TDDAHAnalytics(db_path=str(config.get_timer_database_path()))
             st.sidebar.success("🧠 Advanced analytics enabled")
         else:
             analytics_engine = None
             st.sidebar.warning("⚠️ Basic analytics mode (install pandas, plotly for full features)")
-
+        return db_manager, analytics_engine
     except Exception as e:
         st.error(f"❌ Database connection error: {e}")
-        return
+        return None, None
 
-    # Enhanced time range selector with interactivity
+
+def _render_analytics_filters(db_manager: DatabaseManager) -> Dict[str, Any]:
+    """Render filter sidebar and return selected filters."""
+    days = _render_time_range_selector()
+    filters = _render_advanced_filters(db_manager, days)
+    _render_sidebar_utilities()
+    return filters
+
+
+def _fetch_analytics_data(db_manager: DatabaseManager, analytics_engine: Any, filters: Dict[str, Any]) -> Dict[str, Any]:
+    """Fetch and process analytics data based on filters."""
+    days = filters.get("days", 7)
+    with st.spinner("Loading analytics data..."):
+        if analytics_engine:
+            data = _get_enhanced_analytics_data(analytics_engine, db_manager, days)
+        else:
+            data = _get_analytics_data(db_manager, days)
+        if filters:
+            data = _apply_data_filters(data, filters)
+    st.session_state.last_analytics = data
+    return data
+
+
+def _render_analytics_header(analytics_data: Dict[str, Any]):
+    """Render analytics page header with key metrics."""
+    filters = getattr(st.session_state, "analytics_filters", {})
+    active_filters = []
+    if filters.get("selected_epics"):
+        active_filters.append(f"Epics: {len(filters['selected_epics'])}")
+    if filters.get("focus_range") and filters.get("focus_range") != (1, 10):
+        active_filters.append(f"Focus: {filters['focus_range'][0]}-{filters['focus_range'][1]}")
+    if filters.get("selected_tdd_phases"):
+        active_filters.append(f"TDD: {len(filters['selected_tdd_phases'])}")
+    if filters.get("selected_session_types"):
+        active_filters.append(f"Sessions: {len(filters['selected_session_types'])}")
+    if active_filters:
+        st.info(f"🔍 **Active filters:** {' | '.join(active_filters)}")
+    _render_overview_metrics(analytics_data)
+    st.markdown("---")
+
+
+def _render_analytics_tabs(analytics_data: Dict[str, Any]):
+    """Render tabbed interface for different analytics views."""
+    col1, col2 = st.columns(2)
+    with col1:
+        _render_productivity_chart(analytics_data)
+        _render_tdd_phase_distribution(analytics_data)
+    with col2:
+        _render_focus_time_chart(analytics_data)
+        _render_epic_progress_chart(analytics_data)
+    st.markdown("---")
+    _render_tdah_insights(analytics_data)
+    st.markdown("---")
+
+
+def _render_analytics_footer(analytics_data: Dict[str, Any]):
+    """Render analytics page footer with export options."""
+    _render_advanced_tdah_metrics(analytics_data)
+    with st.expander("📋 Detailed Data"):
+        _render_detailed_tables(analytics_data)
+
+
+def _render_time_range_selector() -> int:
+    """Render time range selector and return number of days."""
     st.sidebar.markdown("## 📅 Time Range")
-
-    # Quick time range options
     time_options = {
         "Today": 1,
         "Last 3 days": 3,
@@ -312,216 +391,86 @@ def render_analytics_page():
         "Last 6 months": 180,
         "Last year": 365,
         "All time": 9999,
-        "Custom range": 0
+        "Custom range": 0,
     }
-
     selected_range = st.sidebar.selectbox("Select time range", list(time_options.keys()), index=2)
-
     if selected_range == "Custom range":
         col1, col2 = st.sidebar.columns(2)
         with col1:
             start_date = st.date_input("From", value=datetime.now() - timedelta(days=30))
         with col2:
             end_date = st.date_input("To", value=datetime.now())
-
-        # Calculate days difference
         days = (end_date - start_date).days + 1
         st.sidebar.caption(f"Period: {days} days")
     else:
         days = time_options[selected_range]
+        start_date = end_date = None
+    return days
 
-    # Advanced filters
+
+def _render_advanced_filters(db_manager: DatabaseManager, days: int) -> Dict[str, Any]:
+    """Render advanced sidebar filters."""
     st.sidebar.markdown("## 🔍 Advanced Filters")
-
-    # Epic filter
-    show_epic_filter = st.sidebar.checkbox("Filter by Epic", value=False)
-    selected_epics = []
-    if show_epic_filter:
+    selected_epics: List[str] = []
+    if st.sidebar.checkbox("Filter by Epic", value=False):
         try:
-            config = load_config()
-            db_manager = DatabaseManager(
-                framework_db_path=str(config.get_database_path()),
-                timer_db_path=str(config.get_timer_database_path())
-            )
             all_epics = db_manager.get_epics()
             epic_names = [epic.get("name", "Unknown") for epic in all_epics]
             selected_epics = st.sidebar.multiselect("Select Epics", epic_names)
-        except:
+        except Exception:
             st.sidebar.warning("Could not load epics")
-
-    # Focus level filter
-    show_focus_filter = st.sidebar.checkbox("Filter by Focus Level", value=False)
     focus_range = (1, 10)
-    if show_focus_filter:
-        focus_range = st.sidebar.slider(
-            "Focus Rating Range", 
-            min_value=1, max_value=10, 
-            value=(1, 10), 
-            step=1
-        )
-
-    # TDD phase filter
-    show_tdd_filter = st.sidebar.checkbox("Filter by TDD Phase", value=False)
-    selected_tdd_phases = []
-    if show_tdd_filter:
+    if st.sidebar.checkbox("Filter by Focus Level", value=False):
+        focus_range = st.sidebar.slider("Focus Rating Range", min_value=1, max_value=10, value=(1, 10), step=1)
+    selected_tdd_phases: List[str] = []
+    if st.sidebar.checkbox("Filter by TDD Phase", value=False):
         tdd_phases = ["red", "green", "refactor"]
         selected_tdd_phases = st.sidebar.multiselect("Select TDD Phases", tdd_phases)
-
-    # Session type filter
-    show_session_filter = st.sidebar.checkbox("Filter by Session Type", value=False)
-    selected_session_types = []
-    if show_session_filter:
+    selected_session_types: List[str] = []
+    if st.sidebar.checkbox("Filter by Session Type", value=False):
         session_types = ["focus_session", "short_break", "long_break", "custom"]
         selected_session_types = st.sidebar.multiselect("Select Session Types", session_types)
-
-    # Store filters in session state for use across functions
-    st.session_state.analytics_filters = {
+    filters = {
         "days": days,
         "selected_epics": selected_epics,
         "focus_range": focus_range,
         "selected_tdd_phases": selected_tdd_phases,
         "selected_session_types": selected_session_types,
-        "custom_date_range": (start_date, end_date) if selected_range == "Custom range" else None
     }
+    st.session_state.analytics_filters = filters
+    return filters
 
-    # Interactive controls
+
+def _render_sidebar_utilities():
+    """Render sidebar utilities like refresh and export options."""
     st.sidebar.markdown("## ⚡ Interactive Controls")
-
-    # Auto-refresh option
-    auto_refresh = st.sidebar.checkbox("Auto-refresh (30s)", value=False)
+    auto_refresh = st.sidebar.checkbox("Auto-refresh every minute", value=False)
     if auto_refresh:
-        st.sidebar.info("📡 Data refreshes automatically")
-        # Add auto-refresh functionality
-        if 'refresh_counter' not in st.session_state:
+        if "refresh_counter" not in st.session_state:
             st.session_state.refresh_counter = 0
-        st.session_state.refresh_counter += 1
-
-        # Show refresh indicator
-        st.sidebar.caption(f"Last refresh: {datetime.now().strftime('%H:%M:%S')}")
-
-        # Auto-refresh every 30 seconds
-        time.sleep(1)  # Small delay to prevent too frequent refreshes
-        st.rerun()
-
-    # Manual refresh button
+        if time.time() - st.session_state.get("last_refresh", 0) > 60:
+            st.session_state.last_refresh = time.time()
+            st.session_state.refresh_counter += 1
+            st.sidebar.caption(f"Last refresh: {datetime.now().strftime('%H:%M:%S')}")
+            time.sleep(1)
+            st.rerun()
     if st.sidebar.button("🔄 Refresh Data", type="primary"):
         st.rerun()
-
-    # Export controls
     st.sidebar.markdown("## 📊 Export Options")
-
-    export_format = st.sidebar.selectbox(
-        "Export Format",
-        ["CSV", "JSON", "Excel"],
-        help="Choose format for exporting analytics data"
-    )
-
+    export_format = st.sidebar.selectbox("Export Format", ["CSV", "JSON", "Excel"], help="Choose format for exporting analytics data")
     if st.sidebar.button("📥 Export Data"):
-        _export_analytics_data(analytics_data if 'analytics_data' in locals() else {}, export_format)
-
-    # Chart interaction settings
+        _export_analytics_data(getattr(st.session_state, 'last_analytics', {}), export_format)
     st.sidebar.markdown("## 📈 Chart Settings")
-
-    chart_theme = st.sidebar.selectbox(
-        "Chart Theme",
-        ["plotly", "plotly_white", "plotly_dark", "presentation"],
-        index=0,
-        help="Choose visual theme for charts"
-    )
-
+    chart_theme = st.sidebar.selectbox("Chart Theme", ["plotly", "plotly_white", "plotly_dark", "presentation"], index=0)
     show_animations = st.sidebar.checkbox("Chart Animations", value=True)
     show_tooltips = st.sidebar.checkbox("Enhanced Tooltips", value=True)
-
-    # Store chart settings
-    st.session_state.chart_settings = {
-        "theme": chart_theme,
-        "animations": show_animations,
-        "tooltips": show_tooltips
-    }
-
-    # Performance settings
+    st.session_state.chart_settings = {"theme": chart_theme, "animations": show_animations, "tooltips": show_tooltips}
     st.sidebar.markdown("## ⚙️ Performance")
-
     use_cache = st.sidebar.checkbox("Use Data Caching", value=True, help="Cache data for faster loading")
     chart_quality = st.sidebar.selectbox("Chart Quality", ["High", "Medium", "Fast"], index=1)
-
-    st.session_state.performance_settings = {
-        "use_cache": use_cache,
-        "chart_quality": chart_quality
-    }
-
-    # Performance monitoring display
+    st.session_state.performance_settings = {"use_cache": use_cache, "chart_quality": chart_quality}
     if st.sidebar.checkbox("Show Performance Metrics", value=False):
         _render_performance_metrics()
-
-    # Fetch data using analytics engine or fallback
-    with st.spinner("Loading analytics data..."):
-        if analytics_engine:
-            analytics_data = _get_enhanced_analytics_data(analytics_engine, db_manager, days)
-        else:
-            analytics_data = _get_analytics_data(db_manager, days)
-
-        # Apply filters if any are set
-        if hasattr(st.session_state, 'analytics_filters') and st.session_state.analytics_filters:
-            analytics_data = _apply_data_filters(analytics_data, st.session_state.analytics_filters)
-
-            # Show filter status
-            active_filters = []
-            filters = st.session_state.analytics_filters
-
-            if filters.get("selected_epics"):
-                active_filters.append(f"Epics: {len(filters['selected_epics'])}")
-            if filters.get("focus_range") != (1, 10):
-                active_filters.append(f"Focus: {filters['focus_range'][0]}-{filters['focus_range'][1]}")
-            if filters.get("selected_tdd_phases"):
-                active_filters.append(f"TDD: {len(filters['selected_tdd_phases'])}")
-            if filters.get("selected_session_types"):
-                active_filters.append(f"Sessions: {len(filters['selected_session_types'])}")
-
-            if active_filters:
-                st.info(f"🔍 **Active filters:** {' | '.join(active_filters)}")
-
-                # Add reset filters button
-                col1, col2 = st.columns([1, 4])
-                with col1:
-                    if st.button("🗑️ Clear Filters"):
-                        if hasattr(st.session_state, 'analytics_filters'):
-                            del st.session_state.analytics_filters
-                        st.rerun()
-
-    if not analytics_data:
-        st.warning("📝 No data available for the selected time range.")
-        return
-
-    # Overview metrics
-    _render_overview_metrics(analytics_data)
-
-    st.markdown("---")
-
-    # Charts in columns
-    col1, col2 = st.columns(2)
-
-    with col1:
-        _render_productivity_chart(analytics_data)
-        _render_tdd_phase_distribution(analytics_data)
-
-    with col2:
-        _render_focus_time_chart(analytics_data)
-        _render_epic_progress_chart(analytics_data)
-
-    st.markdown("---")
-
-    # TDAH-specific analytics
-    _render_tdah_insights(analytics_data)
-
-    st.markdown("---")
-
-    # Advanced TDAH metrics dashboard
-    _render_advanced_tdah_metrics(analytics_data)
-
-    # Detailed tables
-    with st.expander("📋 Detailed Data"):
-        _render_detailed_tables(analytics_data)
 
 
 @cached_analytics_data(ttl=300)  # Cache for 5 minutes
@@ -727,28 +676,30 @@ def _render_overview_metrics(analytics_data: Dict[str, Any]):
         )
 
 
+
 def _render_productivity_chart(analytics_data: Dict[str, Any]):
-    """Render enhanced productivity over time chart using analytics engine data."""
+    """Render productivity charts with modular data processing."""
     if not PLOTLY_AVAILABLE:
         st.warning("Charts require plotly installation")
         return
-
     st.markdown("### 📈 Daily Productivity")
+    chart_data = _process_productivity_data(analytics_data)
+    if chart_data.get("df") is None:
+        st.info("No productivity data available")
+        return
+    config = _get_productivity_chart_config()
+    _display_productivity_charts(chart_data, config)
+    _display_productivity_metrics(chart_data)
 
+def _process_productivity_data(analytics_data: Dict[str, Any]) -> Dict[str, Any]:
+    """Process raw analytics data for productivity visualization."""
     engine_enabled = analytics_data.get("analytics_engine_enabled", False)
     productivity_metrics = analytics_data.get("productivity_metrics", {})
-
     if engine_enabled and productivity_metrics:
-        # Use enhanced productivity data from analytics engine
         daily_productivity = productivity_metrics.get("daily_productivity", [])
-
         if not daily_productivity:
-            # Fallback to basic daily metrics
-            daily_metrics = analytics_data.get("daily_metrics", [])
-            daily_productivity = daily_metrics
-
+            daily_productivity = analytics_data.get("daily_metrics", [])
         if daily_productivity and PANDAS_AVAILABLE:
-            # Convert to DataFrame for easier manipulation
             df_data = []
             for day_data in daily_productivity:
                 df_data.append({
@@ -757,299 +708,207 @@ def _render_productivity_chart(analytics_data: Dict[str, Any]):
                     "tasks_completed": day_data.get("tasks_completed", 0),
                     "productivity_score": day_data.get("productivity_score", 0),
                     "focus_efficiency": day_data.get("focus_efficiency", 0),
-                    "avg_focus_rating": day_data.get("avg_focus_rating", 0)
+                    "avg_focus_rating": day_data.get("avg_focus_rating", 0),
                 })
+            df = pd.DataFrame(df_data).sort_values("date")
+            return {"df": df, "insights": productivity_metrics.get("insights", []), "enhanced": True}
+        return {"df": None, "insights": [], "enhanced": True}
+    daily_metrics = analytics_data.get("daily_metrics", [])
+    if daily_metrics and PANDAS_AVAILABLE:
+        df = pd.DataFrame(sorted(daily_metrics, key=lambda x: x["date"]))
+        return {"df": df, "insights": [], "enhanced": False}
+    return {"df": None, "insights": [], "enhanced": False}
 
-            df = pd.DataFrame(df_data)
-            df = df.sort_values("date")
+def _get_productivity_chart_config() -> Dict[str, Any]:
+    """Get chart configuration for productivity visualizations."""
+    return {"enhanced_height": 600, "basic_height": 400}
 
-            # Create enhanced chart with productivity score
-            fig = make_subplots(
-                rows=2, cols=1,
-                subplot_titles=["Focus Time & Tasks Completed", "Productivity Score & Focus Efficiency"],
-                specs=[[{"secondary_y": True}], [{"secondary_y": True}]],
-                vertical_spacing=0.12
-            )
+def _display_productivity_metrics(chart_data: Dict[str, Any]):
+    """Display key productivity metrics in cards."""
+    insights = chart_data.get("insights", [])
+    if insights:
+        st.markdown("#### 💡 Productivity Insights")
+        for insight in insights[:3]:
+            st.info(f"• {insight}")
 
-            # Top chart: Focus time (bars) and tasks (line)
-            fig.add_trace(
-                go.Bar(
-                    x=df["date"],
-                    y=df["focus_minutes"],
-                    name="Focus Minutes",
-                    marker_color="lightblue",
-                    opacity=0.7
-                ),
-                row=1, col=1, secondary_y=False
-            )
-
-            fig.add_trace(
-                go.Scatter(
-                    x=df["date"],
-                    y=df["tasks_completed"],
-                    mode="lines+markers",
-                    name="Tasks Completed",
-                    line=dict(color="orange", width=2),
-                    marker=dict(size=6)
-                ),
-                row=1, col=1, secondary_y=True
-            )
-
-            # Bottom chart: Productivity metrics
-            fig.add_trace(
-                go.Scatter(
-                    x=df["date"],
-                    y=df["productivity_score"],
-                    mode="lines+markers",
-                    name="Productivity Score",
-                    line=dict(color="green", width=3),
-                    marker=dict(size=8)
-                ),
-                row=2, col=1, secondary_y=False
-            )
-
-            fig.add_trace(
-                go.Scatter(
-                    x=df["date"],
-                    y=df["focus_efficiency"],
-                    mode="lines+markers",
-                    name="Focus Efficiency %",
-                    line=dict(color="purple", width=2, dash="dash"),
-                    marker=dict(size=6)
-                ),
-                row=2, col=1, secondary_y=True
-            )
-
-            # Update axes
-            fig.update_xaxes(title_text="Date", row=2, col=1)
-            fig.update_yaxes(title_text="Focus Minutes", row=1, col=1, secondary_y=False)
-            fig.update_yaxes(title_text="Tasks Completed", row=1, col=1, secondary_y=True)
-            fig.update_yaxes(title_text="Productivity Score", row=2, col=1, secondary_y=False)
-            fig.update_yaxes(title_text="Focus Efficiency %", row=2, col=1, secondary_y=True)
-
-            fig.update_layout(
-                height=600,
-                showlegend=True,
-                title=None
-            )
-
-            st.plotly_chart(fig, use_container_width=True)
-
-            # Add insights if available
-            if productivity_metrics.get("insights"):
-                st.markdown("#### 💡 Productivity Insights")
-                for insight in productivity_metrics["insights"][:3]:
-                    st.info(f"• {insight}")
-        else:
-            st.info("No productivity data available")
+def _display_productivity_charts(chart_data: Dict[str, Any], config: Dict[str, Any]):
+    """Display productivity charts with given configuration."""
+    df = chart_data.get("df")
+    if df is None:
+        return
+    if chart_data.get("enhanced"):
+        fig = make_subplots(
+            rows=2,
+            cols=1,
+            subplot_titles=["Focus Time & Tasks Completed", "Productivity Score & Focus Efficiency"],
+            specs=[[{"secondary_y": True}], [{"secondary_y": True}]],
+            vertical_spacing=0.12,
+        )
+        fig.add_trace(
+            go.Bar(x=df["date"], y=df["focus_minutes"], name="Focus Minutes", marker_color="lightblue", opacity=0.7),
+            row=1,
+            col=1,
+            secondary_y=False,
+        )
+        fig.add_trace(
+            go.Scatter(x=df["date"], y=df["tasks_completed"], mode="lines+markers", name="Tasks Completed", line=dict(color="orange", width=2), marker=dict(size=6)),
+            row=1,
+            col=1,
+            secondary_y=True,
+        )
+        fig.add_trace(
+            go.Scatter(x=df["date"], y=df["productivity_score"], mode="lines+markers", name="Productivity Score", line=dict(color="green", width=3), marker=dict(size=8)),
+            row=2,
+            col=1,
+            secondary_y=False,
+        )
+        fig.add_trace(
+            go.Scatter(x=df["date"], y=df["focus_efficiency"], mode="lines+markers", name="Focus Efficiency %", line=dict(color="purple", width=2, dash="dash"), marker=dict(size=6)),
+            row=2,
+            col=1,
+            secondary_y=True,
+        )
+        fig.update_xaxes(title_text="Date", row=2, col=1)
+        fig.update_yaxes(title_text="Focus Minutes", row=1, col=1, secondary_y=False)
+        fig.update_yaxes(title_text="Tasks Completed", row=1, col=1, secondary_y=True)
+        fig.update_yaxes(title_text="Productivity Score", row=2, col=1, secondary_y=False)
+        fig.update_yaxes(title_text="Focus Efficiency %", row=2, col=1, secondary_y=True)
+        fig.update_layout(height=config["enhanced_height"], showlegend=True, title=None)
+        st.plotly_chart(fig, use_container_width=True)
     else:
-        # Fallback to basic chart
-        daily_metrics = analytics_data.get("daily_metrics", [])
-        if not daily_metrics:
-            st.info("No daily data available")
-            return
-
-        # Sort by date
-        daily_metrics.sort(key=lambda x: x["date"])
-
-        if PANDAS_AVAILABLE:
-            df = pd.DataFrame(daily_metrics)
-
-            # Create basic subplot with secondary y-axis
-            fig = make_subplots(specs=[[{"secondary_y": True}]])
-
-            # Add focus time bar chart
-            fig.add_trace(
-                go.Bar(
-                    x=df["date"],
-                    y=df["focus_minutes"],
-                    name="Focus Minutes",
-                    marker_color="lightblue",
-                    opacity=0.7
-                ),
-                secondary_y=False
-            )
-
-            # Add tasks completed line
-            fig.add_trace(
-                go.Scatter(
-                    x=df["date"],
-                    y=df["tasks_completed"],
-                    mode="lines+markers",
-                    name="Tasks Completed",
-                    line=dict(color="orange", width=2),
-                    marker=dict(size=6)
-                ),
-                secondary_y=True
-            )
-
-            # Update axes
-            fig.update_xaxes(title_text="Date")
-            fig.update_yaxes(title_text="Focus Minutes", secondary_y=False)
-            fig.update_yaxes(title_text="Tasks Completed", secondary_y=True)
-
-            fig.update_layout(
-                height=400,
-                showlegend=True,
-                title=None
-            )
-
-            st.plotly_chart(fig, use_container_width=True)
-        else:
-            # Fallback display
-            st.json(daily_metrics[:5])  # Show first 5 days
-
+        fig = make_subplots(specs=[[{"secondary_y": True}]])
+        fig.add_trace(
+            go.Bar(x=df["date"], y=df["focus_minutes"], name="Focus Minutes", marker_color="lightblue", opacity=0.7),
+            secondary_y=False,
+        )
+        fig.add_trace(
+            go.Scatter(x=df["date"], y=df["tasks_completed"], mode="lines+markers", name="Tasks Completed", line=dict(color="orange", width=2), marker=dict(size=6)),
+            secondary_y=True,
+        )
+        fig.update_xaxes(title_text="Date")
+        fig.update_yaxes(title_text="Focus Minutes", secondary_y=False)
+        fig.update_yaxes(title_text="Tasks Completed", secondary_y=True)
+        fig.update_layout(height=config["basic_height"], showlegend=True, title=None)
+        st.plotly_chart(fig, use_container_width=True)
 
 def _render_focus_time_chart(analytics_data: Dict[str, Any]):
-    """Render enhanced focus time analysis using analytics engine time patterns."""
+    """Render focus time analysis charts."""
     if not PLOTLY_AVAILABLE:
         st.warning("Charts require plotly installation")
         return
-
     st.markdown("### ⏱️ Focus Time Analysis")
+    focus_data = _aggregate_focus_time_data(analytics_data)
+    if not focus_data:
+        st.info("No timer sessions available")
+        return
+    _render_focus_trends(focus_data)
+    _render_focus_summary(focus_data)
+    _render_focus_patterns(focus_data)
 
+def _aggregate_focus_time_data(analytics_data: Dict[str, Any]) -> Dict[str, Any]:
+    """Aggregate and calculate focus time metrics."""
     engine_enabled = analytics_data.get("analytics_engine_enabled", False)
     time_patterns = analytics_data.get("time_patterns", {})
-
     if engine_enabled and time_patterns:
-        # Use enhanced time patterns from analytics engine
         hourly_focus = time_patterns.get("hourly_focus_distribution", {})
         peak_hours = time_patterns.get("peak_productivity_hours", [])
         focus_quality_by_hour = time_patterns.get("focus_quality_by_hour", {})
+        hours = list(range(24))
+        minutes = [hourly_focus.get(str(h), 0) for h in hours]
+        focus_quality = [focus_quality_by_hour.get(str(h), 0) for h in hours]
+        total_focus_time = sum(minutes)
+        avg_session_quality = sum(focus_quality) / len([q for q in focus_quality if q > 0]) if any(focus_quality) else 0
+        return {
+            "type": "enhanced",
+            "hours": hours,
+            "minutes": minutes,
+            "focus_quality": focus_quality,
+            "peak_hours": peak_hours,
+            "patterns": time_patterns.get("patterns", []),
+            "total_focus_time": total_focus_time,
+            "avg_session_quality": avg_session_quality,
+        }
+    # Fallback to basic hourly analysis
+    timer_sessions = analytics_data.get("timer_sessions", [])
+    if not timer_sessions:
+        return {}
+    from collections import defaultdict
+    hourly_data = defaultdict(int)
+    for session in timer_sessions:
+        if session.get("started_at"):
+            try:
+                if "T" in session["started_at"]:
+                    hour = int(session["started_at"].split("T")[1][:2])
+                else:
+                    hour = int(session["started_at"].split(" ")[1][:2])
+                hourly_data[hour] += session.get("planned_duration_minutes", 0)
+            except (ValueError, IndexError):
+                continue
+    hours = list(range(24))
+    minutes = [hourly_data.get(h, 0) for h in hours]
+    return {"type": "basic", "hours": hours, "minutes": minutes}
 
-        if hourly_focus:
-            # Create enhanced hourly chart with focus quality overlay
-            hours = list(range(24))
-            minutes = [hourly_focus.get(str(h), 0) for h in hours]
-            focus_quality = [focus_quality_by_hour.get(str(h), 0) for h in hours]
+def _render_focus_summary(focus_data: Dict[str, Any]):
+    """Render focus time summary metrics."""
+    if focus_data.get("type") != "enhanced":
+        return
+    peak_hours = focus_data.get("peak_hours", [])
+    if peak_hours:
+        peak_times = ", ".join([f"{h}:00" for h in peak_hours[:3]])
+        st.success(f"🌟 **Peak Hours:** {peak_times}")
+    st.info(f"⏱️ **Total Focus:** {focus_data.get('total_focus_time', 0):.0f} minutes")
+    st.info(f"🎯 **Avg Quality:** {focus_data.get('avg_session_quality', 0):.1f}/10")
 
-            # Create dual chart showing time and quality
-            fig = make_subplots(
-                rows=2, cols=1,
-                subplot_titles=["Focus Time by Hour", "Focus Quality by Hour"],
-                vertical_spacing=0.15
-            )
-
-            # Top chart: Focus time with peak hours highlighted
-            colors = ['rgba(255, 99, 132, 0.8)' if h in peak_hours else 'rgba(54, 162, 235, 0.6)' for h in hours]
-
-            fig.add_trace(
-                go.Bar(
-                    x=hours,
-                    y=minutes,
-                    name="Focus Minutes",
-                    marker_color=colors,
-                    text=[f"{m:.0f}min" if m > 0 else "" for m in minutes],
-                    textposition="outside"
-                ),
-                row=1, col=1
-            )
-
-            # Bottom chart: Focus quality
-            fig.add_trace(
-                go.Scatter(
-                    x=hours,
-                    y=focus_quality,
-                    mode="lines+markers",
-                    name="Focus Quality",
-                    line=dict(color="green", width=3),
-                    marker=dict(size=8, color=focus_quality, colorscale="RdYlGn", cmin=0, cmax=10),
-                    fill="tonexty" if focus_quality else None
-                ),
-                row=2, col=1
-            )
-
-            # Update layout
-            fig.update_xaxes(title_text="Hour of Day", row=2, col=1, dtick=2)
-            fig.update_yaxes(title_text="Minutes", row=1, col=1)
-            fig.update_yaxes(title_text="Quality (1-10)", row=2, col=1, range=[0, 10])
-
-            fig.update_layout(
-                height=500,
-                showlegend=False,
-                title=None
-            )
-
-            st.plotly_chart(fig, use_container_width=True)
-
-            # Add insights
-            col1, col2 = st.columns(2)
-            with col1:
-                if peak_hours:
-                    peak_times = ", ".join([f"{h}:00" for h in peak_hours[:3]])
-                    st.success(f"🌟 **Peak Hours:** {peak_times}")
-
-                total_focus_time = sum(minutes)
-                avg_session_quality = sum(focus_quality) / len([q for q in focus_quality if q > 0]) if any(focus_quality) else 0
-                st.info(f"⏱️ **Total Focus:** {total_focus_time:.0f} minutes")
-                st.info(f"🎯 **Avg Quality:** {avg_session_quality:.1f}/10")
-
-            with col2:
-                # Time patterns insights
-                patterns = time_patterns.get("patterns", [])
-                if patterns:
-                    st.markdown("**💡 Time Insights:**")
-                    for pattern in patterns[:3]:
-                        st.markdown(f"• {pattern}")
-        else:
-            st.info("No enhanced time pattern data available")
+def _render_focus_trends(focus_data: Dict[str, Any]):
+    """Render focus time trend charts."""
+    hours = focus_data.get("hours", [])
+    minutes = focus_data.get("minutes", [])
+    if focus_data.get("type") == "enhanced":
+        focus_quality = focus_data.get("focus_quality", [])
+        peak_hours = focus_data.get("peak_hours", [])
+        fig = make_subplots(rows=2, cols=1, subplot_titles=["Focus Time by Hour", "Focus Quality by Hour"], vertical_spacing=0.15)
+        colors = ['rgba(255, 99, 132, 0.8)' if h in peak_hours else 'rgba(54, 162, 235, 0.6)' for h in hours]
+        fig.add_trace(go.Bar(x=hours, y=minutes, name="Focus Minutes", marker_color=colors, text=[f"{m:.0f}min" if m > 0 else "" for m in minutes], textposition="outside"), row=1, col=1)
+        fig.add_trace(go.Scatter(x=hours, y=focus_quality, mode="lines+markers", name="Focus Quality", line=dict(color="green", width=3), marker=dict(size=8, color=focus_quality, colorscale="RdYlGn", cmin=0, cmax=10), fill="tonexty" if focus_quality else None), row=2, col=1)
+        fig.update_xaxes(title_text="Hour of Day", row=2, col=1, dtick=2)
+        fig.update_yaxes(title_text="Minutes", row=1, col=1)
+        fig.update_yaxes(title_text="Quality (1-10)", row=2, col=1, range=[0, 10])
+        fig.update_layout(height=500, showlegend=False, title=None)
+        st.plotly_chart(fig, use_container_width=True)
     else:
-        # Fallback to basic hourly analysis
-        timer_sessions = analytics_data.get("timer_sessions", [])
-        if not timer_sessions:
-            st.info("No timer sessions available")
-            return
+        fig = px.bar(x=hours, y=minutes, title="Focus Time by Hour of Day", labels={"x": "Hour", "y": "Minutes"}, color=minutes, color_continuous_scale="Blues")
+        fig.update_layout(height=400, showlegend=False)
+        st.plotly_chart(fig, use_container_width=True)
 
-        # Group by hour of day
-        from collections import defaultdict
-        hourly_data = defaultdict(int)
-
-        for session in timer_sessions:
-            if session.get("started_at"):
-                try:
-                    # Extract hour from timestamp
-                    if "T" in session["started_at"]:
-                        hour = int(session["started_at"].split("T")[1][:2])
-                    else:
-                        hour = int(session["started_at"].split(" ")[1][:2])
-
-                    hourly_data[hour] += session.get("planned_duration_minutes", 0)
-                except (ValueError, IndexError):
-                    continue
-
-        if hourly_data:
-            hours = list(range(24))
-            minutes = [hourly_data.get(h, 0) for h in hours]
-
-            fig = px.bar(
-                x=hours,
-                y=minutes,
-                title="Focus Time by Hour of Day",
-                labels={"x": "Hour", "y": "Minutes"},
-                color=minutes,
-                color_continuous_scale="Blues"
-            )
-
-            fig.update_layout(height=400, showlegend=False)
-            st.plotly_chart(fig, use_container_width=True)
+def _render_focus_patterns(focus_data: Dict[str, Any]):
+    """Render focus pattern analysis."""
+    if focus_data.get("type") != "enhanced":
+        return
+    patterns = focus_data.get("patterns", [])
+    if patterns:
+        st.markdown("**💡 Time Insights:**")
+        for pattern in patterns[:3]:
+            st.markdown(f"• {pattern}")
 
 
 def _render_tdd_phase_distribution(analytics_data: Dict[str, Any]):
-    """Render TDD phase distribution."""
+    """Render TDD phase distribution analysis."""
     if not PLOTLY_AVAILABLE:
         st.warning("Charts require plotly installation")
         return
-
-    st.markdown("### 🔴🟢🔵 TDD Phase Distribution")
-
-    tasks = analytics_data.get("tasks", [])
-    if not tasks:
+    tdd_data = _calculate_tdd_metrics(analytics_data)
+    if not tdd_data.get("phase_counts"):
         st.info("No task data available")
         return
+    _render_tdd_overview(tdd_data)
+    _render_tdd_phase_chart(tdd_data)
+    _render_tdd_recommendations(tdd_data)
 
-    # Count tasks by TDD phase
+
+def _calculate_tdd_metrics(analytics_data: Dict[str, Any]) -> Dict[str, Any]:
+    """Calculate TDD phase metrics and balance scores."""
+    tasks = analytics_data.get("tasks", [])
     phase_counts = {"red": 0, "green": 0, "refactor": 0, "unknown": 0}
-
     for task in tasks:
         phase = task.get("tdd_phase") or "unknown"
         phase = phase.lower() if isinstance(phase, str) else "unknown"
@@ -1057,177 +916,143 @@ def _render_tdd_phase_distribution(analytics_data: Dict[str, Any]):
             phase_counts[phase] += 1
         else:
             phase_counts["unknown"] += 1
-
-    # Remove zero counts
     phase_counts = {k: v for k, v in phase_counts.items() if v > 0}
+    return {"phase_counts": phase_counts}
 
-    if phase_counts:
-        colors = {
-            "red": "#FF6B6B",
-            "green": "#51CF66",
-            "refactor": "#339AF0",
-            "unknown": "#ADB5BD"
-        }
 
-        fig = px.pie(
-            values=list(phase_counts.values()),
-            names=list(phase_counts.keys()),
-            title="Tasks by TDD Phase",
-            color_discrete_map=colors
-        )
+def _render_tdd_overview(tdd_data: Dict[str, Any]):
+    """Render TDD overview metrics."""
+    st.markdown("### 🔴🟢🔵 TDD Phase Distribution")
 
-        fig.update_layout(height=400)
-        st.plotly_chart(fig, use_container_width=True)
+
+def _render_tdd_phase_chart(tdd_data: Dict[str, Any]):
+    """Render TDD phase distribution chart."""
+    phase_counts = tdd_data.get("phase_counts", {})
+    if not phase_counts:
+        return
+    colors = {
+        "red": "#FF6B6B",
+        "green": "#51CF66",
+        "refactor": "#339AF0",
+        "unknown": "#ADB5BD",
+    }
+    fig = px.pie(
+        values=list(phase_counts.values()),
+        names=list(phase_counts.keys()),
+        title="Tasks by TDD Phase",
+        color_discrete_map=colors,
+    )
+    fig.update_layout(height=400)
+    st.plotly_chart(fig, use_container_width=True)
+
+
+def _render_tdd_recommendations(tdd_data: Dict[str, Any]):
+    """Render TDD improvement recommendations."""
+    return
+
 
 
 def _render_epic_progress_chart(analytics_data: Dict[str, Any]):
-    """Render enhanced epic progress overview with productivity insights."""
+    """Render epic progress visualization."""
     if not PLOTLY_AVAILABLE:
         st.warning("Charts require plotly installation")
         return
-
     st.markdown("### 📊 Epic Progress")
+    progress_data = _calculate_epic_progress(analytics_data)
+    if not progress_data:
+        _render_basic_epic_progress(analytics_data)
+        return
+    _render_progress_overview(progress_data)
+    _render_progress_charts(progress_data)
+    _render_progress_details(progress_data)
 
+def _calculate_epic_progress(analytics_data: Dict[str, Any]) -> Dict[str, Any]:
+    """Calculate epic progress metrics and completion rates."""
     engine_enabled = analytics_data.get("analytics_engine_enabled", False)
     productivity_metrics = analytics_data.get("productivity_metrics", {})
-
     if engine_enabled and productivity_metrics:
-        # Enhanced epic analysis from analytics engine
         epic_analysis = productivity_metrics.get("epic_analysis", {})
+        epic_performance = epic_analysis.get("epic_performance", [])
+        if epic_performance and PANDAS_AVAILABLE:
+            df = pd.DataFrame(epic_performance)
+            return {"df": df, "analysis": epic_analysis}
+    return {}
 
-        if epic_analysis:
-            epic_performance = epic_analysis.get("epic_performance", [])
+def _render_progress_overview(progress_data: Dict[str, Any]):
+    """Render epic progress overview."""
+    df = progress_data.get("df")
+    if df is None:
+        return
 
-            if epic_performance and PANDAS_AVAILABLE:
-                # Create comprehensive epic dashboard
-                df = pd.DataFrame(epic_performance)
+def _render_progress_charts(progress_data: Dict[str, Any]):
+    """Render epic progress charts."""
+    df = progress_data.get("df")
+    if df is None:
+        return
+    fig = make_subplots(
+        rows=2,
+        cols=2,
+        subplot_titles=["Points Earned by Epic", "Epic Velocity (Tasks/Week)", "Epic Efficiency Score", "Progress vs Target"],
+        specs=[[{"type": "bar"}, {"type": "bar"}], [{"type": "scatter"}, {"type": "bar"}]],
+    )
+    fig.add_trace(
+        go.Bar(x=df["epic_name"] if "epic_name" in df.columns else df.get("name", []),
+               y=df["points_earned"] if "points_earned" in df.columns else df.get("points", []),
+               name="Points", marker_color="lightblue", text=df["points_earned"] if "points_earned" in df.columns else df.get("points", []), textposition="outside"),
+        row=1, col=1,
+    )
+    if "velocity" in df.columns:
+        fig.add_trace(
+            go.Bar(x=df["epic_name"] if "epic_name" in df.columns else df.get("name", []), y=df["velocity"], name="Velocity", marker_color="orange", text=[f"{v:.1f}" for v in df["velocity"]], textposition="outside"),
+            row=1, col=2,
+        )
+    if "efficiency_score" in df.columns:
+        fig.add_trace(
+            go.Scatter(x=df["epic_name"] if "epic_name" in df.columns else df.get("name", []), y=df["efficiency_score"], mode="markers+lines", name="Efficiency", marker=dict(size=12, color=df["efficiency_score"], colorscale="RdYlGn", cmin=0, cmax=100), line=dict(color="green", width=2)),
+            row=2, col=1,
+        )
+    if "progress_percentage" in df.columns:
+        fig.add_trace(
+            go.Bar(x=df["epic_name"] if "epic_name" in df.columns else df.get("name", []), y=df["progress_percentage"], name="Actual Progress", marker_color="lightgreen", opacity=0.7),
+            row=2, col=2,
+        )
+        if "target_percentage" in df.columns:
+            fig.add_trace(
+                go.Scatter(x=df["epic_name"] if "epic_name" in df.columns else df.get("name", []), y=df["target_percentage"], mode="markers+lines", name="Target", line=dict(color="red", dash="dash", width=2), marker=dict(size=8, color="red")),
+                row=2, col=2,
+            )
+    fig.update_layout(height=600, showlegend=False)
+    fig.update_xaxes(tickangle=-45)
+    fig.update_yaxes(title_text="Points", row=1, col=1)
+    fig.update_yaxes(title_text="Tasks/Week", row=1, col=2)
+    fig.update_yaxes(title_text="Efficiency %", range=[0, 100], row=2, col=1)
+    fig.update_yaxes(title_text="Progress %", range=[0, 100], row=2, col=2)
+    st.plotly_chart(fig, use_container_width=True)
 
-                # Multi-metric epic chart
-                fig = make_subplots(
-                    rows=2, cols=2,
-                    subplot_titles=[
-                        "Points Earned by Epic",
-                        "Epic Velocity (Tasks/Week)", 
-                        "Epic Efficiency Score",
-                        "Progress vs Target"
-                    ],
-                    specs=[
-                        [{"type": "bar"}, {"type": "bar"}],
-                        [{"type": "scatter"}, {"type": "bar"}]
-                    ]
-                )
+def _render_progress_details(progress_data: Dict[str, Any]):
+    """Render detailed epic progress information."""
+    df = progress_data.get("df")
+    if df is None:
+        return
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        if "velocity" in df.columns and len(df) > 0:
+            top_velocity_epic = df.loc[df["velocity"].idxmax()]
+            epic_name = top_velocity_epic.get("epic_name", top_velocity_epic.get("name", "Unknown"))
+            st.success(f"🚀 **Fastest Epic:** {epic_name}")
+            st.caption(f"Velocity: {top_velocity_epic['velocity']:.1f} tasks/week")
+    with col2:
+        if "efficiency_score" in df.columns and len(df) > 0:
+            most_efficient_epic = df.loc[df["efficiency_score"].idxmax()]
+            epic_name = most_efficient_epic.get("epic_name", most_efficient_epic.get("name", "Unknown"))
+            st.success(f"⚙️ **Most Efficient:** {epic_name}")
+            st.caption(f"Efficiency: {most_efficient_epic['efficiency_score']:.1f}%")
+    with col3:
+        points_col = "points_earned" if "points_earned" in df.columns else "points"
+        total_points = df[points_col].sum() if points_col in df.columns else 0
+        avg_progress = df["progress_percentage"].mean() if "progress_percentage" in df.columns else 0
+        st.metric("Total Points", f"{total_points:,}", f"Avg Progress: {avg_progress:.1f}%")
 
-                # Top-left: Points by Epic
-                fig.add_trace(
-                    go.Bar(
-                        x=df["epic_name"] if "epic_name" in df.columns else df.get("name", []),
-                        y=df["points_earned"] if "points_earned" in df.columns else df.get("points", []),
-                        name="Points",
-                        marker_color="lightblue",
-                        text=df["points_earned"] if "points_earned" in df.columns else df.get("points", []),
-                        textposition="outside"
-                    ),
-                    row=1, col=1
-                )
-
-                # Top-right: Epic Velocity (if available)
-                if "velocity" in df.columns:
-                    fig.add_trace(
-                        go.Bar(
-                            x=df["epic_name"] if "epic_name" in df.columns else df.get("name", []),
-                            y=df["velocity"],
-                            name="Velocity",
-                            marker_color="orange",
-                            text=[f"{v:.1f}" for v in df["velocity"]],
-                            textposition="outside"
-                        ),
-                        row=1, col=2
-                    )
-
-                # Bottom-left: Efficiency Score (if available)
-                if "efficiency_score" in df.columns:
-                    fig.add_trace(
-                        go.Scatter(
-                            x=df["epic_name"] if "epic_name" in df.columns else df.get("name", []),
-                            y=df["efficiency_score"],
-                            mode="markers+lines",
-                            name="Efficiency",
-                            marker=dict(size=12, color=df["efficiency_score"], colorscale="RdYlGn", cmin=0, cmax=100),
-                            line=dict(color="green", width=2)
-                        ),
-                        row=2, col=1
-                    )
-
-                # Bottom-right: Progress vs Target (if available)
-                if "progress_percentage" in df.columns:
-                    fig.add_trace(
-                        go.Bar(
-                            x=df["epic_name"] if "epic_name" in df.columns else df.get("name", []),
-                            y=df["progress_percentage"],
-                            name="Actual Progress",
-                            marker_color="lightgreen",
-                            opacity=0.7
-                        ),
-                        row=2, col=2
-                    )
-
-                    if "target_percentage" in df.columns:
-                        fig.add_trace(
-                            go.Scatter(
-                                x=df["epic_name"] if "epic_name" in df.columns else df.get("name", []),
-                                y=df["target_percentage"],
-                                mode="markers+lines",
-                                name="Target",
-                                line=dict(color="red", dash="dash", width=2),
-                                marker=dict(size=8, color="red")
-                            ),
-                            row=2, col=2
-                        )
-
-                # Update layout
-                fig.update_layout(
-                    height=600,
-                    showlegend=False
-                )
-
-                # Update axes
-                fig.update_xaxes(tickangle=-45)
-                fig.update_yaxes(title_text="Points", row=1, col=1)
-                fig.update_yaxes(title_text="Tasks/Week", row=1, col=2)
-                fig.update_yaxes(title_text="Efficiency %", range=[0, 100], row=2, col=1)
-                fig.update_yaxes(title_text="Progress %", range=[0, 100], row=2, col=2)
-
-                st.plotly_chart(fig, use_container_width=True)
-
-                # Epic insights
-                col1, col2, col3 = st.columns(3)
-
-                with col1:
-                    if "velocity" in df.columns and len(df) > 0:
-                        top_velocity_epic = df.loc[df["velocity"].idxmax()]
-                        epic_name = top_velocity_epic.get("epic_name", top_velocity_epic.get("name", "Unknown"))
-                        st.success(f"🚀 **Fastest Epic:** {epic_name}")
-                        st.caption(f"Velocity: {top_velocity_epic['velocity']:.1f} tasks/week")
-
-                with col2:
-                    if "efficiency_score" in df.columns and len(df) > 0:
-                        most_efficient_epic = df.loc[df["efficiency_score"].idxmax()]
-                        epic_name = most_efficient_epic.get("epic_name", most_efficient_epic.get("name", "Unknown"))
-                        st.success(f"⚙️ **Most Efficient:** {epic_name}")
-                        st.caption(f"Efficiency: {most_efficient_epic['efficiency_score']:.1f}%")
-
-                with col3:
-                    points_col = "points_earned" if "points_earned" in df.columns else "points"
-                    total_points = df[points_col].sum() if points_col in df.columns else 0
-                    avg_progress = df["progress_percentage"].mean() if "progress_percentage" in df.columns else 0
-                    st.metric("Total Points", f"{total_points:,}", f"Avg Progress: {avg_progress:.1f}%")
-            else:
-                # Fallback to basic epic chart
-                _render_basic_epic_progress(analytics_data)
-        else:
-            _render_basic_epic_progress(analytics_data)
-    else:
-        _render_basic_epic_progress(analytics_data)
 
 def _render_basic_epic_progress(analytics_data: Dict[str, Any]):
     """Render basic epic progress (fallback)."""

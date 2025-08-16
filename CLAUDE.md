@@ -432,6 +432,48 @@ test-tdd-project/
 │       ├── development.yaml      # Development environment settings
 │       ├── staging.yaml          # Staging environment settings
 │       └── production.yaml       # Production environment settings
+├── 📚 docs/                       # 📚 Documentation (ORGANIZED)
+│   ├── archive/                  # Historical documentation
+│   │   ├── PROMPT_*.md          # Original implementation prompts
+│   │   ├── plano.md             # Development planning documentation
+│   │   └── audit_reports/       # Historical audit reports
+│   ├── development/              # Development guides
+│   │   ├── SETUP_GUIDE.md       # Setup and installation guide
+│   │   ├── USAGE_GUIDE.md       # Usage instructions
+│   │   └── CUSTOMIZATION.md     # Customization guide
+│   ├── security/                 # Security documentation
+│   │   ├── PATCHES_SECURITY_FIXES_SUMMARY.md
+│   │   └── PATCH_VULNERABILITY_FIXES.md
+│   └── CACHE_MANAGEMENT.md       # Cache management documentation
+├── 🔧 scripts/                    # 🔧 Scripts (ORGANIZED)
+│   ├── maintenance/              # Database and system maintenance
+│   │   ├── database_maintenance.py
+│   │   ├── benchmark_database.py
+│   │   └── simple_benchmark.py
+│   ├── migration/                # Data migration scripts
+│   │   ├── migrate_*.py
+│   │   └── migration_*.py
+│   ├── analysis/                 # Analysis and audit tools
+│   │   ├── audit_*.py
+│   │   ├── analyze_*.py
+│   │   └── catalog_*.py
+│   ├── setup/                    # Setup and creation scripts
+│   │   └── create_*.py
+│   ├── testing/                  # Testing utilities
+│   │   ├── test_*.py
+│   │   └── demo_*.py
+│   └── cleanup_cache.py          # Cache cleanup utility
+├── 🧪 tests/                     # Comprehensive test suite (525+ tests)
+│   ├── test_*.py                 # Individual component tests
+│   ├── integration/              # Integration test suite
+│   └── performance/              # Performance and stress tests
+│       ├── test_stress_suite.py  # Comprehensive stress testing
+│       ├── test_breakpoint_testing.py # System limit testing
+│       └── conftest.py           # Test configuration
+├── 📁 patches_applied/            # Applied patches (ORGANIZED)
+│   ├── 1.patch through 6.patch  # Valid implementation patches
+│   ├── 8.patch through 13.patch # Additional patches
+│   └── patch.patch               # Generic patch file
 ├── 🗄️ framework.db               # Main database (1 client, 1 project, 12 epics, 206 tasks)
 ├── 🗄️ task_timer.db              # Timer sessions (49KB, 34 examples)
 ├── 📊 duration_system/            # Duration calculation engine
@@ -442,23 +484,15 @@ test-tdd-project/
 │   ├── business_calendar.py     # Business days with holidays
 │   ├── database_transactions.py # Transaction security system
 │   └── json_security.py         # JSON validation & sanitization
-├── 🔄 migration/                 # Data migration and sync tools (NEW)
+├── 🔄 migration/                 # Data migration and sync tools
 │   ├── bidirectional_sync.py    # Core sync engine (565 lines)
 │   ├── json_enrichment.py       # 3-layer enrichment system
 │   └── data_base_strategy.py     # Duration → planned dates calculation
 ├── 📋 epics/                     # Epic data (JSON format)
 │   ├── user_epics/               # Production epic files (9 files)
 │   └── enriched/                 # Enriched JSON exports (9 files)
-├── 🧪 tests/                     # Comprehensive test suite (510+ tests)
-│   ├── test_*.py                 # Individual component tests
-│   └── integration/              # Integration test suite
-├── 📚 audits/                    # Audit reports and documentation (NEW)
-│   ├── CODEX_*.md               # Codex audit reports
-│   ├── SECURITY_*.md            # Security audit reports
-│   ├── AUDIT_*.md               # General audit documentation
-│   └── FASE_7.2_*.md            # Phase completion reports
-├── 📖 USAGE_GUIDE.md             # Complete usage instructions (NEW)
 ├── 📖 CLAUDE.md                  # This file (updated)
+├── 📖 TROUBLESHOOTING.md         # Troubleshooting guide
 ├── 🔧 SQL Schema:
 │   ├── framework_v3.sql         # Core database schema
 │   ├── schema_extensions_v4.sql # Duration System extensions
@@ -466,9 +500,7 @@ test-tdd-project/
 └── 🛠️ Utilities:
     ├── comprehensive_integrity_test.py # Production certification suite
     ├── validate_sync_results.py        # Data integrity validation
-    ├── test_simple_sync.py             # Connection testing
-    ├── database_maintenance.py         # Database maintenance
-    └── Various migration and setup scripts
+    └── test_simple_sync.py             # Connection testing
 ```
 
 ---
@@ -478,22 +510,22 @@ test-tdd-project/
 ### Database Operations
 ```bash
 # Run database maintenance
-python database_maintenance.py
+python scripts/maintenance/database_maintenance.py
 
 # Quick backup only
-python database_maintenance.py backup
+python scripts/maintenance/database_maintenance.py backup
 
 # Health check only  
-python database_maintenance.py health
+python scripts/maintenance/database_maintenance.py health
 
 # Test database integrity
-python test_database_integrity.py
+python scripts/testing/test_database_integrity.py
 
 # Validate Streamlit requirements
-python validate_streamlit_requirements.py
+python scripts/testing/validate_streamlit_requirements.py
 
 # Migrate JSON data to SQLite
-python migrate_real_json_data.py
+python scripts/migration/migrate_real_json_data.py
 ```
 
 ### Testing & Validation
@@ -513,11 +545,17 @@ python -m pytest tests/test_duration_*.py -v
 # All Security tests (110+ tests)
 python -m pytest tests/test_*security*.py tests/test_*transactions*.py -v
 
-# All tests with coverage (510+ tests)
+# All tests with coverage (525+ tests)
 python -m pytest tests/ --cov=duration_system --cov-report=html
+
+# Performance and stress tests
+python -m pytest tests/performance/ --stress -v
 
 # Bidirectional Sync Testing
 python migration/bidirectional_sync.py
+
+# Cache cleanup utility
+python scripts/cleanup_cache.py
 ```
 
 ### Security Testing
@@ -962,12 +1000,21 @@ streamlit run streamlit_extension/streamlit_app.py
 - **Test Coverage:** 525+ tests (100% success rate)
 - **Code Quality:** Production-ready maintainable architecture
 
-*Last updated: 2025-08-15 by Claude*  
+*Last updated: 2025-08-16 by Claude*  
 *Phase 2 (Code Quality) **COMPLETE** ✅*  
 *Type Safety: **A+ GRADE** | DRY Architecture: **75% REDUCTION** | Constants: **CENTRALIZED***  
 *Security Status: **ZERO CRITICAL VULNERABILITIES** - 100% database access patterns secured*  
 *Total Tests: **525+** (100% passing) | Runtime: **<10s***  
 *Status: **PRODUCTION-READY CODE QUALITY** - Enterprise maintainability achieved*  
+
+### 🧹 **PROJECT CLEANUP COMPLETED (2025-08-16)**
+- ✅ **Enterprise Structure**: docs/ and scripts/ organization implemented
+- ✅ **Documentation Organized**: 28+ .md files categorized (archive/development/security)
+- ✅ **Scripts Organized**: Maintenance, migration, analysis, setup, testing
+- ✅ **Patches Consolidated**: Valid patches 1-6 organized in patches_applied/
+- ✅ **Cache Management**: Comprehensive cleanup with automated tools
+- ✅ **Repository Optimized**: Clean structure ready for enterprise deployment
+
 *Next: Phase 3 - Service Layer Implementation*
 - Sempre leia o arquivo antes de tentar edita-lo.
 Claude (Dev Sênior + Tech Leader)

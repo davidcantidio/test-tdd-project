@@ -1,0 +1,48 @@
+# Alert rules for TDD Project
+groups:
+  - name: database_alerts
+    rules:
+      - alert: DatabaseConnectionFailure
+        expr: database_connections_failed_total > 5
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Database connection failures detected"
+          description: "{{ $labels.instance }} has {{ $value }} failed connections"
+
+      - alert: SlowQueries
+        expr: database_query_duration_seconds > 1
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Slow database queries detected"
+
+  - name: application_alerts
+    rules:
+      - alert: HighErrorRate
+        expr: error_rate > 0.1
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "High error rate in application"
+
+      - alert: MemoryUsageHigh
+        expr: memory_usage_percent > 90
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High memory usage"
+
+  - name: performance_alerts
+    rules:
+      - alert: ResponseTimeHigh
+        expr: response_time_seconds > 2
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High response times detected"

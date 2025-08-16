@@ -1,0 +1,44 @@
+# Structured logging configuration
+version: 1
+disable_existing_loggers: false
+
+formatters:
+  standard:
+    format: '%(asctime)s [%(levelname)s] %(name)s: %(message)s'
+  json:
+    class: pythonjsonlogger.jsonlogger.JsonFormatter
+    format: '%(asctime)s %(name)s %(levelname)s %(message)s'
+
+handlers:
+  console:
+    class: logging.StreamHandler
+    level: INFO
+    formatter: standard
+    stream: ext://sys.stdout
+
+  file:
+    class: logging.handlers.RotatingFileHandler
+    level: DEBUG
+    formatter: json
+    filename: logs/application.log
+    maxBytes: 10485760  # 10MB
+    backupCount: 5
+
+  prometheus:
+    class: prometheus_client.logging.PrometheusHandler
+    level: WARNING
+
+loggers:
+  streamlit_extension:
+    level: DEBUG
+    handlers: [console, file, prometheus]
+    propagate: false
+  
+  duration_system:
+    level: DEBUG
+    handlers: [console, file]
+    propagate: false
+
+root:
+  level: WARNING
+  handlers: [console, file]

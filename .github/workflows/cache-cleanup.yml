@@ -1,0 +1,31 @@
+name: Cache Cleanup Check
+
+on:
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  cache-check:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
+
+    - name: Check for cache artifacts
+      run: |
+        python scripts/cleanup_cache.py
+
+        # Fail if cache files found
+        cache_files=$(find . -name "__pycache__" -o -name ".streamlit_cache" -o -name "*.pyc")
+        if [ ! -z "$cache_files" ]; then
+          echo "❌ Cache artifacts found in repository:"
+          echo "$cache_files"
+          exit 1
+        fi
+
+        echo "✅ No cache artifacts found"

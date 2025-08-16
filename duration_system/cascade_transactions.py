@@ -13,6 +13,8 @@ from datetime import datetime
 from contextlib import contextmanager
 import uuid
 
+from .query_builders import query_table
+
 logger = logging.getLogger(__name__)
 
 
@@ -77,9 +79,14 @@ class CascadeTransactionManager:
                     child_table = relationship['table']
                     foreign_key = relationship['foreign_key']
                     
-                    # Use parameter binding to prevent SQL injection
-                    query = f"SELECT COUNT(*) FROM {child_table} WHERE {foreign_key} = ?"
-                    cursor = conn.execute(query, (record_id,))
+                    # Use query builder for secure parameter binding
+                    count_query, params = (
+                        query_table(child_table)
+                        .select("COUNT(*)")
+                        .where(foreign_key, "=", record_id)
+                        .build()
+                    )
+                    cursor = conn.execute(count_query, params)
                     count = cursor.fetchone()[0]
                     
                     if count > 0:
@@ -177,9 +184,14 @@ class CascadeTransactionManager:
             child_table = relationship['table']
             foreign_key = relationship['foreign_key']
             
-            # SECURITY FIX: Use parameter binding
-            delete_query = f"DELETE FROM {child_table} WHERE {foreign_key} = ?"
-            cursor = conn.execute(delete_query, (record_id,))
+            # SECURITY FIX: Use query builder for parameter binding
+            delete_query, params = (
+                query_table(child_table)
+                .delete()
+                .where(foreign_key, "=", record_id)
+                .build()
+            )
+            cursor = conn.execute(delete_query, params)
             
             if cursor.rowcount > 0:
                 deleted_count += cursor.rowcount
@@ -187,9 +199,11 @@ class CascadeTransactionManager:
                 logger.debug(f"Deleted {cursor.rowcount} records from {child_table}")
 
         # Finally delete the parent record
-        # SECURITY FIX: Use parameter binding
-        parent_delete_query = f"DELETE FROM {table} WHERE id = ?"
-        cursor = conn.execute(parent_delete_query, (record_id,))
+        # SECURITY FIX: Use query builder for parameter binding
+        parent_delete_query, parent_params = (
+            query_table(table).delete().where("id", "=", record_id).build()
+        )
+        cursor = conn.execute(parent_delete_query, parent_params)
         
         if cursor.rowcount > 0:
             deleted_count += cursor.rowcount
