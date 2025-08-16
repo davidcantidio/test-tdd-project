@@ -1,1512 +1,865 @@
  (cd "$(git rev-parse --show-toplevel)" && git apply --3way <<'EOF' 
-diff --git a/streamlit_extension/pages/clients.py b/streamlit_extension/pages/clients.py
-index bb89b60ddb0f8779b79adb8a8173acde7b80d3d5..5aabc0b9894917579b6da69df39d05f311b5d971 100644
---- a/streamlit_extension/pages/clients.py
-+++ b/streamlit_extension/pages/clients.py
-@@ -15,50 +15,51 @@ from typing import Dict, Any, List, Optional
- from datetime import datetime
+diff --git a/streamlit_extension/components/form_components.py b/streamlit_extension/components/form_components.py
+index b140c6b6694fc000da40584da36abdc67cd7f1a6..5a6074a697eef7cf226d3c5cccfc1e040acf6f23 100644
+--- a/streamlit_extension/components/form_components.py
++++ b/streamlit_extension/components/form_components.py
+@@ -1,577 +1,136 @@
+-#!/usr/bin/env python3
+-"""
+-🏗️ DRY Form Components
++from typing import Dict, List, Callable, Any, Optional
  
- # Add parent directory to path
- sys.path.append(str(Path(__file__).parent.parent.parent))
- 
- # Graceful imports
+-Addresses report.md requirement: "Refactor repeated form logic into DRY components"
+-
+-This module provides reusable form components that eliminate code duplication:
+-- StandardForm: Modal and expander form patterns
+-- InputSection: Common input groupings
+-- FormValidator: Centralized validation logic
+-- SecurityForm: CSRF token handling
+-- SubmissionHandler: Form submission patterns
+-"""
+-
+-import sys
+-from pathlib import Path
+-from typing import Dict, Any, List, Optional, Callable, Tuple, Union
+-from contextlib import contextmanager
+-from dataclasses import dataclass
+-from datetime import datetime
+-
+-# Add parent directory to path
+-sys.path.append(str(Path(__file__).parent.parent.parent))
+-
+-# Graceful imports
  try:
      import streamlit as st
-     STREAMLIT_AVAILABLE = True
- except ImportError:
-     STREAMLIT_AVAILABLE = False
+-    STREAMLIT_AVAILABLE = True
+-except ImportError:
+-    STREAMLIT_AVAILABLE = False
++except ImportError:  # pragma: no cover - streamlit not installed in tests
      st = None
  
- # Local imports
- try:
-     from streamlit_extension.utils.database import DatabaseManager
-     from streamlit_extension.utils.validators import validate_client_data, validate_email_uniqueness, validate_client_key_uniqueness
-     from streamlit_extension.utils.security import (
-         create_safe_client, sanitize_display, validate_form, check_rate_limit,
-         security_manager
-     )
-     from streamlit_extension.config import load_config
-     from streamlit_extension.config.constants import (
-         GeneralStatus, ClientTier, CompanySize, UIConstants, FormFields
-     )
-+    from streamlit_extension.security import SecureFormManager, sanitize_input
-     DATABASE_UTILS_AVAILABLE = True
- except ImportError:
-     DATABASE_UTILS_AVAILABLE = False
-     DatabaseManager = validate_client_data = load_config = None
-     create_safe_client = sanitize_display = validate_form = None
-     GeneralStatus = ClientTier = CompanySize = UIConstants = FormFields = None
+-try:
+-    from streamlit_extension.utils.security import security_manager, validate_form
+-    from streamlit_extension.utils.validators import validate_client_data, validate_project_data
+-    SECURITY_AVAILABLE = True
+-except ImportError:
+-    SECURITY_AVAILABLE = False
+-    security_manager = validate_form = None
+-    validate_client_data = validate_project_data = None
+-
+-
+-@dataclass
+-class FormConfig:
+-    """Configuration for form components."""
+-    form_id: str
+-    title: str
+-    submit_text: str = "Submit"
+-    cancel_text: str = "Cancel"
+-    enable_csrf: bool = True
+-    enable_rate_limit: bool = True
+-    columns: int = 2
+-    submit_button_type: str = "primary"
+-    clear_on_submit: bool = False
+-
  
- from streamlit_extension.utils.exception_handler import (
-     handle_streamlit_exceptions,
-     streamlit_error_boundary,
-     safe_streamlit_operation,
-     get_error_statistics,
- )
- 
- try:
-     from streamlit_extension.utils.auth import require_authentication
- except ImportError:
-     # Fallback if auth module not available
-     def require_authentication(func):
-         return func
- 
- 
- def render_client_card(client: Dict[str, Any], db_manager: DatabaseManager):
-     """Render an individual client card."""
-     if not STREAMLIT_AVAILABLE:
-@@ -298,128 +299,126 @@ def render_delete_client_modal(client: Dict[str, Any], db_manager: DatabaseManag
-             if st.button("🗑️ Delete Client", use_container_width=True):
-                 # Check rate limit for database write
-                 db_rate_allowed, db_rate_error = check_rate_limit("db_write") if check_rate_limit else (True, None)
-                 if not db_rate_allowed:
-                     st.error(f"🚦 Database {db_rate_error}")
-                     return
-                 
-                 success = db_manager.delete_client(client['id'], soft_delete=True)
-                 if success:
-                     st.success("✅ Client deleted successfully!")
-                     st.session_state[f"delete_client_{client['id']}"] = False
-                     st.rerun()
-                 else:
-                     st.error("❌ Failed to delete client")
-         
-         with col2:
-             if st.button("❌ Cancel", use_container_width=True):
-                 st.session_state[f"delete_client_{client['id']}"] = False
-                 st.rerun()
- 
- 
- def render_create_client_form(db_manager: DatabaseManager):
-     """Render the create new client form."""
-     if not STREAMLIT_AVAILABLE:
-         return
+-@dataclass
+-class InputField:
+-    """Configuration for individual input fields."""
+-    name: str
+-    label: str
+-    input_type: str = "text_input"
+-    required: bool = False
+-    placeholder: str = ""
+-    value: Any = None
+-    help_text: str = ""
+-    options: List[Any] = None
+-    min_value: Optional[float] = None
+-    max_value: Optional[float] = None
+-    step: Optional[float] = None
+-    validation_func: Optional[Callable] = None
+-
+-
+-class FormValidator:
+-    """Centralized form validation logic."""
 -    
-+
-+    form_manager = SecureFormManager("create_client_form")
-+
-     with st.expander("➕ Create New Client", expanded=False):
-         with st.form("create_client_form"):
-             st.markdown("### 📝 New Client Information")
--            
--            # Generate CSRF token for form protection
--            csrf_form_id = "create_client_form"
--            csrf_field = security_manager.get_csrf_form_field(csrf_form_id) if security_manager else None
--            
-+
-             col1, col2 = st.columns(2)
-             
-             with col1:
-                 st.markdown("#### Basic Information")
-                 client_key = st.text_input("Client Key*", placeholder="e.g., client_xyz")
-                 name = st.text_input("Client Name*", placeholder="e.g., Company ABC")
-                 description = st.text_area("Description", placeholder="Brief description of the client...")
-                 
-                 industry = st.text_input("Industry", placeholder="e.g., Technology")
-                 company_size_options = CompanySize.get_all_values() if CompanySize else ["startup", "small", "medium", "large", "enterprise"]
-                 company_size = st.selectbox("Company Size", options=company_size_options)
-             
-             with col2:
-                 st.markdown("#### Contact Information")
-                 primary_contact_name = st.text_input("Contact Name", placeholder="e.g., John Doe")
-                 primary_contact_email = st.text_input("Contact Email*", placeholder="john@company.com")
-                 primary_contact_phone = st.text_input("Contact Phone", placeholder="+55 (11) 99999-9999")
-                 
-                 st.markdown("#### Business Settings")
-                 status_options = GeneralStatus.get_all_values() if GeneralStatus else ["active", "inactive", "suspended", "archived"]
-                 status = st.selectbox("Status", options=status_options, index=0)
-                 tier_options = ClientTier.get_all_values() if ClientTier else ["basic", "standard", "premium", "enterprise"]
-                 tier_default_index = tier_options.index(ClientTier.get_default()) if ClientTier else 1
-                 client_tier = st.selectbox("Client Tier", options=tier_options, index=tier_default_index)
-                 hourly_rate = st.number_input("Hourly Rate (R$)", value=0.0, min_value=0.0)
-             
-             if st.form_submit_button("🚀 Create Client", use_container_width=True):
--                # CSRF Protection
--                if csrf_field and security_manager:
--                    csrf_valid, csrf_error = security_manager.require_csrf_protection(
--                        csrf_form_id, csrf_field.get("token_value")
--                    )
--                    if not csrf_valid:
--                        st.error(f"🔒 Security Error: {csrf_error}")
--                        return
--                
-                 # Check rate limit for form submission
-                 rate_allowed, rate_error = check_rate_limit("form_submit") if check_rate_limit else (True, None)
-                 if not rate_allowed:
-                     st.error(f"🚦 {rate_error}")
-                     return
--                
--                # Create raw data
--                raw_data = {
-+
-+                form_data = {
-                     'client_key': client_key,
-                     'name': name,
-                     'description': description,
-                     'industry': industry,
-                     'company_size': company_size,
-                     'primary_contact_name': primary_contact_name,
-                     'primary_contact_email': primary_contact_email,
-                     'primary_contact_phone': primary_contact_phone,
-                     'status': status,
-                     'client_tier': client_tier,
-                     'hourly_rate': hourly_rate
-                 }
--                
--                # Security validation
--                if validate_form:
--                    security_valid, security_errors = validate_form(raw_data)
--                    if not security_valid:
--                        for error in security_errors:
--                            st.error(f"🔒 Security: {error}")
--                        return
--                
--                # Sanitize data for security
--                client_data = create_safe_client(raw_data) if create_safe_client else raw_data
--                
--                is_valid, errors = validate_client_data(client_data)
-+
-+                success, error = form_manager.validate_submission(form_data, [
-+                    'client_key', 'name', 'primary_contact_email'
-+                ])
-+                if not success:
-+                    st.error(f"Validation failed: {error}")
-+                    return
-+
-+                sanitized_data = sanitize_input(form_data)
-+
-+                client_key = sanitized_data['client_key']
-+                name = sanitized_data['name']
-+                description = sanitized_data.get('description')
-+                industry = sanitized_data.get('industry')
-+                company_size = sanitized_data.get('company_size')
-+                primary_contact_name = sanitized_data.get('primary_contact_name')
-+                primary_contact_email = sanitized_data.get('primary_contact_email')
-+                primary_contact_phone = sanitized_data.get('primary_contact_phone')
-+                status = sanitized_data.get('status')
-+                client_tier = sanitized_data.get('client_tier')
-+                hourly_rate = sanitized_data.get('hourly_rate')
-+
-+                is_valid, errors = validate_client_data(sanitized_data)
-                 
-                 if is_valid:
-                     # Check uniqueness
-                     existing_clients_result = db_manager.get_clients(include_inactive=True)
-                     existing_clients = existing_clients_result.get("data", []) if isinstance(existing_clients_result, dict) else []
-                     
-                     if not validate_email_uniqueness(primary_contact_email, existing_clients):
-                         st.error("❌ Email already exists for another client")
-                     elif not validate_client_key_uniqueness(client_key, existing_clients):
-                         st.error("❌ Client key already exists")
-                     else:
-                         # Check rate limit for database write
-                         db_rate_allowed, db_rate_error = check_rate_limit("db_write") if check_rate_limit else (True, None)
-                         if not db_rate_allowed:
-                             st.error(f"🚦 Database {db_rate_error}")
-                             return
-                         
-                         # Create client
-                         client_id = db_manager.create_client(
-                             client_key=client_key,
-                             name=name,
-                             description=description,
-                             industry=industry,
-                             company_size=company_size,
-                             primary_contact_name=primary_contact_name,
-diff --git a/streamlit_extension/pages/projects.py b/streamlit_extension/pages/projects.py
-index b972e85a1725b23b4253e032294f0191454fb3e2..95be7bbd918b81f0e85ac3e3897a2bd207062603 100644
---- a/streamlit_extension/pages/projects.py
-+++ b/streamlit_extension/pages/projects.py
-@@ -12,50 +12,51 @@ Comprehensive project management interface with CRUD operations:
- import sys
- from pathlib import Path
- from typing import Dict, Any, List, Optional
- from datetime import datetime, date
- 
- # Add parent directory to path
- sys.path.append(str(Path(__file__).parent.parent.parent))
- 
- # Graceful imports
- try:
-     import streamlit as st
-     STREAMLIT_AVAILABLE = True
- except ImportError:
-     STREAMLIT_AVAILABLE = False
-     st = None
- 
- # Local imports
- try:
-     from streamlit_extension.utils.database import DatabaseManager
-     from streamlit_extension.utils.validators import validate_project_data, validate_project_key_uniqueness
-     from streamlit_extension.utils.security import (
-         create_safe_project, sanitize_display, validate_form, check_rate_limit,
-         security_manager
-     )
-     from streamlit_extension.config import load_config
-+    from streamlit_extension.security import SecureFormManager, sanitize_input
-     DATABASE_UTILS_AVAILABLE = True
- except ImportError:
-     DATABASE_UTILS_AVAILABLE = False
-     DatabaseManager = validate_project_data = load_config = None
-     create_safe_project = sanitize_display = validate_form = None
- 
- 
- def render_project_card(project: Dict[str, Any], db_manager: DatabaseManager, clients_map: Dict[int, str]):
-     """Render an individual project card."""
-     if not STREAMLIT_AVAILABLE:
-         return
-     
-     with st.container():
-         # Card header with status indicator
-         status_colors = {
-             "planning": "🟡",
-             "in_progress": "🟢", 
-             "completed": "✅",
-             "on_hold": "⏸️",
-             "cancelled": "🔴"
-         }
-         status_emoji = status_colors.get(project.get("status", "planning"), "⚪")
-         
-         col1, col2, col3 = st.columns([3, 1, 1])
-         
-@@ -315,152 +316,152 @@ def render_delete_project_modal(project: Dict[str, Any], db_manager: DatabaseMan
-         except:
-             pass
-         
-         col1, col2 = st.columns(2)
-         
-         with col1:
-             if st.button("🗑️ Delete Project", use_container_width=True):
-                 success = db_manager.delete_project(project['id'], soft_delete=True)
-                 if success:
-                     st.success("✅ Project deleted successfully!")
-                     st.session_state[f"delete_project_{project['id']}"] = False
-                     st.rerun()
-                 else:
-                     st.error("❌ Failed to delete project")
-         
-         with col2:
-             if st.button("❌ Cancel", use_container_width=True):
-                 st.session_state[f"delete_project_{project['id']}"] = False
-                 st.rerun()
- 
- 
- def render_create_project_form(db_manager: DatabaseManager, clients_map: Dict[int, str]):
-     """Render the create new project form."""
-     if not STREAMLIT_AVAILABLE:
-         return
+-    @staticmethod
+-    def validate_required_fields(data: Dict[str, Any], required_fields: List[str]) -> List[str]:
+-        """Validate that required fields are present and non-empty."""
+-        errors = []
+-        for field in required_fields:
+-            if not data.get(field):
+-                errors.append(f"{field.replace('_', ' ').title()} is required")
+-        return errors
 -    
-+
-+    form_manager = SecureFormManager("create_project_form")
-+
-     with st.expander("➕ Create New Project", expanded=False):
-         with st.form("create_project_form"):
-             st.markdown("### 📝 New Project Information")
--            
--            # Generate CSRF token for form protection
--            csrf_form_id = "create_project_form"
--            csrf_field = security_manager.get_csrf_form_field(csrf_form_id) if security_manager else None
--            
-+
-             col1, col2 = st.columns(2)
-             
-             with col1:
-                 st.markdown("#### Basic Information")
-                 
-                 # Client selection
-                 if not clients_map:
-                     st.error("❌ No clients available. Please create a client first.")
-                     return
-                 
-                 client_options = list(clients_map.values())
-                 selected_client_name = st.selectbox("Client*", options=client_options)
-                 selected_client_id = next(id for id, name in clients_map.items() if name == selected_client_name)
-                 
-                 project_key = st.text_input("Project Key*", placeholder="e.g., project_abc")
-                 name = st.text_input("Project Name*", placeholder="e.g., Website Development")
-                 description = st.text_area("Description", placeholder="Brief description of the project...")
-                 
-                 project_type = st.selectbox("Project Type", 
-                     options=["development", "maintenance", "consulting", "research", "support"],
-                     index=0
-                 )
-                 methodology = st.selectbox("Methodology",
-                     options=["agile", "waterfall", "kanban", "scrum", "lean", "hybrid"],
-                     index=0
-                 )
-             
-             with col2:
-                 st.markdown("#### Timeline & Budget")
-                 
-                 planned_start_date = st.date_input("Planned Start Date*", value=date.today())
-                 planned_end_date = st.date_input("Planned End Date*", value=date.today())
-                 
-                 budget_amount = st.number_input("Budget Amount", value=0.0, min_value=0.0)
-                 budget_currency = st.selectbox("Currency", options=["BRL", "USD", "EUR"], index=0)
-                 estimated_hours = st.number_input("Estimated Hours", value=0.0, min_value=0.0)
-                 
-                 status = st.selectbox("Status*", 
-                     options=["planning", "in_progress", "completed", "on_hold", "cancelled"],
-                     index=0
-                 )
-                 
-                 health_status = st.selectbox("Health Status",
-                     options=["green", "yellow", "red"],
-                     index=0
-                 )
-             
-             if st.form_submit_button("🚀 Create Project", use_container_width=True):
--                # CSRF Protection
--                if csrf_field and security_manager:
--                    csrf_valid, csrf_error = security_manager.require_csrf_protection(
--                        csrf_form_id, csrf_field.get("token_value")
--                    )
--                    if not csrf_valid:
--                        st.error(f"🔒 Security Error: {csrf_error}")
--                        return
--                
-                 # Check rate limit for form submission
-                 rate_allowed, rate_error = check_rate_limit("form_submit") if check_rate_limit else (True, None)
-                 if not rate_allowed:
-                     st.error(f"🚦 {rate_error}")
-                     return
--                
--                # Create raw data
--                raw_data = {
-+
-+                form_data = {
-                     'client_id': selected_client_id,
-                     'project_key': project_key,
-                     'name': name,
-                     'description': description,
-                     'project_type': project_type,
-                     'methodology': methodology,
-                     'planned_start_date': planned_start_date.isoformat(),
-                     'planned_end_date': planned_end_date.isoformat(),
-                     'budget_amount': budget_amount,
-                     'budget_currency': budget_currency,
-                     'estimated_hours': estimated_hours,
-                     'status': status,
-                     'health_status': health_status,
-                     'completion_percentage': 0.0
-                 }
--                
--                # Security validation
--                if validate_form:
--                    security_valid, security_errors = validate_form(raw_data)
--                    if not security_valid:
--                        for error in security_errors:
--                            st.error(f"🔒 Security: {error}")
--                        return
--                
--                # Sanitize data for security
--                project_data = create_safe_project(raw_data) if create_safe_project else raw_data
--                
--                is_valid, errors = validate_project_data(project_data)
-+
-+                success, error = form_manager.validate_submission(form_data, [
-+                    'project_key', 'name'
-+                ])
-+                if not success:
-+                    st.error(f"Validation failed: {error}")
-+                    return
-+
-+                sanitized_data = sanitize_input(form_data)
-+
-+                selected_client_id = sanitized_data['client_id']
-+                project_key = sanitized_data['project_key']
-+                name = sanitized_data['name']
-+                description = sanitized_data.get('description')
-+                project_type = sanitized_data.get('project_type')
-+                methodology = sanitized_data.get('methodology')
-+                planned_start_date = sanitized_data.get('planned_start_date')
-+                planned_end_date = sanitized_data.get('planned_end_date')
-+                budget_amount = sanitized_data.get('budget_amount')
-+                budget_currency = sanitized_data.get('budget_currency')
-+                estimated_hours = sanitized_data.get('estimated_hours')
-+                status = sanitized_data.get('status')
-+                health_status = sanitized_data.get('health_status')
-+
-+                is_valid, errors = validate_project_data(sanitized_data)
-                 
-                 if is_valid:
-                     # Check uniqueness
-                     existing_projects = db_manager.get_projects(include_inactive=True)
-                     
-                     if not validate_project_key_uniqueness(project_key, selected_client_id, existing_projects):
-                         st.error("❌ Project key already exists for this client")
-                     else:
-                         # Check rate limit for database write
-                         db_rate_allowed, db_rate_error = check_rate_limit("db_write") if check_rate_limit else (True, None)
-                         if not db_rate_allowed:
-                             st.error(f"🚦 Database {db_rate_error}")
-                             return
-                         
-                         # Create project
-                         project_id = db_manager.create_project(
-                             client_id=selected_client_id,
-                             project_key=project_key,
-                             name=name,
-                             description=description,
-                             project_type=project_type,
-                             methodology=methodology
-                         )
-                         
-                         if project_id:
-diff --git a/streamlit_extension/security/__init__.py b/streamlit_extension/security/__init__.py
-new file mode 100644
-index 0000000000000000000000000000000000000000..249a0432c543956e7bdf2352c1f19192ce6da5a7
---- /dev/null
-+++ b/streamlit_extension/security/__init__.py
-@@ -0,0 +1,22 @@
-+"""Security package for CSRF protection and XSS sanitization."""
-+
-+from .csrf_protection import CSRFProtection, generate_csrf_token, validate_csrf_token
-+from .xss_sanitizer import XSSSanitizer, sanitize_input, sanitize_html
-+from .security_headers import SecurityHeaders, apply_security_headers
-+from .input_validator import InputValidator, validate_form_input
-+from .security_middleware import security_middleware, require_csrf
-+
-+__all__ = [
-+    "CSRFProtection",
-+    "generate_csrf_token", 
-+    "validate_csrf_token",
-+    "XSSSanitizer",
-+    "sanitize_input",
-+    "sanitize_html",
-+    "SecurityHeaders",
-+    "apply_security_headers",
-+    "InputValidator",
-+    "validate_form_input",
-+    "security_middleware",
-+    "require_csrf"
-+]
-diff --git a/streamlit_extension/security/csrf_protection.py b/streamlit_extension/security/csrf_protection.py
-new file mode 100644
-index 0000000000000000000000000000000000000000..b826ac665383b6d7e517e879d9ba404b453d9adb
---- /dev/null
-+++ b/streamlit_extension/security/csrf_protection.py
-@@ -0,0 +1,201 @@
-+"""CSRF (Cross-Site Request Forgery) protection implementation."""
-+
-+from __future__ import annotations
-+import secrets
-+import hashlib
-+import time
-+from typing import Dict, Optional, Set
-+from dataclasses import dataclass
-+from datetime import datetime, timedelta
-+import streamlit as st
-+
-+
-+@dataclass
-+class CSRFToken:
-+    """CSRF token data structure."""
-+    token: str
-+    created_at: datetime
-+    expires_at: datetime
-+    user_session: Optional[str] = None
-+    
-+    @property
-+    def is_expired(self) -> bool:
-+        """Check if token is expired."""
-+        return datetime.now() > self.expires_at
-+    
-+    @property
-+    def is_valid(self) -> bool:
-+        """Check if token is valid and not expired."""
-+        return not self.is_expired
-+
-+
-+class CSRFProtection:
-+    """CSRF protection manager with token generation and validation."""
-+    
-+    def __init__(self, token_lifetime_minutes: int = 60):
-+        self.token_lifetime = timedelta(minutes=token_lifetime_minutes)
-+        self._tokens: Dict[str, CSRFToken] = {}
-+        self._used_tokens: Set[str] = set()
-+        self._last_cleanup = time.time()
-+    
-+    def generate_token(self, session_id: Optional[str] = None) -> str:
-+        """Generate new CSRF token."""
-+        # Generate cryptographically secure token
-+        token_data = f"{secrets.token_urlsafe(32)}{time.time()}{session_id or ''}"
-+        token = hashlib.sha256(token_data.encode()).hexdigest()
-+        
-+        now = datetime.now()
-+        csrf_token = CSRFToken(
-+            token=token,
-+            created_at=now,
-+            expires_at=now + self.token_lifetime,
-+            user_session=session_id
-+        )
-+        
-+        self._tokens[token] = csrf_token
-+        self._cleanup_expired_tokens()
-+        
-+        return token
-+    
-+    def validate_token(self, token: str, session_id: Optional[str] = None) -> bool:
-+        """Validate CSRF token."""
-+        if not token or token in self._used_tokens:
-+            return False
-+        
-+        if token not in self._tokens:
-+            return False
-+        
-+        csrf_token = self._tokens[token]
-+        
-+        # Check expiration
-+        if csrf_token.is_expired:
-+            del self._tokens[token]
-+            return False
-+        
-+        # Check session binding if provided
-+        if session_id and csrf_token.user_session != session_id:
-+            return False
-+        
-+        # Mark token as used (one-time use)
-+        self._used_tokens.add(token)
-+        del self._tokens[token]
-+        
-+        return True
-+    
-+    def _cleanup_expired_tokens(self) -> None:
-+        """Clean up expired tokens periodically."""
-+        current_time = time.time()
-+        
-+        # Only cleanup every 5 minutes
-+        if current_time - self._last_cleanup < 300:
-+            return
-+        
-+        now = datetime.now()
-+        expired_tokens = [
-+            token for token, csrf_token in self._tokens.items()
-+            if csrf_token.is_expired
-+        ]
-+        
-+        for token in expired_tokens:
-+            del self._tokens[token]
-+        
-+        # Clean up old used tokens (keep for 1 hour to prevent replay)
-+        cleanup_time = now - timedelta(hours=1)
-+        self._used_tokens = {
-+            token for token in self._used_tokens
-+            if token in self._tokens or 
-+            any(t.created_at > cleanup_time for t in self._tokens.values() if t.token == token)
-+        }
-+        
-+        self._last_cleanup = current_time
-+    
-+    def get_active_tokens_count(self) -> int:
-+        """Get count of active tokens."""
-+        self._cleanup_expired_tokens()
-+        return len(self._tokens)
-+
-+
-+# Global CSRF protection instance
-+_csrf_protection: Optional[CSRFProtection] = None
-+
-+
-+def get_csrf_protection() -> CSRFProtection:
-+    """Get global CSRF protection instance."""
-+    global _csrf_protection
-+    if _csrf_protection is None:
-+        _csrf_protection = CSRFProtection()
-+    return _csrf_protection
-+
-+
-+def generate_csrf_token() -> str:
-+    """Generate CSRF token for current session."""
-+    csrf = get_csrf_protection()
-+    session_id = st.session_state.get("session_id")
-+    return csrf.generate_token(session_id)
-+
-+
-+def validate_csrf_token(token: str) -> bool:
-+    """Validate CSRF token for current session."""
-+    if not token:
-+        return False
-+    
-+    csrf = get_csrf_protection()
-+    session_id = st.session_state.get("session_id")
-+    return csrf.validate_token(token, session_id)
-+
-+
-+def require_csrf_token(form_data: Dict) -> bool:
-+    """Require and validate CSRF token in form data."""
-+    csrf_token = form_data.get("csrf_token")
-+    
-+    if not csrf_token:
-+        st.error("🔒 Security Error: Missing CSRF token")
-+        return False
-+    
-+    if not validate_csrf_token(csrf_token):
-+        st.error("🔒 Security Error: Invalid or expired CSRF token")
-+        return False
-+    
-+    return True
-+
-+
-+def csrf_form_wrapper(form_key: str):
-+    """Decorator to add CSRF protection to Streamlit forms."""
-+    def decorator(func):
-+        def wrapper(*args, **kwargs):
-+            # Generate CSRF token for the form
-+            if f"csrf_token_{form_key}" not in st.session_state:
-+                st.session_state[f"csrf_token_{form_key}"] = generate_csrf_token()
-+            
-+            return func(*args, **kwargs)
-+        return wrapper
-+    return decorator
-+
-+
-+def add_csrf_field(form_key: str) -> str:
-+    """Add CSRF token field to form and return token."""
-+    if f"csrf_token_{form_key}" not in st.session_state:
-+        st.session_state[f"csrf_token_{form_key}"] = generate_csrf_token()
-+    
-+    token = st.session_state[f"csrf_token_{form_key}"]
-+    
-+    # Add hidden field (in Streamlit, we'll store in session state)
-+    st.session_state[f"form_csrf_{form_key}"] = token
-+    
-+    return token
-+
-+
-+def validate_form_csrf(form_key: str, submitted_token: str) -> bool:
-+    """Validate CSRF token for specific form."""
-+    expected_token = st.session_state.get(f"form_csrf_{form_key}")
-+    
-+    if not expected_token or not submitted_token:
-+        return False
-+    
-+    # Clear the token after use
-+    if f"csrf_token_{form_key}" in st.session_state:
-+        del st.session_state[f"csrf_token_{form_key}"]
-+    if f"form_csrf_{form_key}" in st.session_state:
-+        del st.session_state[f"form_csrf_{form_key}"]
-+    
-+    return validate_csrf_token(submitted_token)
-diff --git a/streamlit_extension/security/input_validator.py b/streamlit_extension/security/input_validator.py
-new file mode 100644
-index 0000000000000000000000000000000000000000..f89088ea437d57bd12a58db932d4878ba3a4d4e6
---- /dev/null
-+++ b/streamlit_extension/security/input_validator.py
-@@ -0,0 +1,195 @@
-+"""Input validation for forms and user data."""
-+
-+from __future__ import annotations
-+import re
-+from typing import Dict, List, Optional, Any, Union
-+from dataclasses import dataclass
-+from enum import Enum
-+
-+
-+class ValidationError(Exception):
-+    """Validation error exception."""
-+    pass
-+
-+
-+class ValidationType(Enum):
-+    """Types of validation."""
-+    EMAIL = "email"
-+    USERNAME = "username"
-+    PASSWORD = "password"
-+    PHONE = "phone"
-+    URL = "url"
-+    TEXT = "text"
-+    NUMBER = "number"
-+    DATE = "date"
-+
-+
-+@dataclass
-+class ValidationRule:
-+    """Validation rule definition."""
-+    field_name: str
-+    validation_type: ValidationType
-+    required: bool = True
-+    min_length: Optional[int] = None
-+    max_length: Optional[int] = None
-+    pattern: Optional[str] = None
-+    custom_validator: Optional[callable] = None
-+    error_message: Optional[str] = None
-+
-+
-+class InputValidator:
-+    """Comprehensive input validator."""
-+    
-+    # Regex patterns for common validations
-+    PATTERNS = {
-+        ValidationType.EMAIL: r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$',
-+        ValidationType.USERNAME: r'^[a-zA-Z0-9_]{3,30}$',
-+        ValidationType.PASSWORD: r'^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)[a-zA-Z\d@$!%*?&]{8,}$',
-+        ValidationType.PHONE: r'^\+?[\d\s\-\(\)]{10,15}$',
-+        ValidationType.URL: r'^https?://[^\s/$.?#].[^\s]*$',
-+        ValidationType.NUMBER: r'^\d+(\.\d+)?$',
-+        ValidationType.DATE: r'^\d{4}-\d{2}-\d{2}$'
-+    }
-+    
-+    # Default error messages
-+    DEFAULT_ERRORS = {
-+        ValidationType.EMAIL: "Invalid email format",
-+        ValidationType.USERNAME: "Username must be 3-30 characters, letters/numbers/underscore only",
-+        ValidationType.PASSWORD: "Password must be 8+ chars with uppercase, lowercase, and number",
-+        ValidationType.PHONE: "Invalid phone number format",
-+        ValidationType.URL: "Invalid URL format (must start with http:// or https://)",
-+        ValidationType.TEXT: "Invalid text input",
-+        ValidationType.NUMBER: "Must be a valid number",
-+        ValidationType.DATE: "Date must be in YYYY-MM-DD format"
-+    }
-+    
-+    def __init__(self):
-+        self.compiled_patterns = {
-+            vtype: re.compile(pattern) 
-+            for vtype, pattern in self.PATTERNS.items()
-+        }
-+    
-+    def validate_field(self, value: Any, rule: ValidationRule) -> List[str]:
-+        """Validate a single field against a rule."""
-+        errors = []
-+        
-+        # Convert to string for validation
-+        str_value = str(value) if value is not None else ""
-+        
-+        # Check required
-+        if rule.required and not str_value.strip():
-+            errors.append(f"{rule.field_name} is required")
-+            return errors
-+        
-+        # Skip other validations if empty and not required
-+        if not str_value.strip() and not rule.required:
-+            return errors
-+        
-+        # Check length constraints
-+        if rule.min_length and len(str_value) < rule.min_length:
-+            errors.append(f"{rule.field_name} must be at least {rule.min_length} characters")
-+        
-+        if rule.max_length and len(str_value) > rule.max_length:
-+            errors.append(f"{rule.field_name} must be no more than {rule.max_length} characters")
-+        
-+        # Check pattern
-+        pattern_to_use = rule.pattern or self.PATTERNS.get(rule.validation_type)
-+        if pattern_to_use:
-+            regex = self.compiled_patterns.get(rule.validation_type) or re.compile(pattern_to_use)
-+            if not regex.match(str_value):
-+                error_msg = rule.error_message or self.DEFAULT_ERRORS.get(
-+                    rule.validation_type, f"Invalid {rule.field_name} format"
-+                )
-+                errors.append(error_msg)
-+        
-+        # Custom validator
-+        if rule.custom_validator:
-+            try:
-+                if not rule.custom_validator(value):
-+                    errors.append(f"Custom validation failed for {rule.field_name}")
-+            except Exception as e:
-+                errors.append(f"Validation error for {rule.field_name}: {str(e)}")
-+        
-+        return errors
-+    
-+    def validate_form(self, form_data: Dict[str, Any], rules: List[ValidationRule]) -> Dict[str, List[str]]:
-+        """Validate entire form against rules."""
-+        all_errors = {}
-+        
-+        for rule in rules:
-+            field_value = form_data.get(rule.field_name)
-+            field_errors = self.validate_field(field_value, rule)
-+            
-+            if field_errors:
-+                all_errors[rule.field_name] = field_errors
-+        
-+        return all_errors
-+    
-+    def is_valid_form(self, form_data: Dict[str, Any], rules: List[ValidationRule]) -> bool:
-+        """Check if form is valid."""
-+        errors = self.validate_form(form_data, rules)
-+        return len(errors) == 0
-+    
-+    def validate_and_raise(self, form_data: Dict[str, Any], rules: List[ValidationRule]) -> None:
-+        """Validate form and raise ValidationError if invalid."""
-+        errors = self.validate_form(form_data, rules)
-+        if errors:
-+            error_messages = []
-+            for field, field_errors in errors.items():
-+                error_messages.extend(field_errors)
-+            raise ValidationError("; ".join(error_messages))
-+
-+
-+# Predefined validation rules for common fields
-+COMMON_VALIDATION_RULES = {
-+    "username": ValidationRule("username", ValidationType.USERNAME, required=True),
-+    "email": ValidationRule("email", ValidationType.EMAIL, required=True),
-+    "password": ValidationRule("password", ValidationType.PASSWORD, required=True),
-+    "client_name": ValidationRule("client_name", ValidationType.TEXT, required=True, min_length=2, max_length=100),
-+    "project_name": ValidationRule("project_name", ValidationType.TEXT, required=True, min_length=2, max_length=100),
-+    "epic_title": ValidationRule("epic_title", ValidationType.TEXT, required=True, min_length=3, max_length=200),
-+    "description": ValidationRule("description", ValidationType.TEXT, required=False, max_length=1000),
-+    "phone": ValidationRule("phone", ValidationType.PHONE, required=False),
-+    "website": ValidationRule("website", ValidationType.URL, required=False)
-+}
-+
-+
-+# Global validator instance
-+_input_validator: Optional[InputValidator] = None
-+
-+
-+def get_input_validator() -> InputValidator:
-+    """Get global input validator instance."""
-+    global _input_validator
-+    if _input_validator is None:
-+        _input_validator = InputValidator()
-+    return _input_validator
-+
-+
-+def validate_form_input(form_data: Dict[str, Any], field_names: List[str]) -> Dict[str, List[str]]:
-+    """Validate form input using common rules."""
-+    validator = get_input_validator()
-+    
-+    rules = []
-+    for field_name in field_names:
-+        if field_name in COMMON_VALIDATION_RULES:
-+            rules.append(COMMON_VALIDATION_RULES[field_name])
-+        else:
-+            # Default text validation
-+            rules.append(ValidationRule(field_name, ValidationType.TEXT, required=True))
-+    
-+    return validator.validate_form(form_data, rules)
-+
-+
-+def is_valid_email(email: str) -> bool:
-+    """Quick email validation."""
-+    validator = get_input_validator()
-+    errors = validator.validate_field(email, COMMON_VALIDATION_RULES["email"])
-+    return len(errors) == 0
-+
-+
-+def is_strong_password(password: str) -> bool:
-+    """Quick password strength validation."""
-+    validator = get_input_validator()
-+    errors = validator.validate_field(password, COMMON_VALIDATION_RULES["password"])
-+    return len(errors) == 0
-diff --git a/streamlit_extension/security/security_headers.py b/streamlit_extension/security/security_headers.py
-new file mode 100644
-index 0000000000000000000000000000000000000000..a89a6a934ad257b774251f78e21f3d0c438fc977
---- /dev/null
-+++ b/streamlit_extension/security/security_headers.py
-@@ -0,0 +1,100 @@
-+"""Security headers for enhanced protection."""
-+
-+from typing import Dict, Optional
-+from dataclasses import dataclass
-+
-+
-+@dataclass
-+class SecurityConfig:
-+    """Security configuration for headers."""
-+    content_security_policy: bool = True
-+    x_frame_options: bool = True
-+    x_content_type_options: bool = True
-+    x_xss_protection: bool = True
-+    strict_transport_security: bool = True
-+    referrer_policy: bool = True
-+    permissions_policy: bool = True
-+
-+
-+class SecurityHeaders:
-+    """Security headers manager."""
-+    
-+    def __init__(self, config: Optional[SecurityConfig] = None):
-+        self.config = config or SecurityConfig()
-+    
-+    def get_csp_header(self) -> str:
-+        """Get Content Security Policy header."""
-+        csp_directives = [
-+            "default-src 'self'",
-+            "script-src 'self' 'unsafe-inline' 'unsafe-eval'",  # Streamlit needs these
-+            "style-src 'self' 'unsafe-inline'",
-+            "img-src 'self' data: blob:",
-+            "font-src 'self' data:",
-+            "connect-src 'self' ws: wss:",  # WebSocket for Streamlit
-+            "media-src 'none'",
-+            "object-src 'none'",
-+            "base-uri 'self'",
-+            "form-action 'self'",
-+            "frame-ancestors 'none'"
-+        ]
-+        return "; ".join(csp_directives)
-+    
-+    def get_security_headers(self) -> Dict[str, str]:
-+        """Get all security headers."""
-+        headers = {}
-+        
-+        if self.config.content_security_policy:
-+            headers["Content-Security-Policy"] = self.get_csp_header()
-+        
-+        if self.config.x_frame_options:
-+            headers["X-Frame-Options"] = "DENY"
-+        
-+        if self.config.x_content_type_options:
-+            headers["X-Content-Type-Options"] = "nosniff"
-+        
-+        if self.config.x_xss_protection:
-+            headers["X-XSS-Protection"] = "1; mode=block"
-+        
-+        if self.config.strict_transport_security:
-+            headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
-+        
-+        if self.config.referrer_policy:
-+            headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
-+        
-+        if self.config.permissions_policy:
-+            headers["Permissions-Policy"] = (
-+                "camera=(), microphone=(), geolocation=(), "
-+                "accelerometer=(), gyroscope=(), magnetometer=(), "
-+                "payment=(), usb=()"
-+            )
-+        
-+        return headers
-+    
-+    def apply_headers_to_response(self, response_headers: Dict[str, str]) -> None:
-+        """Apply security headers to response."""
-+        security_headers = self.get_security_headers()
-+        response_headers.update(security_headers)
-+
-+
-+# Global security headers instance
-+_security_headers: Optional[SecurityHeaders] = None
-+
-+
-+def get_security_headers() -> SecurityHeaders:
-+    """Get global security headers instance."""
-+    global _security_headers
-+    if _security_headers is None:
-+        _security_headers = SecurityHeaders()
-+    return _security_headers
-+
-+
-+def apply_security_headers() -> Dict[str, str]:
-+    """Apply security headers and return them."""
-+    headers_manager = get_security_headers()
-+    return headers_manager.get_security_headers()
-+
-+
-+def get_csp_policy() -> str:
-+    """Get Content Security Policy."""
-+    headers_manager = get_security_headers()
-+    return headers_manager.get_csp_header()
-diff --git a/streamlit_extension/security/security_middleware.py b/streamlit_extension/security/security_middleware.py
-new file mode 100644
-index 0000000000000000000000000000000000000000..0dc0a73672527889e56ce33101feb90f63639650
---- /dev/null
-+++ b/streamlit_extension/security/security_middleware.py
-@@ -0,0 +1,153 @@
-+"""Security middleware for Streamlit applications."""
-+
-+from functools import wraps
-+from typing import Callable, Dict, Any, Optional
-+import streamlit as st
-+
-+from .csrf_protection import generate_csrf_token, validate_csrf_token
-+from .xss_sanitizer import sanitize_input, detect_security_threats
-+from .input_validator import validate_form_input
-+from .security_headers import apply_security_headers
-+
-+
-+def security_middleware() -> None:
-+    """Apply security middleware to current Streamlit session."""
-+    # Apply security headers
-+    headers = apply_security_headers()
-+    
-+    # Store security headers in session state for reference
-+    st.session_state.security_headers = headers
-+    
-+    # Initialize CSRF protection if not present
-+    if "csrf_initialized" not in st.session_state:
-+        st.session_state.csrf_initialized = True
-+
-+
-+def require_csrf(form_key: str):
-+    """Decorator to require CSRF protection for form submission."""
-+    def decorator(func: Callable):
-+        @wraps(func)
-+        def wrapper(*args, **kwargs):
-+            # Generate CSRF token if not exists
-+            csrf_key = f"csrf_token_{form_key}"
-+            if csrf_key not in st.session_state:
-+                st.session_state[csrf_key] = generate_csrf_token()
-+            
-+            return func(*args, **kwargs)
-+        return wrapper
-+    return decorator
-+
-+
-+def sanitize_form_data(form_data: Dict[str, Any]) -> Dict[str, Any]:
-+    """Sanitize all form data."""
-+    return sanitize_input(form_data)
-+
-+
-+def validate_secure_form(form_data: Dict[str, Any], field_names: list, form_key: str) -> tuple[bool, Dict[str, list], list]:
-+    """
-+    Comprehensive form validation with security checks.
-+    
-+    Returns:
-+        tuple: (is_valid, validation_errors, security_threats)
-+    """
-+    # Check CSRF token
-+    csrf_token = form_data.get("csrf_token")
-+    if not csrf_token or not validate_csrf_token(csrf_token):
-+        return False, {"csrf": ["Invalid or missing CSRF token"]}, ["CSRF token invalid"]
-+    
-+    # Sanitize input data
-+    sanitized_data = sanitize_form_data(form_data)
-+    
-+    # Detect security threats
-+    security_threats = []
-+    for field_name, value in form_data.items():
-+        if isinstance(value, str):
-+            threats = detect_security_threats(value)
-+            if threats:
-+                security_threats.extend([f"{field_name}: {threat}" for threat in threats])
-+    
-+    # Validate form fields
-+    validation_errors = validate_form_input(sanitized_data, field_names)
-+    
-+    is_valid = len(validation_errors) == 0 and len(security_threats) == 0
-+    
-+    return is_valid, validation_errors, security_threats
-+
-+
-+def secure_form_submit(form_data: Dict[str, Any], field_names: list, form_key: str) -> tuple[bool, Optional[str]]:
-+    """
-+    Handle secure form submission with comprehensive validation.
-+    
-+    Returns:
-+        tuple: (success, error_message)
-+    """
-+    is_valid, validation_errors, security_threats = validate_secure_form(form_data, field_names, form_key)
-+    
-+    if not is_valid:
-+        error_messages = []
-+        
-+        # Add validation errors
-+        for field, errors in validation_errors.items():
-+            error_messages.extend(errors)
-+        
-+        # Add security threat warnings
-+        if security_threats:
-+            error_messages.append("🔒 Security threats detected")
-+            error_messages.extend(security_threats)
-+        
-+        return False, " | ".join(error_messages)
-+    
-+    return True, None
-+
-+
-+def create_secure_form(form_key: str) -> str:
-+    """Create a secure form with CSRF token."""
-+    csrf_token = generate_csrf_token()
-+    st.session_state[f"csrf_token_{form_key}"] = csrf_token
-+    return csrf_token
-+
-+
-+def add_csrf_to_form(form_key: str) -> str:
-+    """Add CSRF token to existing form."""
-+    if f"csrf_token_{form_key}" not in st.session_state:
-+        st.session_state[f"csrf_token_{form_key}"] = generate_csrf_token()
-+    
-+    return st.session_state[f"csrf_token_{form_key}"]
-+
-+
-+class SecureFormManager:
-+    """Manager for secure forms with CSRF and XSS protection."""
-+    
-+    def __init__(self, form_key: str):
-+        self.form_key = form_key
-+        self.csrf_token = self._ensure_csrf_token()
-+    
-+    def _ensure_csrf_token(self) -> str:
-+        """Ensure CSRF token exists for this form."""
-+        csrf_key = f"csrf_token_{self.form_key}"
-+        if csrf_key not in st.session_state:
-+            st.session_state[csrf_key] = generate_csrf_token()
-+        return st.session_state[csrf_key]
-+    
-+    def validate_submission(self, form_data: Dict[str, Any], field_names: list) -> tuple[bool, str]:
-+        """Validate form submission."""
-+        # Add CSRF token to form data
-+        form_data["csrf_token"] = self.csrf_token
-+        
-+        success, error_message = secure_form_submit(form_data, field_names, self.form_key)
-+        
-+        if success:
-+            # Regenerate CSRF token for next submission
-+            self._regenerate_csrf_token()
-+        
-+        return success, error_message or ""
-+    
-+    def _regenerate_csrf_token(self):
-+        """Regenerate CSRF token after successful submission."""
-+        csrf_key = f"csrf_token_{self.form_key}"
-+        st.session_state[csrf_key] = generate_csrf_token()
-+        self.csrf_token = st.session_state[csrf_key]
-+    
-+    def get_csrf_token(self) -> str:
-+        """Get current CSRF token."""
-+        return self.csrf_token
-diff --git a/streamlit_extension/security/xss_sanitizer.py b/streamlit_extension/security/xss_sanitizer.py
-new file mode 100644
-index 0000000000000000000000000000000000000000..6fab17fa029bb75f2a27ee57fcc9f777b7ad1e69
---- /dev/null
-+++ b/streamlit_extension/security/xss_sanitizer.py
-@@ -0,0 +1,230 @@
-+"""XSS (Cross-Site Scripting) sanitization and prevention."""
-+
-+from __future__ import annotations
-+import re
-+import html
-+from typing import Dict, List, Optional, Union, Any
-+from urllib.parse import urlparse
-+
-+
-+class XSSSanitizer:
-+    """XSS sanitization with configurable rules."""
-+    
-+    # Dangerous HTML tags that should be removed
-+    DANGEROUS_TAGS = {
-+        'script', 'object', 'embed', 'form', 'input', 'button', 'select', 
-+        'textarea', 'iframe', 'frame', 'frameset', 'meta', 'link', 'base',
-+        'applet', 'bgsound', 'isindex', 'layer', 'ilayer', 'blink', 'marquee'
-+    }
-+    
-+    # Event handlers that should be removed
-+    EVENT_HANDLERS = {
-+        'onabort', 'onblur', 'onchange', 'onclick', 'ondblclick', 'onerror',
-+        'onfocus', 'onkeydown', 'onkeypress', 'onkeyup', 'onload', 'onmousedown',
-+        'onmousemove', 'onmouseout', 'onmouseover', 'onmouseup', 'onreset',
-+        'onresize', 'onselect', 'onsubmit', 'onunload', 'onbeforeunload',
-+        'oncontextmenu', 'ondrag', 'ondragend', 'ondragenter', 'ondragleave',
-+        'ondragover', 'ondragstart', 'ondrop', 'onscroll', 'onwheel'
-+    }
-+    
-+    # JavaScript protocol patterns
-+    JS_PROTOCOLS = [
-+        r'javascript\s*:',
-+        r'vbscript\s*:',
-+        r'data\s*:.*text/html',
-+        r'data\s*:.*application/.*script'
-+    ]
-+    
-+    # SQL injection patterns
-+    SQL_INJECTION_PATTERNS = [
-+        r'(\bUNION\b.*\bSELECT\b)',
-+        r'(\bINSERT\b.*\bINTO\b)',
-+        r'(\bUPDATE\b.*\bSET\b)',
-+        r'(\bDELETE\b.*\bFROM\b)',
-+        r'(\bDROP\b.*\bTABLE\b)',
-+        r'(\bCREATE\b.*\bTABLE\b)',
-+        r'(\bALTER\b.*\bTABLE\b)',
-+        r'(;\s*--)',
-+        r'(/\*.*\*/)',
-+        r'(\bOR\b.*=.*)',
-+        r'(\bAND\b.*=.*)',
-+        r'(\'.*OR.*\'.*=.*\')',
-+        r'(\".*OR.*\".*=.*\")'
-+    ]
-+    
-+    def __init__(self, strict_mode: bool = True):
-+        self.strict_mode = strict_mode
-+        self._compile_patterns()
-+    
-+    def _compile_patterns(self):
-+        """Compile regex patterns for performance."""
-+        self.js_pattern = re.compile(
-+            '|'.join(self.JS_PROTOCOLS), 
-+            re.IGNORECASE | re.MULTILINE
-+        )
-+        
-+        self.sql_pattern = re.compile(
-+            '|'.join(self.SQL_INJECTION_PATTERNS),
-+            re.IGNORECASE | re.MULTILINE
-+        )
-+        
-+        self.tag_pattern = re.compile(
-+            r'<\s*(/?)(' + '|'.join(self.DANGEROUS_TAGS) + r')\b[^>]*>',
-+            re.IGNORECASE
-+        )
-+        
-+        self.event_pattern = re.compile(
-+            r'\b(' + '|'.join(self.EVENT_HANDLERS) + r')\s*=\s*["\'][^"\']*["\']',
-+            re.IGNORECASE
-+        )
-+    
-+    def sanitize_string(self, input_str: str) -> str:
-+        """Sanitize a single string input."""
-+        if not isinstance(input_str, str):
-+            return str(input_str)
-+        
-+        # HTML encode basic characters
-+        sanitized = html.escape(input_str, quote=True)
-+        
-+        if self.strict_mode:
-+            # Remove dangerous HTML tags
-+            sanitized = self.tag_pattern.sub('', sanitized)
-+            
-+            # Remove event handlers
-+            sanitized = self.event_pattern.sub('', sanitized)
-+            
-+            # Check for JavaScript protocols
-+            if self.js_pattern.search(sanitized):
-+                sanitized = self.js_pattern.sub('[BLOCKED]', sanitized)
-+            
-+            # Check for SQL injection patterns
-+            if self.sql_pattern.search(sanitized):
-+                sanitized = self.sql_pattern.sub('[BLOCKED]', sanitized)
-+        
-+        return sanitized.strip()
-+    
-+    def sanitize_dict(self, input_dict: Dict[str, Any]) -> Dict[str, Any]:
-+        """Sanitize dictionary values recursively."""
-+        sanitized = {}
-+        
-+        for key, value in input_dict.items():
-+            # Sanitize key
-+            clean_key = self.sanitize_string(str(key))
-+            
-+            # Sanitize value based on type
-+            if isinstance(value, str):
-+                sanitized[clean_key] = self.sanitize_string(value)
-+            elif isinstance(value, dict):
-+                sanitized[clean_key] = self.sanitize_dict(value)
-+            elif isinstance(value, (list, tuple)):
-+                sanitized[clean_key] = self.sanitize_list(value)
-+            else:
-+                sanitized[clean_key] = value
-+        
-+        return sanitized
-+    
-+    def sanitize_list(self, input_list: List[Any]) -> List[Any]:
-+        """Sanitize list items recursively."""
-+        sanitized = []
-+        
-+        for item in input_list:
-+            if isinstance(item, str):
-+                sanitized.append(self.sanitize_string(item))
-+            elif isinstance(item, dict):
-+                sanitized.append(self.sanitize_dict(item))
-+            elif isinstance(item, (list, tuple)):
-+                sanitized.append(self.sanitize_list(item))
-+            else:
-+                sanitized.append(item)
-+        
-+        return sanitized
-+    
-+    def is_safe_url(self, url: str) -> bool:
-+        """Check if URL is safe (no JavaScript protocols)."""
-+        if not url:
-+            return True
-+        
-+        try:
-+            parsed = urlparse(url.lower())
-+            return parsed.scheme in ['http', 'https', 'mailto', 'tel', ''] and \
-+                   not self.js_pattern.search(url)
-+        except Exception:
-+            return False
-+    
-+    def sanitize_html_content(self, html_content: str) -> str:
-+        """Sanitize HTML content more thoroughly."""
-+        if not html_content:
+-    @staticmethod
+-    def validate_email(email: str) -> Optional[str]:
+-        """Validate email format."""
+-        if not email:
+-            return None
+-        
+-        import re
+-        pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+-        if not re.match(pattern, email):
+-            return "Invalid email format"
+-        return None
+-    
+-    @staticmethod
+-    def validate_phone(phone: str) -> Optional[str]:
+-        """Validate phone number format."""
+-        if not phone:
+-            return None
+-        
+-        import re
+-        # Remove non-digit characters for validation
+-        digits_only = re.sub(r'[^\d]', '', phone)
+-        if len(digits_only) < 10 or len(digits_only) > 15:
+-            return "Phone number must be between 10-15 digits"
+-        return None
+-    
+-    @staticmethod
+-    def validate_unique_key(key: str, existing_keys: List[str]) -> Optional[str]:
+-        """Validate that a key is unique."""
+-        if key in existing_keys:
+-            return f"Key '{key}' already exists"
+-        return None
+-
+-
+-class SecurityForm:
+-    """Handles security aspects of forms."""
+-    
+-    @staticmethod
+-    def generate_csrf_token(form_id: str) -> Optional[str]:
+-        """Generate CSRF token for form."""
+-        if SECURITY_AVAILABLE and security_manager:
+-            return security_manager.get_csrf_form_field(form_id)
+-        return None
+-    
+-    @staticmethod
+-    def validate_csrf_token(form_id: str, token: str) -> bool:
+-        """Validate CSRF token."""
+-        if SECURITY_AVAILABLE and security_manager:
+-            return security_manager.validate_csrf_token(form_id, token)
+-        return True  # Pass through if security not available
+-    
+-    @staticmethod
+-    def check_rate_limit(user_id: str = "anonymous") -> bool:
+-        """Check rate limiting."""
+-        if SECURITY_AVAILABLE and hasattr(security_manager, 'check_rate_limit'):
+-            return security_manager.check_rate_limit(user_id)
+-        return True  # Pass through if rate limiting not available
+-
+-
+-class InputRenderer:
+-    """Renders different types of input fields."""
+-    
+-    @staticmethod
+-    def render_field(field: InputField, column=None) -> Any:
+-        """Render an input field based on its configuration."""
+-        if not STREAMLIT_AVAILABLE:
+-            return None
+-        
+-        # Determine where to render (column or main area)
+-        render_ctx = column if column else st
+-        
+-        # Common parameters
+-        kwargs = {
+-            "key": field.name,
+-            "help": field.help_text if field.help_text else None,
+-            "placeholder": field.placeholder if field.placeholder else None
+-        }
+-        
+-        # Add value if provided
+-        if field.value is not None:
+-            kwargs["value"] = field.value
+-        
+-        # Add type-specific parameters
+-        if field.input_type in ["number_input"]:
+-            if field.min_value is not None:
+-                kwargs["min_value"] = field.min_value
+-            if field.max_value is not None:
+-                kwargs["max_value"] = field.max_value
+-            if field.step is not None:
+-                kwargs["step"] = field.step
+-        
+-        # Render based on type
+-        if field.input_type == "text_input":
+-            return render_ctx.text_input(field.label, **kwargs)
+-        elif field.input_type == "text_area":
+-            return render_ctx.text_area(field.label, **kwargs)
+-        elif field.input_type == "number_input":
+-            return render_ctx.number_input(field.label, **kwargs)
+-        elif field.input_type == "selectbox":
+-            return render_ctx.selectbox(field.label, options=field.options or [], **kwargs)
+-        elif field.input_type == "multiselect":
+-            return render_ctx.multiselect(field.label, options=field.options or [], **kwargs)
+-        elif field.input_type == "checkbox":
+-            checked = kwargs.get("value", False)
+-            return render_ctx.checkbox(field.label, value=checked, key=field.name, help=field.help_text)
+-        elif field.input_type == "date_input":
+-            return render_ctx.date_input(field.label, **kwargs)
+-        elif field.input_type == "email":
+-            return render_ctx.text_input(field.label, **kwargs)
+-        elif field.input_type == "password":
+-            return render_ctx.text_input(field.label, type="password", **kwargs)
++class StandardForm:
++    """Base form component providing common helpers."""
++
++    def __init__(self, form_id: str, title: str, st_module: Optional[Any] = None):
++        self.form_id = form_id
++        self.title = title
++        self.st = st_module or st
++        self.form_data: Dict[str, Any] = {}
++        self.errors: List[str] = []
++        self.submitted: bool = False
++
++    # ------------------------------------------------------------------
++    # Rendering helpers
++    def render_text_input(self, label: str, key: str, required: bool = False):
++        if not self.st:  # pragma: no cover - streamlit missing
++            self.form_data[key] = ""
 +            return ""
-+        
-+        # Remove dangerous tags completely
-+        sanitized = self.tag_pattern.sub('', html_content)
-+        
-+        # Remove event handlers
-+        sanitized = self.event_pattern.sub('', sanitized)
-+        
-+        # Remove JavaScript protocols
-+        sanitized = self.js_pattern.sub('[BLOCKED]', sanitized)
-+        
-+        return sanitized
-+    
-+    def detect_threats(self, input_str: str) -> List[str]:
-+        """Detect potential security threats in input."""
-+        threats = []
-+        
-+        if self.js_pattern.search(input_str):
-+            threats.append("JavaScript injection detected")
-+        
-+        if self.sql_pattern.search(input_str):
-+            threats.append("SQL injection pattern detected")
-+        
-+        if self.tag_pattern.search(input_str):
-+            threats.append("Dangerous HTML tags detected")
-+        
-+        if self.event_pattern.search(input_str):
-+            threats.append("JavaScript event handlers detected")
-+        
-+        return threats
++        value = self.st.text_input(label, key=f"{self.form_id}_{key}")
++        self.form_data[key] = value
++        return value
 +
++    def render_text_area(self, label: str, key: str, required: bool = False):
++        if not self.st:
++            self.form_data[key] = ""
++            return ""
++        value = self.st.text_area(label, key=f"{self.form_id}_{key}")
++        self.form_data[key] = value
++        return value
 +
-+# Global sanitizer instance
-+_xss_sanitizer: Optional[XSSSanitizer] = None
++    def render_select_box(self, label: str, key: str, options: List, required: bool = False):
++        if not self.st:
++            self.form_data[key] = options[0] if options else None
++            return self.form_data[key]
++        value = self.st.selectbox(label, options=options, key=f"{self.form_id}_{key}")
++        self.form_data[key] = value
++        return value
 +
-+
-+def get_xss_sanitizer() -> XSSSanitizer:
-+    """Get global XSS sanitizer instance."""
-+    global _xss_sanitizer
-+    if _xss_sanitizer is None:
-+        _xss_sanitizer = XSSSanitizer(strict_mode=True)
-+    return _xss_sanitizer
-+
-+
-+def sanitize_input(input_data: Union[str, Dict, List]) -> Union[str, Dict, List]:
-+    """Sanitize input data (string, dict, or list)."""
-+    sanitizer = get_xss_sanitizer()
-+    
-+    if isinstance(input_data, str):
-+        return sanitizer.sanitize_string(input_data)
-+    elif isinstance(input_data, dict):
-+        return sanitizer.sanitize_dict(input_data)
-+    elif isinstance(input_data, (list, tuple)):
-+        return sanitizer.sanitize_list(input_data)
-+    else:
-+        return input_data
-+
-+
-+def sanitize_html(html_content: str) -> str:
-+    """Sanitize HTML content."""
-+    sanitizer = get_xss_sanitizer()
-+    return sanitizer.sanitize_html_content(html_content)
-+
-+
-+def validate_safe_url(url: str) -> bool:
-+    """Validate that URL is safe."""
-+    sanitizer = get_xss_sanitizer()
-+    return sanitizer.is_safe_url(url)
-+
-+
-+def detect_security_threats(input_str: str) -> List[str]:
-+    """Detect security threats in input string."""
-+    sanitizer = get_xss_sanitizer()
-+    return sanitizer.detect_threats(input_str)
-diff --git a/streamlit_extension/streamlit_app.py b/streamlit_extension/streamlit_app.py
-index 28a5f742dfa486bd1b28799781f0e1e59cb267af..eaada42982615dd47d723d8f50de527383dff910 100644
---- a/streamlit_extension/streamlit_app.py
-+++ b/streamlit_extension/streamlit_app.py
-@@ -54,54 +54,55 @@ if STREAMLIT_AVAILABLE:
-             Interactive development environment for TDD workflow with:
-             - ⏱️ Focus timer with TDAH support
-             - 📋 Task management with Kanban
-             - 📊 Analytics and productivity tracking
-             - 🎮 Gamification system
-             - 🐙 GitHub integration
-             
-             **Version:** 1.2.1
-             **Phase:** Enhanced Dashboard
-             """
-         }
-     )
++    def render_submit_button(self, label: str = "Submit") -> bool:
++        if not self.st:
++            self.submitted = True
+         else:
+-            # Fallback to text input
+-            return render_ctx.text_input(field.label, **kwargs)
++            self.submitted = self.st.form_submit_button(label)
++        return self.submitted
  
- # Import components
- try:
-     from streamlit_extension.components.sidebar import render_sidebar
-     from streamlit_extension.components.timer import TimerComponent
-     from streamlit_extension.components.dashboard_widgets import (
-         WelcomeHeader, DailyStats, ProductivityHeatmap,
-         ProgressRing, SparklineChart, AchievementCard,
-         NotificationToast, NotificationData, QuickActionButton
-     )
-     from streamlit_extension.utils.database import DatabaseManager
-     from streamlit_extension.utils.auth import GoogleOAuthManager, require_authentication, render_user_menu, get_authenticated_user
-     from streamlit_extension.config import load_config, load_config
++    # ------------------------------------------------------------------
++    def get_form_data(self) -> Dict[str, Any]:
++        return dict(self.form_data)
+ 
+-class StandardForm:
+-    """Reusable form component that handles common patterns."""
 -    
-+    from streamlit_extension.security import security_middleware
-+
-     # Import global exception handler
-     from streamlit_extension.utils.exception_handler import (
--        install_global_exception_handler, handle_streamlit_exceptions, 
-+        install_global_exception_handler, handle_streamlit_exceptions,
-         streamlit_error_boundary, safe_streamlit_operation,
-         show_error_dashboard, get_error_statistics
-     )
-     EXCEPTION_HANDLER_AVAILABLE = True
- except ImportError as e:
-     EXCEPTION_HANDLER_AVAILABLE = False
-     st.error(f"❌ Import Error: {e}")
-     st.error("Make sure to run from the project root directory")
-     st.stop()
- 
- 
- @handle_streamlit_exceptions(show_error=True, attempt_recovery=True)
- def initialize_session_state():
-     """Initialize Streamlit session state variables."""
-     
-     # Install global exception handler on first run
-     if EXCEPTION_HANDLER_AVAILABLE and "exception_handler_installed" not in st.session_state:
-         install_global_exception_handler()
-         st.session_state.exception_handler_installed = True
-     
-     # Core app state
-     if "config" not in st.session_state:
-         with streamlit_error_boundary("configuration_loading"):
-             st.session_state.config = load_config()
-     
-@@ -677,51 +678,53 @@ def render_debug_panel():
-         
-         st.markdown("#### Database Health")
-         st.json(st.session_state.db_health_check)
-         
-         st.markdown("#### Session State Keys")
-         st.write(list(st.session_state.keys()))
-         
-         st.markdown("#### Cache Statistics")
-         with streamlit_error_boundary("cache_stats"):
-             cache_stats = safe_streamlit_operation(
-                 st.session_state.db_manager.get_cache_stats,
-                 default_return={"error": "Unable to retrieve cache stats"},
-                 operation_name="get_cache_stats"
-             )
-             st.json(cache_stats)
-         
-         # Error monitoring dashboard
-         if EXCEPTION_HANDLER_AVAILABLE:
-             st.markdown("#### Error Monitoring")
-             show_error_dashboard()
- 
- 
- @handle_streamlit_exceptions(show_error=True, attempt_recovery=True)
- def main():
-     """Main application entry point with centralized authentication gateway."""
+-    def __init__(self, config: FormConfig):
+-        self.config = config
+-        self.validator = FormValidator()
+-        self.security = SecurityForm()
+-        self.renderer = InputRenderer()
+-        self.csrf_token = None
+-        
+-    @contextmanager
+-    def modal_form(self, width: str = "large"):
+-        """Context manager for modal forms."""
+-        if not STREAMLIT_AVAILABLE:
+-            yield
+-            return
+-            
+-        with st.modal(self.config.title, width=width):
+-            with st.form(self.config.form_id):
+-                # Generate CSRF token
+-                if self.config.enable_csrf:
+-                    self.csrf_token = self.security.generate_csrf_token(self.config.form_id)
+-                
+-                yield
 -    
-+    # Apply security middleware
-+    security_middleware()
+-    @contextmanager
+-    def expander_form(self, expanded: bool = False):
+-        """Context manager for expander forms."""
+-        if not STREAMLIT_AVAILABLE:
+-            yield
+-            return
+-            
+-        with st.expander(self.config.title, expanded=expanded):
+-            with st.form(self.config.form_id):
+-                # Generate CSRF token
+-                if self.config.enable_csrf:
+-                    self.csrf_token = self.security.generate_csrf_token(self.config.form_id)
+-                
+-                yield
+-    
+-    @contextmanager
+-    def form_layout(self):
+-        """Create standardized form layout with columns."""
+-        if not STREAMLIT_AVAILABLE:
+-            yield None
+-            return
+-            
+-        if self.config.columns > 1:
+-            columns = st.columns(self.config.columns)
+-            yield columns
+-        else:
+-            yield None
+-    
+-    def render_title(self, subtitle: str = None):
+-        """Render form title and subtitle."""
+-        if not STREAMLIT_AVAILABLE:
+-            return
+-            
+-        st.markdown(f"### {self.config.title}")
+-        if subtitle:
+-            st.markdown(f"*{subtitle}*")
+-    
+-    def render_section(self, title: str, fields: List[InputField], column=None) -> Dict[str, Any]:
+-        """Render a section of form fields."""
+-        if not STREAMLIT_AVAILABLE:
+-            return {}
+-            
+-        # Determine render context
+-        ctx = column if column else st
+-        
+-        # Section header
+-        ctx.markdown(f"#### {title}")
+-        
+-        # Render fields and collect values
+-        values = {}
+-        for field in fields:
+-            values[field.name] = self.renderer.render_field(field, column)
+-        
+-        return values
+-    
+-    def render_submit_buttons(self) -> Tuple[bool, bool]:
+-        """Render submit and cancel buttons."""
+-        if not STREAMLIT_AVAILABLE:
+-            return False, False
+-            
+-        col1, col2 = st.columns([1, 1])
+-        
+-        with col1:
+-            submitted = st.form_submit_button(
+-                self.config.submit_text,
+-                type=self.config.submit_button_type,
+-                use_container_width=True
+-            )
+-        
+-        with col2:
+-            cancelled = st.form_submit_button(
+-                self.config.cancel_text,
+-                use_container_width=True
+-            )
+-        
+-        return submitted, cancelled
+-    
+-    def validate_and_submit(self, 
+-                          data: Dict[str, Any], 
+-                          required_fields: List[str],
+-                          validation_func: Optional[Callable] = None,
+-                          submit_func: Optional[Callable] = None) -> Dict[str, Any]:
+-        """Validate form data and handle submission."""
+-        result = {
+-            "success": False,
+-            "errors": [],
+-            "data": data
+-        }
+-        
+-        # Check rate limiting
+-        if self.config.enable_rate_limit:
+-            if not self.security.check_rate_limit():
+-                result["errors"].append("Rate limit exceeded. Please try again later.")
+-                return result
+-        
+-        # Validate CSRF token
+-        if self.config.enable_csrf and self.csrf_token:
+-            if not self.security.validate_csrf_token(self.config.form_id, self.csrf_token):
+-                result["errors"].append("Security validation failed.")
+-                return result
+-        
+-        # Validate required fields
+-        field_errors = self.validator.validate_required_fields(data, required_fields)
+-        result["errors"].extend(field_errors)
+-        
+-        # Custom validation
+-        if validation_func:
+-            custom_errors = validation_func(data)
+-            if custom_errors:
+-                result["errors"].extend(custom_errors)
+-        
+-        # If no errors, submit
+-        if not result["errors"] and submit_func:
+-            try:
+-                submit_result = submit_func(data)
+-                if submit_result:
+-                    result["success"] = True
+-                else:
+-                    result["errors"].append("Submission failed")
+-            except Exception as e:
+-                result["errors"].append(f"Error during submission: {str(e)}")
+-        
+-        return result
++    def validate_and_submit(self, form_data: Dict, validation_func: Callable[[Dict], List[str]]):
++        errors = validation_func(form_data)
++        if errors:
++            self.display_errors(errors)
++            return False, errors
++        return True, []
 +
-     # Check if running in headless mode
-     if not STREAMLIT_AVAILABLE:
-         print("📊 Dashboard functions available for testing")
-         print("Run 'streamlit run streamlit_app.py' for full UI")
-         return
-     
-     # Initialize session state with error boundary
-     with streamlit_error_boundary("session_initialization"):
-         initialize_session_state()
-     
-     # Initialize authentication manager
-     with streamlit_error_boundary("authentication_initialization"):
-         auth_manager = safe_streamlit_operation(
-             GoogleOAuthManager,
-             default_return=None,
-             operation_name="auth_manager_init"
-         )
-         
-         if auth_manager is None:
-             st.error("❌ Authentication initialization failed")
-             st.stop()
-     
-     # 🔐 CENTRALIZED AUTHENTICATION GATEWAY
-     # Check authentication status - if not authenticated, show login page
-     if not auth_manager.is_authenticated():
++    def display_errors(self, errors: List[str]):
++        if not self.st:
++            self.errors.extend(errors)
++        else:  # pragma: no cover - simple streamlit display
++            for error in errors:
++                self.st.error(error)
+ 
+ 
+ class ClientForm(StandardForm):
+-    """Specialized form for client management."""
+-    
+-    def get_client_fields(self, client_data: Dict[str, Any] = None) -> Tuple[List[InputField], List[InputField]]:
+-        """Get client form fields organized by section."""
+-        basic_fields = [
+-            InputField("client_key", "Client Key*", required=True, 
+-                      value=client_data.get("client_key", "") if client_data else "",
+-                      placeholder="e.g., client_xyz"),
+-            InputField("name", "Client Name*", required=True,
+-                      value=client_data.get("name", "") if client_data else "",
+-                      placeholder="e.g., Company ABC"),
+-            InputField("description", "Description", input_type="text_area",
+-                      value=client_data.get("description", "") if client_data else "",
+-                      placeholder="Brief description of the client..."),
+-            InputField("industry", "Industry",
+-                      value=client_data.get("industry", "") if client_data else "",
+-                      placeholder="e.g., Technology")
+-        ]
+-        
+-        contact_fields = [
+-            InputField("contact_name", "Contact Name",
+-                      value=client_data.get("contact_name", "") if client_data else "",
+-                      placeholder="Primary contact person"),
+-            InputField("contact_email", "Contact Email", input_type="email",
+-                      value=client_data.get("contact_email", "") if client_data else "",
+-                      placeholder="contact@company.com"),
+-            InputField("contact_phone", "Contact Phone",
+-                      value=client_data.get("contact_phone", "") if client_data else "",
+-                      placeholder="+1 (555) 123-4567"),
+-            InputField("status", "Status", input_type="selectbox",
+-                      options=["active", "inactive", "suspended", "archived"],
+-                      value=client_data.get("status", "active") if client_data else "active")
+-        ]
+-        
+-        return basic_fields, contact_fields
+-    
+-    def validate_client_data(self, data: Dict[str, Any]) -> List[str]:
+-        """Validate client-specific data."""
+-        errors = []
+-        
+-        # Email validation
+-        if data.get("contact_email"):
+-            email_error = self.validator.validate_email(data["contact_email"])
+-            if email_error:
+-                errors.append(email_error)
+-        
+-        # Phone validation
+-        if data.get("contact_phone"):
+-            phone_error = self.validator.validate_phone(data["contact_phone"])
+-            if phone_error:
+-                errors.append(phone_error)
+-        
+-        # Use existing validation if available
+-        if SECURITY_AVAILABLE and validate_client_data:
+-            try:
+-                external_errors = validate_client_data(data)
+-                if external_errors:
+-                    errors.extend(external_errors)
+-            except Exception:
+-                pass  # Fallback gracefully
+-        
++    """Form component for creating clients."""
++
++    def render_client_fields(self):
++        if not self.st:
++            return True  # allow tests without streamlit
++        with self.st.form(self.form_id):
++            self.st.markdown(f"### {self.title}")
++            self.render_text_input("Client Key", "client_key")
++            self.render_text_input("Client Name", "name")
++            self.render_text_area("Description", "description")
++            self.render_text_input("Contact Email", "primary_contact_email")
++            self.render_text_input("Contact Name", "primary_contact_name")
++            self.render_text_input("Contact Phone", "primary_contact_phone")
++            return self.render_submit_button("Create Client")
++
++    def validate_client_data(self, data: Dict) -> List[str]:
++        from streamlit_extension.utils.form_validation import (
++            validate_required_fields,
++            validate_email_format,
++            validate_phone_format,
++            validate_business_rules_client,
++            sanitize_form_inputs,
++        )
++
++        data = sanitize_form_inputs(data)
++        errors: List[str] = []
++        errors.extend(validate_required_fields(data, ["client_key", "name", "primary_contact_email"]))
++        email = data.get("primary_contact_email")
++        if email and not validate_email_format(email):
++            errors.append("Invalid email format")
++        phone = data.get("primary_contact_phone")
++        if phone and not validate_phone_format(phone):
++            errors.append("Invalid phone format")
++        errors.extend(validate_business_rules_client(data))
+         return errors
+ 
+ 
+ class ProjectForm(StandardForm):
+-    """Specialized form for project management."""
+-    
+-    def get_project_fields(self, project_data: Dict[str, Any] = None, clients_map: Dict[int, str] = None) -> Tuple[List[InputField], List[InputField]]:
+-        """Get project form fields organized by section."""
+-        basic_fields = [
+-            InputField("name", "Project Name*", required=True,
+-                      value=project_data.get("name", "") if project_data else "",
+-                      placeholder="e.g., Website Redesign"),
+-            InputField("description", "Description", input_type="text_area",
+-                      value=project_data.get("description", "") if project_data else "",
+-                      placeholder="Project details and objectives..."),
+-            InputField("status", "Status", input_type="selectbox",
+-                      options=["planning", "active", "on_hold", "completed", "cancelled"],
+-                      value=project_data.get("status", "planning") if project_data else "planning"),
+-            InputField("priority", "Priority", input_type="selectbox",
+-                      options=["low", "medium", "high", "critical"],
+-                      value=project_data.get("priority", "medium") if project_data else "medium")
+-        ]
+-        
+-        # Add client selection field
+-        if clients_map:
+-            client_options = list(clients_map.values())
+-            current_value = None
+-            if project_data and project_data.get("client_id"):
+-                current_value = clients_map.get(project_data["client_id"])
+-            
+-            basic_fields.insert(0, InputField(
+-                "client_id", "Client*", input_type="selectbox", required=True,
+-                options=client_options, value=current_value
+-            ))
+-        
+-        timeline_fields = [
+-            InputField("start_date", "Start Date", input_type="date_input",
+-                      value=project_data.get("start_date") if project_data else None),
+-            InputField("end_date", "End Date", input_type="date_input",
+-                      value=project_data.get("end_date") if project_data else None),
+-            InputField("budget", "Budget", input_type="number_input",
+-                      value=project_data.get("budget") if project_data else None,
+-                      min_value=0.0, step=100.0),
+-            InputField("estimated_hours", "Estimated Hours", input_type="number_input",
+-                      value=project_data.get("estimated_hours") if project_data else None,
+-                      min_value=0.0, step=1.0)
+-        ]
+-        
+-        return basic_fields, timeline_fields
+-    
+-    def validate_project_data(self, data: Dict[str, Any], clients_map: Dict[int, str] = None) -> List[str]:
+-        """Validate project-specific data."""
+-        errors = []
+-        
+-        # Client validation
+-        if clients_map and data.get("client_id"):
+-            # Convert client name back to ID
+-            client_name = data["client_id"]
+-            client_id = None
+-            for cid, cname in clients_map.items():
+-                if cname == client_name:
+-                    client_id = cid
+-                    break
+-            
+-            if client_id is None:
+-                errors.append("Invalid client selection")
+-            else:
+-                data["client_id"] = client_id  # Convert back to ID for processing
+-        
+-        # Date validation
+-        if data.get("start_date") and data.get("end_date"):
+-            if data["start_date"] > data["end_date"]:
+-                errors.append("End date must be after start date")
+-        
+-        # Use existing validation if available
+-        if SECURITY_AVAILABLE and validate_project_data:
+-            try:
+-                external_errors = validate_project_data(data)
+-                if external_errors:
+-                    errors.extend(external_errors)
+-            except Exception:
+-                pass  # Fallback gracefully
+-        
++    """Form component for creating projects."""
++
++    def render_project_fields(self, client_options: List):
++        if not self.st:
++            return True
++        with self.st.form(self.form_id):
++            self.st.markdown(f"### {self.title}")
++            self.render_select_box("Client", "client_id", client_options)
++            self.render_text_input("Project Key", "project_key")
++            self.render_text_input("Project Name", "name")
++            self.render_text_area("Description", "description")
++            self.render_select_box("Status", "status", ["planning", "in_progress", "completed", "on_hold", "cancelled"])
++            return self.render_submit_button("Create Project")
++
++    def validate_project_data(self, data: Dict) -> List[str]:
++        from streamlit_extension.utils.form_validation import (
++            validate_required_fields,
++            validate_business_rules_project,
++            sanitize_form_inputs,
++        )
++
++        data = sanitize_form_inputs(data)
++        errors: List[str] = []
++        errors.extend(validate_required_fields(data, ["client_id", "project_key", "name", "status"]))
++        errors.extend(validate_business_rules_project(data))
+         return errors
+-
+-
+-# Convenience functions for common form patterns
+-def create_client_form(form_id: str, title: str, modal: bool = True) -> ClientForm:
+-    """Create a client form with standard configuration."""
+-    config = FormConfig(
+-        form_id=form_id,
+-        title=title,
+-        submit_text="Save Client",
+-        cancel_text="Cancel"
+-    )
+-    return ClientForm(config)
+-
+-
+-def create_project_form(form_id: str, title: str, modal: bool = True) -> ProjectForm:
+-    """Create a project form with standard configuration."""
+-    config = FormConfig(
+-        form_id=form_id,
+-        title=title,
+-        submit_text="Save Project",
+-        cancel_text="Cancel"
+-    )
+-    return ProjectForm(config)
+-
+-
+-def render_success_message(message: str, icon: str = "✅"):
+-    """Render a standardized success message."""
+-    if STREAMLIT_AVAILABLE:
+-        st.success(f"{icon} {message}")
+-
+-
+-def render_error_messages(errors: List[str], icon: str = "❌"):
+-    """Render standardized error messages."""
+-    if STREAMLIT_AVAILABLE and errors:
+-        for error in errors:
+-            st.error(f"{icon} {error}")
+-
+-
+-# Backwards compatibility exports
+-ValidatedInput = InputField
+-ConfigurationForm = StandardForm
+-ButtonGroup = StandardForm  # Placeholder - buttons are handled in StandardForm
+-
+-
+-if __name__ == "__main__":
+-    # Test form components
+-    print("🏗️ Testing DRY Form Components")
+-    print("=" * 50)
+-    
+-    # Test form configuration
+-    config = FormConfig(
+-        form_id="test_form",
+-        title="Test Form",
+-        submit_text="Submit Test"
+-    )
+-    
+-    # Test input field configuration
+-    field = InputField(
+-        name="test_field",
+-        label="Test Field",
+-        input_type="text_input",
+-        required=True,
+-        placeholder="Enter test value"
+-    )
+-    
+-    print("✅ Form components configured successfully")
+-    print(f"   Form ID: {config.form_id}")
+-    print(f"   Form Title: {config.title}")
+-    print(f"   Field Name: {field.name}")
+-    print(f"   Field Type: {field.input_type}")
+-    print(f"   Field Required: {field.required}")
+-    
+-    # Test validation
+-    validator = FormValidator()
+-    test_data = {"test_field": ""}
+-    errors = validator.validate_required_fields(test_data, ["test_field"])
+-    
+-    if errors:
+-        print(f"✅ Validation working: {errors[0]}")
+-    
+-    print("✅ DRY form components test completed")
+\ No newline at end of file
+diff --git a/streamlit_extension/utils/form_validation.py b/streamlit_extension/utils/form_validation.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..e8dee4052231d472b5b993abdcfeeeb6e0d3a623
+--- /dev/null
++++ b/streamlit_extension/utils/form_validation.py
+@@ -0,0 +1,62 @@
++import re
++from typing import Dict, List, Optional, Any
++
++try:
++    from .security import sanitize_input, validate_form
++except Exception:  # pragma: no cover
++    sanitize_input = lambda x, field_name="input": x  # type: ignore
++    validate_form = None
++
++
++def validate_required_fields(data: Dict, required_fields: List[str]) -> List[str]:
++    errors = []
++    for field in required_fields:
++        if not data.get(field):
++            errors.append(f"Missing required field: {field}")
++    return errors
++
++
++def validate_email_format(email: str) -> bool:
++    pattern = r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$"
++    return bool(re.match(pattern, email or ""))
++
++
++def validate_phone_format(phone: str) -> bool:
++    pattern = r"^[+\d][\d\s().-]{7,}$"
++    return bool(re.match(pattern, phone or ""))
++
++
++def validate_text_length(text: str, min_len: int, max_len: int, field_name: str) -> List[str]:
++    errors = []
++    text = text or ""
++    if len(text) < min_len:
++        errors.append(f"{field_name} must be at least {min_len} characters")
++    if len(text) > max_len:
++        errors.append(f"{field_name} must be at most {max_len} characters")
++    return errors
++
++
++def validate_business_rules_client(data: Dict) -> List[str]:
++    errors: List[str] = []
++    errors.extend(validate_text_length(data.get("client_key", ""), 2, 50, "client_key"))
++    errors.extend(validate_text_length(data.get("name", ""), 1, 255, "name"))
++    return errors
++
++
++def validate_business_rules_project(data: Dict) -> List[str]:
++    errors: List[str] = []
++    errors.extend(validate_text_length(data.get("project_key", ""), 2, 50, "project_key"))
++    errors.extend(validate_text_length(data.get("name", ""), 1, 255, "name"))
++    return errors
++
++
++def sanitize_form_inputs(data: Dict) -> Dict:
++    sanitized: Dict[str, Any] = {}
++    for key, value in data.items():
++        if isinstance(value, str):
++            sanitized[key] = sanitize_input(value, key)
++        else:
++            sanitized[key] = value
++    if validate_form:
++        validate_form(sanitized)
++    return sanitized
+diff --git a/tests/test_form_components.py b/tests/test_form_components.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..35974766919b88d13f94363e2627599f74f5c2df
+--- /dev/null
++++ b/tests/test_form_components.py
+@@ -0,0 +1,85 @@
++import types
++import sys
++sys.modules.setdefault("psutil", types.SimpleNamespace())
++from streamlit_extension.components.form_components import StandardForm, ClientForm, ProjectForm
++from streamlit_extension.utils import form_validation as fv
++
++
++class DummyStreamlit:
++    def __init__(self, inputs=None):
++        self.inputs = inputs or {}
++        self.errors = []
++
++    def text_input(self, label, key=None):
++        return self.inputs.get(key, "")
++
++    def text_area(self, label, key=None):
++        return self.inputs.get(key, "")
++
++    def selectbox(self, label, options, key=None):
++        return self.inputs.get(key, options[0] if options else None)
++
++    def form_submit_button(self, label):
++        return True
++
++    def error(self, msg):
++        self.errors.append(msg)
++
++    def form(self, _id):
++        return types.SimpleNamespace(__enter=lambda self: None, __exit=lambda self, exc_type, exc, tb: None)
++
++    def markdown(self, text):
++        pass
++
++
++def test_standard_form_initialization():
++    st = DummyStreamlit()
++    form = StandardForm("test", "Title", st_module=st)
++    assert form.form_id == "test"
++    assert form.get_form_data() == {}
++
++
++def test_client_form_validation_success():
++    form = ClientForm("f", "title")
++    data = {
++        "client_key": "abc",
++        "name": "Client",
++        "primary_contact_email": "a@b.com"
++    }
++    assert form.validate_client_data(data) == []
++
++
++def test_client_form_validation_failures():
++    form = ClientForm("f", "title")
++    data = {"client_key": "a", "name": "", "primary_contact_email": "bad"}
++    errors = form.validate_client_data(data)
++    assert any("Missing" in e or "Invalid" in e for e in errors)
++
++
++def test_project_form_validation_success():
++    form = ProjectForm("f", "title")
++    data = {"client_id": 1, "project_key": "p1", "name": "Proj", "status": "planning"}
++    assert form.validate_project_data(data) == []
++
++
++def test_project_form_validation_failures():
++    form = ProjectForm("f", "title")
++    data = {"client_id": 0, "project_key": "p", "name": "", "status": ""}
++    errors = form.validate_project_data(data)
++    assert errors
++
++
++def test_form_validation_required_fields():
++    errors = fv.validate_required_fields({"a": 1}, ["a", "b"])
++    assert errors == ["Missing required field: b"]
++
++
++def test_form_validation_email_format():
++    assert fv.validate_email_format("a@b.com")
++    assert not fv.validate_email_format("bad")
++
++
++def test_form_validation_business_rules():
++    client_errors = fv.validate_business_rules_client({"client_key": "a", "name": ""})
++    project_errors = fv.validate_business_rules_project({"project_key": "a", "name": ""})
++    assert client_errors and project_errors
  
 EOF
 )

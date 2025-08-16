@@ -1,15 +1,29 @@
-"""
-🔐 Streamlit Security Utilities
+"""Comprehensive security framework for web application protection.
 
-Provides XSS protection and input sanitization for Streamlit forms.
-Integrates the comprehensive JSON security module with Streamlit UI components.
+This module implements layered security measures for the Streamlit
+application including XSS sanitization, CSRF protection, input
+validation, rate limiting and basic DoS mitigation.  It integrates with
+the JSON security library and optional logging utilities to provide
+enterprise grade monitoring and threat detection.
 
-Security Features:
-- XSS protection for form inputs
-- HTML encoding for safe output
-- Input validation and sanitization
-- CSRF protection with secure tokens
-- Integration with existing JSON security framework
+Classes:
+    StreamlitSecurityManager: Central security management for Streamlit
+        forms and API calls.
+
+Functions:
+    sanitize_form_input: Sanitize user supplied text.
+    validate_csrf_token: Validate form submission tokens.
+    check_rate_limit: Apply rate limiting checks on operations.
+
+Example:
+    Protecting form input::
+
+        security = StreamlitSecurityManager()
+        clean = security.sanitize_form_input(user_value)
+
+Note:
+    Requires optional dependencies ``json_security`` and ``rate_limiter``
+    for full functionality.
 """
 
 import sys
@@ -60,8 +74,19 @@ except ImportError:
 
 
 class StreamlitSecurityManager:
-    """Manages security for Streamlit forms and data display."""
-    
+    """Manage security for Streamlit forms and data display.
+
+    The manager combines XSS sanitization, JSON payload validation, rate
+    limiting and DoS protection behind a single interface tailored for
+    Streamlit applications.
+
+    Attributes:
+        logger: Logging object used for sanitized security logging.
+        validator: Optional JSONSecurityValidator instance.
+        rate_limiter: Optional rate limiter instance.
+        dos_protector: Optional DoS protection instance.
+    """
+
     def __init__(self):
         """Initialize security manager with safe defaults."""
         # Initialize secure logging

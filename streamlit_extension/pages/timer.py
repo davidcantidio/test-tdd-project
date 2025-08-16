@@ -34,6 +34,9 @@ try:
         create_safe_client, sanitize_display, validate_form, check_rate_limit,
         security_manager
     )
+    from streamlit_extension.utils.exception_handler import (
+        handle_streamlit_exceptions, streamlit_error_boundary, safe_streamlit_operation
+    )
     DATABASE_UTILS_AVAILABLE = True
 except ImportError:
     DatabaseManager = load_config = TimerComponent = None
@@ -45,6 +48,7 @@ from streamlit_extension.auth import require_auth
 
 
 @require_auth()
+@handle_streamlit_exceptions(show_error=True, attempt_recovery=True)
 def render_timer_page():
     """Render the dedicated timer page."""
     if not STREAMLIT_AVAILABLE:

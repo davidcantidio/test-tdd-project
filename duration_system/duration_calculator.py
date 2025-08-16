@@ -1,10 +1,18 @@
-"""
-Duration Calculator Engine for Epic Timeline Management
+"""Duration calculator for epic timeline management.
 
-This module provides automatic duration calculation between dates with support
-for business days, calendar days, and various time units used in real epic data.
+The module offers utilities to parse human readable duration strings and
+convert them into concrete date offsets.  Both calendar and business day
+calculations are supported with simple algorithms that skip weekends when
+necessary.  These helpers power the duration features used across the test
+TDD project.
 
-Focus: Duration System Implementation - Core calculation logic
+Example:
+    >>> calc = DurationCalculator()
+    >>> calc.calculate_duration_days("2024-01-01", "2024-01-03")
+    2.0
+
+Todo:
+    * Add holiday calendar integration for business day calculations.
 """
 
 from datetime import datetime, date, timedelta

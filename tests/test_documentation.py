@@ -72,3 +72,21 @@ def test_api_examples_work(tmp_path):
     db = DatabaseManager(str(db_path))
     with db.get_connection():
         pass
+
+
+def test_auth_manager_docstrings():
+    validator = DocstringValidator()
+    missing = validator.check_missing_docstrings("streamlit_extension.auth.auth_manager")
+    assert missing == []
+
+
+def test_security_manager_docstrings():
+    validator = DocstringValidator()
+    missing = validator.check_missing_docstrings("streamlit_extension/utils/security.py")
+    assert missing == []
+
+
+def test_duration_calculator_docstrings():
+    validator = DocstringValidator()
+    missing = validator.check_missing_docstrings("duration_system.duration_calculator")
+    assert missing == []

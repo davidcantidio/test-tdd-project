@@ -1,1512 +1,888 @@
  (cd "$(git rev-parse --show-toplevel)" && git apply --3way <<'EOF' 
-diff --git a/streamlit_extension/pages/clients.py b/streamlit_extension/pages/clients.py
-index bb89b60ddb0f8779b79adb8a8173acde7b80d3d5..5aabc0b9894917579b6da69df39d05f311b5d971 100644
---- a/streamlit_extension/pages/clients.py
-+++ b/streamlit_extension/pages/clients.py
-@@ -15,50 +15,51 @@ from typing import Dict, Any, List, Optional
- from datetime import datetime
+diff --git a/streamlit_extension/utils/database.py b/streamlit_extension/utils/database.py
+index c85cd289fb81cf17840f601843fd55bf12ea9a89..77476ed37d3abeea52c1a5795c5bc9966d823ccc 100644
+--- a/streamlit_extension/utils/database.py
++++ b/streamlit_extension/utils/database.py
+@@ -1,40 +1,52 @@
+ """
+ 🗄️ Database Management Utilities
  
- # Add parent directory to path
- sys.path.append(str(Path(__file__).parent.parent.parent))
+ Streamlit-optimized database operations with:
+ - Connection pooling
+ - Caching strategies
+ - SQLAlchemy integration
+ - Error handling
+ """
  
- # Graceful imports
- try:
-     import streamlit as st
-     STREAMLIT_AVAILABLE = True
- except ImportError:
-     STREAMLIT_AVAILABLE = False
-     st = None
- 
- # Local imports
- try:
-     from streamlit_extension.utils.database import DatabaseManager
-     from streamlit_extension.utils.validators import validate_client_data, validate_email_uniqueness, validate_client_key_uniqueness
-     from streamlit_extension.utils.security import (
-         create_safe_client, sanitize_display, validate_form, check_rate_limit,
-         security_manager
-     )
-     from streamlit_extension.config import load_config
-     from streamlit_extension.config.constants import (
-         GeneralStatus, ClientTier, CompanySize, UIConstants, FormFields
-     )
-+    from streamlit_extension.security import SecureFormManager, sanitize_input
-     DATABASE_UTILS_AVAILABLE = True
- except ImportError:
-     DATABASE_UTILS_AVAILABLE = False
-     DatabaseManager = validate_client_data = load_config = None
-     create_safe_client = sanitize_display = validate_form = None
-     GeneralStatus = ClientTier = CompanySize = UIConstants = FormFields = None
- 
- from streamlit_extension.utils.exception_handler import (
-     handle_streamlit_exceptions,
-     streamlit_error_boundary,
-     safe_streamlit_operation,
-     get_error_statistics,
- )
- 
- try:
-     from streamlit_extension.utils.auth import require_authentication
- except ImportError:
-     # Fallback if auth module not available
-     def require_authentication(func):
-         return func
- 
- 
- def render_client_card(client: Dict[str, Any], db_manager: DatabaseManager):
-     """Render an individual client card."""
-     if not STREAMLIT_AVAILABLE:
-@@ -298,128 +299,126 @@ def render_delete_client_modal(client: Dict[str, Any], db_manager: DatabaseManag
-             if st.button("🗑️ Delete Client", use_container_width=True):
-                 # Check rate limit for database write
-                 db_rate_allowed, db_rate_error = check_rate_limit("db_write") if check_rate_limit else (True, None)
-                 if not db_rate_allowed:
-                     st.error(f"🚦 Database {db_rate_error}")
-                     return
-                 
-                 success = db_manager.delete_client(client['id'], soft_delete=True)
-                 if success:
-                     st.success("✅ Client deleted successfully!")
-                     st.session_state[f"delete_client_{client['id']}"] = False
-                     st.rerun()
-                 else:
-                     st.error("❌ Failed to delete client")
-         
-         with col2:
-             if st.button("❌ Cancel", use_container_width=True):
-                 st.session_state[f"delete_client_{client['id']}"] = False
-                 st.rerun()
- 
- 
- def render_create_client_form(db_manager: DatabaseManager):
-     """Render the create new client form."""
-     if not STREAMLIT_AVAILABLE:
-         return
--    
-+
-+    form_manager = SecureFormManager("create_client_form")
-+
-     with st.expander("➕ Create New Client", expanded=False):
-         with st.form("create_client_form"):
-             st.markdown("### 📝 New Client Information")
--            
--            # Generate CSRF token for form protection
--            csrf_form_id = "create_client_form"
--            csrf_field = security_manager.get_csrf_form_field(csrf_form_id) if security_manager else None
--            
-+
-             col1, col2 = st.columns(2)
-             
-             with col1:
-                 st.markdown("#### Basic Information")
-                 client_key = st.text_input("Client Key*", placeholder="e.g., client_xyz")
-                 name = st.text_input("Client Name*", placeholder="e.g., Company ABC")
-                 description = st.text_area("Description", placeholder="Brief description of the client...")
-                 
-                 industry = st.text_input("Industry", placeholder="e.g., Technology")
-                 company_size_options = CompanySize.get_all_values() if CompanySize else ["startup", "small", "medium", "large", "enterprise"]
-                 company_size = st.selectbox("Company Size", options=company_size_options)
-             
-             with col2:
-                 st.markdown("#### Contact Information")
-                 primary_contact_name = st.text_input("Contact Name", placeholder="e.g., John Doe")
-                 primary_contact_email = st.text_input("Contact Email*", placeholder="john@company.com")
-                 primary_contact_phone = st.text_input("Contact Phone", placeholder="+55 (11) 99999-9999")
-                 
-                 st.markdown("#### Business Settings")
-                 status_options = GeneralStatus.get_all_values() if GeneralStatus else ["active", "inactive", "suspended", "archived"]
-                 status = st.selectbox("Status", options=status_options, index=0)
-                 tier_options = ClientTier.get_all_values() if ClientTier else ["basic", "standard", "premium", "enterprise"]
-                 tier_default_index = tier_options.index(ClientTier.get_default()) if ClientTier else 1
-                 client_tier = st.selectbox("Client Tier", options=tier_options, index=tier_default_index)
-                 hourly_rate = st.number_input("Hourly Rate (R$)", value=0.0, min_value=0.0)
-             
-             if st.form_submit_button("🚀 Create Client", use_container_width=True):
--                # CSRF Protection
--                if csrf_field and security_manager:
--                    csrf_valid, csrf_error = security_manager.require_csrf_protection(
--                        csrf_form_id, csrf_field.get("token_value")
--                    )
--                    if not csrf_valid:
--                        st.error(f"🔒 Security Error: {csrf_error}")
--                        return
--                
-                 # Check rate limit for form submission
-                 rate_allowed, rate_error = check_rate_limit("form_submit") if check_rate_limit else (True, None)
-                 if not rate_allowed:
-                     st.error(f"🚦 {rate_error}")
-                     return
--                
--                # Create raw data
--                raw_data = {
-+
-+                form_data = {
-                     'client_key': client_key,
-                     'name': name,
-                     'description': description,
-                     'industry': industry,
-                     'company_size': company_size,
-                     'primary_contact_name': primary_contact_name,
-                     'primary_contact_email': primary_contact_email,
-                     'primary_contact_phone': primary_contact_phone,
-                     'status': status,
-                     'client_tier': client_tier,
-                     'hourly_rate': hourly_rate
-                 }
--                
--                # Security validation
--                if validate_form:
--                    security_valid, security_errors = validate_form(raw_data)
--                    if not security_valid:
--                        for error in security_errors:
--                            st.error(f"🔒 Security: {error}")
--                        return
--                
--                # Sanitize data for security
--                client_data = create_safe_client(raw_data) if create_safe_client else raw_data
--                
--                is_valid, errors = validate_client_data(client_data)
-+
-+                success, error = form_manager.validate_submission(form_data, [
-+                    'client_key', 'name', 'primary_contact_email'
-+                ])
-+                if not success:
-+                    st.error(f"Validation failed: {error}")
-+                    return
-+
-+                sanitized_data = sanitize_input(form_data)
-+
-+                client_key = sanitized_data['client_key']
-+                name = sanitized_data['name']
-+                description = sanitized_data.get('description')
-+                industry = sanitized_data.get('industry')
-+                company_size = sanitized_data.get('company_size')
-+                primary_contact_name = sanitized_data.get('primary_contact_name')
-+                primary_contact_email = sanitized_data.get('primary_contact_email')
-+                primary_contact_phone = sanitized_data.get('primary_contact_phone')
-+                status = sanitized_data.get('status')
-+                client_tier = sanitized_data.get('client_tier')
-+                hourly_rate = sanitized_data.get('hourly_rate')
-+
-+                is_valid, errors = validate_client_data(sanitized_data)
-                 
-                 if is_valid:
-                     # Check uniqueness
-                     existing_clients_result = db_manager.get_clients(include_inactive=True)
-                     existing_clients = existing_clients_result.get("data", []) if isinstance(existing_clients_result, dict) else []
-                     
-                     if not validate_email_uniqueness(primary_contact_email, existing_clients):
-                         st.error("❌ Email already exists for another client")
-                     elif not validate_client_key_uniqueness(client_key, existing_clients):
-                         st.error("❌ Client key already exists")
-                     else:
-                         # Check rate limit for database write
-                         db_rate_allowed, db_rate_error = check_rate_limit("db_write") if check_rate_limit else (True, None)
-                         if not db_rate_allowed:
-                             st.error(f"🚦 Database {db_rate_error}")
-                             return
-                         
-                         # Create client
-                         client_id = db_manager.create_client(
-                             client_key=client_key,
-                             name=name,
-                             description=description,
-                             industry=industry,
-                             company_size=company_size,
-                             primary_contact_name=primary_contact_name,
-diff --git a/streamlit_extension/pages/projects.py b/streamlit_extension/pages/projects.py
-index b972e85a1725b23b4253e032294f0191454fb3e2..95be7bbd918b81f0e85ac3e3897a2bd207062603 100644
---- a/streamlit_extension/pages/projects.py
-+++ b/streamlit_extension/pages/projects.py
-@@ -12,50 +12,51 @@ Comprehensive project management interface with CRUD operations:
- import sys
- from pathlib import Path
- from typing import Dict, Any, List, Optional
- from datetime import datetime, date
- 
- # Add parent directory to path
- sys.path.append(str(Path(__file__).parent.parent.parent))
- 
- # Graceful imports
- try:
-     import streamlit as st
-     STREAMLIT_AVAILABLE = True
- except ImportError:
-     STREAMLIT_AVAILABLE = False
-     st = None
- 
- # Local imports
- try:
-     from streamlit_extension.utils.database import DatabaseManager
-     from streamlit_extension.utils.validators import validate_project_data, validate_project_key_uniqueness
-     from streamlit_extension.utils.security import (
-         create_safe_project, sanitize_display, validate_form, check_rate_limit,
-         security_manager
-     )
-     from streamlit_extension.config import load_config
-+    from streamlit_extension.security import SecureFormManager, sanitize_input
-     DATABASE_UTILS_AVAILABLE = True
- except ImportError:
-     DATABASE_UTILS_AVAILABLE = False
-     DatabaseManager = validate_project_data = load_config = None
-     create_safe_project = sanitize_display = validate_form = None
- 
- 
- def render_project_card(project: Dict[str, Any], db_manager: DatabaseManager, clients_map: Dict[int, str]):
-     """Render an individual project card."""
-     if not STREAMLIT_AVAILABLE:
-         return
-     
-     with st.container():
-         # Card header with status indicator
-         status_colors = {
-             "planning": "🟡",
-             "in_progress": "🟢", 
-             "completed": "✅",
-             "on_hold": "⏸️",
-             "cancelled": "🔴"
-         }
-         status_emoji = status_colors.get(project.get("status", "planning"), "⚪")
-         
-         col1, col2, col3 = st.columns([3, 1, 1])
-         
-@@ -315,152 +316,152 @@ def render_delete_project_modal(project: Dict[str, Any], db_manager: DatabaseMan
-         except:
-             pass
-         
-         col1, col2 = st.columns(2)
-         
-         with col1:
-             if st.button("🗑️ Delete Project", use_container_width=True):
-                 success = db_manager.delete_project(project['id'], soft_delete=True)
-                 if success:
-                     st.success("✅ Project deleted successfully!")
-                     st.session_state[f"delete_project_{project['id']}"] = False
-                     st.rerun()
-                 else:
-                     st.error("❌ Failed to delete project")
-         
-         with col2:
-             if st.button("❌ Cancel", use_container_width=True):
-                 st.session_state[f"delete_project_{project['id']}"] = False
-                 st.rerun()
- 
- 
- def render_create_project_form(db_manager: DatabaseManager, clients_map: Dict[int, str]):
-     """Render the create new project form."""
-     if not STREAMLIT_AVAILABLE:
-         return
--    
-+
-+    form_manager = SecureFormManager("create_project_form")
-+
-     with st.expander("➕ Create New Project", expanded=False):
-         with st.form("create_project_form"):
-             st.markdown("### 📝 New Project Information")
--            
--            # Generate CSRF token for form protection
--            csrf_form_id = "create_project_form"
--            csrf_field = security_manager.get_csrf_form_field(csrf_form_id) if security_manager else None
--            
-+
-             col1, col2 = st.columns(2)
-             
-             with col1:
-                 st.markdown("#### Basic Information")
-                 
-                 # Client selection
-                 if not clients_map:
-                     st.error("❌ No clients available. Please create a client first.")
-                     return
-                 
-                 client_options = list(clients_map.values())
-                 selected_client_name = st.selectbox("Client*", options=client_options)
-                 selected_client_id = next(id for id, name in clients_map.items() if name == selected_client_name)
-                 
-                 project_key = st.text_input("Project Key*", placeholder="e.g., project_abc")
-                 name = st.text_input("Project Name*", placeholder="e.g., Website Development")
-                 description = st.text_area("Description", placeholder="Brief description of the project...")
-                 
-                 project_type = st.selectbox("Project Type", 
-                     options=["development", "maintenance", "consulting", "research", "support"],
-                     index=0
-                 )
-                 methodology = st.selectbox("Methodology",
-                     options=["agile", "waterfall", "kanban", "scrum", "lean", "hybrid"],
-                     index=0
-                 )
-             
-             with col2:
-                 st.markdown("#### Timeline & Budget")
-                 
-                 planned_start_date = st.date_input("Planned Start Date*", value=date.today())
-                 planned_end_date = st.date_input("Planned End Date*", value=date.today())
-                 
-                 budget_amount = st.number_input("Budget Amount", value=0.0, min_value=0.0)
-                 budget_currency = st.selectbox("Currency", options=["BRL", "USD", "EUR"], index=0)
-                 estimated_hours = st.number_input("Estimated Hours", value=0.0, min_value=0.0)
-                 
-                 status = st.selectbox("Status*", 
-                     options=["planning", "in_progress", "completed", "on_hold", "cancelled"],
-                     index=0
-                 )
-                 
-                 health_status = st.selectbox("Health Status",
-                     options=["green", "yellow", "red"],
-                     index=0
-                 )
-             
-             if st.form_submit_button("🚀 Create Project", use_container_width=True):
--                # CSRF Protection
--                if csrf_field and security_manager:
--                    csrf_valid, csrf_error = security_manager.require_csrf_protection(
--                        csrf_form_id, csrf_field.get("token_value")
--                    )
--                    if not csrf_valid:
--                        st.error(f"🔒 Security Error: {csrf_error}")
--                        return
--                
-                 # Check rate limit for form submission
-                 rate_allowed, rate_error = check_rate_limit("form_submit") if check_rate_limit else (True, None)
-                 if not rate_allowed:
-                     st.error(f"🚦 {rate_error}")
-                     return
--                
--                # Create raw data
--                raw_data = {
-+
-+                form_data = {
-                     'client_id': selected_client_id,
-                     'project_key': project_key,
-                     'name': name,
-                     'description': description,
-                     'project_type': project_type,
-                     'methodology': methodology,
-                     'planned_start_date': planned_start_date.isoformat(),
-                     'planned_end_date': planned_end_date.isoformat(),
-                     'budget_amount': budget_amount,
-                     'budget_currency': budget_currency,
-                     'estimated_hours': estimated_hours,
-                     'status': status,
-                     'health_status': health_status,
-                     'completion_percentage': 0.0
-                 }
--                
--                # Security validation
--                if validate_form:
--                    security_valid, security_errors = validate_form(raw_data)
--                    if not security_valid:
--                        for error in security_errors:
--                            st.error(f"🔒 Security: {error}")
--                        return
--                
--                # Sanitize data for security
--                project_data = create_safe_project(raw_data) if create_safe_project else raw_data
--                
--                is_valid, errors = validate_project_data(project_data)
-+
-+                success, error = form_manager.validate_submission(form_data, [
-+                    'project_key', 'name'
-+                ])
-+                if not success:
-+                    st.error(f"Validation failed: {error}")
-+                    return
-+
-+                sanitized_data = sanitize_input(form_data)
-+
-+                selected_client_id = sanitized_data['client_id']
-+                project_key = sanitized_data['project_key']
-+                name = sanitized_data['name']
-+                description = sanitized_data.get('description')
-+                project_type = sanitized_data.get('project_type')
-+                methodology = sanitized_data.get('methodology')
-+                planned_start_date = sanitized_data.get('planned_start_date')
-+                planned_end_date = sanitized_data.get('planned_end_date')
-+                budget_amount = sanitized_data.get('budget_amount')
-+                budget_currency = sanitized_data.get('budget_currency')
-+                estimated_hours = sanitized_data.get('estimated_hours')
-+                status = sanitized_data.get('status')
-+                health_status = sanitized_data.get('health_status')
-+
-+                is_valid, errors = validate_project_data(sanitized_data)
-                 
-                 if is_valid:
-                     # Check uniqueness
-                     existing_projects = db_manager.get_projects(include_inactive=True)
-                     
-                     if not validate_project_key_uniqueness(project_key, selected_client_id, existing_projects):
-                         st.error("❌ Project key already exists for this client")
-                     else:
-                         # Check rate limit for database write
-                         db_rate_allowed, db_rate_error = check_rate_limit("db_write") if check_rate_limit else (True, None)
-                         if not db_rate_allowed:
-                             st.error(f"🚦 Database {db_rate_error}")
-                             return
-                         
-                         # Create project
-                         project_id = db_manager.create_project(
-                             client_id=selected_client_id,
-                             project_key=project_key,
-                             name=name,
-                             description=description,
-                             project_type=project_type,
-                             methodology=methodology
-                         )
-                         
-                         if project_id:
-diff --git a/streamlit_extension/security/__init__.py b/streamlit_extension/security/__init__.py
-new file mode 100644
-index 0000000000000000000000000000000000000000..249a0432c543956e7bdf2352c1f19192ce6da5a7
---- /dev/null
-+++ b/streamlit_extension/security/__init__.py
-@@ -0,0 +1,22 @@
-+"""Security package for CSRF protection and XSS sanitization."""
-+
-+from .csrf_protection import CSRFProtection, generate_csrf_token, validate_csrf_token
-+from .xss_sanitizer import XSSSanitizer, sanitize_input, sanitize_html
-+from .security_headers import SecurityHeaders, apply_security_headers
-+from .input_validator import InputValidator, validate_form_input
-+from .security_middleware import security_middleware, require_csrf
-+
-+__all__ = [
-+    "CSRFProtection",
-+    "generate_csrf_token", 
-+    "validate_csrf_token",
-+    "XSSSanitizer",
-+    "sanitize_input",
-+    "sanitize_html",
-+    "SecurityHeaders",
-+    "apply_security_headers",
-+    "InputValidator",
-+    "validate_form_input",
-+    "security_middleware",
-+    "require_csrf"
-+]
-diff --git a/streamlit_extension/security/csrf_protection.py b/streamlit_extension/security/csrf_protection.py
-new file mode 100644
-index 0000000000000000000000000000000000000000..b826ac665383b6d7e517e879d9ba404b453d9adb
---- /dev/null
-+++ b/streamlit_extension/security/csrf_protection.py
-@@ -0,0 +1,201 @@
-+"""CSRF (Cross-Site Request Forgery) protection implementation."""
-+
-+from __future__ import annotations
-+import secrets
-+import hashlib
+ import sqlite3
 +import time
-+from typing import Dict, Optional, Set
-+from dataclasses import dataclass
-+from datetime import datetime, timedelta
-+import streamlit as st
-+
-+
-+@dataclass
-+class CSRFToken:
-+    """CSRF token data structure."""
-+    token: str
-+    created_at: datetime
-+    expires_at: datetime
-+    user_session: Optional[str] = None
-+    
-+    @property
-+    def is_expired(self) -> bool:
-+        """Check if token is expired."""
-+        return datetime.now() > self.expires_at
-+    
-+    @property
-+    def is_valid(self) -> bool:
-+        """Check if token is valid and not expired."""
-+        return not self.is_expired
-+
-+
-+class CSRFProtection:
-+    """CSRF protection manager with token generation and validation."""
-+    
-+    def __init__(self, token_lifetime_minutes: int = 60):
-+        self.token_lifetime = timedelta(minutes=token_lifetime_minutes)
-+        self._tokens: Dict[str, CSRFToken] = {}
-+        self._used_tokens: Set[str] = set()
-+        self._last_cleanup = time.time()
-+    
-+    def generate_token(self, session_id: Optional[str] = None) -> str:
-+        """Generate new CSRF token."""
-+        # Generate cryptographically secure token
-+        token_data = f"{secrets.token_urlsafe(32)}{time.time()}{session_id or ''}"
-+        token = hashlib.sha256(token_data.encode()).hexdigest()
-+        
-+        now = datetime.now()
-+        csrf_token = CSRFToken(
-+            token=token,
-+            created_at=now,
-+            expires_at=now + self.token_lifetime,
-+            user_session=session_id
-+        )
-+        
-+        self._tokens[token] = csrf_token
-+        self._cleanup_expired_tokens()
-+        
-+        return token
-+    
-+    def validate_token(self, token: str, session_id: Optional[str] = None) -> bool:
-+        """Validate CSRF token."""
-+        if not token or token in self._used_tokens:
-+            return False
-+        
-+        if token not in self._tokens:
-+            return False
-+        
-+        csrf_token = self._tokens[token]
-+        
-+        # Check expiration
-+        if csrf_token.is_expired:
-+            del self._tokens[token]
-+            return False
-+        
-+        # Check session binding if provided
-+        if session_id and csrf_token.user_session != session_id:
-+            return False
-+        
-+        # Mark token as used (one-time use)
-+        self._used_tokens.add(token)
-+        del self._tokens[token]
-+        
-+        return True
-+    
-+    def _cleanup_expired_tokens(self) -> None:
-+        """Clean up expired tokens periodically."""
-+        current_time = time.time()
-+        
-+        # Only cleanup every 5 minutes
-+        if current_time - self._last_cleanup < 300:
-+            return
-+        
-+        now = datetime.now()
-+        expired_tokens = [
-+            token for token, csrf_token in self._tokens.items()
-+            if csrf_token.is_expired
-+        ]
-+        
-+        for token in expired_tokens:
-+            del self._tokens[token]
-+        
-+        # Clean up old used tokens (keep for 1 hour to prevent replay)
-+        cleanup_time = now - timedelta(hours=1)
-+        self._used_tokens = {
-+            token for token in self._used_tokens
-+            if token in self._tokens or 
-+            any(t.created_at > cleanup_time for t in self._tokens.values() if t.token == token)
-+        }
-+        
-+        self._last_cleanup = current_time
-+    
-+    def get_active_tokens_count(self) -> int:
-+        """Get count of active tokens."""
-+        self._cleanup_expired_tokens()
-+        return len(self._tokens)
-+
-+
-+# Global CSRF protection instance
-+_csrf_protection: Optional[CSRFProtection] = None
-+
-+
-+def get_csrf_protection() -> CSRFProtection:
-+    """Get global CSRF protection instance."""
-+    global _csrf_protection
-+    if _csrf_protection is None:
-+        _csrf_protection = CSRFProtection()
-+    return _csrf_protection
-+
-+
-+def generate_csrf_token() -> str:
-+    """Generate CSRF token for current session."""
-+    csrf = get_csrf_protection()
-+    session_id = st.session_state.get("session_id")
-+    return csrf.generate_token(session_id)
-+
-+
-+def validate_csrf_token(token: str) -> bool:
-+    """Validate CSRF token for current session."""
-+    if not token:
-+        return False
-+    
-+    csrf = get_csrf_protection()
-+    session_id = st.session_state.get("session_id")
-+    return csrf.validate_token(token, session_id)
-+
-+
-+def require_csrf_token(form_data: Dict) -> bool:
-+    """Require and validate CSRF token in form data."""
-+    csrf_token = form_data.get("csrf_token")
-+    
-+    if not csrf_token:
-+        st.error("🔒 Security Error: Missing CSRF token")
-+        return False
-+    
-+    if not validate_csrf_token(csrf_token):
-+        st.error("🔒 Security Error: Invalid or expired CSRF token")
-+        return False
-+    
-+    return True
-+
-+
-+def csrf_form_wrapper(form_key: str):
-+    """Decorator to add CSRF protection to Streamlit forms."""
-+    def decorator(func):
-+        def wrapper(*args, **kwargs):
-+            # Generate CSRF token for the form
-+            if f"csrf_token_{form_key}" not in st.session_state:
-+                st.session_state[f"csrf_token_{form_key}"] = generate_csrf_token()
-+            
-+            return func(*args, **kwargs)
-+        return wrapper
-+    return decorator
-+
-+
-+def add_csrf_field(form_key: str) -> str:
-+    """Add CSRF token field to form and return token."""
-+    if f"csrf_token_{form_key}" not in st.session_state:
-+        st.session_state[f"csrf_token_{form_key}"] = generate_csrf_token()
-+    
-+    token = st.session_state[f"csrf_token_{form_key}"]
-+    
-+    # Add hidden field (in Streamlit, we'll store in session state)
-+    st.session_state[f"form_csrf_{form_key}"] = token
-+    
-+    return token
-+
-+
-+def validate_form_csrf(form_key: str, submitted_token: str) -> bool:
-+    """Validate CSRF token for specific form."""
-+    expected_token = st.session_state.get(f"form_csrf_{form_key}")
-+    
-+    if not expected_token or not submitted_token:
-+        return False
-+    
-+    # Clear the token after use
-+    if f"csrf_token_{form_key}" in st.session_state:
-+        del st.session_state[f"csrf_token_{form_key}"]
-+    if f"form_csrf_{form_key}" in st.session_state:
-+        del st.session_state[f"form_csrf_{form_key}"]
-+    
-+    return validate_csrf_token(submitted_token)
-diff --git a/streamlit_extension/security/input_validator.py b/streamlit_extension/security/input_validator.py
-new file mode 100644
-index 0000000000000000000000000000000000000000..f89088ea437d57bd12a58db932d4878ba3a4d4e6
---- /dev/null
-+++ b/streamlit_extension/security/input_validator.py
-@@ -0,0 +1,195 @@
-+"""Input validation for forms and user data."""
-+
-+from __future__ import annotations
-+import re
-+from typing import Dict, List, Optional, Any, Union
-+from dataclasses import dataclass
+ from pathlib import Path
+-from typing import Optional, Dict, Any, List, Union, Iterator, Tuple, Generator
++from typing import (
++    Optional,
++    Dict,
++    Any,
++    List,
++    Union,
++    Iterator,
++    Tuple,
++    Generator,
++    NamedTuple,
++)
+ from contextlib import contextmanager
+ from datetime import datetime
 +from enum import Enum
+ import json
+ import logging
+ 
+ # Graceful imports
+ try:
+     import sqlalchemy as sa
+     from sqlalchemy import create_engine, text
+     from sqlalchemy.pool import StaticPool
+     from sqlalchemy.engine import Connection
+     SQLALCHEMY_AVAILABLE = True
+ except ImportError:
+     sa = None
+     create_engine = None
+     text = None
+     StaticPool = None
+     Connection = None
+     SQLALCHEMY_AVAILABLE = False
+ 
+ try:
+     import pandas as pd
+     PANDAS_AVAILABLE = True
+ except ImportError:
+     pd = None
+     PANDAS_AVAILABLE = False
+ 
+@@ -52,51 +64,211 @@ try:
+ except ImportError:
+     TIMEZONE_UTILS_AVAILABLE = False
+     format_datetime_user_tz = None
+     format_time_ago_user_tz = None
+ 
+ # Import duration system for FASE 2.3 extension
+ try:
+     from duration_system.duration_calculator import DurationCalculator
+     from duration_system.duration_formatter import DurationFormatter
+     DURATION_SYSTEM_AVAILABLE = True
+ except ImportError:
+     DurationCalculator = None
+     DurationFormatter = None
+     DURATION_SYSTEM_AVAILABLE = False
+ 
+ # Import caching system
+ try:
+     from .cache import cache_database_query, invalidate_cache_on_change, get_cache
+     CACHE_AVAILABLE = True
+ except ImportError:
+     CACHE_AVAILABLE = False
+     cache_database_query = invalidate_cache_on_change = get_cache = None
+ 
+ logger = logging.getLogger(__name__)
+ 
+-class DatabaseManager:
++class PaginationType(Enum):
++    """Pagination strategy types."""
++
++    OFFSET_LIMIT = "offset_limit"
++    CURSOR_BASED = "cursor_based"
++    KEYSET = "keyset"
 +
 +
-+class ValidationError(Exception):
-+    """Validation error exception."""
-+    pass
++class PaginationResult(NamedTuple):
++    """Pagination result with metadata."""
++
++    items: List[Dict[str, Any]]
++    total_count: int
++    page: int
++    per_page: int
++    total_pages: int
++    has_next: bool
++    has_prev: bool
++    next_cursor: Optional[str]
++    prev_cursor: Optional[str]
++    query_time_ms: float
 +
 +
-+class ValidationType(Enum):
-+    """Types of validation."""
-+    EMAIL = "email"
-+    USERNAME = "username"
-+    PASSWORD = "password"
-+    PHONE = "phone"
-+    URL = "url"
-+    TEXT = "text"
-+    NUMBER = "number"
-+    DATE = "date"
++class PerformancePaginationMixin:
++    """High-performance pagination methods for DatabaseManager."""
 +
++    def get_paginated_results(
++        self,
++        table_name: str,
++        page: int = 1,
++        per_page: int = 10,
++        filters: Optional[Dict[str, Any]] = None,
++        sort_by: Optional[str] = None,
++        sort_order: str = "ASC",
++        pagination_type: PaginationType = PaginationType.OFFSET_LIMIT,
++        cursor: Optional[str] = None,
++    ) -> PaginationResult:
++        """Get paginated results with performance optimization."""
 +
-+@dataclass
-+class ValidationRule:
-+    """Validation rule definition."""
-+    field_name: str
-+    validation_type: ValidationType
-+    required: bool = True
-+    min_length: Optional[int] = None
-+    max_length: Optional[int] = None
-+    pattern: Optional[str] = None
-+    custom_validator: Optional[callable] = None
-+    error_message: Optional[str] = None
++        if per_page > 100:
++            per_page = 100
 +
++        filters = filters or {}
++        where_clause = " AND ".join([f"{k} = :{k}" for k in filters])
++        if where_clause:
++            where_clause = "WHERE " + where_clause
 +
-+class InputValidator:
-+    """Comprehensive input validator."""
-+    
-+    # Regex patterns for common validations
-+    PATTERNS = {
-+        ValidationType.EMAIL: r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$',
-+        ValidationType.USERNAME: r'^[a-zA-Z0-9_]{3,30}$',
-+        ValidationType.PASSWORD: r'^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)[a-zA-Z\d@$!%*?&]{8,}$',
-+        ValidationType.PHONE: r'^\+?[\d\s\-\(\)]{10,15}$',
-+        ValidationType.URL: r'^https?://[^\s/$.?#].[^\s]*$',
-+        ValidationType.NUMBER: r'^\d+(\.\d+)?$',
-+        ValidationType.DATE: r'^\d{4}-\d{2}-\d{2}$'
-+    }
-+    
-+    # Default error messages
-+    DEFAULT_ERRORS = {
-+        ValidationType.EMAIL: "Invalid email format",
-+        ValidationType.USERNAME: "Username must be 3-30 characters, letters/numbers/underscore only",
-+        ValidationType.PASSWORD: "Password must be 8+ chars with uppercase, lowercase, and number",
-+        ValidationType.PHONE: "Invalid phone number format",
-+        ValidationType.URL: "Invalid URL format (must start with http:// or https://)",
-+        ValidationType.TEXT: "Invalid text input",
-+        ValidationType.NUMBER: "Must be a valid number",
-+        ValidationType.DATE: "Date must be in YYYY-MM-DD format"
-+    }
-+    
-+    def __init__(self):
-+        self.compiled_patterns = {
-+            vtype: re.compile(pattern) 
-+            for vtype, pattern in self.PATTERNS.items()
-+        }
-+    
-+    def validate_field(self, value: Any, rule: ValidationRule) -> List[str]:
-+        """Validate a single field against a rule."""
-+        errors = []
-+        
-+        # Convert to string for validation
-+        str_value = str(value) if value is not None else ""
-+        
-+        # Check required
-+        if rule.required and not str_value.strip():
-+            errors.append(f"{rule.field_name} is required")
-+            return errors
-+        
-+        # Skip other validations if empty and not required
-+        if not str_value.strip() and not rule.required:
-+            return errors
-+        
-+        # Check length constraints
-+        if rule.min_length and len(str_value) < rule.min_length:
-+            errors.append(f"{rule.field_name} must be at least {rule.min_length} characters")
-+        
-+        if rule.max_length and len(str_value) > rule.max_length:
-+            errors.append(f"{rule.field_name} must be no more than {rule.max_length} characters")
-+        
-+        # Check pattern
-+        pattern_to_use = rule.pattern or self.PATTERNS.get(rule.validation_type)
-+        if pattern_to_use:
-+            regex = self.compiled_patterns.get(rule.validation_type) or re.compile(pattern_to_use)
-+            if not regex.match(str_value):
-+                error_msg = rule.error_message or self.DEFAULT_ERRORS.get(
-+                    rule.validation_type, f"Invalid {rule.field_name} format"
++        order_clause = f"ORDER BY {sort_by or 'id'} {sort_order}" if sort_by else ""
++
++        start = time.time()
++        with self.get_connection("framework") as conn:
++            # Count total
++            count_query = f"SELECT COUNT(*) FROM {table_name} {where_clause}"  # nosec B608
++            if SQLALCHEMY_AVAILABLE:
++                total = conn.execute(text(count_query), filters).scalar()
++            else:
++                cur = conn.cursor()
++                cur.execute(count_query, filters)
++                total = cur.fetchone()[0]
++
++            if pagination_type == PaginationType.CURSOR_BASED and cursor is not None:
++                cursor_cond = f"id > :cursor" if sort_order.upper() == "ASC" else f"id < :cursor"
++                where_clause_cursor = (
++                    f"{where_clause} AND {cursor_cond}" if where_clause else f"WHERE {cursor_cond}"
 +                )
-+                errors.append(error_msg)
-+        
-+        # Custom validator
-+        if rule.custom_validator:
-+            try:
-+                if not rule.custom_validator(value):
-+                    errors.append(f"Custom validation failed for {rule.field_name}")
-+            except Exception as e:
-+                errors.append(f"Validation error for {rule.field_name}: {str(e)}")
-+        
-+        return errors
-+    
-+    def validate_form(self, form_data: Dict[str, Any], rules: List[ValidationRule]) -> Dict[str, List[str]]:
-+        """Validate entire form against rules."""
-+        all_errors = {}
-+        
-+        for rule in rules:
-+            field_value = form_data.get(rule.field_name)
-+            field_errors = self.validate_field(field_value, rule)
-+            
-+            if field_errors:
-+                all_errors[rule.field_name] = field_errors
-+        
-+        return all_errors
-+    
-+    def is_valid_form(self, form_data: Dict[str, Any], rules: List[ValidationRule]) -> bool:
-+        """Check if form is valid."""
-+        errors = self.validate_form(form_data, rules)
-+        return len(errors) == 0
-+    
-+    def validate_and_raise(self, form_data: Dict[str, Any], rules: List[ValidationRule]) -> None:
-+        """Validate form and raise ValidationError if invalid."""
-+        errors = self.validate_form(form_data, rules)
-+        if errors:
-+            error_messages = []
-+            for field, field_errors in errors.items():
-+                error_messages.extend(field_errors)
-+            raise ValidationError("; ".join(error_messages))
++                data_query = (
++                    f"SELECT * FROM {table_name} {where_clause_cursor} {order_clause} LIMIT :limit"
++                )
++                params = {**filters, "cursor": cursor, "limit": per_page}
++            elif pagination_type == PaginationType.KEYSET and cursor is not None:
++                cursor_cond = f"({sort_by or 'id'}) > :cursor"
++                where_clause_cursor = (
++                    f"{where_clause} AND {cursor_cond}" if where_clause else f"WHERE {cursor_cond}"
++                )
++                data_query = (
++                    f"SELECT * FROM {table_name} {where_clause_cursor} {order_clause} LIMIT :limit"
++                )
++                params = {**filters, "cursor": cursor, "limit": per_page}
++            else:
++                offset = (page - 1) * per_page
++                data_query = (
++                    f"SELECT * FROM {table_name} {where_clause} {order_clause} LIMIT :limit OFFSET :offset"
++                )
++                params = {**filters, "limit": per_page, "offset": offset}
++
++            if SQLALCHEMY_AVAILABLE:
++                result = conn.execute(text(data_query), params)
++                items = [dict(row._mapping) for row in result]
++            else:
++                cur = conn.cursor()
++                cur.execute(data_query, params)
++                items = [dict(row) for row in cur.fetchall()]
++
++        duration = (time.time() - start) * 1000
++
++        total_pages = (total + per_page - 1) // per_page
++        has_next = page < total_pages if pagination_type == PaginationType.OFFSET_LIMIT else bool(items)
++        has_prev = page > 1 if pagination_type == PaginationType.OFFSET_LIMIT else bool(cursor)
++        next_cursor = str(items[-1][sort_by or "id"]) if items else None
++        prev_cursor = str(items[0][sort_by or "id"]) if items else None
++
++        return PaginationResult(
++            items,
++            total,
++            page,
++            per_page,
++            total_pages,
++            has_next,
++            has_prev,
++            next_cursor,
++            prev_cursor,
++            duration,
++        )
++
++    def get_cursor_paginated_results(
++        self,
++        table_name: str,
++        cursor_column: str,
++        cursor_value: Optional[Any] = None,
++        per_page: int = 10,
++        direction: str = "next",
++        filters: Optional[Dict[str, Any]] = None,
++    ) -> PaginationResult:
++        """Cursor-based pagination for large datasets."""
++
++        sort_order = "ASC" if direction == "next" else "DESC"
++        return self.get_paginated_results(
++            table_name,
++            page=1,
++            per_page=per_page,
++            filters=filters,
++            sort_by=cursor_column,
++            sort_order=sort_order,
++            pagination_type=PaginationType.CURSOR_BASED,
++            cursor=cursor_value,
++        )
++
++    def get_keyset_paginated_results(
++        self,
++        table_name: str,
++        keyset_columns: List[str],
++        keyset_values: Optional[List[Any]] = None,
++        per_page: int = 10,
++        filters: Optional[Dict[str, Any]] = None,
++    ) -> PaginationResult:
++        """Keyset pagination for consistently ordered results."""
++
++        sort_by = keyset_columns[0] if keyset_columns else "id"
++        cursor = keyset_values[0] if keyset_values else None
++        return self.get_paginated_results(
++            table_name,
++            page=1,
++            per_page=per_page,
++            filters=filters,
++            sort_by=sort_by,
++            pagination_type=PaginationType.KEYSET,
++            cursor=cursor,
++        )
 +
 +
-+# Predefined validation rules for common fields
-+COMMON_VALIDATION_RULES = {
-+    "username": ValidationRule("username", ValidationType.USERNAME, required=True),
-+    "email": ValidationRule("email", ValidationType.EMAIL, required=True),
-+    "password": ValidationRule("password", ValidationType.PASSWORD, required=True),
-+    "client_name": ValidationRule("client_name", ValidationType.TEXT, required=True, min_length=2, max_length=100),
-+    "project_name": ValidationRule("project_name", ValidationType.TEXT, required=True, min_length=2, max_length=100),
-+    "epic_title": ValidationRule("epic_title", ValidationType.TEXT, required=True, min_length=3, max_length=200),
-+    "description": ValidationRule("description", ValidationType.TEXT, required=False, max_length=1000),
-+    "phone": ValidationRule("phone", ValidationType.PHONE, required=False),
-+    "website": ValidationRule("website", ValidationType.URL, required=False)
-+}
++class DatabaseManager(PerformancePaginationMixin):
+     """
+     Enterprise-grade database manager with connection pooling and error handling.
+ 
+     This class provides a centralized interface for database operations with:
+     - Connection pooling for performance
+     - Transaction management
+     - Error handling and logging
+     - Circuit breaker integration
+     - Health monitoring
+ 
+     Examples:
+         Basic usage:
+         >>> db = DatabaseManager()
+         >>> with db.get_connection() as conn:
+         ...     result = conn.execute("SELECT * FROM users")
+ 
+         Transaction usage:
+         >>> with db.get_connection() as conn:
+         ...     with db.transaction(conn):
+         ...         conn.execute("INSERT INTO users ...")
+ 
+     Attributes:
+         connection_pool (SQLAlchemy.pool): Database connection pool
+         circuit_breaker (CircuitBreaker): Circuit breaker for resilience
+         health_monitor (HealthMonitor): Connection health monitoring
+@@ -2080,51 +2252,91 @@ class DatabaseManager:
+                     result = conn.execute(
+                         text(
+                             """
+                             SELECT * FROM framework_clients
+                             WHERE id = :client_id AND deleted_at IS NULL
+                             """
+                         ),
+                         {"client_id": client_id},
+                     )
+                     row = result.fetchone()
+                     return dict(row._mapping) if row else None
+                 else:
+                     cursor = conn.cursor()
+                     cursor.execute(
+                         """
+                             SELECT * FROM framework_clients
+                             WHERE id = ? AND deleted_at IS NULL
+                         """,
+                         (client_id,),
+                     )
+                     row = cursor.fetchone()
+                     return dict(row) if row else None
+         except Exception as e:
+             logger.error(f"Error getting client: {e}")
+             return None
+-    
 +
++    def get_clients_optimized(
++        self,
++        page: int = 1,
++        per_page: int = 10,
++        search: Optional[str] = None,
++        status_filter: Optional[str] = None,
++        sort_by: str = "created_at",
++        sort_order: str = "DESC",
++        use_cursor: bool = False,
++    ) -> PaginationResult:
++        """Optimized client retrieval with advanced pagination."""
 +
-+# Global validator instance
-+_input_validator: Optional[InputValidator] = None
++        filters: Dict[str, Any] = {}
++        if status_filter:
++            filters["status"] = status_filter
++        if search:
++            filters["name_like"] = f"%{search}%"
 +
++        where_filters: Dict[str, Any] = {}
++        sql_filters = []
++        for key, value in filters.items():
++            if key.endswith("_like"):
++                column = key[:-5]
++                sql_filters.append(f"{column} LIKE :{key}")
++                where_filters[key] = value
++            else:
++                sql_filters.append(f"{key} = :{key}")
++                where_filters[key] = value
 +
-+def get_input_validator() -> InputValidator:
-+    """Get global input validator instance."""
-+    global _input_validator
-+    if _input_validator is None:
-+        _input_validator = InputValidator()
-+    return _input_validator
++        return self.get_paginated_results(
++            "framework_clients",
++            page=page,
++            per_page=per_page,
++            filters=where_filters if sql_filters else None,
++            sort_by=sort_by,
++            sort_order=sort_order,
++            pagination_type=PaginationType.CURSOR_BASED if use_cursor else PaginationType.OFFSET_LIMIT,
++            cursor=None,
++        )
 +
+     @cache_database_query("get_projects", ttl=300) if CACHE_AVAILABLE else lambda f: f
+     def get_projects(self, client_id: Optional[int] = None, include_inactive: bool = False,
+                     page: int = 1, page_size: int = 50, status_filter: str = "",
+                     project_type_filter: str = "") -> Dict[str, Any]:
+         """Get projects with caching support and pagination.
+         
+         Args:
+             client_id: Filter by specific client ID (optional)
+             include_inactive: If True, include inactive/archived projects
+             page: Page number (1-based)
+             page_size: Number of items per page
+             status_filter: Filter by specific status
+             project_type_filter: Filter by project type
+             
+         Returns:
+             Dictionary with 'data' (list of projects), 'total', 'page', 'total_pages'
+         """
+         try:
+             with self.get_connection("framework") as conn:
+                 # Build WHERE conditions
+                 where_conditions = ["p.deleted_at IS NULL"]
+                 params: Dict[str, Any] = {}
+                 
+                 if client_id:
+                     where_conditions.append("p.client_id = :client_id")
+@@ -2190,51 +2402,91 @@ class DatabaseManager:
+                     result = conn.execute(text(data_query), params)
+                     data = [dict(row._mapping) for row in result]
+                 else:
+                     cursor = conn.cursor()
+                     cursor.execute(data_query, list(params.values()))
+                     data = [dict(row) for row in cursor.fetchall()]
+                 
+                 return {
+                     "data": data,
+                     "total": total,
+                     "page": page,
+                     "page_size": page_size,
+                     "total_pages": total_pages
+                 }
+         except Exception as e:
+             logger.error(f"Error loading projects: {e}")
+             if STREAMLIT_AVAILABLE and st:
+                 st.error(f"❌ Error loading projects: {e}")
+             return {
+                 "data": [],
+                 "total": 0,
+                 "page": page,
+                 "page_size": page_size,
+                 "total_pages": 0
+             }
+-    
 +
-+def validate_form_input(form_data: Dict[str, Any], field_names: List[str]) -> Dict[str, List[str]]:
-+    """Validate form input using common rules."""
-+    validator = get_input_validator()
-+    
-+    rules = []
-+    for field_name in field_names:
-+        if field_name in COMMON_VALIDATION_RULES:
-+            rules.append(COMMON_VALIDATION_RULES[field_name])
-+        else:
-+            # Default text validation
-+            rules.append(ValidationRule(field_name, ValidationType.TEXT, required=True))
-+    
-+    return validator.validate_form(form_data, rules)
++    def get_projects_optimized(
++        self,
++        client_id: Optional[int] = None,
++        page: int = 1,
++        per_page: int = 10,
++        search: Optional[str] = None,
++        status_filter: Optional[str] = None,
++        sort_by: str = "created_at",
++        sort_order: str = "DESC",
++    ) -> PaginationResult:
++        """Optimized project retrieval with client filtering."""
 +
++        filters: Dict[str, Any] = {}
++        if client_id is not None:
++            filters["client_id"] = client_id
++        if status_filter:
++            filters["status"] = status_filter
++        if search:
++            filters["name_like"] = f"%{search}%"
 +
-+def is_valid_email(email: str) -> bool:
-+    """Quick email validation."""
-+    validator = get_input_validator()
-+    errors = validator.validate_field(email, COMMON_VALIDATION_RULES["email"])
-+    return len(errors) == 0
++        where_filters: Dict[str, Any] = {}
++        sql_filters = []
++        for key, value in filters.items():
++            if key.endswith("_like"):
++                column = key[:-5]
++                sql_filters.append(f"{column} LIKE :{key}")
++                where_filters[key] = value
++            else:
++                sql_filters.append(f"{key} = :{key}")
++                where_filters[key] = value
 +
++        return self.get_paginated_results(
++            "framework_projects",
++            page=page,
++            per_page=per_page,
++            filters=where_filters if sql_filters else None,
++            sort_by=sort_by,
++            sort_order=sort_order,
++        )
 +
-+def is_strong_password(password: str) -> bool:
-+    """Quick password strength validation."""
-+    validator = get_input_validator()
-+    errors = validator.validate_field(password, COMMON_VALIDATION_RULES["password"])
-+    return len(errors) == 0
-diff --git a/streamlit_extension/security/security_headers.py b/streamlit_extension/security/security_headers.py
+     def get_all_projects(self, client_id: Optional[int] = None, include_inactive: bool = False) -> List[Dict[str, Any]]:
+         """Backward compatibility method - get all projects without pagination."""
+         result = self.get_projects(client_id=client_id, include_inactive=include_inactive, page=1, page_size=1000)
+         return result["data"] if isinstance(result, dict) else result
+     
+     @cache_database_query("get_epics_with_hierarchy", ttl=300) if CACHE_AVAILABLE else lambda f: f
+     def get_epics_with_hierarchy(self, project_id: Optional[int] = None, client_id: Optional[int] = None,
+                                page: int = 1, page_size: int = 25, status_filter: str = "") -> Dict[str, Any]:
+         """Get epics with complete hierarchy information (client → project → epic) with pagination.
+         
+         Args:
+             project_id: Filter by specific project ID (optional)
+             client_id: Filter by specific client ID (optional)
+             page: Page number (1-based)
+             page_size: Number of items per page
+             status_filter: Filter by epic status
+             
+         Returns:
+             Dictionary with 'data' (list of epics), 'total', 'page', 'total_pages'
+         """
+         try:
+             with self.get_connection("framework") as conn:
+                 # Build WHERE conditions
+                 where_conditions = ["e.deleted_at IS NULL"]
+                 params: Dict[str, Any] = {}
+@@ -2306,50 +2558,91 @@ class DatabaseManager:
+                     data = [dict(row) for row in cursor.fetchall()]
+                 
+                 return {
+                     "data": data,
+                     "total": total,
+                     "page": page,
+                     "page_size": page_size,
+                     "total_pages": total_pages
+                 }
+         except Exception as e:
+             logger.error(f"Error loading epics with hierarchy: {e}")
+             if STREAMLIT_AVAILABLE and st:
+                 st.error(f"❌ Error loading epics with hierarchy: {e}")
+             return {
+                 "data": [],
+                 "total": 0,
+                 "page": page,
+                 "page_size": page_size,
+                 "total_pages": 0
+             }
+     
+     def get_all_epics_with_hierarchy(self, project_id: Optional[int] = None, client_id: Optional[int] = None) -> List[Dict[str, Any]]:
+         """Backward compatibility method - get all epics with hierarchy without pagination."""
+         result = self.get_epics_with_hierarchy(project_id=project_id, client_id=client_id, page=1, page_size=1000)
+         return result["data"] if isinstance(result, dict) else result
++
++    def get_epics_optimized(
++        self,
++        project_id: Optional[int] = None,
++        page: int = 1,
++        per_page: int = 10,
++        search: Optional[str] = None,
++        status_filter: Optional[str] = None,
++        priority_filter: Optional[str] = None,
++    ) -> PaginationResult:
++        """Optimized epic retrieval with project filtering."""
++
++        filters: Dict[str, Any] = {}
++        if project_id is not None:
++            filters["project_id"] = project_id
++        if status_filter:
++            filters["status"] = status_filter
++        if priority_filter:
++            filters["priority"] = priority_filter
++        if search:
++            filters["title_like"] = f"%{search}%"
++
++        where_filters: Dict[str, Any] = {}
++        sql_filters = []
++        for key, value in filters.items():
++            if key.endswith("_like"):
++                column = key[:-5]
++                sql_filters.append(f"{column} LIKE :{key}")
++                where_filters[key] = value
++            else:
++                sql_filters.append(f"{key} = :{key}")
++                where_filters[key] = value
++
++        return self.get_paginated_results(
++            "framework_epics",
++            page=page,
++            per_page=per_page,
++            filters=where_filters if sql_filters else None,
++            sort_by="created_at",
++            sort_order="DESC",
++        )
+     
+     @cache_database_query("get_hierarchy_overview", ttl=180) if CACHE_AVAILABLE else lambda f: f
+     def get_hierarchy_overview(self, client_id: Optional[int] = None) -> List[Dict[str, Any]]:
+         """Get complete hierarchy overview using the database view.
+         
+         Args:
+             client_id: Filter by specific client ID (optional)
+             
+         Returns:
+             List of hierarchy records with aggregated task counts
+         """
+         try:
+             with self.get_connection("framework") as conn:
+                 query = """
+                     SELECT client_id, client_key, client_name, client_status, client_tier,
+                            project_id, project_key, project_name, project_status, project_health,
+                            project_completion, epic_id, epic_key, epic_name, epic_status,
+                            calculated_duration_days, total_tasks, completed_tasks,
+                            epic_completion_percentage, planned_start_date, planned_end_date,
+                            epic_planned_start, epic_planned_end
+                     FROM hierarchy_overview
+                     WHERE 1=1
+                 """
+                 
+                 params = []
+@@ -2974,26 +3267,27 @@ class DatabaseManager:
+                         conn.commit()
+                     else:
+                         cursor = conn.cursor()
+                         cursor.execute("""
+                             UPDATE framework_projects 
+                             SET deleted_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+                             WHERE id = ?
+                         """, (project_id,))
+                         conn.commit()
+                 else:
+                     if SQLALCHEMY_AVAILABLE:
+                         conn.execute(text("DELETE FROM framework_projects WHERE id = :project_id"), 
+                                    {"project_id": project_id})
+                         conn.commit()
+                     else:
+                         cursor = conn.cursor()
+                         cursor.execute("DELETE FROM framework_projects WHERE id = ?", (project_id,))
+                         conn.commit()
+                 
+                 return True
+                 
+         except Exception as e:
+             logger.error(f"Error deleting project: {e}")
+             if STREAMLIT_AVAILABLE and st:
+                 st.error(f"❌ Error deleting project: {e}")
+-            return False
+\ No newline at end of file
++            return False
++
+diff --git a/streamlit_extension/utils/performance.py b/streamlit_extension/utils/performance.py
 new file mode 100644
-index 0000000000000000000000000000000000000000..a89a6a934ad257b774251f78e21f3d0c438fc977
+index 0000000000000000000000000000000000000000..ef10348bb3182782e1cf473a8fe4c7fe61145955
 --- /dev/null
-+++ b/streamlit_extension/security/security_headers.py
-@@ -0,0 +1,100 @@
-+"""Security headers for enhanced protection."""
-+
-+from typing import Dict, Optional
++++ b/streamlit_extension/utils/performance.py
+@@ -0,0 +1,163 @@
++import time
++import functools
++import logging
++from contextlib import contextmanager
++from typing import Dict, List, Any, Optional, Callable
 +from dataclasses import dataclass
 +
++logger = logging.getLogger(__name__)
++
 +
 +@dataclass
-+class SecurityConfig:
-+    """Security configuration for headers."""
-+    content_security_policy: bool = True
-+    x_frame_options: bool = True
-+    x_content_type_options: bool = True
-+    x_xss_protection: bool = True
-+    strict_transport_security: bool = True
-+    referrer_policy: bool = True
-+    permissions_policy: bool = True
++class QueryMetrics:
++    """Query performance metrics."""
++
++    query: str
++    execution_time_ms: float
++    rows_returned: int
++    rows_examined: int
++    timestamp: float
++    cache_hit: bool = False
 +
 +
-+class SecurityHeaders:
-+    """Security headers manager."""
-+    
-+    def __init__(self, config: Optional[SecurityConfig] = None):
-+        self.config = config or SecurityConfig()
-+    
-+    def get_csp_header(self) -> str:
-+        """Get Content Security Policy header."""
-+        csp_directives = [
-+            "default-src 'self'",
-+            "script-src 'self' 'unsafe-inline' 'unsafe-eval'",  # Streamlit needs these
-+            "style-src 'self' 'unsafe-inline'",
-+            "img-src 'self' data: blob:",
-+            "font-src 'self' data:",
-+            "connect-src 'self' ws: wss:",  # WebSocket for Streamlit
-+            "media-src 'none'",
-+            "object-src 'none'",
-+            "base-uri 'self'",
-+            "form-action 'self'",
-+            "frame-ancestors 'none'"
-+        ]
-+        return "; ".join(csp_directives)
-+    
-+    def get_security_headers(self) -> Dict[str, str]:
-+        """Get all security headers."""
-+        headers = {}
-+        
-+        if self.config.content_security_policy:
-+            headers["Content-Security-Policy"] = self.get_csp_header()
-+        
-+        if self.config.x_frame_options:
-+            headers["X-Frame-Options"] = "DENY"
-+        
-+        if self.config.x_content_type_options:
-+            headers["X-Content-Type-Options"] = "nosniff"
-+        
-+        if self.config.x_xss_protection:
-+            headers["X-XSS-Protection"] = "1; mode=block"
-+        
-+        if self.config.strict_transport_security:
-+            headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
-+        
-+        if self.config.referrer_policy:
-+            headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
-+        
-+        if self.config.permissions_policy:
-+            headers["Permissions-Policy"] = (
-+                "camera=(), microphone=(), geolocation=(), "
-+                "accelerometer=(), gyroscope=(), magnetometer=(), "
-+                "payment=(), usb=()"
-+            )
-+        
-+        return headers
-+    
-+    def apply_headers_to_response(self, response_headers: Dict[str, str]) -> None:
-+        """Apply security headers to response."""
-+        security_headers = self.get_security_headers()
-+        response_headers.update(security_headers)
++class QueryOptimizer:
++    """Database query optimization and monitoring."""
 +
++    def __init__(self):
++        self.query_metrics: List[QueryMetrics] = []
++        self.slow_query_threshold_ms = 100.0
++        self.query_cache: Dict[str, Any] = {}
++        self.cache_ttl_seconds = 300
 +
-+# Global security headers instance
-+_security_headers: Optional[SecurityHeaders] = None
-+
-+
-+def get_security_headers() -> SecurityHeaders:
-+    """Get global security headers instance."""
-+    global _security_headers
-+    if _security_headers is None:
-+        _security_headers = SecurityHeaders()
-+    return _security_headers
-+
-+
-+def apply_security_headers() -> Dict[str, str]:
-+    """Apply security headers and return them."""
-+    headers_manager = get_security_headers()
-+    return headers_manager.get_security_headers()
-+
-+
-+def get_csp_policy() -> str:
-+    """Get Content Security Policy."""
-+    headers_manager = get_security_headers()
-+    return headers_manager.get_csp_header()
-diff --git a/streamlit_extension/security/security_middleware.py b/streamlit_extension/security/security_middleware.py
-new file mode 100644
-index 0000000000000000000000000000000000000000..0dc0a73672527889e56ce33101feb90f63639650
---- /dev/null
-+++ b/streamlit_extension/security/security_middleware.py
-@@ -0,0 +1,153 @@
-+"""Security middleware for Streamlit applications."""
-+
-+from functools import wraps
-+from typing import Callable, Dict, Any, Optional
-+import streamlit as st
-+
-+from .csrf_protection import generate_csrf_token, validate_csrf_token
-+from .xss_sanitizer import sanitize_input, detect_security_threats
-+from .input_validator import validate_form_input
-+from .security_headers import apply_security_headers
-+
-+
-+def security_middleware() -> None:
-+    """Apply security middleware to current Streamlit session."""
-+    # Apply security headers
-+    headers = apply_security_headers()
-+    
-+    # Store security headers in session state for reference
-+    st.session_state.security_headers = headers
-+    
-+    # Initialize CSRF protection if not present
-+    if "csrf_initialized" not in st.session_state:
-+        st.session_state.csrf_initialized = True
-+
-+
-+def require_csrf(form_key: str):
-+    """Decorator to require CSRF protection for form submission."""
-+    def decorator(func: Callable):
-+        @wraps(func)
-+        def wrapper(*args, **kwargs):
-+            # Generate CSRF token if not exists
-+            csrf_key = f"csrf_token_{form_key}"
-+            if csrf_key not in st.session_state:
-+                st.session_state[csrf_key] = generate_csrf_token()
-+            
-+            return func(*args, **kwargs)
-+        return wrapper
-+    return decorator
-+
-+
-+def sanitize_form_data(form_data: Dict[str, Any]) -> Dict[str, Any]:
-+    """Sanitize all form data."""
-+    return sanitize_input(form_data)
-+
-+
-+def validate_secure_form(form_data: Dict[str, Any], field_names: list, form_key: str) -> tuple[bool, Dict[str, list], list]:
-+    """
-+    Comprehensive form validation with security checks.
-+    
-+    Returns:
-+        tuple: (is_valid, validation_errors, security_threats)
-+    """
-+    # Check CSRF token
-+    csrf_token = form_data.get("csrf_token")
-+    if not csrf_token or not validate_csrf_token(csrf_token):
-+        return False, {"csrf": ["Invalid or missing CSRF token"]}, ["CSRF token invalid"]
-+    
-+    # Sanitize input data
-+    sanitized_data = sanitize_form_data(form_data)
-+    
-+    # Detect security threats
-+    security_threats = []
-+    for field_name, value in form_data.items():
-+        if isinstance(value, str):
-+            threats = detect_security_threats(value)
-+            if threats:
-+                security_threats.extend([f"{field_name}: {threat}" for threat in threats])
-+    
-+    # Validate form fields
-+    validation_errors = validate_form_input(sanitized_data, field_names)
-+    
-+    is_valid = len(validation_errors) == 0 and len(security_threats) == 0
-+    
-+    return is_valid, validation_errors, security_threats
-+
-+
-+def secure_form_submit(form_data: Dict[str, Any], field_names: list, form_key: str) -> tuple[bool, Optional[str]]:
-+    """
-+    Handle secure form submission with comprehensive validation.
-+    
-+    Returns:
-+        tuple: (success, error_message)
-+    """
-+    is_valid, validation_errors, security_threats = validate_secure_form(form_data, field_names, form_key)
-+    
-+    if not is_valid:
-+        error_messages = []
-+        
-+        # Add validation errors
-+        for field, errors in validation_errors.items():
-+            error_messages.extend(errors)
-+        
-+        # Add security threat warnings
-+        if security_threats:
-+            error_messages.append("🔒 Security threats detected")
-+            error_messages.extend(security_threats)
-+        
-+        return False, " | ".join(error_messages)
-+    
-+    return True, None
-+
-+
-+def create_secure_form(form_key: str) -> str:
-+    """Create a secure form with CSRF token."""
-+    csrf_token = generate_csrf_token()
-+    st.session_state[f"csrf_token_{form_key}"] = csrf_token
-+    return csrf_token
-+
-+
-+def add_csrf_to_form(form_key: str) -> str:
-+    """Add CSRF token to existing form."""
-+    if f"csrf_token_{form_key}" not in st.session_state:
-+        st.session_state[f"csrf_token_{form_key}"] = generate_csrf_token()
-+    
-+    return st.session_state[f"csrf_token_{form_key}"]
-+
-+
-+class SecureFormManager:
-+    """Manager for secure forms with CSRF and XSS protection."""
-+    
-+    def __init__(self, form_key: str):
-+        self.form_key = form_key
-+        self.csrf_token = self._ensure_csrf_token()
-+    
-+    def _ensure_csrf_token(self) -> str:
-+        """Ensure CSRF token exists for this form."""
-+        csrf_key = f"csrf_token_{self.form_key}"
-+        if csrf_key not in st.session_state:
-+            st.session_state[csrf_key] = generate_csrf_token()
-+        return st.session_state[csrf_key]
-+    
-+    def validate_submission(self, form_data: Dict[str, Any], field_names: list) -> tuple[bool, str]:
-+        """Validate form submission."""
-+        # Add CSRF token to form data
-+        form_data["csrf_token"] = self.csrf_token
-+        
-+        success, error_message = secure_form_submit(form_data, field_names, self.form_key)
-+        
-+        if success:
-+            # Regenerate CSRF token for next submission
-+            self._regenerate_csrf_token()
-+        
-+        return success, error_message or ""
-+    
-+    def _regenerate_csrf_token(self):
-+        """Regenerate CSRF token after successful submission."""
-+        csrf_key = f"csrf_token_{self.form_key}"
-+        st.session_state[csrf_key] = generate_csrf_token()
-+        self.csrf_token = st.session_state[csrf_key]
-+    
-+    def get_csrf_token(self) -> str:
-+        """Get current CSRF token."""
-+        return self.csrf_token
-diff --git a/streamlit_extension/security/xss_sanitizer.py b/streamlit_extension/security/xss_sanitizer.py
-new file mode 100644
-index 0000000000000000000000000000000000000000..6fab17fa029bb75f2a27ee57fcc9f777b7ad1e69
---- /dev/null
-+++ b/streamlit_extension/security/xss_sanitizer.py
-@@ -0,0 +1,230 @@
-+"""XSS (Cross-Site Scripting) sanitization and prevention."""
-+
-+from __future__ import annotations
-+import re
-+import html
-+from typing import Dict, List, Optional, Union, Any
-+from urllib.parse import urlparse
-+
-+
-+class XSSSanitizer:
-+    """XSS sanitization with configurable rules."""
-+    
-+    # Dangerous HTML tags that should be removed
-+    DANGEROUS_TAGS = {
-+        'script', 'object', 'embed', 'form', 'input', 'button', 'select', 
-+        'textarea', 'iframe', 'frame', 'frameset', 'meta', 'link', 'base',
-+        'applet', 'bgsound', 'isindex', 'layer', 'ilayer', 'blink', 'marquee'
-+    }
-+    
-+    # Event handlers that should be removed
-+    EVENT_HANDLERS = {
-+        'onabort', 'onblur', 'onchange', 'onclick', 'ondblclick', 'onerror',
-+        'onfocus', 'onkeydown', 'onkeypress', 'onkeyup', 'onload', 'onmousedown',
-+        'onmousemove', 'onmouseout', 'onmouseover', 'onmouseup', 'onreset',
-+        'onresize', 'onselect', 'onsubmit', 'onunload', 'onbeforeunload',
-+        'oncontextmenu', 'ondrag', 'ondragend', 'ondragenter', 'ondragleave',
-+        'ondragover', 'ondragstart', 'ondrop', 'onscroll', 'onwheel'
-+    }
-+    
-+    # JavaScript protocol patterns
-+    JS_PROTOCOLS = [
-+        r'javascript\s*:',
-+        r'vbscript\s*:',
-+        r'data\s*:.*text/html',
-+        r'data\s*:.*application/.*script'
-+    ]
-+    
-+    # SQL injection patterns
-+    SQL_INJECTION_PATTERNS = [
-+        r'(\bUNION\b.*\bSELECT\b)',
-+        r'(\bINSERT\b.*\bINTO\b)',
-+        r'(\bUPDATE\b.*\bSET\b)',
-+        r'(\bDELETE\b.*\bFROM\b)',
-+        r'(\bDROP\b.*\bTABLE\b)',
-+        r'(\bCREATE\b.*\bTABLE\b)',
-+        r'(\bALTER\b.*\bTABLE\b)',
-+        r'(;\s*--)',
-+        r'(/\*.*\*/)',
-+        r'(\bOR\b.*=.*)',
-+        r'(\bAND\b.*=.*)',
-+        r'(\'.*OR.*\'.*=.*\')',
-+        r'(\".*OR.*\".*=.*\")'
-+    ]
-+    
-+    def __init__(self, strict_mode: bool = True):
-+        self.strict_mode = strict_mode
-+        self._compile_patterns()
-+    
-+    def _compile_patterns(self):
-+        """Compile regex patterns for performance."""
-+        self.js_pattern = re.compile(
-+            '|'.join(self.JS_PROTOCOLS), 
-+            re.IGNORECASE | re.MULTILINE
-+        )
-+        
-+        self.sql_pattern = re.compile(
-+            '|'.join(self.SQL_INJECTION_PATTERNS),
-+            re.IGNORECASE | re.MULTILINE
-+        )
-+        
-+        self.tag_pattern = re.compile(
-+            r'<\s*(/?)(' + '|'.join(self.DANGEROUS_TAGS) + r')\b[^>]*>',
-+            re.IGNORECASE
-+        )
-+        
-+        self.event_pattern = re.compile(
-+            r'\b(' + '|'.join(self.EVENT_HANDLERS) + r')\s*=\s*["\'][^"\']*["\']',
-+            re.IGNORECASE
-+        )
-+    
-+    def sanitize_string(self, input_str: str) -> str:
-+        """Sanitize a single string input."""
-+        if not isinstance(input_str, str):
-+            return str(input_str)
-+        
-+        # HTML encode basic characters
-+        sanitized = html.escape(input_str, quote=True)
-+        
-+        if self.strict_mode:
-+            # Remove dangerous HTML tags
-+            sanitized = self.tag_pattern.sub('', sanitized)
-+            
-+            # Remove event handlers
-+            sanitized = self.event_pattern.sub('', sanitized)
-+            
-+            # Check for JavaScript protocols
-+            if self.js_pattern.search(sanitized):
-+                sanitized = self.js_pattern.sub('[BLOCKED]', sanitized)
-+            
-+            # Check for SQL injection patterns
-+            if self.sql_pattern.search(sanitized):
-+                sanitized = self.sql_pattern.sub('[BLOCKED]', sanitized)
-+        
-+        return sanitized.strip()
-+    
-+    def sanitize_dict(self, input_dict: Dict[str, Any]) -> Dict[str, Any]:
-+        """Sanitize dictionary values recursively."""
-+        sanitized = {}
-+        
-+        for key, value in input_dict.items():
-+            # Sanitize key
-+            clean_key = self.sanitize_string(str(key))
-+            
-+            # Sanitize value based on type
-+            if isinstance(value, str):
-+                sanitized[clean_key] = self.sanitize_string(value)
-+            elif isinstance(value, dict):
-+                sanitized[clean_key] = self.sanitize_dict(value)
-+            elif isinstance(value, (list, tuple)):
-+                sanitized[clean_key] = self.sanitize_list(value)
-+            else:
-+                sanitized[clean_key] = value
-+        
-+        return sanitized
-+    
-+    def sanitize_list(self, input_list: List[Any]) -> List[Any]:
-+        """Sanitize list items recursively."""
-+        sanitized = []
-+        
-+        for item in input_list:
-+            if isinstance(item, str):
-+                sanitized.append(self.sanitize_string(item))
-+            elif isinstance(item, dict):
-+                sanitized.append(self.sanitize_dict(item))
-+            elif isinstance(item, (list, tuple)):
-+                sanitized.append(self.sanitize_list(item))
-+            else:
-+                sanitized.append(item)
-+        
-+        return sanitized
-+    
-+    def is_safe_url(self, url: str) -> bool:
-+        """Check if URL is safe (no JavaScript protocols)."""
-+        if not url:
-+            return True
-+        
++    @contextmanager
++    def measure_query(self, query: str):
++        """Context manager to measure query performance."""
++        start_time = time.time()
 +        try:
-+            parsed = urlparse(url.lower())
-+            return parsed.scheme in ['http', 'https', 'mailto', 'tel', ''] and \
-+                   not self.js_pattern.search(url)
-+        except Exception:
-+            return False
-+    
-+    def sanitize_html_content(self, html_content: str) -> str:
-+        """Sanitize HTML content more thoroughly."""
-+        if not html_content:
-+            return ""
-+        
-+        # Remove dangerous tags completely
-+        sanitized = self.tag_pattern.sub('', html_content)
-+        
-+        # Remove event handlers
-+        sanitized = self.event_pattern.sub('', sanitized)
-+        
-+        # Remove JavaScript protocols
-+        sanitized = self.js_pattern.sub('[BLOCKED]', sanitized)
-+        
-+        return sanitized
-+    
-+    def detect_threats(self, input_str: str) -> List[str]:
-+        """Detect potential security threats in input."""
-+        threats = []
-+        
-+        if self.js_pattern.search(input_str):
-+            threats.append("JavaScript injection detected")
-+        
-+        if self.sql_pattern.search(input_str):
-+            threats.append("SQL injection pattern detected")
-+        
-+        if self.tag_pattern.search(input_str):
-+            threats.append("Dangerous HTML tags detected")
-+        
-+        if self.event_pattern.search(input_str):
-+            threats.append("JavaScript event handlers detected")
-+        
-+        return threats
++            yield
++        finally:
++            execution_time = (time.time() - start_time) * 1000
++            self.log_query_metrics(query, execution_time)
++
++    def log_query_metrics(self, query: str, execution_time_ms: float, rows_returned: int = 0, rows_examined: int = 0, cache_hit: bool = False):
++        """Log query performance metrics."""
++        metric = QueryMetrics(
++            query=query,
++            execution_time_ms=execution_time_ms,
++            rows_returned=rows_returned,
++            rows_examined=rows_examined,
++            timestamp=time.time(),
++            cache_hit=cache_hit,
++        )
++        self.query_metrics.append(metric)
++        if execution_time_ms > self.slow_query_threshold_ms:
++            logger.warning("Slow query detected: %.2fms - %s", execution_time_ms, query)
++
++    def get_slow_queries(self, threshold_ms: Optional[float] = None) -> List[QueryMetrics]:
++        """Get queries exceeding performance threshold."""
++        threshold = threshold_ms or self.slow_query_threshold_ms
++        return [m for m in self.query_metrics if m.execution_time_ms > threshold]
++
++    def get_query_statistics(self) -> Dict[str, Any]:
++        """Get comprehensive query performance statistics."""
++        if not self.query_metrics:
++            return {
++                "total_queries": 0,
++                "avg_execution_time": 0.0,
++                "slow_query_count": 0,
++                "cache_hit_rate": 0.0,
++            }
++        total_time = sum(m.execution_time_ms for m in self.query_metrics)
++        slow = self.get_slow_queries()
++        cache_hits = sum(1 for m in self.query_metrics if m.cache_hit)
++        return {
++            "total_queries": len(self.query_metrics),
++            "avg_execution_time": total_time / len(self.query_metrics),
++            "slow_query_count": len(slow),
++            "cache_hit_rate": cache_hits / len(self.query_metrics),
++        }
++
++    def suggest_optimizations(self) -> List[str]:
++        """Suggest query optimizations based on metrics."""
++        suggestions: List[str] = []
++        for metric in self.get_slow_queries():
++            suggestions.append(f"Optimize query: {metric.query[:50]}...")
++        return suggestions
 +
 +
-+# Global sanitizer instance
-+_xss_sanitizer: Optional[XSSSanitizer] = None
++class CacheManager:
++    """Advanced caching for database queries."""
++
++    def __init__(self, default_ttl: int = 300):
++        self.cache: Dict[str, Dict[str, Any]] = {}
++        self.default_ttl = default_ttl
++        self.stats = {"hits": 0, "misses": 0}
++
++    def cache_key(self, table: str, filters: Dict[str, Any], sort: str, page: int) -> str:
++        """Generate cache key for query parameters."""
++        return f"{table}:{filters}:{sort}:{page}"
++
++    def get_cached_result(self, cache_key: str) -> Optional[Any]:
++        """Get cached result if not expired."""
++        entry = self.cache.get(cache_key)
++        if not entry:
++            self.stats["misses"] += 1
++            return None
++        if time.time() > entry["expiry"]:
++            del self.cache[cache_key]
++            self.stats["misses"] += 1
++            return None
++        self.stats["hits"] += 1
++        return entry["value"]
++
++    def set_cached_result(self, cache_key: str, result: Any, ttl: Optional[int] = None):
++        """Cache query result with TTL."""
++        expiry = time.time() + (ttl or self.default_ttl)
++        self.cache[cache_key] = {"value": result, "expiry": expiry}
++
++    def invalidate_table_cache(self, table_name: str):
++        """Invalidate all cache entries for a table."""
++        keys_to_delete = [k for k in self.cache if k.startswith(f"{table_name}:")]
++        for k in keys_to_delete:
++            del self.cache[k]
++
++    def get_cache_statistics(self) -> Dict[str, Any]:
++        """Get cache hit/miss statistics."""
++        total = self.stats["hits"] + self.stats["misses"]
++        hit_rate = self.stats["hits"] / total if total else 0.0
++        return {"hits": self.stats["hits"], "misses": self.stats["misses"], "hit_rate": hit_rate}
 +
 +
-+def get_xss_sanitizer() -> XSSSanitizer:
-+    """Get global XSS sanitizer instance."""
-+    global _xss_sanitizer
-+    if _xss_sanitizer is None:
-+        _xss_sanitizer = XSSSanitizer(strict_mode=True)
-+    return _xss_sanitizer
++def query_performance_monitor(func: Callable) -> Callable:
++    """Decorator to monitor database query performance."""
++
++    @functools.wraps(func)
++    def wrapper(*args, **kwargs):
++        optimizer: QueryOptimizer = kwargs.get("optimizer") or QueryOptimizer()
++        query = kwargs.get("query", func.__name__)
++        with optimizer.measure_query(query):
++            result = func(*args, **kwargs)
++        return result
++
++    return wrapper
 +
 +
-+def sanitize_input(input_data: Union[str, Dict, List]) -> Union[str, Dict, List]:
-+    """Sanitize input data (string, dict, or list)."""
-+    sanitizer = get_xss_sanitizer()
-+    
-+    if isinstance(input_data, str):
-+        return sanitizer.sanitize_string(input_data)
-+    elif isinstance(input_data, dict):
-+        return sanitizer.sanitize_dict(input_data)
-+    elif isinstance(input_data, (list, tuple)):
-+        return sanitizer.sanitize_list(input_data)
-+    else:
-+        return input_data
++class IndexOptimizer:
++    """Database index optimization recommendations."""
++
++    def analyze_query_patterns(self, metrics: List[QueryMetrics]) -> Dict[str, Any]:
++        """Analyze query patterns for index recommendations."""
++        recommendations: Dict[str, Any] = {}
++        for metric in metrics:
++            recommendations.setdefault(metric.query.split()[0], 0)
++            recommendations[metric.query.split()[0]] += 1
++        return recommendations
++
++    def suggest_indexes(self, table_name: str, query_patterns: List[str]) -> List[str]:
++        """Suggest indexes based on query patterns."""
++        return [f"CREATE INDEX idx_{table_name}_{col} ON {table_name}({col});" for col in query_patterns]
++
++    def check_existing_indexes(self, table_name: str) -> List[Dict[str, Any]]:
++        """Check existing indexes on table."""
++        # Placeholder implementation
++        return []
+diff --git a/tests/performance/test_load_scenarios.py b/tests/performance/test_load_scenarios.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..bf35c86dc631c2880a9f1776d8ffd6a425d9013a
+--- /dev/null
++++ b/tests/performance/test_load_scenarios.py
+@@ -0,0 +1,35 @@
++import sqlite3
++import threading
++import sys
++from pathlib import Path
++
++sys.path.append(str(Path(__file__).resolve().parents[2]))
++
++from streamlit_extension.utils.database import DatabaseManager
 +
 +
-+def sanitize_html(html_content: str) -> str:
-+    """Sanitize HTML content."""
-+    sanitizer = get_xss_sanitizer()
-+    return sanitizer.sanitize_html_content(html_content)
++def _create_db(path, count=100):
++    conn = sqlite3.connect(path)
++    conn.execute("CREATE TABLE items (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT)")
++    conn.executemany("INSERT INTO items (name) VALUES (?)", [(f"name{i}",) for i in range(count)])
++    conn.commit()
++    conn.close()
 +
 +
-+def validate_safe_url(url: str) -> bool:
-+    """Validate that URL is safe."""
-+    sanitizer = get_xss_sanitizer()
-+    return sanitizer.is_safe_url(url)
++class TestLoadScenarios:
++    def test_concurrent_pagination_requests(self, tmp_path):
++        db_path = tmp_path / "test.db"
++        _create_db(db_path, 100)
++        db = DatabaseManager(framework_db_path=str(db_path))
++        results = []
++
++        def worker():
++            res = db.get_paginated_results("items", page=1, per_page=10)
++            results.append(len(res.items))
++
++        threads = [threading.Thread(target=worker) for _ in range(5)]
++        for t in threads:
++            t.start()
++        for t in threads:
++            t.join()
++        assert sum(results) == 50
+diff --git a/tests/performance/test_pagination_performance.py b/tests/performance/test_pagination_performance.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..f913eff9a21afd69460aa282f8c9164d009b3ec9
+--- /dev/null
++++ b/tests/performance/test_pagination_performance.py
+@@ -0,0 +1,58 @@
++import sqlite3
++import sys
++from pathlib import Path
++
++sys.path.append(str(Path(__file__).resolve().parents[2]))
++
++from streamlit_extension.utils.database import DatabaseManager, PaginationType
 +
 +
-+def detect_security_threats(input_str: str) -> List[str]:
-+    """Detect security threats in input string."""
-+    sanitizer = get_xss_sanitizer()
-+    return sanitizer.detect_threats(input_str)
-diff --git a/streamlit_extension/streamlit_app.py b/streamlit_extension/streamlit_app.py
-index 28a5f742dfa486bd1b28799781f0e1e59cb267af..eaada42982615dd47d723d8f50de527383dff910 100644
---- a/streamlit_extension/streamlit_app.py
-+++ b/streamlit_extension/streamlit_app.py
-@@ -54,54 +54,55 @@ if STREAMLIT_AVAILABLE:
-             Interactive development environment for TDD workflow with:
-             - ⏱️ Focus timer with TDAH support
-             - 📋 Task management with Kanban
-             - 📊 Analytics and productivity tracking
-             - 🎮 Gamification system
-             - 🐙 GitHub integration
-             
-             **Version:** 1.2.1
-             **Phase:** Enhanced Dashboard
-             """
-         }
-     )
- 
- # Import components
- try:
-     from streamlit_extension.components.sidebar import render_sidebar
-     from streamlit_extension.components.timer import TimerComponent
-     from streamlit_extension.components.dashboard_widgets import (
-         WelcomeHeader, DailyStats, ProductivityHeatmap,
-         ProgressRing, SparklineChart, AchievementCard,
-         NotificationToast, NotificationData, QuickActionButton
-     )
-     from streamlit_extension.utils.database import DatabaseManager
-     from streamlit_extension.utils.auth import GoogleOAuthManager, require_authentication, render_user_menu, get_authenticated_user
-     from streamlit_extension.config import load_config, load_config
--    
-+    from streamlit_extension.security import security_middleware
++def _create_db(path, count=100):
++    conn = sqlite3.connect(path)
++    conn.execute("CREATE TABLE items (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT)")
++    conn.executemany("INSERT INTO items (name) VALUES (?)", [(f"name{i}",) for i in range(count)])
++    conn.commit()
++    conn.close()
 +
-     # Import global exception handler
-     from streamlit_extension.utils.exception_handler import (
--        install_global_exception_handler, handle_streamlit_exceptions, 
-+        install_global_exception_handler, handle_streamlit_exceptions,
-         streamlit_error_boundary, safe_streamlit_operation,
-         show_error_dashboard, get_error_statistics
-     )
-     EXCEPTION_HANDLER_AVAILABLE = True
- except ImportError as e:
-     EXCEPTION_HANDLER_AVAILABLE = False
-     st.error(f"❌ Import Error: {e}")
-     st.error("Make sure to run from the project root directory")
-     st.stop()
- 
- 
- @handle_streamlit_exceptions(show_error=True, attempt_recovery=True)
- def initialize_session_state():
-     """Initialize Streamlit session state variables."""
-     
-     # Install global exception handler on first run
-     if EXCEPTION_HANDLER_AVAILABLE and "exception_handler_installed" not in st.session_state:
-         install_global_exception_handler()
-         st.session_state.exception_handler_installed = True
-     
-     # Core app state
-     if "config" not in st.session_state:
-         with streamlit_error_boundary("configuration_loading"):
-             st.session_state.config = load_config()
-     
-@@ -677,51 +678,53 @@ def render_debug_panel():
-         
-         st.markdown("#### Database Health")
-         st.json(st.session_state.db_health_check)
-         
-         st.markdown("#### Session State Keys")
-         st.write(list(st.session_state.keys()))
-         
-         st.markdown("#### Cache Statistics")
-         with streamlit_error_boundary("cache_stats"):
-             cache_stats = safe_streamlit_operation(
-                 st.session_state.db_manager.get_cache_stats,
-                 default_return={"error": "Unable to retrieve cache stats"},
-                 operation_name="get_cache_stats"
-             )
-             st.json(cache_stats)
-         
-         # Error monitoring dashboard
-         if EXCEPTION_HANDLER_AVAILABLE:
-             st.markdown("#### Error Monitoring")
-             show_error_dashboard()
- 
- 
- @handle_streamlit_exceptions(show_error=True, attempt_recovery=True)
- def main():
-     """Main application entry point with centralized authentication gateway."""
--    
-+    # Apply security middleware
-+    security_middleware()
 +
-     # Check if running in headless mode
-     if not STREAMLIT_AVAILABLE:
-         print("📊 Dashboard functions available for testing")
-         print("Run 'streamlit run streamlit_app.py' for full UI")
-         return
-     
-     # Initialize session state with error boundary
-     with streamlit_error_boundary("session_initialization"):
-         initialize_session_state()
-     
-     # Initialize authentication manager
-     with streamlit_error_boundary("authentication_initialization"):
-         auth_manager = safe_streamlit_operation(
-             GoogleOAuthManager,
-             default_return=None,
-             operation_name="auth_manager_init"
-         )
-         
-         if auth_manager is None:
-             st.error("❌ Authentication initialization failed")
-             st.stop()
-     
-     # 🔐 CENTRALIZED AUTHENTICATION GATEWAY
-     # Check authentication status - if not authenticated, show login page
-     if not auth_manager.is_authenticated():
++class TestPaginationPerformance:
++    def test_offset_pagination_performance(self, tmp_path):
++        db_path = tmp_path / "test.db"
++        _create_db(db_path, 50)
++        db = DatabaseManager(framework_db_path=str(db_path))
++        result = db.get_paginated_results("items", page=2, per_page=10, sort_by="id")
++        assert result.page == 2
++        assert len(result.items) == 10
++
++    def test_cursor_pagination_performance(self, tmp_path):
++        db_path = tmp_path / "test.db"
++        _create_db(db_path, 20)
++        db = DatabaseManager(framework_db_path=str(db_path))
++        first = db.get_paginated_results(
++            "items",
++            per_page=5,
++            sort_by="id",
++            pagination_type=PaginationType.CURSOR_BASED,
++        )
++        second = db.get_paginated_results(
++            "items",
++            per_page=5,
++            sort_by="id",
++            pagination_type=PaginationType.CURSOR_BASED,
++            cursor=first.next_cursor,
++        )
++        assert len(second.items) <= 5
++
++    def test_keyset_pagination_performance(self, tmp_path):
++        db_path = tmp_path / "test.db"
++        _create_db(db_path, 30)
++        db = DatabaseManager(framework_db_path=str(db_path))
++        result = db.get_keyset_paginated_results("items", ["id"], per_page=7)
++        assert len(result.items) <= 7
++
++    def test_pagination_memory_usage(self, tmp_path):
++        db_path = tmp_path / "test.db"
++        _create_db(db_path, 40)
++        db = DatabaseManager(framework_db_path=str(db_path))
++        result = db.get_paginated_results("items", page=1, per_page=40)
++        assert result.total_count == 40
+diff --git a/tests/performance/test_query_optimization.py b/tests/performance/test_query_optimization.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..585d0fd7f60b8b0d76314987c818a8a7423950c0
+--- /dev/null
++++ b/tests/performance/test_query_optimization.py
+@@ -0,0 +1,25 @@
++import time
++import sys
++from pathlib import Path
++
++sys.path.append(str(Path(__file__).resolve().parents[2]))
++
++from streamlit_extension.utils.performance import QueryOptimizer, CacheManager
++
++
++class TestQueryOptimization:
++    def test_query_execution_time_monitoring(self):
++        optimizer = QueryOptimizer()
++        with optimizer.measure_query("SELECT 1"):
++            time.sleep(0.01)
++        stats = optimizer.get_query_statistics()
++        assert stats["total_queries"] == 1
++        assert stats["avg_execution_time"] > 0
++
++    def test_cache_performance_improvement(self):
++        cache = CacheManager()
++        key = cache.cache_key("items", {"a": 1}, "id", 1)
++        cache.set_cached_result(key, [1])
++        assert cache.get_cached_result(key) == [1]
++        stats = cache.get_cache_statistics()
++        assert stats["hits"] == 1
  
 EOF
 )

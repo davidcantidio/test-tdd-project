@@ -1,4 +1,9 @@
-"""Authentication middleware and decorators."""
+"""
+🔐 Authentication Middleware for Streamlit Pages
+
+Enhanced authentication middleware that integrates with the DRY form components
+and provides comprehensive page protection with role-based access control.
+"""
 
 from functools import wraps
 from typing import Callable, Optional
@@ -98,3 +103,55 @@ def logout_user():
         del st.session_state.current_user
     
     st.rerun()
+
+
+def show_user_info():
+    """Display current user information in sidebar."""
+    user = get_current_user()
+    if user:
+        with st.sidebar:
+            st.markdown("---")
+            st.markdown("### 👤 User Info")
+            st.markdown(f"**Username:** {user.username}")
+            st.markdown(f"**Role:** {user.role.value}")
+            
+            if st.button("🚪 Logout", use_container_width=True):
+                logout_user()
+
+
+def init_protected_page(page_title: str, required_roles: Optional[list[UserRole]] = None):
+    """Initialize a protected page with authentication checks.
+    
+    Args:
+        page_title: Title to display on the page
+        required_roles: Optional list of required roles
+    
+    Returns:
+        Current user if authenticated and authorized, None otherwise
+    """
+    st.set_page_config(page_title=page_title, layout="wide")
+    
+    # Run authentication middleware
+    user = auth_middleware()
+    
+    if not user:
+        st.title("🔐 Authentication Required")
+        st.error("Please log in to access this page.")
+        
+        # Display login form
+        from .login_page import render_login_page
+        render_login_page()
+        return None
+    
+    # Check role requirements
+    if required_roles and user.role not in required_roles:
+        st.error(f"🚫 Access denied. Required role: {[r.value for r in required_roles]}")
+        st.stop()
+    
+    # Show user info in sidebar
+    show_user_info()
+    
+    # Display page title
+    st.title(page_title)
+    
+    return user

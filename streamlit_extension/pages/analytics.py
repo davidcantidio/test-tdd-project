@@ -49,6 +49,9 @@ try:
         create_safe_client, sanitize_display, validate_form, check_rate_limit,
         security_manager
     )
+    from streamlit_extension.utils.exception_handler import (
+        handle_streamlit_exceptions, streamlit_error_boundary, safe_streamlit_operation
+    )
 from streamlit_extension.config import load_config
     DATABASE_UTILS_AVAILABLE = True
 except ImportError:
@@ -239,6 +242,7 @@ def optimize_database_queries(db_manager: DatabaseManager, days: int, filters: D
 
 
 @require_auth()
+@handle_streamlit_exceptions(show_error=True, attempt_recovery=True)
 def render_analytics_page():
     """Render the analytics dashboard page."""
     if not STREAMLIT_AVAILABLE:

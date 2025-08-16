@@ -14,6 +14,7 @@ from typing import Dict
 
 from streamlit_extension.utils.health_check import HealthChecker
 from streamlit_extension.auth import require_auth
+from streamlit_extension.utils.exception_handler import handle_streamlit_exceptions
 
 _health_checker = HealthChecker()
 
@@ -25,6 +26,7 @@ def get_health_json() -> Dict[str, object]:
 
 
 @require_auth()
+@handle_streamlit_exceptions(show_error=True, attempt_recovery=True)
 def render_health_endpoint() -> None:  # pragma: no cover - requires streamlit
     """Render health check endpoint for monitoring tools."""
 
@@ -34,6 +36,7 @@ def render_health_endpoint() -> None:  # pragma: no cover - requires streamlit
 
 
 @require_auth()
+@handle_streamlit_exceptions(show_error=True, attempt_recovery=True)
 def render_health_dashboard() -> None:  # pragma: no cover - requires streamlit
     """Render detailed health dashboard for administrators."""
 

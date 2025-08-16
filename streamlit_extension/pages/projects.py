@@ -33,14 +33,20 @@ try:
         create_safe_project, sanitize_display, validate_form, check_rate_limit,
         security_manager
     )
+    from streamlit_extension.utils.exception_handler import (
+        handle_streamlit_exceptions, streamlit_error_boundary, safe_streamlit_operation
+    )
     from streamlit_extension.config import load_config
+    # Import authentication middleware
+    from streamlit_extension.auth.middleware import init_protected_page
     DATABASE_UTILS_AVAILABLE = True
 except ImportError:
     DATABASE_UTILS_AVAILABLE = False
     DatabaseManager = validate_project_data = load_config = None
     create_safe_project = sanitize_display = validate_form = None
+    handle_streamlit_exceptions = streamlit_error_boundary = safe_streamlit_operation = None
+    init_protected_page = None
 
-from streamlit_extension.auth import require_auth
 
 
 def render_project_card(project: Dict[str, Any], db_manager: DatabaseManager, clients_map: Dict[int, str]):
@@ -487,7 +493,7 @@ def render_create_project_form(db_manager: DatabaseManager, clients_map: Dict[in
                         st.error(f"❌ {error}")
 
 
-@require_auth()
+@handle_streamlit_exceptions(show_error=True, attempt_recovery=True)
 def render_projects_page():
     """Render the main projects management page."""
     if not STREAMLIT_AVAILABLE:
@@ -497,6 +503,11 @@ def render_projects_page():
         st.error("❌ Database utilities not available")
         return {"error": "Database utilities not available"}
     
+    # Initialize protected page with authentication
+    current_user = init_protected_page("📁 Project Management")
+    if not current_user:
+        return {"error": "Authentication required"}
+    
     # Check rate limit for page load
     page_rate_allowed, page_rate_error = check_rate_limit("page_load") if check_rate_limit else (True, None)
     if not page_rate_allowed:
@@ -504,7 +515,6 @@ def render_projects_page():
         st.info("Please wait before reloading the page.")
         return {"error": "Rate limited"}
     
-    st.title("📁 Project Management")
     st.markdown("Manage your projects, timelines, and deliverables")
     st.markdown("---")
     
@@ -519,19 +529,30 @@ def render_projects_page():
         st.error(f"❌ Database connection error: {e}")
         return {"error": f"Database connection error: {e}"}
     
-    # Get clients for mapping
-    try:
-        clients_result = db_manager.get_clients(include_inactive=False)
-        clients = clients_result.get("data", []) if isinstance(clients_result, dict) else []
-        clients_map = {client['id']: client['name'] for client in clients} if clients else {}
-        
-        if not clients_map:
-            st.warning("⚠️ No active clients found. Please create clients first before creating projects.")
-            return {"status": "no_clients"}
-    
-    except Exception as e:
-        st.error(f"❌ Error loading clients: {e}")
-        return {"error": f"Error loading clients: {e}"}
+    # Get clients for mapping with error boundary
+    clients_map = {}
+    if handle_streamlit_exceptions:
+        with streamlit_error_boundary("loading_clients"):
+            clients_result = db_manager.get_clients(include_inactive=False)
+            clients = clients_result.get("data", []) if isinstance(clients_result, dict) else []
+            clients_map = {client['id']: client['name'] for client in clients} if clients else {}
+            
+            if not clients_map:
+                st.warning("⚠️ No active clients found. Please create clients first before creating projects.")
+                return {"status": "no_clients"}
+    else:
+        # Fallback for when exception handler is not available
+        try:
+            clients_result = db_manager.get_clients(include_inactive=False)
+            clients = clients_result.get("data", []) if isinstance(clients_result, dict) else []
+            clients_map = {client['id']: client['name'] for client in clients} if clients else {}
+            
+            if not clients_map:
+                st.warning("⚠️ No active clients found. Please create clients first before creating projects.")
+                return {"status": "no_clients"}
+        except Exception as e:
+            st.error(f"❌ Error loading clients: {e}")
+            return {"error": f"Error loading clients: {e}"}
     
     # Filters and search
     col1, col2, col3 = st.columns([2, 1, 1])
@@ -556,48 +577,68 @@ def render_projects_page():
     
     st.markdown("---")
     
-    # Get projects with filters
-    try:
-        # Check rate limit for database read
-        db_read_allowed, db_read_error = check_rate_limit("db_read") if check_rate_limit else (True, None)
-        if not db_read_allowed:
-            st.error(f"🚦 Database {db_read_error}")
-            return {"error": "Database rate limited"}
-        
-        all_projects = db_manager.get_projects(include_inactive=True)
-        
-        if not all_projects:
-            st.info("📝 No projects found. Create your first project using the form above!")
-            return {"status": "no_projects"}
-        
-        # Apply filters
-        filtered_projects = all_projects
-        
-        if search_name:
-            filtered_projects = [p for p in filtered_projects if search_name.lower() in p.get('name', '').lower()]
-        
-        if status_filter != "all":
-            filtered_projects = [p for p in filtered_projects if p.get('status') == status_filter]
-        
-        if client_filter != "all":
-            client_id = next((id for id, name in clients_map.items() if name == client_filter), None)
-            if client_id:
-                filtered_projects = [p for p in filtered_projects if p.get('client_id') == client_id]
-        
-        # Display results count
-        st.markdown(f"**Found {len(filtered_projects)} project(s)**")
-        
-        if not filtered_projects:
-            st.warning("🔍 No projects match your current filters.")
-            return {"status": "no_matches"}
-        
-        # Display projects
-        for project in filtered_projects:
-            render_project_card(project, db_manager, clients_map)
+    # Get projects with filters using error boundary
+    all_projects = []
+    if handle_streamlit_exceptions:
+        with streamlit_error_boundary("loading_projects"):
+            # Check rate limit for database read
+            db_read_allowed, db_read_error = check_rate_limit("db_read") if check_rate_limit else (True, None)
+            if not db_read_allowed:
+                st.error(f"🚦 Database {db_read_error}")
+                return {"error": "Database rate limited"}
+            
+            all_projects = db_manager.get_projects(include_inactive=True)
+    else:
+        # Fallback for when exception handler is not available
+        try:
+            # Check rate limit for database read
+            db_read_allowed, db_read_error = check_rate_limit("db_read") if check_rate_limit else (True, None)
+            if not db_read_allowed:
+                st.error(f"🚦 Database {db_read_error}")
+                return {"error": "Database rate limited"}
+            
+            all_projects = db_manager.get_projects(include_inactive=True)
+        except Exception as e:
+            st.error(f"❌ Error loading projects: {e}")
+            return {"error": f"Error loading projects: {e}"}
     
-    except Exception as e:
-        st.error(f"❌ Error loading projects: {e}")
-        return {"error": f"Error loading projects: {e}"}
+    if not all_projects:
+        st.info("📝 No projects found. Create your first project using the form above!")
+        return {"status": "no_projects"}
+    
+    # Apply filters
+    filtered_projects = all_projects
+    
+    if search_name:
+        filtered_projects = [p for p in filtered_projects if search_name.lower() in p.get('name', '').lower()]
+    
+    if status_filter != "all":
+        filtered_projects = [p for p in filtered_projects if p.get('status') == status_filter]
+    
+    if client_filter != "all":
+        client_id = next((id for id, name in clients_map.items() if name == client_filter), None)
+        if client_id:
+            filtered_projects = [p for p in filtered_projects if p.get('client_id') == client_id]
+    
+    # Display results count
+    st.markdown(f"**Found {len(filtered_projects)} project(s)**")
+    
+    if not filtered_projects:
+        st.warning("🔍 No projects match your current filters.")
+        return {"status": "no_matches"}
+    
+    # Display projects with error boundary protection
+    if handle_streamlit_exceptions:
+        for project in filtered_projects:
+            with streamlit_error_boundary(f"rendering_project_{project.get('id', 'unknown')}"):
+                render_project_card(project, db_manager, clients_map)
+    else:
+        # Fallback without error boundary
+        for project in filtered_projects:
+            try:
+                render_project_card(project, db_manager, clients_map)
+            except Exception as e:
+                st.error(f"❌ Error rendering project {project.get('name', 'Unknown')}: {e}")
     
     return {"status": "success", "projects_count": len(filtered_projects)}
 

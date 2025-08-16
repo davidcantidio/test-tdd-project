@@ -37,12 +37,15 @@ try:
     from streamlit_extension.config.constants import (
         GeneralStatus, ClientTier, CompanySize, UIConstants, FormFields
     )
+    # Import authentication middleware
+    from streamlit_extension.auth.middleware import init_protected_page, require_auth
     DATABASE_UTILS_AVAILABLE = True
 except ImportError:
     DATABASE_UTILS_AVAILABLE = False
     DatabaseManager = validate_client_data = load_config = None
     create_safe_client = sanitize_display = validate_form = None
     GeneralStatus = ClientTier = CompanySize = UIConstants = FormFields = None
+    init_protected_page = require_auth = None
 
 from streamlit_extension.utils.exception_handler import (
     handle_streamlit_exceptions,
@@ -50,7 +53,6 @@ from streamlit_extension.utils.exception_handler import (
     safe_streamlit_operation,
     get_error_statistics,
 )
-from streamlit_extension.auth import require_auth
 
 
 def render_client_card(client: Dict[str, Any], db_manager: DatabaseManager):
@@ -434,7 +436,6 @@ def render_create_client_form(db_manager: DatabaseManager):
 
 
 @handle_streamlit_exceptions(show_error=True, attempt_recovery=True)
-@require_auth()
 def render_clients_page():
     """Render the main clients management page."""
     if not STREAMLIT_AVAILABLE:
@@ -444,6 +445,11 @@ def render_clients_page():
         st.error("❌ Database utilities not available")
         return {"error": "Database utilities not available"}
     
+    # Initialize protected page with authentication
+    current_user = init_protected_page("👥 Client Management")
+    if not current_user:
+        return {"error": "Authentication required"}
+    
     # Check rate limit for page load
     page_rate_allowed, page_rate_error = check_rate_limit("page_load") if check_rate_limit else (True, None)
     if not page_rate_allowed:
@@ -451,7 +457,6 @@ def render_clients_page():
         st.info("Please wait before reloading the page.")
         return {"error": "Rate limited"}
     
-    st.title("👥 Client Management")
     st.markdown("Manage your clients, contacts, and business relationships")
     st.markdown("---")
     

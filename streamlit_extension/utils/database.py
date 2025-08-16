@@ -9,10 +9,22 @@ Streamlit-optimized database operations with:
 """
 
 import sqlite3
+import time
 from pathlib import Path
-from typing import Optional, Dict, Any, List, Union, Iterator, Tuple, Generator
+from typing import (
+    Optional,
+    Dict,
+    Any,
+    List,
+    Union,
+    Iterator,
+    Tuple,
+    Generator,
+    NamedTuple,
+)
 from contextlib import contextmanager
 from datetime import datetime
+from enum import Enum
 import json
 import logging
 
@@ -21,7 +33,7 @@ try:
     import sqlalchemy as sa
     from sqlalchemy import create_engine, text
     from sqlalchemy.pool import StaticPool
-    from sqlalchemy.engine import Connection
+    from sqlalchemy.engine import Connection, Result
     SQLALCHEMY_AVAILABLE = True
 except ImportError:
     sa = None
@@ -29,6 +41,7 @@ except ImportError:
     text = None
     StaticPool = None
     Connection = None
+    Result = Any  # type: ignore[assignment]
     SQLALCHEMY_AVAILABLE = False
 
 try:
@@ -72,9 +85,282 @@ except ImportError:
     CACHE_AVAILABLE = False
     cache_database_query = invalidate_cache_on_change = get_cache = None
 
+from .constants import (
+    TableNames,
+    FieldNames,
+    ClientStatus,
+    ProjectStatus,
+    TaskStatus,
+    EpicStatus,
+    TDDPhase,
+)
+
 logger = logging.getLogger(__name__)
 
-class DatabaseManager:
+# Security: Whitelist of allowed table names to prevent SQL injection
+ALLOWED_TABLES = {
+    "framework_clients",
+    "framework_projects", 
+    "framework_epics",
+    "framework_tasks",
+    "work_sessions",
+    "achievement_types",
+    "user_achievements",
+    "user_streaks",
+    "github_sync_log",
+    "system_settings",
+    "auth_users",
+    "items",  # For tests
+    "users"   # For tests
+}
+
+# Security: Whitelist of allowed sort columns
+ALLOWED_SORT_COLUMNS = {
+    "id", "created_at", "updated_at", "name", "title", "status", "priority",
+    "client_id", "project_id", "epic_id", "budget", "completion_percentage",
+    "email"  # For tests
+}
+
+
+class PaginationType(Enum):
+    """Pagination strategy types."""
+
+    OFFSET_LIMIT = "offset_limit"
+    CURSOR_BASED = "cursor_based"
+    KEYSET = "keyset"
+
+
+class PaginationResult(NamedTuple):
+    """Pagination result with metadata."""
+
+    items: List[Dict[str, Any]]
+    total_count: int
+    page: int
+    per_page: int
+    total_pages: int
+    has_next: bool
+    has_prev: bool
+    next_cursor: Optional[str]
+    prev_cursor: Optional[str]
+    query_time_ms: float
+
+
+class PerformancePaginationMixin:
+    """High-performance pagination methods for DatabaseManager."""
+
+    def _validate_table_name(self, table_name: str) -> bool:
+        """Security: Validate table name against whitelist."""
+        return table_name in ALLOWED_TABLES
+
+    def _validate_sort_column(self, sort_column: str) -> bool:
+        """Security: Validate sort column against whitelist."""
+        return sort_column in ALLOWED_SORT_COLUMNS
+
+    def _sanitize_filters(self, filters: Dict[str, Any]) -> Dict[str, Any]:
+        """Security: Sanitize filter values to prevent injection."""
+        sanitized = {}
+        for key, value in filters.items():
+            # Only allow alphanumeric keys and safe values
+            if key.replace("_", "").replace("-", "").isalnum():
+                if isinstance(value, (str, int, float, bool)):
+                    sanitized[key] = value
+        return sanitized
+
+    def get_paginated_results(
+        self,
+        table_name: str,
+        page: int = 1,
+        per_page: int = 10,
+        filters: Optional[Dict[str, Any]] = None,
+        sort_by: Optional[str] = None,
+        sort_order: str = "ASC",
+        pagination_type: PaginationType = PaginationType.OFFSET_LIMIT,
+        cursor: Optional[str] = None,
+    ) -> PaginationResult:
+        """Get paginated results with performance optimization and security."""
+        
+        # Security validation
+        if not self._validate_table_name(table_name):
+            raise ValueError(f"Invalid table name: {table_name}")
+        
+        if sort_by and not self._validate_sort_column(sort_by):
+            raise ValueError(f"Invalid sort column: {sort_by}")
+        
+        if per_page > 100:
+            per_page = 100
+        
+        if sort_order.upper() not in ["ASC", "DESC"]:
+            sort_order = "ASC"
+
+        filters = self._sanitize_filters(filters or {})
+        sort_column = sort_by or "id"
+
+        start = time.time()
+        with self.get_connection("framework") as conn:
+            if SQLALCHEMY_AVAILABLE:
+                # SQLAlchemy path with named parameters
+                where_clause = " AND ".join([f"{k} = :{k}" for k in filters])
+                if where_clause:
+                    where_clause = "WHERE " + where_clause
+                
+                order_clause = f"ORDER BY {sort_column} {sort_order}" if sort_column else ""
+                
+                # Count total
+                count_query = text(f"SELECT COUNT(*) FROM {table_name}") if not where_clause else text(f"SELECT COUNT(*) FROM {table_name} {where_clause}")
+                total = conn.execute(count_query, filters).scalar()
+                
+                # Build data query
+                if pagination_type == PaginationType.CURSOR_BASED and cursor is not None:
+                    cursor_cond = f"{sort_column} > :cursor" if sort_order.upper() == "ASC" else f"{sort_column} < :cursor"
+                    where_clause_cursor = (
+                        f"{where_clause} AND {cursor_cond}" if where_clause else f"WHERE {cursor_cond}"
+                    )
+                    data_sql = f"SELECT * FROM {table_name} {where_clause_cursor} {order_clause} LIMIT :limit"
+                    params = {**filters, "cursor": cursor, "limit": per_page}
+                elif pagination_type == PaginationType.KEYSET and cursor is not None:
+                    cursor_cond = f"({sort_column}) > :cursor"
+                    where_clause_cursor = (
+                        f"{where_clause} AND {cursor_cond}" if where_clause else f"WHERE {cursor_cond}"
+                    )
+                    data_sql = f"SELECT * FROM {table_name} {where_clause_cursor} {order_clause} LIMIT :limit"
+                    params = {**filters, "cursor": cursor, "limit": per_page}
+                else:
+                    offset = (page - 1) * per_page
+                    data_sql = f"SELECT * FROM {table_name}"
+                    if where_clause:
+                        data_sql += f" {where_clause}"
+                    if order_clause:
+                        data_sql += f" {order_clause}"
+                    data_sql += " LIMIT :limit OFFSET :offset"
+                    params = {**filters, "limit": per_page, "offset": offset}
+                
+                result = conn.execute(text(data_sql), params)
+                items = [dict(row._mapping) for row in result]
+            else:
+                # SQLite path with ? placeholders
+                where_conditions = []
+                where_params = []
+                
+                for k, v in filters.items():
+                    where_conditions.append(f"{k} = ?")
+                    where_params.append(v)
+                
+                where_clause = "WHERE " + " AND ".join(where_conditions) if where_conditions else ""
+                order_clause = f"ORDER BY {sort_column} {sort_order}"
+                
+                # Count total
+                count_sql = f"SELECT COUNT(*) FROM {table_name} {where_clause}"
+                cur = conn.cursor()
+                cur.execute(count_sql, where_params)
+                result = cur.fetchone()
+                total = result[0] if result else 0
+                
+                # Build data query
+                if pagination_type == PaginationType.CURSOR_BASED and cursor is not None:
+                    cursor_cond = f"{sort_column} > ?" if sort_order.upper() == "ASC" else f"{sort_column} < ?"
+                    where_clause_cursor = (
+                        f"{where_clause} AND {cursor_cond}" if where_clause else f"WHERE {cursor_cond}"
+                    )
+                    data_sql = f"SELECT * FROM {table_name} {where_clause_cursor} {order_clause} LIMIT ?"
+                    data_params = where_params + [cursor, per_page]
+                elif pagination_type == PaginationType.KEYSET and cursor is not None:
+                    cursor_cond = f"{sort_column} > ?"
+                    where_clause_cursor = (
+                        f"{where_clause} AND {cursor_cond}" if where_clause else f"WHERE {cursor_cond}"
+                    )
+                    data_sql = f"SELECT * FROM {table_name} {where_clause_cursor} {order_clause} LIMIT ?"
+                    data_params = where_params + [cursor, per_page]
+                else:
+                    offset = (page - 1) * per_page
+                    data_sql = f"SELECT * FROM {table_name} {where_clause} {order_clause} LIMIT ? OFFSET ?"
+                    data_params = where_params + [per_page, offset]
+                
+                cur.execute(data_sql, data_params)
+                columns = [col[0] for col in cur.description]
+                items = [dict(zip(columns, row)) for row in cur.fetchall()]
+
+        duration = (time.time() - start) * 1000
+
+        total_pages = (total + per_page - 1) // per_page if total > 0 else 0
+        has_next = page < total_pages if pagination_type == PaginationType.OFFSET_LIMIT else bool(items)
+        has_prev = page > 1 if pagination_type == PaginationType.OFFSET_LIMIT else bool(cursor)
+        
+        # Safe cursor generation
+        next_cursor = None
+        prev_cursor = None
+        if items and sort_column in items[-1]:
+            next_cursor = str(items[-1][sort_column])
+        if items and sort_column in items[0]:
+            prev_cursor = str(items[0][sort_column])
+
+        return PaginationResult(
+            items,
+            total,
+            page,
+            per_page,
+            total_pages,
+            has_next,
+            has_prev,
+            next_cursor,
+            prev_cursor,
+            duration,
+        )
+
+    def get_cursor_paginated_results(
+        self,
+        table_name: str,
+        cursor_column: str,
+        cursor_value: Optional[Any] = None,
+        per_page: int = 10,
+        direction: str = "next",
+        filters: Optional[Dict[str, Any]] = None,
+    ) -> PaginationResult:
+        """Cursor-based pagination for large datasets."""
+        
+        if not self._validate_sort_column(cursor_column):
+            raise ValueError(f"Invalid cursor column: {cursor_column}")
+
+        sort_order = "ASC" if direction == "next" else "DESC"
+        return self.get_paginated_results(
+            table_name,
+            page=1,
+            per_page=per_page,
+            filters=filters,
+            sort_by=cursor_column,
+            sort_order=sort_order,
+            pagination_type=PaginationType.CURSOR_BASED,
+            cursor=cursor_value,
+        )
+
+    def get_keyset_paginated_results(
+        self,
+        table_name: str,
+        keyset_columns: List[str],
+        keyset_values: Optional[List[Any]] = None,
+        per_page: int = 10,
+        filters: Optional[Dict[str, Any]] = None,
+    ) -> PaginationResult:
+        """Keyset pagination for consistently ordered results."""
+        
+        # Validate all keyset columns
+        for col in keyset_columns:
+            if not self._validate_sort_column(col):
+                raise ValueError(f"Invalid keyset column: {col}")
+
+        sort_by = keyset_columns[0] if keyset_columns else "id"
+        cursor = keyset_values[0] if keyset_values else None
+        return self.get_paginated_results(
+            table_name,
+            page=1,
+            per_page=per_page,
+            filters=filters,
+            sort_by=sort_by,
+            pagination_type=PaginationType.KEYSET,
+            cursor=cursor,
+        )
+
+
+class DatabaseManager(PerformancePaginationMixin):
     """
     Enterprise-grade database manager with connection pooling and error handling.
 
@@ -220,10 +506,39 @@ class DatabaseManager:
             connection.close()
         except Exception:  # pragma: no cover - best effort
             logger.warning("Failed to close connection", exc_info=True)
+
+    def execute_query(
+        self,
+        query: str,
+        params: Optional[Dict[str, Any]] = None,
+        database_name: str = "framework",
+    ) -> Union[Result, List[Dict[str, Any]]]:
+        """Execute a raw SQL query.
+
+        Args:
+            query: SQL query string to execute.
+            params: Optional mapping of parameters.
+            database_name: Database identifier, defaults to ``framework``.
+
+        Returns:
+            SQLAlchemy ``Result`` when available or list of row dictionaries.
+        """
+        params = params or {}
+        with self.get_connection(database_name) as conn:
+            if SQLALCHEMY_AVAILABLE:
+                return conn.execute(text(query), params)
+            cursor = conn.cursor()
+            cursor.execute(query, params)
+            return [dict(row) for row in cursor.fetchall()]
     
     @cache_database_query("get_epics", ttl=300) if CACHE_AVAILABLE else lambda f: f
-    def get_epics(self, page: int = 1, page_size: int = 50, 
-                 status_filter: str = "", project_id: Optional[int] = None) -> Dict[str, Any]:
+    def get_epics(
+        self,
+        page: int = 1,
+        page_size: int = 50,
+        status_filter: Optional[Union[EpicStatus, str]] = None,
+        project_id: Optional[int] = None,
+    ) -> Dict[str, Any]:
         """Get epics with intelligent caching and pagination.
         
         Args:
@@ -242,8 +557,10 @@ class DatabaseManager:
                 params: Dict[str, Any] = {}
                 
                 if status_filter:
-                    where_conditions.append("status = :status_filter")
-                    params["status_filter"] = status_filter
+                    where_conditions.append(f"{FieldNames.STATUS} = :status_filter")
+                    params["status_filter"] = (
+                        status_filter.value if isinstance(status_filter, EpicStatus) else status_filter
+                    )
                 
                 if project_id:
                     where_conditions.append("project_id = :project_id")
@@ -252,7 +569,7 @@ class DatabaseManager:
                 where_clause = " AND ".join(where_conditions)
                 
                 # Count total records
-                count_query = f"SELECT COUNT(*) FROM framework_epics WHERE {where_clause}"
+                count_query = f"SELECT COUNT(*) FROM {TableNames.EPICS} WHERE {where_clause}"
                 
                 if SQLALCHEMY_AVAILABLE:
                     count_result = conn.execute(text(count_query), params)
@@ -271,7 +588,7 @@ class DatabaseManager:
                     SELECT id, epic_key, name, description, status, 
                            created_at, updated_at, completed_at,
                            points_earned, difficulty_level, project_id
-                    FROM framework_epics
+                    FROM {TableNames.EPICS}
                     WHERE {where_clause}
                     ORDER BY created_at DESC
                     LIMIT :limit OFFSET :offset
@@ -310,8 +627,14 @@ class DatabaseManager:
         return result["data"] if isinstance(result, dict) else result
     
     @cache_database_query("get_tasks", ttl=300) if CACHE_AVAILABLE else lambda f: f
-    def get_tasks(self, epic_id: Optional[int] = None, page: int = 1, page_size: int = 100,
-                 status_filter: str = "", tdd_phase_filter: str = "") -> Dict[str, Any]:
+    def get_tasks(
+        self,
+        epic_id: Optional[int] = None,
+        page: int = 1,
+        page_size: int = 100,
+        status_filter: Optional[Union[TaskStatus, str]] = None,
+        tdd_phase_filter: Optional[Union[TDDPhase, str]] = None,
+    ) -> Dict[str, Any]:
         """Get tasks with intelligent caching, pagination, and filtering.
         
         Args:
@@ -336,19 +659,23 @@ class DatabaseManager:
                 
                 if status_filter:
                     where_conditions.append("t.status = :status_filter")
-                    params["status_filter"] = status_filter
-                
+                    params["status_filter"] = (
+                        status_filter.value if isinstance(status_filter, TaskStatus) else status_filter
+                    )
+
                 if tdd_phase_filter:
                     where_conditions.append("t.tdd_phase = :tdd_phase_filter")
-                    params["tdd_phase_filter"] = tdd_phase_filter
+                    params["tdd_phase_filter"] = (
+                        tdd_phase_filter.value if isinstance(tdd_phase_filter, TDDPhase) else tdd_phase_filter
+                    )
                 
                 where_clause = " AND ".join(where_conditions)
                 
                 # Count total records
                 count_query = f"""
-                    SELECT COUNT(*) 
-                    FROM framework_tasks t
-                    JOIN framework_epics e ON t.epic_id = e.id
+                    SELECT COUNT(*)
+                    FROM {TableNames.TASKS} t
+                    JOIN {TableNames.EPICS} e ON t.epic_id = e.id
                     WHERE {where_clause}
                 """
                 
@@ -370,8 +697,8 @@ class DatabaseManager:
                            t.estimate_minutes, t.tdd_phase, t.position,
                            t.created_at, t.updated_at, t.completed_at,
                            e.name as epic_name, e.epic_key, t.task_key
-                    FROM framework_tasks t
-                    JOIN framework_epics e ON t.epic_id = e.id
+                    FROM {TableNames.TASKS} t
+                    JOIN {TableNames.EPICS} e ON t.epic_id = e.id
                     WHERE {where_clause}
                     ORDER BY t.position ASC, t.created_at DESC
                     LIMIT :limit OFFSET :offset
@@ -1939,7 +2266,7 @@ class DatabaseManager:
         page: int = 1,
         page_size: int = 20,
         name_filter: str = "",
-        status_filter: str = "",
+        status_filter: Optional[Union[ClientStatus, str]] = None,
     ) -> Dict[str, Any]:
         """Retrieve clients with filtering and pagination support.
 
@@ -1980,23 +2307,25 @@ class DatabaseManager:
                 # Build WHERE conditions
                 where_conditions = ["deleted_at IS NULL"]
                 params: Dict[str, Any] = {}
-                
+
                 if not include_inactive:
-                    where_conditions.append("status = :status")
-                    params["status"] = "active"
-                
+                    where_conditions.append(f"{FieldNames.STATUS} = :status")
+                    params["status"] = ClientStatus.ACTIVE.value
+
                 if name_filter:
                     where_conditions.append("name LIKE :name_filter")
                     params["name_filter"] = f"%{name_filter}%"
-                
+
                 if status_filter:
-                    where_conditions.append("status = :status_filter")
-                    params["status_filter"] = status_filter
+                    where_conditions.append(f"{FieldNames.STATUS} = :status_filter")
+                    params["status_filter"] = (
+                        status_filter.value if isinstance(status_filter, ClientStatus) else status_filter
+                    )
                 
                 where_clause = " AND ".join(where_conditions)
                 
                 # Count total records
-                count_query = f"SELECT COUNT(*) FROM framework_clients WHERE {where_clause}"  # nosec B608
+                count_query = f"SELECT COUNT(*) FROM {TableNames.CLIENTS} WHERE {where_clause}"  # nosec B608
                 
                 if SQLALCHEMY_AVAILABLE:
                     count_result = conn.execute(text(count_query), params)
@@ -2018,7 +2347,7 @@ class DatabaseManager:
                            hourly_rate, contract_type, status, client_tier,
                            priority_level, account_manager_id, technical_lead_id,
                            created_at, updated_at, last_contact_date
-                    FROM framework_clients
+                    FROM {TableNames.CLIENTS}
                     WHERE {where_clause}
                     ORDER BY priority_level DESC, name ASC
                     LIMIT :limit OFFSET :offset
@@ -2104,9 +2433,15 @@ class DatabaseManager:
             return None
     
     @cache_database_query("get_projects", ttl=300) if CACHE_AVAILABLE else lambda f: f
-    def get_projects(self, client_id: Optional[int] = None, include_inactive: bool = False,
-                    page: int = 1, page_size: int = 50, status_filter: str = "",
-                    project_type_filter: str = "") -> Dict[str, Any]:
+    def get_projects(
+        self,
+        client_id: Optional[int] = None,
+        include_inactive: bool = False,
+        page: int = 1,
+        page_size: int = 50,
+        status_filter: Optional[Union[ProjectStatus, str]] = None,
+        project_type_filter: str = "",
+    ) -> Dict[str, Any]:
         """Get projects with caching support and pagination.
         
         Args:
@@ -2135,7 +2470,9 @@ class DatabaseManager:
                 
                 if status_filter:
                     where_conditions.append("p.status = :status_filter")
-                    params["status_filter"] = status_filter
+                    params["status_filter"] = (
+                        status_filter.value if isinstance(status_filter, ProjectStatus) else status_filter
+                    )
                 
                 if project_type_filter:
                     where_conditions.append("p.project_type = :project_type_filter")
@@ -2145,9 +2482,9 @@ class DatabaseManager:
                 
                 # Count total records
                 count_query = f"""
-                    SELECT COUNT(*) 
-                    FROM framework_projects p
-                    INNER JOIN framework_clients c ON p.client_id = c.id AND c.deleted_at IS NULL
+                    SELECT COUNT(*)
+                    FROM {TableNames.PROJECTS} p
+                    INNER JOIN {TableNames.CLIENTS} c ON p.client_id = c.id AND c.deleted_at IS NULL
                     WHERE {where_clause}
                 """
                 
@@ -2177,8 +2514,8 @@ class DatabaseManager:
                            p.created_at, p.updated_at,
                            c.name as client_name, c.client_key as client_key,
                            c.status as client_status, c.client_tier
-                    FROM framework_projects p
-                    INNER JOIN framework_clients c ON p.client_id = c.id AND c.deleted_at IS NULL
+                    FROM {TableNames.PROJECTS} p
+                    INNER JOIN {TableNames.CLIENTS} c ON p.client_id = c.id AND c.deleted_at IS NULL
                     WHERE {where_clause}
                     ORDER BY p.priority DESC, p.name ASC
                     LIMIT :limit OFFSET :offset
@@ -2464,10 +2801,18 @@ class DatabaseManager:
     # ==================================================================================
     
     @invalidate_cache_on_change("db_query:get_clients:", "db_query:get_client_dashboard:") if CACHE_AVAILABLE else lambda f: f
-    def create_client(self, client_key: str, name: str, description: str = "",
-                     industry: str = "", company_size: str = "startup",
-                     primary_contact_name: str = "", primary_contact_email: str = "",
-                     hourly_rate: float = 0.0, **kwargs) -> Optional[int]:
+    def create_client(
+        self,
+        client_key: str,
+        name: str,
+        description: str = "",
+        industry: str = "",
+        company_size: str = "startup",
+        primary_contact_name: str = "",
+        primary_contact_email: str = "",
+        hourly_rate: float = 0.0,
+        **kwargs: Any,
+    ) -> Optional[int]:
         """Create new client record.
 
         Creates client with full validation and automatic timestamp assignment.
@@ -2515,7 +2860,7 @@ class DatabaseManager:
                 'primary_contact_name': primary_contact_name,
                 'primary_contact_email': primary_contact_email,
                 'hourly_rate': hourly_rate,
-                'status': kwargs.get('status', 'active'),
+                'status': kwargs.get('status', ClientStatus.ACTIVE.value),
                 'client_tier': kwargs.get('client_tier', 'standard'),
                 'priority_level': kwargs.get('priority_level', 5),
                 'timezone': kwargs.get('timezone', 'America/Sao_Paulo'),
@@ -2533,7 +2878,7 @@ class DatabaseManager:
                     # Convert to named parameters for SQLAlchemy
                     named_placeholders = ', '.join([f':{key}' for key in client_data.keys()])
                     result = conn.execute(
-                        text(f"INSERT INTO framework_clients ({columns}) VALUES ({named_placeholders})"),  # nosec B608
+                        text(f"INSERT INTO {TableNames.CLIENTS} ({columns}) VALUES ({named_placeholders})"),  # nosec B608
                         client_data
                     )
                     conn.commit()
@@ -2541,7 +2886,7 @@ class DatabaseManager:
                 else:
                     cursor = conn.cursor()
                     cursor.execute(
-                        f"INSERT INTO framework_clients ({columns}) VALUES ({placeholders})",  # nosec B608
+                        f"INSERT INTO {TableNames.CLIENTS} ({columns}) VALUES ({placeholders})",  # nosec B608
                         list(client_data.values())
                     )
                     conn.commit()
@@ -2559,9 +2904,16 @@ class DatabaseManager:
         "db_query:get_client_dashboard:",
         "db_query:get_project_dashboard:"
     ) if CACHE_AVAILABLE else lambda f: f
-    def create_project(self, client_id: int, project_key: str, name: str,
-                      description: str = "", project_type: str = "development",
-                      methodology: str = "agile", **kwargs) -> Optional[int]:
+    def create_project(
+        self,
+        client_id: int,
+        project_key: str,
+        name: str,
+        description: str = "",
+        project_type: str = "development",
+        methodology: str = "agile",
+        **kwargs: Any,
+    ) -> Optional[int]:
         """Create a new project.
         
         Args:
@@ -2584,7 +2936,7 @@ class DatabaseManager:
                 'description': description,
                 'project_type': project_type,
                 'methodology': methodology,
-                'status': kwargs.get('status', 'planning'),
+                'status': kwargs.get('status', ProjectStatus.PLANNING.value),
                 'priority': kwargs.get('priority', 5),
                 'health_status': kwargs.get('health_status', 'green'),
                 'completion_percentage': kwargs.get('completion_percentage', 0),
@@ -2610,11 +2962,11 @@ class DatabaseManager:
                 
                 placeholders = ', '.join(['?' for _ in project_data])
                 columns = ', '.join(project_data.keys())
-                
+
                 if SQLALCHEMY_AVAILABLE:
                     named_placeholders = ', '.join([f':{key}' for key in project_data.keys()])
                     result = conn.execute(
-                        text(f"INSERT INTO framework_projects ({columns}) VALUES ({named_placeholders})"),  # nosec B608
+                        text(f"INSERT INTO {TableNames.PROJECTS} ({columns}) VALUES ({named_placeholders})"),  # nosec B608
                         project_data
                     )
                     conn.commit()
@@ -2622,7 +2974,7 @@ class DatabaseManager:
                 else:
                     cursor = conn.cursor()
                     cursor.execute(
-                        f"INSERT INTO framework_projects ({columns}) VALUES ({placeholders})",
+                        f"INSERT INTO {TableNames.PROJECTS} ({columns}) VALUES ({placeholders})",
                         list(project_data.values())
                     )
                     conn.commit()
@@ -2734,7 +3086,7 @@ class DatabaseManager:
             return None
     
     @invalidate_cache_on_change("db_query:get_clients:", "db_query:get_client_dashboard:") if CACHE_AVAILABLE else lambda f: f
-    def update_client(self, client_id: int, **fields) -> bool:
+    def update_client(self, client_id: int, **fields: Any) -> bool:
         """Update existing client record.
 
         Updates specified fields while preserving others. Validates all input
@@ -2785,7 +3137,7 @@ class DatabaseManager:
             with self.get_connection("framework") as conn:
                 if SQLALCHEMY_AVAILABLE:
                     conn.execute(text(f"""
-                        UPDATE framework_clients 
+                        UPDATE {TableNames.CLIENTS}
                         SET {', '.join(set_clauses)}
                         WHERE id = :client_id AND deleted_at IS NULL
                     """), values)  # nosec B608
@@ -2800,7 +3152,7 @@ class DatabaseManager:
                     sqlite_clauses.extend([clause for clause in set_clauses if '?' not in clause and ':' not in clause])
                     
                     cursor.execute(f"""
-                        UPDATE framework_clients 
+                        UPDATE {TableNames.CLIENTS}
                         SET {', '.join(sqlite_clauses)}
                         WHERE id = ? AND deleted_at IS NULL
                     """, positional_values)  # nosec B608
@@ -2847,7 +3199,7 @@ class DatabaseManager:
                 if soft_delete:
                     if SQLALCHEMY_AVAILABLE:
                         conn.execute(text("""
-                            UPDATE framework_clients 
+                            UPDATE {TableNames.CLIENTS}
                             SET deleted_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
                             WHERE id = :client_id
                         """), {"client_id": client_id})
@@ -2855,19 +3207,19 @@ class DatabaseManager:
                     else:
                         cursor = conn.cursor()
                         cursor.execute("""
-                            UPDATE framework_clients 
+                            UPDATE {TableNames.CLIENTS}
                             SET deleted_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
                             WHERE id = ?
                         """, (client_id,))
                         conn.commit()
                 else:
                     if SQLALCHEMY_AVAILABLE:
-                        conn.execute(text("DELETE FROM framework_clients WHERE id = :client_id"), 
+                        conn.execute(text(f"DELETE FROM {TableNames.CLIENTS} WHERE id = :client_id"),
                                    {"client_id": client_id})
                         conn.commit()
                     else:
                         cursor = conn.cursor()
-                        cursor.execute("DELETE FROM framework_clients WHERE id = ?", (client_id,))
+                        cursor.execute(f"DELETE FROM {TableNames.CLIENTS} WHERE id = ?", (client_id,))
                         conn.commit()
                 
                 return True
@@ -2884,7 +3236,7 @@ class DatabaseManager:
         "db_query:get_client_dashboard:",
         "db_query:get_project_dashboard:"
     ) if CACHE_AVAILABLE else lambda f: f
-    def update_project(self, project_id: int, **fields) -> bool:
+    def update_project(self, project_id: int, **fields: Any) -> bool:
         """Update an existing project.
         
         Args:
@@ -2917,7 +3269,7 @@ class DatabaseManager:
             with self.get_connection("framework") as conn:
                 if SQLALCHEMY_AVAILABLE:
                     conn.execute(text(f"""
-                        UPDATE framework_projects 
+                        UPDATE {TableNames.PROJECTS}
                         SET {', '.join(set_clauses)}
                         WHERE id = :project_id AND deleted_at IS NULL
                     """), values)  # nosec B608
@@ -2932,7 +3284,7 @@ class DatabaseManager:
                     sqlite_clauses.extend([clause for clause in set_clauses if '?' not in clause and ':' not in clause])
                     
                     cursor.execute(f"""
-                        UPDATE framework_projects 
+                        UPDATE {TableNames.PROJECTS}
                         SET {', '.join(sqlite_clauses)}
                         WHERE id = ? AND deleted_at IS NULL
                     """, positional_values)  # nosec B608
@@ -2967,7 +3319,7 @@ class DatabaseManager:
                 if soft_delete:
                     if SQLALCHEMY_AVAILABLE:
                         conn.execute(text("""
-                            UPDATE framework_projects 
+                            UPDATE {TableNames.PROJECTS}
                             SET deleted_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
                             WHERE id = :project_id
                         """), {"project_id": project_id})
@@ -2975,19 +3327,19 @@ class DatabaseManager:
                     else:
                         cursor = conn.cursor()
                         cursor.execute("""
-                            UPDATE framework_projects 
+                            UPDATE {TableNames.PROJECTS}
                             SET deleted_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
                             WHERE id = ?
                         """, (project_id,))
                         conn.commit()
                 else:
                     if SQLALCHEMY_AVAILABLE:
-                        conn.execute(text("DELETE FROM framework_projects WHERE id = :project_id"), 
+                        conn.execute(text(f"DELETE FROM {TableNames.PROJECTS} WHERE id = :project_id"),
                                    {"project_id": project_id})
                         conn.commit()
                     else:
                         cursor = conn.cursor()
-                        cursor.execute("DELETE FROM framework_projects WHERE id = ?", (project_id,))
+                        cursor.execute(f"DELETE FROM {TableNames.PROJECTS} WHERE id = ?", (project_id,))
                         conn.commit()
                 
                 return True

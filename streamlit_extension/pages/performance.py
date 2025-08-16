@@ -31,6 +31,7 @@ from streamlit_extension.utils.performance_tester import (
 )
 from streamlit_extension.utils.database import DatabaseManager
 from streamlit_extension.auth import require_auth
+from streamlit_extension.utils.exception_handler import handle_streamlit_exceptions
 
 
 # Page configuration
@@ -58,6 +59,7 @@ def initialize_performance_components():
 
 
 @require_auth()
+@handle_streamlit_exceptions(show_error=True, attempt_recovery=True)
 def render_performance_dashboard():
     """Render main performance dashboard."""
     st.title("🚀 Performance Testing Dashboard")

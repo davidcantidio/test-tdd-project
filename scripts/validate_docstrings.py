@@ -11,11 +11,18 @@ from typing import List, Dict
 
 class DocstringValidator:
     def check_missing_docstrings(self, module_path: str) -> List[str]:
-        """Check for missing docstrings in public methods."""
-        spec = importlib.util.spec_from_file_location("_mod", module_path)
-        module = importlib.util.module_from_spec(spec)
-        assert spec.loader is not None
-        spec.loader.exec_module(module)  # type: ignore[assignment]
+        """Check for missing docstrings in public methods.
+
+        Args:
+            module_path: File path to module or dotted module path.
+        """
+        if module_path.endswith(".py"):
+            spec = importlib.util.spec_from_file_location("_mod", module_path)
+            module = importlib.util.module_from_spec(spec)
+            assert spec.loader is not None
+            spec.loader.exec_module(module)  # type: ignore[assignment]
+        else:
+            module = importlib.import_module(module_path)
 
         missing: List[str] = []
         for name, obj in inspect.getmembers(module, inspect.isclass):

@@ -1,4 +1,29 @@
-"""Core authentication management system."""
+"""User authentication and authorization management.
+
+This module implements SHA-256 based password hashing, session lifecycle
+management and basic role based access control for the Streamlit
+application.  It provides helpers for user registration, login, logout and
+password changes while enforcing security features such as account
+lockouts and session validation.
+
+Example:
+    Basic login flow::
+
+        from streamlit_extension.auth.auth_manager import AuthManager
+
+        auth = AuthManager("framework.db")
+        result = auth.register_user("alice", "alice@example.com", "s3cret")
+        if result.success:
+            auth.authenticate("alice", "s3cret")
+
+Classes:
+    AuthManager: Core class responsible for authentication operations.
+    AuthResult: Dataclass describing authentication outcomes.
+
+Todo:
+    * Implement password reset via email
+    * Add token based authentication for API usage
+"""
 
 from __future__ import annotations
 import hashlib
@@ -8,8 +33,31 @@ from typing import Optional, Dict, Any
 from datetime import datetime, timedelta
 import sqlite3
 
-from .user_model import User, UserRole
-from .session_handler import SessionHandler, SessionData
+try:
+    from .user_model import User, UserRole
+    from .session_handler import SessionHandler, SessionData
+except ImportError:  # pragma: no cover - simplifies standalone usage
+    class User:  # type: ignore
+        """Fallback user model."""
+
+    class UserRole:  # type: ignore
+        USER = "user"
+
+    class SessionData:  # type: ignore
+        user: Optional[User] = None
+
+    class SessionHandler:  # type: ignore
+        def create_session(self, user: User) -> str:  # pragma: no cover
+            return ""
+
+        def destroy_session(self, session_id: str) -> bool:  # pragma: no cover
+            return False
+
+        def get_session(self, session_id: str) -> Optional[SessionData]:  # pragma: no cover
+            return None
+
+        def is_valid_session(self, session_id: str) -> bool:  # pragma: no cover
+            return False
 
 
 @dataclass
@@ -22,9 +70,27 @@ class AuthResult:
 
 
 class AuthManager:
-    """Manages user authentication, registration, and session lifecycle."""
-    
+    """Manage user registration, authentication and session state.
+
+    The manager stores credentials in a SQLite database and tracks active
+    sessions through :class:`SessionHandler`.  Account lockout, password
+    hashing and minimal role management are provided out of the box.
+
+    Attributes:
+        db_path: Path to SQLite database storing authentication tables.
+        session_handler: Handler responsible for session creation and
+            validation.
+    """
+
     def __init__(self, db_path: str = "framework.db"):
+        """Create a new authentication manager.
+
+        Args:
+            db_path: Path to the SQLite database. Defaults to ``framework.db``.
+
+        Example:
+            >>> auth = AuthManager("framework.db")
+        """
         self.db_path = db_path
         self.session_handler = SessionHandler()
         self._ensure_auth_tables()
@@ -64,9 +130,35 @@ class AuthManager:
         """Generate cryptographically secure salt."""
         return secrets.token_hex(32)
     
-    def register_user(self, username: str, email: str, password: str, 
-                     role: UserRole = UserRole.USER) -> AuthResult:
-        """Register new user with validation."""
+    def register_user(
+        self,
+        username: str,
+        email: str,
+        password: str,
+        role: UserRole = UserRole.USER,
+    ) -> AuthResult:
+        """Register a new user in the authentication database.
+
+        Args:
+            username: Desired unique username (at least 3 characters).
+            email: Contact e-mail address.
+            password: Raw password string (minimum 8 characters).
+            role: Optional role assigned to the user. Defaults to
+                :class:`UserRole.USER`.
+
+        Returns:
+            AuthResult: Result object with success flag and optional user.
+
+        Raises:
+            ValueError: If provided data fails basic validation.
+            Exception: If database interaction fails.
+
+        Example:
+            >>> auth = AuthManager()
+            >>> result = auth.register_user("alice", "a@example.com", "s3cret")
+            >>> result.success
+            True
+        """
         # Input validation
         if len(username) < 3:
             return AuthResult(False, message="Username must be at least 3 characters")
@@ -112,7 +204,21 @@ class AuthManager:
             return AuthResult(False, message=f"Registration failed: {str(e)}")
     
     def authenticate(self, username: str, password: str) -> AuthResult:
-        """Authenticate user and create session."""
+        """Authenticate a user and create a session.
+
+        Args:
+            username: Username used for login.
+            password: Raw password string.
+
+        Returns:
+            AuthResult: Authentication outcome including created session ID when
+            successful.
+
+        Example:
+            >>> auth = AuthManager()
+            >>> auth.authenticate("alice", "s3cret").success
+            False
+        """
         try:
             with sqlite3.connect(self.db_path) as conn:
                 # Get user data
@@ -179,7 +285,14 @@ class AuthManager:
             return AuthResult(False, message=f"Authentication failed: {str(e)}")
     
     def logout(self, session_id: str) -> bool:
-        """Logout user and destroy session."""
+        """Terminate a user session.
+
+        Args:
+            session_id: Identifier of the session to destroy.
+
+        Returns:
+            bool: ``True`` if the session was removed, ``False`` otherwise.
+        """
         return self.session_handler.destroy_session(session_id)
     
     def get_current_user(self, session_id: str) -> Optional[User]:
