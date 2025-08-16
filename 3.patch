@@ -1,575 +1,1712 @@
  (cd "$(git rev-parse --show-toplevel)" && git apply --3way <<'EOF' 
-diff --git a/scripts/health_check.py b/scripts/health_check.py
+diff --git a/streamlit_extension/auth/__init__.py b/streamlit_extension/auth/__init__.py
 new file mode 100644
-index 0000000000000000000000000000000000000000..7201def1cfc90d726ff284b7ab318ae86a2c38a2
---- /dev/null
-+++ b/scripts/health_check.py
-@@ -0,0 +1,14 @@
-+"""Standalone script that prints a basic health payload."""
-+from __future__ import annotations
-+
-+import json
-+from streamlit_extension.endpoints import HealthCheckEndpoint
-+
-+
-+def main() -> None:
-+    endpoint = HealthCheckEndpoint()
-+    print(json.dumps(endpoint.basic_health()))
-+
-+
-+if __name__ == "__main__":
-+    main()
-diff --git a/streamlit_extension/endpoints/__init__.py b/streamlit_extension/endpoints/__init__.py
+index 0000000000000000000000000000000000000000..e69de29bb2d1d6434b8b29ae775ad8c2e48c5391
+diff --git a/streamlit_extension/auth/auth_manager.py b/streamlit_extension/auth/auth_manager.py
 new file mode 100644
-index 0000000000000000000000000000000000000000..d65962ce2ee933e441a620b619bd18c223b91bf2
+index 0000000000000000000000000000000000000000..bda3e98def80422550e1a41a379eded3933537f9
 --- /dev/null
-+++ b/streamlit_extension/endpoints/__init__.py
-@@ -0,0 +1,8 @@
-+"""Endpoint modules for Streamlit extension."""
-+from .health import HealthCheckEndpoint, HealthStatus, ComponentChecker
-+
-+__all__ = [
-+    "HealthCheckEndpoint",
-+    "HealthStatus",
-+    "ComponentChecker",
-+]
-diff --git a/streamlit_extension/endpoints/health.py b/streamlit_extension/endpoints/health.py
-new file mode 100644
-index 0000000000000000000000000000000000000000..f0a1947e65f9fc113c37cb2d42d5491354698bcf
---- /dev/null
-+++ b/streamlit_extension/endpoints/health.py
-@@ -0,0 +1,145 @@
-+"""Health check endpoints for orchestration tools.
-+
-+This module provides simple health-check utilities that can be used by
-+monitoring systems or orchestration tools such as Kubernetes.  The
-+implementation intentionally keeps the logic lightweight – the goal of
-+these utilities is to offer predictable structures that are easy to
-+consume in tests and during development.
-+"""
++++ b/streamlit_extension/auth/auth_manager.py
+@@ -0,0 +1,253 @@
++"""Core authentication management system."""
 +
 +from __future__ import annotations
-+
++import hashlib
++import secrets
 +from dataclasses import dataclass
++from typing import Optional, Dict, Any
 +from datetime import datetime, timedelta
-+from enum import Enum
++import sqlite3
++
++from .user_model import User, UserRole
++from .session_handler import SessionHandler, SessionData
++
++
++@dataclass
++class AuthResult:
++    """Result of authentication operations."""
++    success: bool
++    user: Optional[User] = None
++    message: str = ""
++    session_id: Optional[str] = None
++
++
++class AuthManager:
++    """Manages user authentication, registration, and session lifecycle."""
++    
++    def __init__(self, db_path: str = "framework.db"):
++        self.db_path = db_path
++        self.session_handler = SessionHandler()
++        self._ensure_auth_tables()
++    
++    def _ensure_auth_tables(self) -> None:
++        """Create authentication tables if they don't exist."""
++        with sqlite3.connect(self.db_path) as conn:
++            conn.execute("""
++                CREATE TABLE IF NOT EXISTS auth_users (
++                    id INTEGER PRIMARY KEY AUTOINCREMENT,
++                    username TEXT UNIQUE NOT NULL,
++                    email TEXT UNIQUE NOT NULL,
++                    password_hash TEXT NOT NULL,
++                    salt TEXT NOT NULL,
++                    role TEXT NOT NULL DEFAULT 'user',
++                    is_active BOOLEAN DEFAULT 1,
++                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
++                    last_login TIMESTAMP,
++                    failed_login_attempts INTEGER DEFAULT 0,
++                    locked_until TIMESTAMP NULL
++                )
++            """)
++            
++            conn.execute("""
++                CREATE INDEX IF NOT EXISTS idx_auth_users_username ON auth_users(username)
++            """)
++            
++            conn.execute("""
++                CREATE INDEX IF NOT EXISTS idx_auth_users_email ON auth_users(email)
++            """)
++    
++    def _hash_password(self, password: str, salt: str) -> str:
++        """Hash password with salt using SHA-256."""
++        return hashlib.sha256((password + salt).encode()).hexdigest()
++    
++    def _generate_salt(self) -> str:
++        """Generate cryptographically secure salt."""
++        return secrets.token_hex(32)
++    
++    def register_user(self, username: str, email: str, password: str, 
++                     role: UserRole = UserRole.USER) -> AuthResult:
++        """Register new user with validation."""
++        # Input validation
++        if len(username) < 3:
++            return AuthResult(False, message="Username must be at least 3 characters")
++        
++        if len(password) < 8:
++            return AuthResult(False, message="Password must be at least 8 characters")
++        
++        if "@" not in email or "." not in email:
++            return AuthResult(False, message="Invalid email format")
++        
++        try:
++            with sqlite3.connect(self.db_path) as conn:
++                # Check if user exists
++                existing = conn.execute(
++                    "SELECT id FROM auth_users WHERE username = ? OR email = ?",
++                    (username, email)
++                ).fetchone()
++                
++                if existing:
++                    return AuthResult(False, message="Username or email already exists")
++                
++                # Create user
++                salt = self._generate_salt()
++                password_hash = self._hash_password(password, salt)
++                
++                cursor = conn.execute("""
++                    INSERT INTO auth_users (username, email, password_hash, salt, role)
++                    VALUES (?, ?, ?, ?, ?)
++                """, (username, email, password_hash, salt, role.value))
++                
++                user = User(
++                    id=cursor.lastrowid,
++                    username=username,
++                    email=email,
++                    role=role,
++                    is_active=True,
++                    created_at=datetime.now()
++                )
++                
++                return AuthResult(True, user=user, message="User registered successfully")
++                
++        except Exception as e:
++            return AuthResult(False, message=f"Registration failed: {str(e)}")
++    
++    def authenticate(self, username: str, password: str) -> AuthResult:
++        """Authenticate user and create session."""
++        try:
++            with sqlite3.connect(self.db_path) as conn:
++                # Get user data
++                row = conn.execute("""
++                    SELECT id, username, email, password_hash, salt, role, is_active, 
++                           failed_login_attempts, locked_until
++                    FROM auth_users WHERE username = ?
++                """, (username,)).fetchone()
++                
++                if not row:
++                    return AuthResult(False, message="Invalid credentials")
++                
++                user_id, username, email, stored_hash, salt, role, is_active, failed_attempts, locked_until = row
++                
++                # Check if account is locked
++                if locked_until and datetime.fromisoformat(locked_until) > datetime.now():
++                    return AuthResult(False, message="Account temporarily locked")
++                
++                # Check if account is active
++                if not is_active:
++                    return AuthResult(False, message="Account is disabled")
++                
++                # Verify password
++                password_hash = self._hash_password(password, salt)
++                if password_hash != stored_hash:
++                    # Increment failed attempts
++                    failed_attempts += 1
++                    lock_time = None
++                    if failed_attempts >= 5:
++                        lock_time = datetime.now() + timedelta(minutes=15)
++                    
++                    conn.execute("""
++                        UPDATE auth_users 
++                        SET failed_login_attempts = ?, locked_until = ?
++                        WHERE id = ?
++                    """, (failed_attempts, lock_time, user_id))
++                    
++                    return AuthResult(False, message="Invalid credentials")
++                
++                # Successful login - reset failed attempts and update last login
++                conn.execute("""
++                    UPDATE auth_users 
++                    SET failed_login_attempts = 0, locked_until = NULL, last_login = ?
++                    WHERE id = ?
++                """, (datetime.now(), user_id))
++                
++                # Create user object
++                user = User(
++                    id=user_id,
++                    username=username,
++                    email=email,
++                    role=UserRole(role),
++                    is_active=is_active,
++                    last_login=datetime.now()
++                )
++                
++                # Create session
++                session_id = self.session_handler.create_session(user)
++                
++                return AuthResult(True, user=user, session_id=session_id, 
++                                message="Login successful")
++                
++        except Exception as e:
++            return AuthResult(False, message=f"Authentication failed: {str(e)}")
++    
++    def logout(self, session_id: str) -> bool:
++        """Logout user and destroy session."""
++        return self.session_handler.destroy_session(session_id)
++    
++    def get_current_user(self, session_id: str) -> Optional[User]:
++        """Get current user from session."""
++        session_data = self.session_handler.get_session(session_id)
++        return session_data.user if session_data else None
++    
++    def is_authenticated(self, session_id: str) -> bool:
++        """Check if session is valid and user is authenticated."""
++        return self.session_handler.is_valid_session(session_id)
++    
++    def change_password(self, user_id: int, old_password: str, new_password: str) -> AuthResult:
++        """Change user password with validation."""
++        if len(new_password) < 8:
++            return AuthResult(False, message="New password must be at least 8 characters")
++        
++        try:
++            with sqlite3.connect(self.db_path) as conn:
++                # Verify old password
++                row = conn.execute(
++                    "SELECT password_hash, salt FROM auth_users WHERE id = ?",
++                    (user_id,)
++                ).fetchone()
++                
++                if not row:
++                    return AuthResult(False, message="User not found")
++                
++                stored_hash, salt = row
++                old_hash = self._hash_password(old_password, salt)
++                
++                if old_hash != stored_hash:
++                    return AuthResult(False, message="Current password is incorrect")
++                
++                # Set new password
++                new_salt = self._generate_salt()
++                new_hash = self._hash_password(new_password, new_salt)
++                
++                conn.execute("""
++                    UPDATE auth_users 
++                    SET password_hash = ?, salt = ?
++                    WHERE id = ?
++                """, (new_hash, new_salt, user_id))
++                
++                return AuthResult(True, message="Password changed successfully")
++                
++        except Exception as e:
++            return AuthResult(False, message=f"Password change failed: {str(e)}")
++    
++    def get_user_by_id(self, user_id: int) -> Optional[User]:
++        """Get user by ID."""
++        try:
++            with sqlite3.connect(self.db_path) as conn:
++                row = conn.execute("""
++                    SELECT id, username, email, role, is_active, created_at, last_login
++                    FROM auth_users WHERE id = ?
++                """, (user_id,)).fetchone()
++                
++                if row:
++                    return User(
++                        id=row[0],
++                        username=row[1],
++                        email=row[2],
++                        role=UserRole(row[3]),
++                        is_active=bool(row[4]),
++                        created_at=datetime.fromisoformat(row[5]),
++                        last_login=datetime.fromisoformat(row[6]) if row[6] else None
++                    )
++        except Exception:
++            pass
++        
++        return None
+diff --git a/streamlit_extension/auth/login_page.py b/streamlit_extension/auth/login_page.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..3f2a9d5d91eb0869e37f362733a1e826cbace6ff
+--- /dev/null
++++ b/streamlit_extension/auth/login_page.py
+@@ -0,0 +1,129 @@
++"""Login and registration page for authentication."""
++
++import streamlit as st
++from .auth_manager import AuthManager
++from .user_model import UserRole
++
++
++def render_login_page():
++    """Render login/registration page."""
++    st.title("🔐 Authentication")
++    
++    auth_manager = AuthManager()
++    
++    # Create tabs for login and registration
++    login_tab, register_tab = st.tabs(["Login", "Register"])
++    
++    with login_tab:
++        render_login_form(auth_manager)
++    
++    with register_tab:
++        render_registration_form(auth_manager)
++
++
++def render_login_form(auth_manager: AuthManager):
++    """Render login form."""
++    st.subheader("Login")
++    
++    with st.form("login_form"):
++        username = st.text_input("Username", key="login_username")
++        password = st.text_input("Password", type="password", key="login_password")
++        
++        if st.form_submit_button("Login", type="primary"):
++            if username and password:
++                result = auth_manager.authenticate(username, password)
++                
++                if result.success:
++                    st.session_state.session_id = result.session_id
++                    st.session_state.current_user = result.user
++                    st.success(f"Welcome back, {result.user.username}!")
++                    st.rerun()
++                else:
++                    st.error(result.message)
++            else:
++                st.error("Please enter both username and password.")
++
++
++def render_registration_form(auth_manager: AuthManager):
++    """Render registration form."""
++    st.subheader("Register New Account")
++    
++    with st.form("register_form"):
++        username = st.text_input("Username", key="reg_username")
++        email = st.text_input("Email", key="reg_email")
++        password = st.text_input("Password", type="password", key="reg_password")
++        confirm_password = st.text_input("Confirm Password", type="password", key="reg_confirm")
++        
++        if st.form_submit_button("Register"):
++            if not all([username, email, password, confirm_password]):
++                st.error("Please fill in all fields.")
++            elif password != confirm_password:
++                st.error("Passwords do not match.")
++            else:
++                result = auth_manager.register_user(username, email, password, UserRole.USER)
++                
++                if result.success:
++                    st.success("Registration successful! Please log in.")
++                    st.balloons()
++                else:
++                    st.error(result.message)
++
++
++def render_user_profile():
++    """Render user profile page."""
++    if "current_user" not in st.session_state:
++        st.error("Please log in to view profile.")
++        return
++    
++    user = st.session_state.current_user
++    auth_manager = AuthManager()
++    
++    st.title("👤 User Profile")
++    
++    col1, col2 = st.columns([1, 1])
++    
++    with col1:
++        st.subheader("Profile Information")
++        st.write(f"**Username:** {user.username}")
++        st.write(f"**Email:** {user.email}")
++        st.write(f"**Role:** {user.role.display_name}")
++        st.write(f"**Account Status:** {'Active' if user.is_active else 'Inactive'}")
++        
++        if user.created_at:
++            st.write(f"**Member Since:** {user.created_at.strftime('%Y-%m-%d')}")
++        
++        if user.last_login:
++            st.write(f"**Last Login:** {user.last_login.strftime('%Y-%m-%d %H:%M')}")
++    
++    with col2:
++        st.subheader("Change Password")
++        
++        with st.form("change_password_form"):
++            old_password = st.text_input("Current Password", type="password")
++            new_password = st.text_input("New Password", type="password")
++            confirm_new = st.text_input("Confirm New Password", type="password")
++            
++            if st.form_submit_button("Change Password"):
++                if not all([old_password, new_password, confirm_new]):
++                    st.error("Please fill in all password fields.")
++                elif new_password != confirm_new:
++                    st.error("New passwords do not match.")
++                else:
++                    result = auth_manager.change_password(user.id, old_password, new_password)
++                    
++                    if result.success:
++                        st.success("Password changed successfully!")
++                    else:
++                        st.error(result.message)
++    
++    # Logout button
++    if st.button("🚪 Logout", type="secondary"):
++        if "session_id" in st.session_state:
++            auth_manager.logout(st.session_state.session_id)
++            del st.session_state.session_id
++        
++        if "current_user" in st.session_state:
++            del st.session_state.current_user
++        
++        st.success("Logged out successfully!")
++        st.rerun()
+diff --git a/streamlit_extension/auth/middleware.py b/streamlit_extension/auth/middleware.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..e59a7d63174f6d20748c353f1dbe492d3886a78e
+--- /dev/null
++++ b/streamlit_extension/auth/middleware.py
+@@ -0,0 +1,100 @@
++"""Authentication middleware and decorators."""
++
++from functools import wraps
++from typing import Callable, Optional
++import streamlit as st
++
++from .auth_manager import AuthManager
++from .user_model import User, UserRole
++
++
++# Global auth manager instance
++_auth_manager: Optional[AuthManager] = None
++
++
++def get_auth_manager() -> AuthManager:
++    """Get global auth manager instance."""
++    global _auth_manager
++    if _auth_manager is None:
++        _auth_manager = AuthManager()
++    return _auth_manager
++
++
++def require_auth(roles: Optional[list[UserRole]] = None):
++    """Decorator to require authentication for Streamlit functions."""
++    def decorator(func: Callable):
++        @wraps(func)
++        def wrapper(*args, **kwargs):
++            # Check authentication
++            if "session_id" not in st.session_state:
++                st.error("🔒 Access denied. Please log in.")
++                st.stop()
++            
++            auth_manager = get_auth_manager()
++            user = auth_manager.get_current_user(st.session_state.session_id)
++            
++            if not user:
++                st.error("🔒 Session expired. Please log in again.")
++                if "session_id" in st.session_state:
++                    del st.session_state.session_id
++                st.stop()
++            
++            # Check role permissions
++            if roles and user.role not in roles:
++                st.error(f"🔒 Access denied. Required role: {[r.display_name for r in roles]}")
++                st.stop()
++            
++            # Store current user in session state
++            st.session_state.current_user = user
++            
++            return func(*args, **kwargs)
++        return wrapper
++    return decorator
++
++
++def require_admin(func: Callable):
++    """Decorator to require admin role."""
++    return require_auth([UserRole.ADMIN])(func)
++
++
++def auth_middleware() -> Optional[User]:
++    """Middleware to check authentication state."""
++    if "session_id" not in st.session_state:
++        return None
++    
++    auth_manager = get_auth_manager()
++    user = auth_manager.get_current_user(st.session_state.session_id)
++    
++    if user:
++        st.session_state.current_user = user
++        return user
++    else:
++        # Clean up invalid session
++        if "session_id" in st.session_state:
++            del st.session_state.session_id
++        if "current_user" in st.session_state:
++            del st.session_state.current_user
++        return None
++
++
++def get_current_user() -> Optional[User]:
++    """Get current authenticated user."""
++    return st.session_state.get("current_user")
++
++
++def is_authenticated() -> bool:
++    """Check if current user is authenticated."""
++    return get_current_user() is not None
++
++
++def logout_user():
++    """Logout current user."""
++    if "session_id" in st.session_state:
++        auth_manager = get_auth_manager()
++        auth_manager.logout(st.session_state.session_id)
++        del st.session_state.session_id
++    
++    if "current_user" in st.session_state:
++        del st.session_state.current_user
++    
++    st.rerun()
+diff --git a/streamlit_extension/auth/session_handler.py b/streamlit_extension/auth/session_handler.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..9251dc0dd6901c31df65b25cf0ebc6c3f3a0212c
+--- /dev/null
++++ b/streamlit_extension/auth/session_handler.py
+@@ -0,0 +1,132 @@
++"""Session management for authentication."""
++
++from __future__ import annotations
++import secrets
 +import time
-+from typing import Dict, Tuple
-+
-+
-+class HealthStatus(str, Enum):
-+    """Enum representing component health states."""
-+
-+    HEALTHY = "healthy"
-+    DEGRADED = "degraded"
-+    UNHEALTHY = "unhealthy"
-+    MAINTENANCE = "maintenance"
-+
-+
-+@dataclass
-+class ComponentChecker:
-+    """Collection of helper methods used by the health endpoints.
-+
-+    The real project would integrate with databases, caches and other
-+    dependencies.  For the purposes of the tests we implement simple
-+    placeholders that return deterministic data which can easily be
-+    monkey‑patched to simulate different scenarios.
-+    """
-+
-+    def check_database(self) -> Dict[str, str]:
-+        return {"status": HealthStatus.HEALTHY.value, "response_time": "1ms"}
-+
-+    def check_cache(self) -> Dict[str, str]:
-+        return {
-+            "status": HealthStatus.HEALTHY.value,
-+            "hit_rate": "100%",
-+            "memory_usage": "0%",
-+        }
-+
-+    def check_external_apis(self) -> Dict[str, str]:
-+        return {"status": HealthStatus.HEALTHY.value, "latency": "0ms"}
-+
-+    def check_disk_space(self) -> Dict[str, str]:
-+        return {"status": HealthStatus.HEALTHY.value, "disk_usage": "0%"}
-+
-+    def check_memory_usage(self) -> Dict[str, str]:
-+        return {
-+            "status": HealthStatus.HEALTHY.value,
-+            "cpu_usage": "0%",
-+            "memory_usage": "0%",
-+        }
-+
-+
-+class HealthCheckEndpoint:
-+    """Implements the different health‑check endpoints."""
-+
-+    def __init__(self, start_time: float | None = None, version: str = "1.0.0", checker: ComponentChecker | None = None) -> None:
-+        self.start_time = start_time or time.time()
-+        self.version = version
-+        self.checker = checker or ComponentChecker()
-+
-+    # ------------------------------------------------------------------
-+    # Helpers
-+    def _current_timestamp(self) -> str:
-+        return datetime.utcnow().isoformat() + "Z"
-+
-+    # ------------------------------------------------------------------
-+    def basic_health(self) -> Dict[str, str]:
-+        """Return a very small health payload."""
-+
-+        uptime_seconds = int(time.time() - self.start_time)
-+        uptime = str(timedelta(seconds=uptime_seconds))
-+        return {
-+            "status": HealthStatus.HEALTHY.value,
-+            "timestamp": self._current_timestamp(),
-+            "uptime": uptime,
-+            "version": self.version,
-+        }
-+
-+    def detailed_health(self) -> Dict[str, object]:
-+        """Return detailed component information.
-+
-+        The overall status is derived from the status of individual
-+        components – ``unhealthy`` takes precedence over ``degraded``
-+        which in turn takes precedence over ``healthy``.
-+        """
-+
-+        database = self.checker.check_database()
-+        cache = self.checker.check_cache()
-+        memory = self.checker.check_memory_usage()
-+        disk = self.checker.check_disk_space()
-+
-+        system = {
-+            "cpu_usage": memory.get("cpu_usage", "0%"),
-+            "memory_usage": memory.get("memory_usage", "0%"),
-+            "disk_usage": disk.get("disk_usage", "0%"),
-+        }
-+
-+        components = {
-+            "database": database,
-+            "cache": cache,
-+            "system": system,
-+        }
-+
-+        statuses = [database.get("status"), cache.get("status"), memory.get("status"), disk.get("status")]
-+        overall = HealthStatus.HEALTHY.value
-+        if HealthStatus.UNHEALTHY.value in statuses:
-+            overall = HealthStatus.UNHEALTHY.value
-+        elif HealthStatus.DEGRADED.value in statuses:
-+            overall = HealthStatus.DEGRADED.value
-+
-+        return {
-+            "status": overall,
-+            "timestamp": self._current_timestamp(),
-+            "components": components,
-+        }
-+
-+    def readiness_check(self) -> Tuple[int, Dict[str, object]]:
-+        """Readiness probe suitable for Kubernetes."""
-+
-+        db = self.checker.check_database()
-+        cache = self.checker.check_cache()
-+        ready = db.get("status") == HealthStatus.HEALTHY.value and cache.get("status") == HealthStatus.HEALTHY.value
-+        status_code = 200 if ready else 503
-+        payload = {
-+            "ready": ready,
-+            "dependencies": {
-+                "database": "connected" if db.get("status") == HealthStatus.HEALTHY.value else "unavailable",
-+                "cache": "available" if cache.get("status") == HealthStatus.HEALTHY.value else "unavailable",
-+            },
-+        }
-+        return status_code, payload
-+
-+    def liveness_check(self) -> Tuple[int, Dict[str, object]]:
-+        """Simple liveness probe."""
-+
-+        return 200, {"alive": True, "last_heartbeat": self._current_timestamp()}
-diff --git a/streamlit_extension/utils/graceful_shutdown.py b/streamlit_extension/utils/graceful_shutdown.py
-new file mode 100644
-index 0000000000000000000000000000000000000000..d62e508746e53fc5fe01574bb66bdc0d2bae4f5a
---- /dev/null
-+++ b/streamlit_extension/utils/graceful_shutdown.py
-@@ -0,0 +1,53 @@
-+"""Simple graceful shutdown helpers.
-+
-+This is a lightweight abstraction that mimics the behaviour of a more
-+sophisticated shutdown handler.  It is intentionally small – the
-+existing project already contains a comprehensive implementation in the
-+``monitoring`` package.  This variant exists so that components within
-+``streamlit_extension`` can depend on a minimal interface during tests.
-+"""
-+
-+from __future__ import annotations
-+
-+from dataclasses import dataclass
-+from enum import Enum, auto
-+from typing import Callable, Dict, List
-+
-+
-+class ShutdownPhase(Enum):
-+    STOP_ACCEPTING_REQUESTS = auto()
-+    DRAIN_CONNECTIONS = auto()
-+    CLEANUP_RESOURCES = auto()
-+    FINAL_SHUTDOWN = auto()
-+
-+
-+@dataclass
-+class GracefulShutdownHandler:
-+    """Coordinate a simple shutdown sequence."""
-+
-+    cleanup_handlers: Dict[str, Callable[[], None]]
-+
-+    def __init__(self) -> None:
-+        self.cleanup_handlers = {}
-+        self._sequence: List[ShutdownPhase] = []
-+
-+    def register_signal_handlers(self) -> None:  # pragma: no cover - OS interaction
-+        """Placeholder for installing signal handlers."""
-+        self._sequence.append(ShutdownPhase.STOP_ACCEPTING_REQUESTS)
-+
-+    def shutdown_sequence(self) -> List[ShutdownPhase]:
-+        self._sequence.append(ShutdownPhase.DRAIN_CONNECTIONS)
-+        self._sequence.append(ShutdownPhase.CLEANUP_RESOURCES)
-+        self.cleanup_resources()
-+        self._sequence.append(ShutdownPhase.FINAL_SHUTDOWN)
-+        return list(self._sequence)
-+
-+    def cleanup_resources(self) -> None:
-+        for handler in self.cleanup_handlers.values():
-+            handler()
-+
-+    def wait_for_completion(self) -> bool:
-+        return True
-+
-+    def add_cleanup_handler(self, name: str, handler: Callable[[], None]) -> None:
-+        self.cleanup_handlers[name] = handler
-diff --git a/streamlit_extension/utils/monitoring.py b/streamlit_extension/utils/monitoring.py
-new file mode 100644
-index 0000000000000000000000000000000000000000..f40fa79310dba4d3970ffd4875df5fccbd9c1be8
---- /dev/null
-+++ b/streamlit_extension/utils/monitoring.py
-@@ -0,0 +1,115 @@
-+"""Light‑weight monitoring helpers used for unit tests.
-+
-+The goal of this module is to provide a minimal yet functional monitoring
-+framework.  It gathers basic metrics, evaluates them against configured
-+thresholds and can export the data in a Prometheus friendly plain text
-+format.  The implementation is intentionally simple so that tests can
-+exercise behaviour without needing heavy dependencies or external
-+services.
-+"""
-+
-+from __future__ import annotations
-+
 +from dataclasses import dataclass, field
-+from typing import Dict, List
-+import os
-+import shutil
++from typing import Dict, Optional
++from datetime import datetime, timedelta
 +
++from .user_model import User
 +
-+# ---------------------------------------------------------------------------
-+# Metrics collection
 +
 +@dataclass
-+class MetricsCollector:
-+    """Collect basic system and application metrics."""
-+
-+    def cpu_usage(self) -> float:
-+        # ``os.getloadavg`` is not available on Windows; fall back to 0.0
-+        try:
-+            load1, _, _ = os.getloadavg()
-+            # normalise to a 0-100 percentage assuming 1 CPU
-+            return float(min(load1 * 100.0, 100.0))
-+        except OSError:  # pragma: no cover - platform specific
-+            return 0.0
-+
-+    def memory_usage(self) -> float:
-+        # Process memory usage via ``resource`` would be possible but is
-+        # avoided to keep things portable.  Instead we use the total
-+        # virtual memory from ``os.sysconf`` when available.
-+        try:
-+            used = os.sysconf("SC_PAGE_SIZE") * os.sysconf("SC_PHYS_PAGES")
-+            return float(used / 1024 / 1024)
-+        except (ValueError, AttributeError, OSError):  # pragma: no cover
-+            return 0.0
-+
-+    def disk_usage(self) -> float:
-+        usage = shutil.disk_usage("/")
-+        return float(usage.used) / float(usage.total) * 100.0
-+
-+    def connection_pool_stats(self) -> Dict[str, int]:
-+        return {"active": 0, "idle": 0, "max": 0}
-+
-+    def response_time_metrics(self) -> Dict[str, float]:
-+        return {"average_ms": 0.0, "p95_ms": 0.0}
++class SessionData:
++    """Session data container."""
++    user: User
++    created_at: datetime
++    last_activity: datetime
++    session_id: str
++    expires_at: datetime
++    data: Dict = field(default_factory=dict)
 +
 +
-+# ---------------------------------------------------------------------------
-+# Alerting
-+
-+@dataclass
-+class AlertManager:
-+    """Basic threshold based alert manager."""
-+
-+    thresholds: Dict[str, float] = field(default_factory=dict)
-+    notifications: List[str] = field(default_factory=list)
-+
-+    def define_thresholds(self, thresholds: Dict[str, float]) -> None:
-+        self.thresholds.update(thresholds)
-+
-+    def check_alerts(self, metrics: Dict[str, float]) -> List[str]:
-+        alerts: List[str] = []
-+        for key, value in metrics.items():
-+            threshold = self.thresholds.get(key)
-+            if threshold is not None and value > threshold:
-+                alerts.append(f"{key} threshold exceeded: {value} > {threshold}")
-+        return alerts
-+
-+    def send_notifications(self, alerts: List[str]) -> None:
-+        self.notifications.extend(alerts)
-+
-+
-+# ---------------------------------------------------------------------------
-+# System monitor facade
-+
-+@dataclass
-+class SystemMonitor:
-+    """Facade coordinating metrics collection and alerting."""
-+
-+    collector: MetricsCollector = field(default_factory=MetricsCollector)
-+    alert_manager: AlertManager = field(default_factory=AlertManager)
-+
-+    def collect_metrics(self) -> Dict[str, float]:
-+        return {
-+            "cpu_usage": self.collector.cpu_usage(),
-+            "memory_usage": self.collector.memory_usage(),
-+            "disk_usage": self.collector.disk_usage(),
-+        }
-+
-+    def check_performance(self) -> Dict[str, str]:
-+        metrics = self.collect_metrics()
-+        status: Dict[str, str] = {}
-+        for key, value in metrics.items():
-+            threshold = self.alert_manager.thresholds.get(key, float("inf"))
-+            status[key] = "healthy" if value <= threshold else "degraded"
-+        return status
-+
-+    def generate_alerts(self) -> List[str]:
-+        metrics = self.collect_metrics()
-+        alerts = self.alert_manager.check_alerts(metrics)
-+        self.alert_manager.send_notifications(alerts)
-+        return alerts
-+
-+    def export_metrics(self) -> str:
-+        metrics = self.collect_metrics()
-+        # Export in a simple Prometheus-style text format
-+        return "\n".join(f"{key} {value}" for key, value in metrics.items())
-diff --git a/streamlit_extension/utils/structured_logging.py b/streamlit_extension/utils/structured_logging.py
++class SessionHandler:
++    """Manages user sessions with automatic cleanup."""
++    
++    def __init__(self, session_timeout_hours: int = 24):
++        self._sessions: Dict[str, SessionData] = {}
++        self.session_timeout = timedelta(hours=session_timeout_hours)
++        self._last_cleanup = time.time()
++    
++    def create_session(self, user: User) -> str:
++        """Create new session for user."""
++        session_id = secrets.token_urlsafe(32)
++        now = datetime.now()
++        
++        session_data = SessionData(
++            user=user,
++            created_at=now,
++            last_activity=now,
++            session_id=session_id,
++            expires_at=now + self.session_timeout
++        )
++        
++        self._sessions[session_id] = session_data
++        self._cleanup_expired_sessions()
++        
++        return session_id
++    
++    def get_session(self, session_id: str) -> Optional[SessionData]:
++        """Get session data if valid."""
++        if session_id not in self._sessions:
++            return None
++        
++        session = self._sessions[session_id]
++        
++        # Check if expired
++        if datetime.now() > session.expires_at:
++            del self._sessions[session_id]
++            return None
++        
++        # Update last activity
++        session.last_activity = datetime.now()
++        return session
++    
++    def is_valid_session(self, session_id: str) -> bool:
++        """Check if session is valid."""
++        return self.get_session(session_id) is not None
++    
++    def destroy_session(self, session_id: str) -> bool:
++        """Destroy session."""
++        if session_id in self._sessions:
++            del self._sessions[session_id]
++            return True
++        return False
++    
++    def extend_session(self, session_id: str, hours: int = 24) -> bool:
++        """Extend session expiration."""
++        if session_id in self._sessions:
++            session = self._sessions[session_id]
++            session.expires_at = datetime.now() + timedelta(hours=hours)
++            return True
++        return False
++    
++    def get_active_sessions_count(self) -> int:
++        """Get count of active sessions."""
++        self._cleanup_expired_sessions()
++        return len(self._sessions)
++    
++    def _cleanup_expired_sessions(self) -> None:
++        """Clean up expired sessions periodically."""
++        current_time = time.time()
++        
++        # Only cleanup every 5 minutes
++        if current_time - self._last_cleanup < 300:
++            return
++        
++        now = datetime.now()
++        expired_sessions = [
++            session_id for session_id, session in self._sessions.items()
++            if now > session.expires_at
++        ]
++        
++        for session_id in expired_sessions:
++            del self._sessions[session_id]
++        
++        self._last_cleanup = current_time
++    
++    def destroy_all_sessions(self) -> int:
++        """Destroy all sessions (admin function)."""
++        count = len(self._sessions)
++        self._sessions.clear()
++        return count
++    
++    def get_user_sessions(self, user_id: int) -> list[SessionData]:
++        """Get all active sessions for a user."""
++        return [
++            session for session in self._sessions.values()
++            if session.user.id == user_id
++        ]
++    
++    def destroy_user_sessions(self, user_id: int) -> int:
++        """Destroy all sessions for a specific user."""
++        user_sessions = [
++            session_id for session_id, session in self._sessions.items()
++            if session.user.id == user_id
++        ]
++        
++        for session_id in user_sessions:
++            del self._sessions[session_id]
++        
++        return len(user_sessions)
+diff --git a/streamlit_extension/auth/user_model.py b/streamlit_extension/auth/user_model.py
 new file mode 100644
-index 0000000000000000000000000000000000000000..857f7bf0d128c5776037e12ca4193e0524225020
+index 0000000000000000000000000000000000000000..e3871509c3ef147e6cb136efbcea254a5c4185b3
 --- /dev/null
-+++ b/streamlit_extension/utils/structured_logging.py
-@@ -0,0 +1,89 @@
-+"""Small structured logging helper.
-+
-+This module implements a tiny structured logger capable of producing JSON
-+formatted log records.  It is deliberately simplified but provides the
-+hooks required for tests: correlation identifiers, performance metrics
-+and dedicated security/business event helpers.
-+"""
++++ b/streamlit_extension/auth/user_model.py
+@@ -0,0 +1,91 @@
++"""User model and role definitions."""
 +
 +from __future__ import annotations
-+
-+import json
-+import logging
 +from dataclasses import dataclass
 +from datetime import datetime
 +from enum import Enum
-+from typing import Any, Dict
++from typing import Optional
 +
 +
-+class LogFormat(str, Enum):
-+    JSON = "json"
-+    GELF = "gelf"
-+    PLAIN_TEXT = "plain_text"
-+
-+
-+class LogLevel(int, Enum):
-+    DEBUG = logging.DEBUG
-+    INFO = logging.INFO
-+    WARNING = logging.WARNING
-+    ERROR = logging.ERROR
-+    CRITICAL = logging.CRITICAL
-+
-+
-+class _JSONFormatter(logging.Formatter):
-+    def format(self, record: logging.LogRecord) -> str:  # pragma: no cover - trivial
-+        data = {
-+            "timestamp": datetime.utcnow().isoformat() + "Z",
-+            "level": record.levelname,
-+            "logger": record.name,
-+            "message": record.getMessage(),
-+        }
-+        for field in ("correlation_id", "performance", "security", "business"):
-+            if hasattr(record, field):
-+                data[field] = getattr(record, field)
-+        return json.dumps(data)
++class UserRole(Enum):
++    """User role enumeration."""
++    ADMIN = "admin"
++    USER = "user"
++    READONLY = "readonly"
++    
++    def __str__(self) -> str:
++        return self.value
++    
++    @property
++    def display_name(self) -> str:
++        """Get display name for role."""
++        return {
++            UserRole.ADMIN: "Administrator",
++            UserRole.USER: "User", 
++            UserRole.READONLY: "Read Only"
++        }[self]
++    
++    def can_edit(self) -> bool:
++        """Check if role can edit data."""
++        return self in [UserRole.ADMIN, UserRole.USER]
++    
++    def can_admin(self) -> bool:
++        """Check if role has admin privileges."""
++        return self == UserRole.ADMIN
 +
 +
 +@dataclass
-+class StructuredLogger:
-+    """Wrapper around :mod:`logging` providing helper methods."""
-+
-+    name: str = "app"
-+    level: LogLevel = LogLevel.INFO
-+    fmt: LogFormat = LogFormat.JSON
-+
-+    def __post_init__(self) -> None:
-+        self.logger = logging.getLogger(self.name)
-+        self.logger.setLevel(self.level.value)
-+        handler = logging.StreamHandler()
-+        formatter: logging.Formatter
-+        if self.fmt is LogFormat.JSON:
-+            formatter = _JSONFormatter()
-+        else:  # pragma: no cover - not used in tests
-+            formatter = logging.Formatter("%(levelname)s: %(message)s")
-+        handler.setFormatter(formatter)
-+        self.logger.handlers = [handler]
-+
-+    # ------------------------------------------------------------------
-+    def log_with_correlation(self, level: LogLevel, message: str, correlation_id: str) -> None:
-+        extra = {"correlation_id": correlation_id}
-+        self.logger.log(level.value, message, extra=extra)
-+
-+    def log_performance(self, message: str, **metrics: Any) -> None:
-+        extra = {"performance": metrics}
-+        self.logger.info(message, extra=extra)
-+
-+    def log_security_event(self, message: str, **details: Any) -> None:
-+        extra = {"security": details}
-+        self.logger.warning(message, extra=extra)
-+
-+    def log_business_event(self, message: str, **details: Any) -> None:
-+        extra = {"business": details}
-+        self.logger.info(message, extra=extra)
-+
-+
-+__all__ = [
-+    "StructuredLogger",
-+    "LogFormat",
-+    "LogLevel",
-+]
-diff --git a/tests/test_health_endpoint.py b/tests/test_health_endpoint.py
-new file mode 100644
-index 0000000000000000000000000000000000000000..9d4b4881d3331514ca22d5cd6a24ea65e710bc7f
---- /dev/null
-+++ b/tests/test_health_endpoint.py
-@@ -0,0 +1,57 @@
-+import sys
-+from pathlib import Path
-+sys.path.append(str(Path(__file__).resolve().parents[1]))
-+from streamlit_extension.endpoints import HealthCheckEndpoint, HealthStatus, ComponentChecker
-+
-+
-+def test_basic_health_check():
-+    endpoint = HealthCheckEndpoint()
-+    data = endpoint.basic_health()
-+    assert data["status"] == HealthStatus.HEALTHY.value
-+    assert "timestamp" in data and "uptime" in data
-+
-+
-+def test_detailed_health_check():
-+    endpoint = HealthCheckEndpoint()
-+    data = endpoint.detailed_health()
-+    assert data["status"] == HealthStatus.HEALTHY.value
-+    components = data["components"]
-+    assert set(["database", "cache", "system"]).issubset(components.keys())
-+
-+
-+def test_readiness_check():
-+    endpoint = HealthCheckEndpoint()
-+    code, payload = endpoint.readiness_check()
-+    assert code == 200
-+    assert payload["ready"] is True
-+
-+
-+def test_liveness_check():
-+    endpoint = HealthCheckEndpoint()
-+    code, payload = endpoint.liveness_check()
-+    assert code == 200
-+    assert payload["alive"] is True
-+
-+
-+def test_health_check_with_database_down(monkeypatch):
-+    def failed_db(self):
-+        return {"status": HealthStatus.UNHEALTHY.value}
-+
-+    monkeypatch.setattr(ComponentChecker, "check_database", failed_db, raising=False)
-+    endpoint = HealthCheckEndpoint()
-+    data = endpoint.detailed_health()
-+    assert data["status"] == HealthStatus.UNHEALTHY.value
-+
-+
-+def test_health_check_with_degraded_performance(monkeypatch):
-+    def degraded_memory(self):
++class User:
++    """User data model."""
++    id: int
++    username: str
++    email: str
++    role: UserRole
++    is_active: bool = True
++    created_at: Optional[datetime] = None
++    last_login: Optional[datetime] = None
++    
++    def __post_init__(self):
++        """Set defaults after initialization."""
++        if self.created_at is None:
++            self.created_at = datetime.now()
++    
++    @property
++    def display_name(self) -> str:
++        """Get display name (username)."""
++        return self.username
++    
++    @property
++    def is_admin(self) -> bool:
++        """Check if user is admin."""
++        return self.role.can_admin()
++    
++    @property
++    def can_edit(self) -> bool:
++        """Check if user can edit data."""
++        return self.role.can_edit() and self.is_active
++    
++    def to_dict(self) -> dict:
++        """Convert to dictionary."""
 +        return {
-+            "status": HealthStatus.DEGRADED.value,
-+            "cpu_usage": "95%",
-+            "memory_usage": "95%",
++            "id": self.id,
++            "username": self.username,
++            "email": self.email,
++            "role": self.role.value,
++            "is_active": self.is_active,
++            "created_at": self.created_at.isoformat() if self.created_at else None,
++            "last_login": self.last_login.isoformat() if self.last_login else None
 +        }
++    
++    @classmethod
++    def from_dict(cls, data: dict) -> User:
++        """Create from dictionary."""
++        return cls(
++            id=data["id"],
++            username=data["username"],
++            email=data["email"],
++            role=UserRole(data["role"]),
++            is_active=data["is_active"],
++            created_at=datetime.fromisoformat(data["created_at"]) if data["created_at"] else None,
++            last_login=datetime.fromisoformat(data["last_login"]) if data["last_login"] else None
++        )
+diff --git a/streamlit_extension/pages/analytics.py b/streamlit_extension/pages/analytics.py
+index 3b36d4bf76bba8cee7f477db93a3fcee1cac3167..b22ac3409e5a97f11ee53b18bd4ec18a62c9b397 100644
+--- a/streamlit_extension/pages/analytics.py
++++ b/streamlit_extension/pages/analytics.py
+@@ -27,75 +27,78 @@ except ImportError:
+     st = None
+ 
+ try:
+     import plotly.express as px
+     import plotly.graph_objects as go
+     from plotly.subplots import make_subplots
+     PLOTLY_AVAILABLE = True
+ except ImportError:
+     PLOTLY_AVAILABLE = False
+     px = go = make_subplots = None
+ 
+ try:
+     import pandas as pd
+     PANDAS_AVAILABLE = True
+ except ImportError:
+     PANDAS_AVAILABLE = False
+     pd = None
+ 
+ # Local imports
+ try:
+     from streamlit_extension.utils.database import DatabaseManager
+     from streamlit_extension.utils.security import (
+         create_safe_client, sanitize_display, validate_form, check_rate_limit,
+         security_manager
+     )
+-    from streamlit_extension.config import load_config
++from streamlit_extension.config import load_config
+     DATABASE_UTILS_AVAILABLE = True
+ except ImportError:
+     DatabaseManager = load_config = None
+     create_safe_client = sanitize_display = validate_form = None
+     check_rate_limit = security_manager = None
+     DATABASE_UTILS_AVAILABLE = False
+ 
+ try:
+     from tdah_tools.analytics_engine import AnalyticsEngine, TDDAHAnalytics
+     ANALYTICS_ENGINE_AVAILABLE = True
+ except ImportError:
+     AnalyticsEngine = TDDAHAnalytics = None
+     ANALYTICS_ENGINE_AVAILABLE = False
+ 
+ # Performance optimization imports
+ try:
+     import functools
+     import hashlib
+     PERFORMANCE_UTILS_AVAILABLE = True
+ except ImportError:
+     functools = hashlib = None
+     PERFORMANCE_UTILS_AVAILABLE = False
+ 
+ 
++# Authentication
++from streamlit_extension.auth import require_auth
 +
-+    monkeypatch.setattr(ComponentChecker, "check_memory_usage", degraded_memory, raising=False)
-+    endpoint = HealthCheckEndpoint()
-+    data = endpoint.detailed_health()
-+    assert data["status"] == HealthStatus.DEGRADED.value
-diff --git a/tests/test_monitoring.py b/tests/test_monitoring.py
-new file mode 100644
-index 0000000000000000000000000000000000000000..2658d528c5bb03a4f7d28f74de0dfead746083c5
---- /dev/null
-+++ b/tests/test_monitoring.py
-@@ -0,0 +1,42 @@
-+import sys
-+from pathlib import Path
-+import importlib.util
+ # Performance optimization functions
+ class AnalyticsCache:
+     """Simple in-memory cache for analytics data with TTL support."""
+ 
+     def __init__(self):
+         self.cache = {}
+         self.cache_timestamps = {}
+         self.default_ttl = 300  # 5 minutes
+ 
+     def get_cache_key(self, *args, **kwargs):
+         """Generate a cache key from arguments."""
+         if not PERFORMANCE_UTILS_AVAILABLE:
+             return None
+ 
+         key_data = str(args) + str(sorted(kwargs.items()))
+         return hashlib.sha256(key_data.encode()).hexdigest()
+ 
+     def get(self, key, ttl=None):
+         """Get cached data if still valid."""
+         if not key or key not in self.cache:
+             return None
+ 
+         ttl = ttl or self.default_ttl
+         cache_time = self.cache_timestamps.get(key, 0)
+ 
+@@ -213,50 +216,51 @@ def optimize_database_queries(db_manager: DatabaseManager, days: int, filters: D
+             task_query_filters = {}
+             if filters:
+                 if filters.get("selected_epics"):
+                     task_query_filters["epic_names"] = filters["selected_epics"]
+ 
+                 if filters.get("selected_tdd_phases"):
+                     task_query_filters["tdd_phases"] = filters["selected_tdd_phases"]
+ 
+             query_results["tasks"] = db_manager.get_tasks()
+             query_results["epics"] = db_manager.get_epics()
+             query_results["user_stats"] = db_manager.get_user_stats()
+ 
+         return query_results
+ 
+     except Exception as e:
+         st.error(f"Database query optimization failed: {e}")
+         # Fallback to individual queries
+         return {
+             "timer_sessions": db_manager.get_timer_sessions(days),
+             "tasks": db_manager.get_tasks(),
+             "epics": db_manager.get_epics(),
+             "user_stats": db_manager.get_user_stats()
+         }
+ 
+ 
++@require_auth()
+ def render_analytics_page():
+     """Render the analytics dashboard page."""
+     if not STREAMLIT_AVAILABLE:
+         return {"error": "Streamlit not available"}
+ 
+     # Check rate limit for page load
+     page_rate_allowed, page_rate_error = check_rate_limit("page_load") if check_rate_limit else (True, None)
+     if not page_rate_allowed:
+         st.error(f"🚦 {page_rate_error}")
+         st.info("Please wait before reloading the page.")
+         return {"error": "Rate limited"}
+ 
+     st.title("📊 Analytics Dashboard")
+     st.markdown("---")
+ 
+     # Check if required dependencies are available
+     missing_deps = []
+     if not PLOTLY_AVAILABLE:
+         missing_deps.append("plotly")
+     if not PANDAS_AVAILABLE:
+         missing_deps.append("pandas")
+     if not DATABASE_UTILS_AVAILABLE:
+         missing_deps.append("database utilities")
+ 
+     if missing_deps:
+diff --git a/streamlit_extension/pages/clients.py b/streamlit_extension/pages/clients.py
+index bb89b60ddb0f8779b79adb8a8173acde7b80d3d5..6a6e739fcc4e7a2bef1b41c8fc4425b1eb4215e4 100644
+--- a/streamlit_extension/pages/clients.py
++++ b/streamlit_extension/pages/clients.py
+@@ -28,57 +28,51 @@ except ImportError:
+ # Local imports
+ try:
+     from streamlit_extension.utils.database import DatabaseManager
+     from streamlit_extension.utils.validators import validate_client_data, validate_email_uniqueness, validate_client_key_uniqueness
+     from streamlit_extension.utils.security import (
+         create_safe_client, sanitize_display, validate_form, check_rate_limit,
+         security_manager
+     )
+     from streamlit_extension.config import load_config
+     from streamlit_extension.config.constants import (
+         GeneralStatus, ClientTier, CompanySize, UIConstants, FormFields
+     )
+     DATABASE_UTILS_AVAILABLE = True
+ except ImportError:
+     DATABASE_UTILS_AVAILABLE = False
+     DatabaseManager = validate_client_data = load_config = None
+     create_safe_client = sanitize_display = validate_form = None
+     GeneralStatus = ClientTier = CompanySize = UIConstants = FormFields = None
+ 
+ from streamlit_extension.utils.exception_handler import (
+     handle_streamlit_exceptions,
+     streamlit_error_boundary,
+     safe_streamlit_operation,
+     get_error_statistics,
+ )
+-
+-try:
+-    from streamlit_extension.utils.auth import require_authentication
+-except ImportError:
+-    # Fallback if auth module not available
+-    def require_authentication(func):
+-        return func
++from streamlit_extension.auth import require_auth
+ 
+ 
+ def render_client_card(client: Dict[str, Any], db_manager: DatabaseManager):
+     """Render an individual client card."""
+     if not STREAMLIT_AVAILABLE:
+         return
+     
+     with st.container():
+         # Card header with status indicator
+         status_colors = {
+             GeneralStatus.ACTIVE.value if GeneralStatus else "active": "🟢",
+             GeneralStatus.INACTIVE.value if GeneralStatus else "inactive": "🟡", 
+             GeneralStatus.SUSPENDED.value if GeneralStatus else "suspended": "🔴",
+             GeneralStatus.ARCHIVED.value if GeneralStatus else "archived": "⚫"
+         }
+         status_emoji = status_colors.get(client.get("status", "active"), "⚪")
+         
+         col1, col2, col3 = st.columns([3, 1, 1])
+         
+         with col1:
+             st.markdown(f"### {status_emoji} {client['name']}")
+             st.caption(f"**Key:** {client.get('client_key', 'N/A')} | **Tier:** {client.get('client_tier', 'standard').title()}")
+         
+         with col2:
+             if st.button("✏️ Edit", key=f"edit_client_{client['id']}", use_container_width=True):
+@@ -417,52 +411,52 @@ def render_create_client_form(db_manager: DatabaseManager):
+                         
+                         # Create client
+                         client_id = db_manager.create_client(
+                             client_key=client_key,
+                             name=name,
+                             description=description,
+                             industry=industry,
+                             company_size=company_size,
+                             primary_contact_name=primary_contact_name,
+                             primary_contact_email=primary_contact_email,
+                             status=status,
+                             client_tier=client_tier,
+                             hourly_rate=hourly_rate
+                         )
+                         
+                         if client_id:
+                             st.success("✅ Client created successfully!")
+                             st.rerun()
+                         else:
+                             st.error("❌ Failed to create client")
+                 else:
+                     for error in errors:
+                         st.error(f"❌ {error}")
+ 
+ 
+-@require_authentication
+ @handle_streamlit_exceptions(show_error=True, attempt_recovery=True)
++@require_auth()
+ def render_clients_page():
+     """Render the main clients management page."""
+     if not STREAMLIT_AVAILABLE:
+         return {"error": "Streamlit not available"}
+     
+     if not DATABASE_UTILS_AVAILABLE:
+         st.error("❌ Database utilities not available")
+         return {"error": "Database utilities not available"}
+     
+     # Check rate limit for page load
+     page_rate_allowed, page_rate_error = check_rate_limit("page_load") if check_rate_limit else (True, None)
+     if not page_rate_allowed:
+         st.error(f"🚦 {page_rate_error}")
+         st.info("Please wait before reloading the page.")
+         return {"error": "Rate limited"}
+     
+     st.title("👥 Client Management")
+     st.markdown("Manage your clients, contacts, and business relationships")
+     st.markdown("---")
+     
+     # Initialize database manager
+     with streamlit_error_boundary("database_initialization"):
+         config = safe_streamlit_operation(
+             load_config,
+             default_return=None,
+diff --git a/streamlit_extension/pages/gantt.py b/streamlit_extension/pages/gantt.py
+index f802db10e182265d8b3f082dfe4374faf402d7fe..9f426ba02e96224be49d4cb816f81b69961cb6a0 100644
+--- a/streamlit_extension/pages/gantt.py
++++ b/streamlit_extension/pages/gantt.py
+@@ -49,52 +49,55 @@ try:
+     from streamlit_extension.utils.security import (
+         create_safe_client, sanitize_display, validate_form, check_rate_limit,
+         security_manager
+     )
+     DATABASE_UTILS_AVAILABLE = True
+ except ImportError:
+     DatabaseManager = load_config = None
+     create_safe_client = sanitize_display = validate_form = None
+     check_rate_limit = security_manager = None
+     DATABASE_UTILS_AVAILABLE = False
+ 
+ try:
+     from gantt_tracker import GanttTracker
+     GANTT_TRACKER_AVAILABLE = True
+ except ImportError:
+     GanttTracker = None
+     GANTT_TRACKER_AVAILABLE = False
+ 
+ from streamlit_extension.utils.exception_handler import (
+     handle_streamlit_exceptions,
+     streamlit_error_boundary,
+     safe_streamlit_operation,
+     get_error_statistics,
+ )
+ 
++from streamlit_extension.auth import require_auth
 +
-+ROOT = Path(__file__).resolve().parents[1]
-+module_path = ROOT / "streamlit_extension" / "utils" / "monitoring.py"
-+spec = importlib.util.spec_from_file_location("streamlit_extension.utils.monitoring", module_path)
-+monitoring = importlib.util.module_from_spec(spec)
-+sys.modules[spec.name] = monitoring
-+spec.loader.exec_module(monitoring)
-+SystemMonitor = monitoring.SystemMonitor
-+MetricsCollector = monitoring.MetricsCollector
-+AlertManager = monitoring.AlertManager
+ 
+ @handle_streamlit_exceptions(show_error=True, attempt_recovery=True)
++@require_auth()
+ def render_gantt_page():
+     """Render the Gantt chart page."""
+     if not STREAMLIT_AVAILABLE:
+         return {"error": "Streamlit not available"}
+     
+     # Check rate limit for page load
+     page_rate_allowed, page_rate_error = check_rate_limit("page_load") if check_rate_limit else (True, None)
+     if not page_rate_allowed:
+         st.error(f"🚦 {page_rate_error}")
+         st.info("Please wait before reloading the page.")
+         return {"error": "Rate limited"}
+     
+     st.title("📊 Gantt Chart - Project Timeline")
+     st.markdown("---")
+     
+     # Check dependencies
+     missing_deps = []
+     if not PLOTLY_AVAILABLE:
+         missing_deps.append("plotly")
+     if not DATABASE_UTILS_AVAILABLE:
+         missing_deps.append("database utilities")
+     
+     if missing_deps:
+         st.error(f"❌ Missing dependencies: {', '.join(missing_deps)}")
+         st.info("Install with: `pip install plotly`")
+diff --git a/streamlit_extension/pages/health.py b/streamlit_extension/pages/health.py
+index 3a7ce60fe99f0dd5e8d35ba8d7728e7c87ba4c7a..8511a057b5a31b35d5a5c4af6c7c841aeedee523 100644
+--- a/streamlit_extension/pages/health.py
++++ b/streamlit_extension/pages/health.py
+@@ -1,43 +1,46 @@
+ """
+ 🏥 Health Check Endpoint Page
+ 
+ Provides:
+ - REST-like health endpoint for orchestration
+ - Detailed health dashboard for administrators
+ - Real-time component monitoring
+ - Health history and trends
+ """
+ 
+ from __future__ import annotations
+ 
+ from typing import Dict
+ 
+ from streamlit_extension.utils.health_check import HealthChecker
++from streamlit_extension.auth import require_auth
+ 
+ _health_checker = HealthChecker()
+ 
+ 
+ def get_health_json() -> Dict[str, object]:
+     """Return JSON health status for API consumption."""
+ 
+     return _health_checker.get_health_endpoint_response()
+ 
+ 
++@require_auth()
+ def render_health_endpoint() -> None:  # pragma: no cover - requires streamlit
+     """Render health check endpoint for monitoring tools."""
+ 
+     import streamlit as st
+ 
+     st.json(get_health_json())
+ 
+ 
++@require_auth()
+ def render_health_dashboard() -> None:  # pragma: no cover - requires streamlit
+     """Render detailed health dashboard for administrators."""
+ 
+     import streamlit as st
+ 
+     st.title("Health Dashboard")
+     data = get_health_json()
+     for component in data["components"]:
+         st.subheader(component["name"])
+         st.write(component)
+diff --git a/streamlit_extension/pages/kanban.py b/streamlit_extension/pages/kanban.py
+index cc80a82861c4b7fa8a6bff3b0cc9f051ed0351f9..e6bb7b6d34783bcd94b4528a6970f3eba45a295d 100644
+--- a/streamlit_extension/pages/kanban.py
++++ b/streamlit_extension/pages/kanban.py
+@@ -27,52 +27,55 @@ except ImportError:
+ 
+ # Local imports
+ try:
+     from streamlit_extension.utils.database import DatabaseManager
+     from streamlit_extension.utils.security import (
+         security_manager, validate_form, check_rate_limit, sanitize_display
+     )
+     from streamlit_extension.config import load_config
+     from streamlit_extension.config.constants import (
+         TaskStatus, TDDPhase, Priority, UIConstants
+     )
+     DATABASE_UTILS_AVAILABLE = True
+ except ImportError:
+     DatabaseManager = load_config = security_manager = None
+     validate_form = check_rate_limit = sanitize_display = None
+     TaskStatus = TDDPhase = Priority = UIConstants = None
+     DATABASE_UTILS_AVAILABLE = False
+ 
+ from streamlit_extension.utils.exception_handler import (
+     handle_streamlit_exceptions,
+     streamlit_error_boundary,
+     safe_streamlit_operation,
+     get_error_statistics,
+ )
+ 
++from streamlit_extension.auth import require_auth
 +
+ 
+ @handle_streamlit_exceptions(show_error=True, attempt_recovery=True)
++@require_auth()
+ def render_kanban_page():
+     """Render the Kanban board page."""
+     if not STREAMLIT_AVAILABLE:
+         return {"error": "Streamlit not available"}
+     
+     # Page load rate limiting
+     page_rate_allowed, page_rate_error = check_rate_limit("page_load") if check_rate_limit else (True, None)
+     if not page_rate_allowed:
+         st.error(f"🚦 {page_rate_error}")
+         st.info("Please wait before reloading the page.")
+         return {"error": "Rate limited"}
+     
+     st.title(UIConstants.KANBAN_PAGE_TITLE if UIConstants else "📋 Kanban Board")
+     st.markdown("---")
+     
+     # Initialize database manager
+     if not DATABASE_UTILS_AVAILABLE:
+         st.error("❌ Database utilities not available")
+         return
+     
+     with streamlit_error_boundary("database_initialization"):
+         config = safe_streamlit_operation(
+             load_config,
+             default_return=None,
+             operation_name="load_config",
+diff --git a/streamlit_extension/pages/performance.py b/streamlit_extension/pages/performance.py
+index 60e37c98075da99b82e8d2cff9d84aba3b1b18d5..722efa44b56b03f08cf210d4b66b5769b8f3eda8 100644
+--- a/streamlit_extension/pages/performance.py
++++ b/streamlit_extension/pages/performance.py
+@@ -8,76 +8,78 @@ Streamlit interface for the performance testing system:
+ - Performance report generation
+ - System metrics visualization
+ """
+ 
+ import streamlit as st
+ import plotly.graph_objects as go
+ import plotly.express as px
+ import pandas as pd
+ import time
+ import json
+ from datetime import datetime, timedelta
+ from pathlib import Path
+ import threading
+ 
+ from streamlit_extension.utils.performance_tester import (
+     PerformanceProfiler,
+     DatabasePerformanceTester,
+     LoadTester,
+     PerformanceMonitor,
+     PerformanceReporter,
+     LoadTestConfig,
+     run_quick_performance_check,
+     create_performance_test_suite
+ )
+ from streamlit_extension.utils.database import DatabaseManager
++from streamlit_extension.auth import require_auth
+ 
+ 
+ # Page configuration
+ st.set_page_config(
+     page_title="Performance Testing Dashboard",
+     page_icon="🚀",
+     layout="wide",
+     initial_sidebar_state="expanded"
+ )
+ 
+ 
+ def initialize_performance_components():
+     """Initialize performance testing components."""
+     if 'db_manager' not in st.session_state:
+         st.session_state.db_manager = DatabaseManager("framework.db", "task_timer.db")
+     
+     if 'performance_monitor' not in st.session_state:
+         st.session_state.performance_monitor = PerformanceMonitor()
+     
+     if 'performance_history' not in st.session_state:
+         st.session_state.performance_history = []
+     
+     if 'monitoring_active' not in st.session_state:
+         st.session_state.monitoring_active = False
+ 
+ 
++@require_auth()
+ def render_performance_dashboard():
+     """Render main performance dashboard."""
+     st.title("🚀 Performance Testing Dashboard")
+     st.markdown("Monitor system performance, run load tests, and analyze bottlenecks")
+     
+     # Sidebar controls
+     render_sidebar_controls()
+     
+     # Main content tabs
+     tab1, tab2, tab3, tab4, tab5 = st.tabs([
+         "📊 Real-time Monitoring",
+         "⚡ Load Testing", 
+         "🗄️ Database Performance",
+         "📈 Performance Analytics",
+         "📋 Reports"
+     ])
+     
+     with tab1:
+         render_realtime_monitoring()
+     
+     with tab2:
+         render_load_testing()
+     
+     with tab3:
+         render_database_performance()
+diff --git a/streamlit_extension/pages/projects.py b/streamlit_extension/pages/projects.py
+index b972e85a1725b23b4253e032294f0191454fb3e2..76aff03a24e3930f2c69dcfb3760d39a9e43c908 100644
+--- a/streamlit_extension/pages/projects.py
++++ b/streamlit_extension/pages/projects.py
+@@ -18,50 +18,52 @@ from datetime import datetime, date
+ sys.path.append(str(Path(__file__).parent.parent.parent))
+ 
+ # Graceful imports
+ try:
+     import streamlit as st
+     STREAMLIT_AVAILABLE = True
+ except ImportError:
+     STREAMLIT_AVAILABLE = False
+     st = None
+ 
+ # Local imports
+ try:
+     from streamlit_extension.utils.database import DatabaseManager
+     from streamlit_extension.utils.validators import validate_project_data, validate_project_key_uniqueness
+     from streamlit_extension.utils.security import (
+         create_safe_project, sanitize_display, validate_form, check_rate_limit,
+         security_manager
+     )
+     from streamlit_extension.config import load_config
+     DATABASE_UTILS_AVAILABLE = True
+ except ImportError:
+     DATABASE_UTILS_AVAILABLE = False
+     DatabaseManager = validate_project_data = load_config = None
+     create_safe_project = sanitize_display = validate_form = None
+ 
++from streamlit_extension.auth import require_auth
 +
-+def test_metrics_collection():
-+    monitor = SystemMonitor()
-+    metrics = monitor.collect_metrics()
-+    assert set(["cpu_usage", "memory_usage", "disk_usage"]).issubset(metrics.keys())
+ 
+ def render_project_card(project: Dict[str, Any], db_manager: DatabaseManager, clients_map: Dict[int, str]):
+     """Render an individual project card."""
+     if not STREAMLIT_AVAILABLE:
+         return
+     
+     with st.container():
+         # Card header with status indicator
+         status_colors = {
+             "planning": "🟡",
+             "in_progress": "🟢", 
+             "completed": "✅",
+             "on_hold": "⏸️",
+             "cancelled": "🔴"
+         }
+         status_emoji = status_colors.get(project.get("status", "planning"), "⚪")
+         
+         col1, col2, col3 = st.columns([3, 1, 1])
+         
+         with col1:
+             client_name = clients_map.get(project.get('client_id'), 'Unknown Client')
+             st.markdown(f"### {status_emoji} {project['name']}")
+             st.caption(f"**Client:** {client_name} | **Key:** {project.get('project_key', 'N/A')}")
+         
+         with col2:
+@@ -463,50 +465,51 @@ def render_create_project_form(db_manager: DatabaseManager, clients_map: Dict[in
+                             methodology=methodology
+                         )
+                         
+                         if project_id:
+                             # Update additional fields
+                             additional_fields = {
+                                 'planned_start_date': planned_start_date.isoformat(),
+                                 'planned_end_date': planned_end_date.isoformat(),
+                                 'budget_amount': budget_amount,
+                                 'budget_currency': budget_currency,
+                                 'estimated_hours': estimated_hours,
+                                 'status': status,
+                                 'health_status': health_status
+                             }
+                             db_manager.update_project(project_id, **additional_fields)
+                             
+                             st.success("✅ Project created successfully!")
+                             st.rerun()
+                         else:
+                             st.error("❌ Failed to create project")
+                 else:
+                     for error in errors:
+                         st.error(f"❌ {error}")
+ 
+ 
++@require_auth()
+ def render_projects_page():
+     """Render the main projects management page."""
+     if not STREAMLIT_AVAILABLE:
+         return {"error": "Streamlit not available"}
+     
+     if not DATABASE_UTILS_AVAILABLE:
+         st.error("❌ Database utilities not available")
+         return {"error": "Database utilities not available"}
+     
+     # Check rate limit for page load
+     page_rate_allowed, page_rate_error = check_rate_limit("page_load") if check_rate_limit else (True, None)
+     if not page_rate_allowed:
+         st.error(f"🚦 {page_rate_error}")
+         st.info("Please wait before reloading the page.")
+         return {"error": "Rate limited"}
+     
+     st.title("📁 Project Management")
+     st.markdown("Manage your projects, timelines, and deliverables")
+     st.markdown("---")
+     
+     # Initialize database manager
+     try:
+         config = load_config()
+         db_manager = DatabaseManager(
+             framework_db_path=str(config.get_database_path()),
+diff --git a/streamlit_extension/pages/settings.py b/streamlit_extension/pages/settings.py
+index 84f8df1be7adeb29f62c23bc68d8c15591e21a5f..06da2aa2db1acc7ec5f015041c36e8dc76a513e0 100644
+--- a/streamlit_extension/pages/settings.py
++++ b/streamlit_extension/pages/settings.py
+@@ -26,52 +26,55 @@ except ImportError:
+     st = None
+ 
+ # Local imports
+ try:
+     from streamlit_extension.utils.database import DatabaseManager
+     from streamlit_extension.config import load_config, create_streamlit_config_file
+     from streamlit_extension.utils.security import (
+         create_safe_client, sanitize_display, validate_form, check_rate_limit,
+         security_manager
+     )
+     from streamlit_extension.config.streamlit_config import reload_config
+     DATABASE_UTILS_AVAILABLE = True
+ except ImportError:
+     DatabaseManager = load_config = create_streamlit_config_file = reload_config = None
+     create_safe_client = sanitize_display = validate_form = None
+     check_rate_limit = security_manager = None
+     DATABASE_UTILS_AVAILABLE = False
+ 
+ from streamlit_extension.utils.exception_handler import (
+     handle_streamlit_exceptions,
+     streamlit_error_boundary,
+     safe_streamlit_operation,
+     get_error_statistics,
+ )
+ 
++from streamlit_extension.auth import require_auth
 +
+ 
+ @handle_streamlit_exceptions(show_error=True, attempt_recovery=True)
++@require_auth()
+ def render_settings_page():
+     """Render the settings configuration page."""
+     if not STREAMLIT_AVAILABLE:
+         return {"error": "Streamlit not available"}
+     
+     # Check rate limit for page load
+     page_rate_allowed, page_rate_error = check_rate_limit("page_load") if check_rate_limit else (True, None)
+     if not page_rate_allowed:
+         st.error(f"🚦 {page_rate_error}")
+         st.info("Please wait before reloading the page.")
+         return {"error": "Rate limited"}
+     
+     st.title("⚙️ Settings & Configuration")
+     st.markdown("---")
+     
+     if not DATABASE_UTILS_AVAILABLE:
+         st.error("❌ Configuration utilities not available")
+         return
+     
+     # Load current configuration
+     with streamlit_error_boundary("configuration_loading"):
+         config = safe_streamlit_operation(
+             load_config,
+             default_return=None,
+             operation_name="load_config",
+diff --git a/streamlit_extension/pages/timer.py b/streamlit_extension/pages/timer.py
+index b7f93be584c37608a46dc11526bc6d8844c3698e..eb4a594334a52882985f8f84b769ae2006b685e1 100644
+--- a/streamlit_extension/pages/timer.py
++++ b/streamlit_extension/pages/timer.py
+@@ -19,51 +19,54 @@ sys.path.append(str(Path(__file__).parent.parent.parent))
+ 
+ # Graceful imports
+ try:
+     import streamlit as st
+     STREAMLIT_AVAILABLE = True
+ except ImportError:
+     STREAMLIT_AVAILABLE = False
+     st = None
+ 
+ # Local imports
+ try:
+     from streamlit_extension.utils.database import DatabaseManager
+     from streamlit_extension.config import load_config
+     from streamlit_extension.components.timer import TimerComponent
+     from streamlit_extension.utils.security import (
+         create_safe_client, sanitize_display, validate_form, check_rate_limit,
+         security_manager
+     )
+     DATABASE_UTILS_AVAILABLE = True
+ except ImportError:
+     DatabaseManager = load_config = TimerComponent = None
+     create_safe_client = sanitize_display = validate_form = None
+     check_rate_limit = security_manager = None
+     DATABASE_UTILS_AVAILABLE = False
+ 
++from streamlit_extension.auth import require_auth
+ 
 +
-+def test_performance_monitoring():
-+    monitor = SystemMonitor()
-+    monitor.alert_manager.define_thresholds({"cpu_usage": 1000, "memory_usage": 1e9, "disk_usage": 1000})
-+    status = monitor.check_performance()
-+    assert status["cpu_usage"] == "healthy"
-+    assert status["memory_usage"] == "healthy"
++@require_auth()
+ def render_timer_page():
+     """Render the dedicated timer page."""
+     if not STREAMLIT_AVAILABLE:
+         return {"error": "Streamlit not available"}
+     
+     # Check rate limit for page load
+     page_rate_allowed, page_rate_error = check_rate_limit("page_load") if check_rate_limit else (True, None)
+     if not page_rate_allowed:
+         st.error(f"🚦 {page_rate_error}")
+         st.info("Please wait before reloading the page.")
+         return {"error": "Rate limited"}
+     
+     st.title("⏱️ Focus Timer - TDAH Edition")
+     st.markdown("---")
+     
+     if not DATABASE_UTILS_AVAILABLE:
+         st.error("❌ Database utilities not available")
+         return
+     
+     # Initialize components
+     try:
+         config = load_config()
+         db_manager = DatabaseManager(
+             framework_db_path=str(config.get_database_path()),
+             timer_db_path=str(config.get_timer_database_path())
+diff --git a/streamlit_extension/streamlit_app.py b/streamlit_extension/streamlit_app.py
+index 28a5f742dfa486bd1b28799781f0e1e59cb267af..90ad75d840a21adbea78bd9e0b9b2ae92615b1bb 100644
+--- a/streamlit_extension/streamlit_app.py
++++ b/streamlit_extension/streamlit_app.py
+@@ -52,51 +52,52 @@ if STREAMLIT_AVAILABLE:
+             # TDD Framework - Advanced Dashboard
+             
+             Interactive development environment for TDD workflow with:
+             - ⏱️ Focus timer with TDAH support
+             - 📋 Task management with Kanban
+             - 📊 Analytics and productivity tracking
+             - 🎮 Gamification system
+             - 🐙 GitHub integration
+             
+             **Version:** 1.2.1
+             **Phase:** Enhanced Dashboard
+             """
+         }
+     )
+ 
+ # Import components
+ try:
+     from streamlit_extension.components.sidebar import render_sidebar
+     from streamlit_extension.components.timer import TimerComponent
+     from streamlit_extension.components.dashboard_widgets import (
+         WelcomeHeader, DailyStats, ProductivityHeatmap,
+         ProgressRing, SparklineChart, AchievementCard,
+         NotificationToast, NotificationData, QuickActionButton
+     )
+     from streamlit_extension.utils.database import DatabaseManager
+-    from streamlit_extension.utils.auth import GoogleOAuthManager, require_authentication, render_user_menu, get_authenticated_user
++    from streamlit_extension.auth import auth_middleware, is_authenticated, get_current_user
++    from streamlit_extension.auth.login_page import render_login_page
+     from streamlit_extension.config import load_config, load_config
+     
+     # Import global exception handler
+     from streamlit_extension.utils.exception_handler import (
+         install_global_exception_handler, handle_streamlit_exceptions, 
+         streamlit_error_boundary, safe_streamlit_operation,
+         show_error_dashboard, get_error_statistics
+     )
+     EXCEPTION_HANDLER_AVAILABLE = True
+ except ImportError as e:
+     EXCEPTION_HANDLER_AVAILABLE = False
+     st.error(f"❌ Import Error: {e}")
+     st.error("Make sure to run from the project root directory")
+     st.stop()
+ 
+ 
+ @handle_streamlit_exceptions(show_error=True, attempt_recovery=True)
+ def initialize_session_state():
+     """Initialize Streamlit session state variables."""
+     
+     # Install global exception handler on first run
+     if EXCEPTION_HANDLER_AVAILABLE and "exception_handler_installed" not in st.session_state:
+         install_global_exception_handler()
+         st.session_state.exception_handler_installed = True
+     
+@@ -121,52 +122,52 @@ def initialize_session_state():
+     if "current_page" not in st.session_state:
+         st.session_state.current_page = "Dashboard"
+     
+     # User preferences
+     if "show_debug_info" not in st.session_state:
+         st.session_state.show_debug_info = st.session_state.config.debug_mode
+     
+     # Database health
+     if "db_health_check" not in st.session_state:
+         with streamlit_error_boundary("database_health_check"):
+             st.session_state.db_health_check = st.session_state.db_manager.check_database_health()
+     
+     # Dashboard preferences
+     if "dashboard_view_mode" not in st.session_state:
+         st.session_state.dashboard_view_mode = "default"
+     
+     # Notifications
+     if "notifications_shown" not in st.session_state:
+         st.session_state.notifications_shown = set()
+ 
+ 
+ def render_enhanced_header():
+     """Render the enhanced main application header with welcome message and quick stats."""
+     
+     # Get authenticated user for personalized greeting
+-    user = get_authenticated_user()
+-    username = user.get('name', 'Developer') if user else 'Developer'
++    user = get_current_user()
++    username = user.username if user else 'Developer'
+     
+     # Welcome header with dynamic greeting
+     WelcomeHeader.render(username=username)
+     
+     # Daily statistics bar
+     db_manager = st.session_state.db_manager
+     daily_stats = db_manager.get_daily_summary()
+     DailyStats.render(daily_stats)
+     
+     # Separator
+     st.markdown("---")
+ 
+ 
+ def render_productivity_overview():
+     """Render productivity overview section with heatmap and metrics."""
+     
+     st.markdown("## 📊 Productivity Overview")
+     
+     db_manager = st.session_state.db_manager
+     productivity_stats = db_manager.get_productivity_stats(days=7)
+     
+     # Create three columns for productivity metrics
+     col1, col2, col3 = st.columns([2, 1, 1])
+     
+     with col1:
+@@ -677,110 +678,91 @@ def render_debug_panel():
+         
+         st.markdown("#### Database Health")
+         st.json(st.session_state.db_health_check)
+         
+         st.markdown("#### Session State Keys")
+         st.write(list(st.session_state.keys()))
+         
+         st.markdown("#### Cache Statistics")
+         with streamlit_error_boundary("cache_stats"):
+             cache_stats = safe_streamlit_operation(
+                 st.session_state.db_manager.get_cache_stats,
+                 default_return={"error": "Unable to retrieve cache stats"},
+                 operation_name="get_cache_stats"
+             )
+             st.json(cache_stats)
+         
+         # Error monitoring dashboard
+         if EXCEPTION_HANDLER_AVAILABLE:
+             st.markdown("#### Error Monitoring")
+             show_error_dashboard()
+ 
+ 
+ @handle_streamlit_exceptions(show_error=True, attempt_recovery=True)
+ def main():
+     """Main application entry point with centralized authentication gateway."""
+-    
 +
++    # Authentication middleware
++    current_user = auth_middleware()
++    if not is_authenticated():
++        render_login_page()
++        return
 +
-+def test_alert_generation():
-+    collector = MetricsCollector()
-+    monitor = SystemMonitor(collector=collector, alert_manager=AlertManager())
-+    monitor.alert_manager.define_thresholds({"cpu_usage": 0})
-+    alerts = monitor.generate_alerts()
-+    assert alerts
-+    assert monitor.alert_manager.notifications == alerts
++    if current_user and current_user.is_admin:
++        pass
 +
+     # Check if running in headless mode
+     if not STREAMLIT_AVAILABLE:
+         print("📊 Dashboard functions available for testing")
+         print("Run 'streamlit run streamlit_app.py' for full UI")
+         return
+-    
 +
-+def test_metrics_export():
-+    monitor = SystemMonitor()
-+    export = monitor.export_metrics()
-+    assert "cpu_usage" in export
+     # Initialize session state with error boundary
+     with streamlit_error_boundary("session_initialization"):
+         initialize_session_state()
+     
+-    # Initialize authentication manager
+-    with streamlit_error_boundary("authentication_initialization"):
+-        auth_manager = safe_streamlit_operation(
+-            GoogleOAuthManager,
+-            default_return=None,
+-            operation_name="auth_manager_init"
+-        )
+-        
+-        if auth_manager is None:
+-            st.error("❌ Authentication initialization failed")
+-            st.stop()
+-    
+-    # 🔐 CENTRALIZED AUTHENTICATION GATEWAY
+-    # Check authentication status - if not authenticated, show login page
+-    if not auth_manager.is_authenticated():
+-        render_landing_login_page(auth_manager)
+-        return
+-    
+-    # ✅ USER IS AUTHENTICATED - Proceed with full application
+-    
+     # Check database connectivity
+     with streamlit_error_boundary("database_health_validation"):
+         health = st.session_state.db_health_check
+         if not health.get("framework_db_connected", False):
+             st.error("❌ **Database Connection Error**")
+             st.error("Cannot connect to framework.db. Please check:")
+             st.code("python database_maintenance.py health")
+             
+             with st.expander("🔧 Database Health Details"):
+                 st.json(health)
+             
+             st.stop()
+     
+     # Render sidebar
+     with streamlit_error_boundary("sidebar_rendering"):
+         sidebar_state = safe_streamlit_operation(
+             render_sidebar,
+             default_return={},
+             operation_name="render_sidebar"
+         )
+     
+-    # Render user menu in sidebar
+-    with streamlit_error_boundary("user_menu_rendering"):
+-        safe_streamlit_operation(
+-            render_user_menu,
+-            auth_manager,
+-            operation_name="render_user_menu"
+-        )
+-    
+     # Page navigation logic
+     current_page = st.session_state.get("current_page", "Dashboard")
+     
+     # Import page registry and functions
+     with streamlit_error_boundary("page_system_loading"):
+         try:
+             from streamlit_extension.pages import PAGE_REGISTRY, render_page
+             
+             # Render the appropriate page
+             if current_page == "Dashboard" or current_page not in PAGE_REGISTRY:
+                 # Render main dashboard
+                 with streamlit_error_boundary("main_dashboard_rendering"):
+                     render_main_dashboard()
+             else:
+                 # Render selected page
+                 with streamlit_error_boundary(f"page_rendering_{current_page}"):
+                     page_result = safe_streamlit_operation(
+                         render_page,
+                         current_page,
+                         default_return={"error": "Page rendering failed"},
+                         operation_name=f"render_page_{current_page}"
+                     )
+                     
+                     if page_result and "error" in page_result:
+                         st.error(f"❌ Error loading page: {page_result['error']}")
  
 EOF
 )

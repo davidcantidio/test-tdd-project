@@ -21,6 +21,10 @@
 - [🏗️ DRY Components Issues](#-dry-components-issues)
 - [🔒 Security and Validation Issues](#-security-and-validation-issues)
 - [🏗️ Service Layer Issues](#-service-layer-issues)
+- [🔐 Authentication System Issues](#-authentication-system-issues)
+- [🛡️ Security Stack Issues](#-security-stack-issues)
+- [🌍 Environment Configuration Issues](#-environment-configuration-issues)
+- [🏥 Health Monitoring Issues](#-health-monitoring-issues)
 - [📞 Getting Additional Help](#-getting-additional-help)
 
 ## 🚨 **Common Setup Issues**
@@ -1261,6 +1265,683 @@ print(f'Database: {'✅ Connected' if db_health else '❌ Connection failed'}')
 # 2. Service initialization
 # 3. Configuration validation
 # 4. Dependency availability
+```
+
+## 🔐 **Authentication System Issues**
+
+### **❌ Authentication Import Errors**
+
+**Error:**
+```
+ImportError: No module named 'streamlit_extension.auth'
+```
+
+**Solution:**
+```bash
+# Check if auth module exists
+ls -la streamlit_extension/auth/
+
+# Verify all auth files are present
+ls streamlit_extension/auth/
+# Should show: __init__.py, auth_manager.py, login_page.py, middleware.py, session_handler.py, user_model.py
+
+# Test auth module import
+python -c "
+from streamlit_extension.auth import AuthManager
+print('AuthManager imported successfully')
+"
+```
+
+### **❌ Database Tables Not Created**
+
+**Error:**
+```
+sqlite3.OperationalError: no such table: auth_users
+```
+
+**Solution:**
+```bash
+# Initialize authentication database tables
+python -c "
+from streamlit_extension.auth.auth_manager import AuthManager
+auth_manager = AuthManager()
+print('Authentication tables created successfully')
+"
+
+# Verify tables exist
+sqlite3 framework.db ".tables" | grep auth
+
+# Check table structure
+sqlite3 framework.db ".schema auth_users"
+```
+
+### **❌ User Registration Fails**
+
+**Error:**
+```
+Registration failed: Username or email already exists
+```
+
+**Solution:**
+```bash
+# Check existing users
+sqlite3 framework.db "SELECT username, email FROM auth_users;"
+
+# Clear test users if needed (development only)
+sqlite3 framework.db "DELETE FROM auth_users WHERE username LIKE 'test%';"
+
+# Test registration with unique credentials
+python -c "
+from streamlit_extension.auth.auth_manager import AuthManager
+auth = AuthManager()
+result = auth.register_user('test_user_$(date +%s)', 'test$(date +%s)@example.com', 'testpassword123')
+print('Registration result:', result.success, result.message)
+"
+```
+
+### **❌ Login Session Issues**
+
+**Error:**
+```
+Session expired or invalid
+```
+
+**Solution:**
+```bash
+# Check session handler configuration
+python -c "
+from streamlit_extension.auth.session_handler import SessionHandler
+handler = SessionHandler()
+print('Session handler initialized')
+
+# Check active sessions
+sessions = handler.get_active_sessions()
+print('Active sessions:', len(sessions))
+"
+
+# Clear expired sessions manually
+python -c "
+from streamlit_extension.auth.session_handler import SessionHandler
+handler = SessionHandler()
+cleaned = handler.cleanup_expired_sessions()
+print('Cleaned expired sessions:', cleaned)
+"
+```
+
+### **❌ Account Lockout Issues**
+
+**Error:**
+```
+Account temporarily locked
+```
+
+**Solution:**
+```bash
+# Check lockout status
+sqlite3 framework.db "
+SELECT username, failed_login_attempts, locked_until 
+FROM auth_users 
+WHERE locked_until IS NOT NULL;
+"
+
+# Reset account lockout (development only)
+sqlite3 framework.db "
+UPDATE auth_users 
+SET failed_login_attempts = 0, locked_until = NULL 
+WHERE username = 'your_username';
+"
+
+# Test account unlock
+python -c "
+from streamlit_extension.auth.auth_manager import AuthManager
+auth = AuthManager()
+result = auth.authenticate('your_username', 'your_password')
+print('Login result:', result.success, result.message)
+"
+```
+
+### **❌ Authentication Middleware Not Working**
+
+**Error:**
+```
+@require_auth() decorator not blocking access
+```
+
+**Solution:**
+```bash
+# Check if @require_auth() is applied correctly
+grep -r "@require_auth" streamlit_extension/pages/
+
+# Verify middleware import
+python -c "
+from streamlit_extension.auth.middleware import require_auth
+print('Middleware imported successfully')
+"
+
+# Test authentication check
+python -c "
+from streamlit_extension.auth import is_authenticated
+print('Auth check function available:', callable(is_authenticated))
+"
+
+# Check Streamlit session state integration
+# In Streamlit app, verify:
+# st.session_state should contain auth-related keys when logged in
+```
+
+## 🛡️ **Security Stack Issues**
+
+### **❌ Security Manager Import Errors**
+
+**Error:**
+```
+ImportError: No module named 'streamlit_extension.utils.security'
+```
+
+**Solution:**
+```bash
+# Check if security module exists
+ls -la streamlit_extension/utils/security.py
+
+# Test security manager import
+python -c "
+from streamlit_extension.utils.security import security_manager
+print('Security manager imported:', security_manager is not None)
+"
+
+# Check security features availability
+python -c "
+from streamlit_extension.utils.security import (
+    sanitize_input, validate_form, check_rate_limit, 
+    create_safe_client, create_safe_project
+)
+print('Security functions imported successfully')
+"
+```
+
+### **❌ CSRF Token Generation Fails**
+
+**Error:**
+```
+AttributeError: 'NoneType' object has no attribute 'generate_csrf_token'
+```
+
+**Solution:**
+```bash
+# Test CSRF token generation
+python -c "
+from streamlit_extension.utils.security import security_manager
+token = security_manager.generate_csrf_token('test_form')
+print('CSRF token generated:', len(token) > 0)
+print('Token preview:', token[:16] + '...')
+"
+
+# Test CSRF validation
+python -c "
+from streamlit_extension.utils.security import security_manager
+token = security_manager.generate_csrf_token('test_form')
+valid = security_manager.validate_csrf_token('test_form', token)
+print('CSRF validation result:', valid)
+"
+
+# Check Streamlit session state for CSRF tokens
+# In Streamlit: st.session_state should contain csrf_token_[form_id] keys
+```
+
+### **❌ XSS Sanitization Not Working**
+
+**Error:**
+```
+Dangerous content not being sanitized
+```
+
+**Solution:**
+```bash
+# Test XSS sanitization
+python -c "
+from streamlit_extension.utils.security import sanitize_input
+test_input = '<script>alert(\"XSS\")</script>Hello World'
+sanitized = sanitize_input(test_input)
+print('Original:', test_input)
+print('Sanitized:', sanitized)
+print('Script removed:', '<script>' not in sanitized)
+"
+
+# Test HTML entity encoding
+python -c "
+from streamlit_extension.utils.security import sanitize_display
+dangerous_text = '<img src=x onerror=alert(1)>Test'
+safe_text = sanitize_display(dangerous_text)
+print('Dangerous text sanitized:', '<' not in safe_text or '&lt;' in safe_text)
+"
+```
+
+### **❌ Rate Limiting Not Functioning**
+
+**Error:**
+```
+Rate limiting allows unlimited requests
+```
+
+**Solution:**
+```bash
+# Test rate limiting functionality
+python -c "
+from streamlit_extension.utils.security import check_rate_limit
+import time
+
+print('Testing rate limiting...')
+for i in range(10):
+    allowed, error = check_rate_limit('test_operation')
+    print(f'Request {i+1}: Allowed={allowed}, Error={error}')
+    if not allowed:
+        break
+    time.sleep(0.1)
+"
+
+# Check rate limit configuration
+python -c "
+from streamlit_extension.utils.security import get_rate_limit_stats
+stats = get_rate_limit_stats()
+print('Rate limit stats:', stats)
+"
+
+# Reset rate limits for testing
+python -c "
+from streamlit_extension.utils.security import reset_rate_limits
+reset_rate_limits('test_operation')
+print('Rate limits reset for test_operation')
+"
+```
+
+### **❌ DoS Protection Triggering False Positives**
+
+**Error:**
+```
+DoS protection blocking legitimate requests
+```
+
+**Solution:**
+```bash
+# Check DoS protection configuration
+python -c "
+from streamlit_extension.utils.security import check_dos_protection
+allowed, error, details = check_dos_protection('normal_operation')
+print('DoS check result:', allowed, error)
+print('Protection details:', details)
+"
+
+# Get DoS protection statistics
+python -c "
+from streamlit_extension.utils.security import get_dos_protection_stats
+stats = get_dos_protection_stats()
+print('DoS protection stats:', stats)
+"
+
+# Reset DoS protection if needed
+python -c "
+from streamlit_extension.utils.security import reset_dos_protection
+reset_dos_protection('normal_operation', user_id='test_user')
+print('DoS protection reset')
+"
+```
+
+### **❌ Input Validation Too Strict**
+
+**Error:**
+```
+Valid input being rejected by validation
+```
+
+**Solution:**
+```bash
+# Test input validation patterns
+python -c "
+from streamlit_extension.utils.security import validate_form
+test_data = {
+    'name': 'Valid Name',
+    'email': 'valid@example.com',
+    'description': 'A normal description without dangerous content'
+}
+is_valid, errors = validate_form(test_data)
+print('Validation result:', is_valid)
+if not is_valid:
+    print('Validation errors:', errors)
+"
+
+# Check if security module is too restrictive
+# Adjust validation patterns in security.py if needed
+# Or use specific safe functions for known-good data
+```
+
+## 🌍 **Environment Configuration Issues**
+
+### **❌ Environment Configuration Import Errors**
+
+**Error:**
+```
+ImportError: No module named 'config.environment'
+```
+
+**Solution:**
+```bash
+# Check if config module exists
+ls -la config/environment.py
+
+# Test environment configuration import
+python -c "
+from config.environment import get_config
+config = get_config()
+print('Environment configuration loaded:', config.environment)
+"
+
+# Check environment files
+ls -la config/environments/
+# Should show: development.yaml, staging.yaml, production.yaml
+```
+
+### **❌ Environment Variable Not Found**
+
+**Error:**
+```
+Missing required environment variables for production: GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET
+```
+
+**Solution:**
+```bash
+# Set required environment variables
+export TDD_ENVIRONMENT=development  # Use development mode to skip required vars
+
+# For production, set all required variables:
+export TDD_ENVIRONMENT=production
+export GOOGLE_CLIENT_ID="your_google_client_id"
+export GOOGLE_CLIENT_SECRET="your_google_client_secret"
+export LOG_LEVEL="INFO"
+
+# Test configuration loading
+python config/environment.py
+
+# Create .env file for persistent configuration (development only)
+cat > .env << EOF
+TDD_ENVIRONMENT=development
+GOOGLE_CLIENT_ID=dev_client_id
+GOOGLE_CLIENT_SECRET=dev_client_secret
+LOG_LEVEL=DEBUG
+EOF
+```
+
+### **❌ YAML Configuration Parse Error**
+
+**Error:**
+```
+yaml.scanner.ScannerError: while scanning for the next token
+```
+
+**Solution:**
+```bash
+# Validate YAML syntax
+python -c "
+import yaml
+with open('config/environments/development.yaml', 'r') as f:
+    config = yaml.safe_load(f)
+    print('YAML is valid:', config is not None)
+"
+
+# Check for common YAML issues:
+# 1. Incorrect indentation (use spaces, not tabs)
+# 2. Missing quotes around special characters
+# 3. Unescaped colons or other special characters
+
+# Test with a minimal YAML config
+cat > config/environments/test.yaml << EOF
+app:
+  name: "Test App"
+  debug: true
+
+database:
+  framework_db_path: "framework.db"
+  
+security:
+  require_auth: false
+EOF
+
+python -c "
+from config.environment import EnvironmentConfigLoader
+loader = EnvironmentConfigLoader()
+loader.environment = 'test'
+config = loader.load_config()
+print('Test config loaded:', config.app_name)
+"
+```
+
+### **❌ Configuration Validation Fails**
+
+**Error:**
+```
+ValueError: Missing required environment variables
+```
+
+**Solution:**
+```bash
+# Check which environment you're running
+echo "Current environment: $TDD_ENVIRONMENT"
+
+# Use development environment to bypass strict validation
+export TDD_ENVIRONMENT=development
+
+# Check configuration validation
+python -c "
+from config.environment import get_config
+try:
+    config = get_config()
+    print('Config validation passed')
+    print('Environment:', config.environment)
+    print('Debug mode:', config.debug)
+    print('Auth required:', config.security.require_auth)
+except Exception as e:
+    print('Validation error:', e)
+"
+```
+
+### **❌ OAuth Configuration Issues**
+
+**Error:**
+```
+Google OAuth credentials not found in environment variables
+```
+
+**Solution:**
+```bash
+# For development (OAuth optional)
+export TDD_ENVIRONMENT=development
+
+# For production with OAuth
+export GOOGLE_CLIENT_ID="your_real_client_id"
+export GOOGLE_CLIENT_SECRET="your_real_client_secret"
+
+# Test OAuth configuration
+python -c "
+from config.environment import get_google_oauth_config
+oauth_config = get_google_oauth_config()
+print('OAuth Client ID set:', bool(oauth_config.client_id))
+print('OAuth Client Secret set:', bool(oauth_config.client_secret))
+print('Redirect URI:', oauth_config.redirect_uri)
+"
+
+# Get OAuth credentials from Google Cloud Console:
+# 1. Go to https://console.cloud.google.com/
+# 2. Create a new project or select existing
+# 3. Enable Google+ API
+# 4. Create OAuth 2.0 credentials
+# 5. Add http://localhost:8501 to authorized redirect URIs
+```
+
+## 🏥 **Health Monitoring Issues**
+
+### **❌ Health Endpoint Import Errors**
+
+**Error:**
+```
+ImportError: No module named 'streamlit_extension.endpoints.health'
+```
+
+**Solution:**
+```bash
+# Check if health module exists
+ls -la streamlit_extension/endpoints/health.py
+
+# Test health endpoint import
+python -c "
+from streamlit_extension.endpoints.health import HealthCheckEndpoint
+endpoint = HealthCheckEndpoint()
+print('Health endpoint imported successfully')
+"
+```
+
+### **❌ Health Checks Failing**
+
+**Error:**
+```
+Database health check failed
+```
+
+**Solution:**
+```bash
+# Test health checks manually
+python -c "
+from streamlit_extension.endpoints.health import HealthCheckEndpoint
+endpoint = HealthCheckEndpoint()
+
+# Basic health check
+basic = endpoint.basic_health()
+print('Basic health:', basic)
+
+# Detailed health check
+detailed = endpoint.detailed_health()
+print('Detailed health:', detailed)
+
+# Component health
+checker = endpoint.checker
+db_health = checker.check_database()
+print('Database health:', db_health)
+"
+
+# Check database connectivity
+python -c "
+from streamlit_extension.utils.database import DatabaseManager
+try:
+    db = DatabaseManager()
+    clients = db.get_all_clients()
+    print('Database connection: OK')
+except Exception as e:
+    print('Database connection error:', e)
+"
+```
+
+### **❌ Kubernetes Probes Not Working**
+
+**Error:**
+```
+Readiness probe failed: dependencies unavailable
+```
+
+**Solution:**
+```bash
+# Test readiness probe
+python -c "
+from streamlit_extension.endpoints.health import HealthCheckEndpoint
+endpoint = HealthCheckEndpoint()
+
+status_code, payload = endpoint.readiness_check()
+print('Readiness status code:', status_code)
+print('Readiness payload:', payload)
+
+if status_code != 200:
+    print('Readiness check failed - check dependencies')
+"
+
+# Test liveness probe
+python -c "
+from streamlit_extension.endpoints.health import HealthCheckEndpoint
+endpoint = HealthCheckEndpoint()
+
+status_code, payload = endpoint.liveness_check()
+print('Liveness status code:', status_code)
+print('Liveness payload:', payload)
+"
+
+# Health check dependencies:
+# 1. Database connectivity
+# 2. Cache system (if enabled)
+# 3. Memory usage within limits
+# 4. Disk space available
+```
+
+### **❌ Performance Monitoring Issues**
+
+**Error:**
+```
+Component health status shows degraded
+```
+
+**Solution:**
+```bash
+# Check system resources
+python -c "
+import psutil
+print('CPU usage:', psutil.cpu_percent(interval=1))
+print('Memory usage:', psutil.virtual_memory().percent)
+print('Disk usage:', psutil.disk_usage('.').percent)
+"
+
+# Monitor health status over time
+python -c "
+from streamlit_extension.endpoints.health import HealthCheckEndpoint
+import time
+
+endpoint = HealthCheckEndpoint()
+for i in range(5):
+    health = endpoint.detailed_health()
+    print(f'Health check {i+1}:', health['status'])
+    time.sleep(1)
+"
+
+# Check performance thresholds in health checker
+# Adjust ComponentChecker methods if thresholds are too strict
+```
+
+### **❌ Health Check Timeout Issues**
+
+**Error:**
+```
+Health check timed out
+```
+
+**Solution:**
+```bash
+# Test individual health components
+python -c "
+from streamlit_extension.endpoints.health import ComponentChecker
+checker = ComponentChecker()
+
+print('Testing database...')
+db_result = checker.check_database()
+print('Database result:', db_result)
+
+print('Testing cache...')
+cache_result = checker.check_cache()
+print('Cache result:', cache_result)
+
+print('Testing memory...')
+memory_result = checker.check_memory_usage()
+print('Memory result:', memory_result)
+"
+
+# For slow database operations, check:
+# 1. Database file permissions
+# 2. Disk space availability
+# 3. SQLite WAL mode configuration
+# 4. Connection pool settings
 ```
 
 ## 📞 **Getting Additional Help**

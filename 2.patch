@@ -1,596 +1,1364 @@
  (cd "$(git rev-parse --show-toplevel)" && git apply --3way <<'EOF' 
-diff --git a/config/environments/development.yaml b/config/environments/development.yaml
+diff --git a/streamlit_extension/pages/clients.py b/streamlit_extension/pages/clients.py
+index bb89b60ddb0f8779b79adb8a8173acde7b80d3d5..8b47e0c60e8328a31b208b350bf390fcba6ee5cb 100644
+--- a/streamlit_extension/pages/clients.py
++++ b/streamlit_extension/pages/clients.py
+@@ -28,50 +28,51 @@ except ImportError:
+ # Local imports
+ try:
+     from streamlit_extension.utils.database import DatabaseManager
+     from streamlit_extension.utils.validators import validate_client_data, validate_email_uniqueness, validate_client_key_uniqueness
+     from streamlit_extension.utils.security import (
+         create_safe_client, sanitize_display, validate_form, check_rate_limit,
+         security_manager
+     )
+     from streamlit_extension.config import load_config
+     from streamlit_extension.config.constants import (
+         GeneralStatus, ClientTier, CompanySize, UIConstants, FormFields
+     )
+     DATABASE_UTILS_AVAILABLE = True
+ except ImportError:
+     DATABASE_UTILS_AVAILABLE = False
+     DatabaseManager = validate_client_data = load_config = None
+     create_safe_client = sanitize_display = validate_form = None
+     GeneralStatus = ClientTier = CompanySize = UIConstants = FormFields = None
+ 
+ from streamlit_extension.utils.exception_handler import (
+     handle_streamlit_exceptions,
+     streamlit_error_boundary,
+     safe_streamlit_operation,
+     get_error_statistics,
+ )
++from streamlit_extension.utils import streamlit_exception_handler, get_logger
+ 
+ try:
+     from streamlit_extension.utils.auth import require_authentication
+ except ImportError:
+     # Fallback if auth module not available
+     def require_authentication(func):
+         return func
+ 
+ 
+ def render_client_card(client: Dict[str, Any], db_manager: DatabaseManager):
+     """Render an individual client card."""
+     if not STREAMLIT_AVAILABLE:
+         return
+     
+     with st.container():
+         # Card header with status indicator
+         status_colors = {
+             GeneralStatus.ACTIVE.value if GeneralStatus else "active": "🟢",
+             GeneralStatus.INACTIVE.value if GeneralStatus else "inactive": "🟡", 
+             GeneralStatus.SUSPENDED.value if GeneralStatus else "suspended": "🔴",
+             GeneralStatus.ARCHIVED.value if GeneralStatus else "archived": "⚫"
+         }
+         status_emoji = status_colors.get(client.get("status", "active"), "⚪")
+         
+         col1, col2, col3 = st.columns([3, 1, 1])
+@@ -419,55 +420,59 @@ def render_create_client_form(db_manager: DatabaseManager):
+                         client_id = db_manager.create_client(
+                             client_key=client_key,
+                             name=name,
+                             description=description,
+                             industry=industry,
+                             company_size=company_size,
+                             primary_contact_name=primary_contact_name,
+                             primary_contact_email=primary_contact_email,
+                             status=status,
+                             client_tier=client_tier,
+                             hourly_rate=hourly_rate
+                         )
+                         
+                         if client_id:
+                             st.success("✅ Client created successfully!")
+                             st.rerun()
+                         else:
+                             st.error("❌ Failed to create client")
+                 else:
+                     for error in errors:
+                         st.error(f"❌ {error}")
+ 
+ 
+ @require_authentication
+ @handle_streamlit_exceptions(show_error=True, attempt_recovery=True)
++@streamlit_exception_handler
+ def render_clients_page():
+     """Render the main clients management page."""
++    logger = get_logger(__name__)
++    logger.info("Rendering clients page")
++
+     if not STREAMLIT_AVAILABLE:
+         return {"error": "Streamlit not available"}
+-    
++
+     if not DATABASE_UTILS_AVAILABLE:
+         st.error("❌ Database utilities not available")
+         return {"error": "Database utilities not available"}
+     
+     # Check rate limit for page load
+     page_rate_allowed, page_rate_error = check_rate_limit("page_load") if check_rate_limit else (True, None)
+     if not page_rate_allowed:
+         st.error(f"🚦 {page_rate_error}")
+         st.info("Please wait before reloading the page.")
+         return {"error": "Rate limited"}
+     
+     st.title("👥 Client Management")
+     st.markdown("Manage your clients, contacts, and business relationships")
+     st.markdown("---")
+     
+     # Initialize database manager
+     with streamlit_error_boundary("database_initialization"):
+         config = safe_streamlit_operation(
+             load_config,
+             default_return=None,
+             operation_name="load_config",
+         )
+         if config is None:
+             st.error("❌ Configuration loading failed")
+             return {"error": "config_load_failed"}
+diff --git a/streamlit_extension/streamlit_app.py b/streamlit_extension/streamlit_app.py
+index 28a5f742dfa486bd1b28799781f0e1e59cb267af..2db013de8eef8b6bb4cd3156b4968a9d6892580a 100644
+--- a/streamlit_extension/streamlit_app.py
++++ b/streamlit_extension/streamlit_app.py
+@@ -51,61 +51,63 @@ if STREAMLIT_AVAILABLE:
+             'About': """
+             # TDD Framework - Advanced Dashboard
+             
+             Interactive development environment for TDD workflow with:
+             - ⏱️ Focus timer with TDAH support
+             - 📋 Task management with Kanban
+             - 📊 Analytics and productivity tracking
+             - 🎮 Gamification system
+             - 🐙 GitHub integration
+             
+             **Version:** 1.2.1
+             **Phase:** Enhanced Dashboard
+             """
+         }
+     )
+ 
+ # Import components
+ try:
+     from streamlit_extension.components.sidebar import render_sidebar
+     from streamlit_extension.components.timer import TimerComponent
+     from streamlit_extension.components.dashboard_widgets import (
+         WelcomeHeader, DailyStats, ProductivityHeatmap,
+         ProgressRing, SparklineChart, AchievementCard,
+         NotificationToast, NotificationData, QuickActionButton
+     )
+-    from streamlit_extension.utils.database import DatabaseManager
+-    from streamlit_extension.utils.auth import GoogleOAuthManager, require_authentication, render_user_menu, get_authenticated_user
+-    from streamlit_extension.config import load_config, load_config
+-    
+-    # Import global exception handler
+-    from streamlit_extension.utils.exception_handler import (
+-        install_global_exception_handler, handle_streamlit_exceptions, 
+-        streamlit_error_boundary, safe_streamlit_operation,
+-        show_error_dashboard, get_error_statistics
+-    )
+-    EXCEPTION_HANDLER_AVAILABLE = True
++      from streamlit_extension.utils.database import DatabaseManager
++      from streamlit_extension.utils.auth import GoogleOAuthManager, require_authentication, render_user_menu, get_authenticated_user
++      from streamlit_extension.config import load_config, load_config
++      from streamlit_extension.utils import setup_logging, setup_global_exception_handling, LogLevel
++      from streamlit_extension.utils import streamlit_exception_handler, get_logger
++
++      # Import global exception handler
++      from streamlit_extension.utils.exception_handler import (
++          install_global_exception_handler, handle_streamlit_exceptions,
++          streamlit_error_boundary, safe_streamlit_operation,
++          show_error_dashboard, get_error_statistics
++      )
++      EXCEPTION_HANDLER_AVAILABLE = True
+ except ImportError as e:
+     EXCEPTION_HANDLER_AVAILABLE = False
+     st.error(f"❌ Import Error: {e}")
+     st.error("Make sure to run from the project root directory")
+     st.stop()
+ 
+ 
+ @handle_streamlit_exceptions(show_error=True, attempt_recovery=True)
+ def initialize_session_state():
+     """Initialize Streamlit session state variables."""
+     
+     # Install global exception handler on first run
+     if EXCEPTION_HANDLER_AVAILABLE and "exception_handler_installed" not in st.session_state:
+         install_global_exception_handler()
+         st.session_state.exception_handler_installed = True
+     
+     # Core app state
+     if "config" not in st.session_state:
+         with streamlit_error_boundary("configuration_loading"):
+             st.session_state.config = load_config()
+     
+     if "db_manager" not in st.session_state:
+         with streamlit_error_boundary("database_initialization"):
+             config = st.session_state.config
+             st.session_state.db_manager = DatabaseManager(
+@@ -677,51 +679,65 @@ def render_debug_panel():
+         
+         st.markdown("#### Database Health")
+         st.json(st.session_state.db_health_check)
+         
+         st.markdown("#### Session State Keys")
+         st.write(list(st.session_state.keys()))
+         
+         st.markdown("#### Cache Statistics")
+         with streamlit_error_boundary("cache_stats"):
+             cache_stats = safe_streamlit_operation(
+                 st.session_state.db_manager.get_cache_stats,
+                 default_return={"error": "Unable to retrieve cache stats"},
+                 operation_name="get_cache_stats"
+             )
+             st.json(cache_stats)
+         
+         # Error monitoring dashboard
+         if EXCEPTION_HANDLER_AVAILABLE:
+             st.markdown("#### Error Monitoring")
+             show_error_dashboard()
+ 
+ 
+ @handle_streamlit_exceptions(show_error=True, attempt_recovery=True)
+ def main():
+     """Main application entry point with centralized authentication gateway."""
+-    
++
++    # Setup logging
++    setup_logging(
++        level=LogLevel.INFO,
++        log_file="logs/app.log",
++        console_output=True
++    )
++
++    # Setup global exception handling
++    setup_global_exception_handling()
++
++    # Get logger for main app
++    logger = get_logger(__name__)
++    logger.info("Application started")
++
+     # Check if running in headless mode
+     if not STREAMLIT_AVAILABLE:
+         print("📊 Dashboard functions available for testing")
+         print("Run 'streamlit run streamlit_app.py' for full UI")
+         return
+     
+     # Initialize session state with error boundary
+     with streamlit_error_boundary("session_initialization"):
+         initialize_session_state()
+     
+     # Initialize authentication manager
+     with streamlit_error_boundary("authentication_initialization"):
+         auth_manager = safe_streamlit_operation(
+             GoogleOAuthManager,
+             default_return=None,
+             operation_name="auth_manager_init"
+         )
+         
+         if auth_manager is None:
+             st.error("❌ Authentication initialization failed")
+             st.stop()
+     
+     # 🔐 CENTRALIZED AUTHENTICATION GATEWAY
+     # Check authentication status - if not authenticated, show login page
+     if not auth_manager.is_authenticated():
+diff --git a/streamlit_extension/utils/__init__.py b/streamlit_extension/utils/__init__.py
+index 65f64f488f03a40d23bbdf2868e06862d68f862e..a46ecf6ecb3fcc130b0bc88fb65fae53c3b5b852 100644
+--- a/streamlit_extension/utils/__init__.py
++++ b/streamlit_extension/utils/__init__.py
+@@ -1,15 +1,66 @@
+-"""Utility functions for Streamlit extension."""
++"""Utilities package with enhanced exception handling and logging."""
+ 
++from .exceptions import (
++    GlobalExceptionHandler, 
++    ApplicationError, 
++    DatabaseError, 
++    ValidationError, 
++    SecurityError,
++    BusinessLogicError,
++    ErrorSeverity,
++    ErrorCategory,
++    exception_handler,
++    streamlit_exception_handler,
++    safe_execute,
++    handle_exception,
++    setup_global_exception_handling
++)
++
++from .logging_config import (
++    LoggingConfig,
++    LogLevel,
++    LogFormat,
++    setup_logging,
++    get_logger,
++    log_function_call,
++    log_performance,
++    log_user_action,
++    log_security_event
++)
++
++# Import existing utilities
+ from .database import DatabaseManager
+-from .validators import validate_config
+-from .load_tester import LoadTester
+-from .metrics_collector import MetricsCollector
+-from .performance_monitor import PerformanceMonitor
++from .cache import CacheManager
+ 
+ __all__ = [
++    # Exception handling
++    "GlobalExceptionHandler",
++    "ApplicationError", 
++    "DatabaseError",
++    "ValidationError",
++    "SecurityError",
++    "BusinessLogicError",
++    "ErrorSeverity",
++    "ErrorCategory",
++    "exception_handler",
++    "streamlit_exception_handler",
++    "safe_execute",
++    "handle_exception",
++    "setup_global_exception_handling",
++    
++    # Logging
++    "LoggingConfig",
++    "LogLevel", 
++    "LogFormat",
++    "setup_logging",
++    "get_logger",
++    "log_function_call",
++    "log_performance",
++    "log_user_action",
++    "log_security_event",
++    
++    # Existing utilities
+     "DatabaseManager",
+-    "validate_config",
+-    "LoadTester",
+-    "MetricsCollector",
+-    "PerformanceMonitor",
+-]
+\ No newline at end of file
++    "CacheManager"
++]
++
+diff --git a/streamlit_extension/utils/database.py b/streamlit_extension/utils/database.py
+index c85cd289fb81cf17840f601843fd55bf12ea9a89..817b0633cba477a2f523862cfd13b9068603dd5e 100644
+--- a/streamlit_extension/utils/database.py
++++ b/streamlit_extension/utils/database.py
+@@ -1,42 +1,45 @@
+ """
+ 🗄️ Database Management Utilities
+ 
+ Streamlit-optimized database operations with:
+ - Connection pooling
+ - Caching strategies
+ - SQLAlchemy integration
+ - Error handling
+ """
+ 
+ import sqlite3
+ from pathlib import Path
+ from typing import Optional, Dict, Any, List, Union, Iterator, Tuple, Generator
+ from contextlib import contextmanager
+ from datetime import datetime
+ import json
+-import logging
++import time
++
++from .exceptions import DatabaseError
++from .logging_config import log_performance, get_logger
+ 
+ # Graceful imports
+ try:
+     import sqlalchemy as sa
+     from sqlalchemy import create_engine, text
+     from sqlalchemy.pool import StaticPool
+     from sqlalchemy.engine import Connection
+     SQLALCHEMY_AVAILABLE = True
+ except ImportError:
+     sa = None
+     create_engine = None
+     text = None
+     StaticPool = None
+     Connection = None
+     SQLALCHEMY_AVAILABLE = False
+ 
+ try:
+     import pandas as pd
+     PANDAS_AVAILABLE = True
+ except ImportError:
+     pd = None
+     PANDAS_AVAILABLE = False
+ 
+ try:
+     import streamlit as st
+@@ -50,51 +53,51 @@ try:
+     from ..config.streamlit_config import format_datetime_user_tz, format_time_ago_user_tz
+     TIMEZONE_UTILS_AVAILABLE = True
+ except ImportError:
+     TIMEZONE_UTILS_AVAILABLE = False
+     format_datetime_user_tz = None
+     format_time_ago_user_tz = None
+ 
+ # Import duration system for FASE 2.3 extension
+ try:
+     from duration_system.duration_calculator import DurationCalculator
+     from duration_system.duration_formatter import DurationFormatter
+     DURATION_SYSTEM_AVAILABLE = True
+ except ImportError:
+     DurationCalculator = None
+     DurationFormatter = None
+     DURATION_SYSTEM_AVAILABLE = False
+ 
+ # Import caching system
+ try:
+     from .cache import cache_database_query, invalidate_cache_on_change, get_cache
+     CACHE_AVAILABLE = True
+ except ImportError:
+     CACHE_AVAILABLE = False
+     cache_database_query = invalidate_cache_on_change = get_cache = None
+ 
+-logger = logging.getLogger(__name__)
++logger = get_logger(__name__)
+ 
+ class DatabaseManager:
+     """
+     Enterprise-grade database manager with connection pooling and error handling.
+ 
+     This class provides a centralized interface for database operations with:
+     - Connection pooling for performance
+     - Transaction management
+     - Error handling and logging
+     - Circuit breaker integration
+     - Health monitoring
+ 
+     Examples:
+         Basic usage:
+         >>> db = DatabaseManager()
+         >>> with db.get_connection() as conn:
+         ...     result = conn.execute("SELECT * FROM users")
+ 
+         Transaction usage:
+         >>> with db.get_connection() as conn:
+         ...     with db.transaction(conn):
+         ...         conn.execute("INSERT INTO users ...")
+ 
+     Attributes:
+         connection_pool (SQLAlchemy.pool): Database connection pool
+@@ -2483,97 +2486,103 @@ class DatabaseManager:
+             primary_contact_email: Primary contact email.
+             hourly_rate: Billing rate per hour.
+             **kwargs: Additional optional fields like ``status`` or
+                 ``client_tier``.
+ 
+         Returns:
+             Optional[int]: New client ID if successful, ``None`` if failed.
+ 
+         Raises:
+             ValueError: If required fields are missing or invalid.
+             IntegrityError: If ``client_key`` already exists.
+             DatabaseError: If insert operation fails.
+ 
+         Side Effects:
+             - Invalidates client list caches.
+             - Creates audit log entry.
+ 
+         Performance:
+             - Insert operation: ~5ms.
+ 
+         Example:
+             >>> client_id = db_manager.create_client(
+             ...     client_key="acme_corp", name="ACME Corporation"
+             ... )
+         """
++        start_time = time.time()
++        query = ""
+         try:
+             client_data = {
+                 'client_key': client_key,
+                 'name': name,
+                 'description': description,
+                 'industry': industry,
+                 'company_size': company_size,
+                 'primary_contact_name': primary_contact_name,
+                 'primary_contact_email': primary_contact_email,
+                 'hourly_rate': hourly_rate,
+                 'status': kwargs.get('status', 'active'),
+                 'client_tier': kwargs.get('client_tier', 'standard'),
+                 'priority_level': kwargs.get('priority_level', 5),
+                 'timezone': kwargs.get('timezone', 'America/Sao_Paulo'),
+                 'currency': kwargs.get('currency', 'BRL'),
+                 'preferred_language': kwargs.get('preferred_language', 'pt-BR'),
+                 'contract_type': kwargs.get('contract_type', 'time_and_materials'),
+                 'created_by': kwargs.get('created_by', 1)
+             }
+-            
++
+             with self.get_connection("framework") as conn:
+-                placeholders = ', '.join(['?' for _ in client_data])
+                 columns = ', '.join(client_data.keys())
+-                
++
+                 if SQLALCHEMY_AVAILABLE:
+-                    # Convert to named parameters for SQLAlchemy
+                     named_placeholders = ', '.join([f':{key}' for key in client_data.keys()])
++                    query = f"INSERT INTO framework_clients ({columns}) VALUES ({named_placeholders})"
+                     result = conn.execute(
+-                        text(f"INSERT INTO framework_clients ({columns}) VALUES ({named_placeholders})"),  # nosec B608
++                        text(query),  # nosec B608
+                         client_data
+                     )
+                     conn.commit()
++                    log_performance("create_client", time.time() - start_time, {
++                        "rows_affected": result.rowcount
++                    })
+                     return result.lastrowid
+                 else:
++                    placeholders = ', '.join(['?' for _ in client_data])
++                    query = f"INSERT INTO framework_clients ({columns}) VALUES ({placeholders})"
+                     cursor = conn.cursor()
+                     cursor.execute(
+-                        f"INSERT INTO framework_clients ({columns}) VALUES ({placeholders})",  # nosec B608
++                        query,  # nosec B608
+                         list(client_data.values())
+                     )
+                     conn.commit()
++                    log_performance("create_client", time.time() - start_time, {
++                        "rows_affected": cursor.rowcount
++                    })
+                     return cursor.lastrowid
+-                    
++
+         except Exception as e:
+-            logger.error(f"Error creating client: {e}")
+-            if STREAMLIT_AVAILABLE and st:
+-                st.error(f"❌ Error creating client: {e}")
+-            return None
++            raise DatabaseError(f"Failed to create client: {e}", query=query, params=tuple(client_data.values()))
+     
+     @invalidate_cache_on_change(
+         "db_query:get_projects:",
+         "db_query:get_hierarchy_overview:",
+         "db_query:get_client_dashboard:",
+         "db_query:get_project_dashboard:"
+     ) if CACHE_AVAILABLE else lambda f: f
+     def create_project(self, client_id: int, project_key: str, name: str,
+                       description: str = "", project_type: str = "development",
+                       methodology: str = "agile", **kwargs) -> Optional[int]:
+         """Create a new project.
+         
+         Args:
+             client_id: ID of the client who owns this project
+             project_key: Unique project identifier within client
+             name: Project name
+             description: Project description
+             project_type: Type of project (development, maintenance, etc.)
+             methodology: Development methodology (agile, waterfall, etc.)
+             **kwargs: Additional project fields
+             
+         Returns:
+             Project ID if successful, None otherwise
+         """
+         try:
+diff --git a/streamlit_extension/utils/exceptions.py b/streamlit_extension/utils/exceptions.py
 new file mode 100644
-index 0000000000000000000000000000000000000000..4e4498747c1b6f05efabdb6b70134242138d8397
+index 0000000000000000000000000000000000000000..c89a914a2915ed090b263b6f454ad2b6e1b7716c
 --- /dev/null
-+++ b/config/environments/development.yaml
-@@ -0,0 +1,14 @@
-+debug: true
-+database:
-+  url: "sqlite:///framework_dev.db"
-+  pool_size: 5
-+  echo: true
-+logging:
-+  level: DEBUG
-+  format: detailed
-+  console: true
-+cache:
-+  enabled: false
-+security:
-+  csrf_protection: false
-+  rate_limiting: false
-diff --git a/config/environments/production.yaml b/config/environments/production.yaml
-new file mode 100644
-index 0000000000000000000000000000000000000000..81a6d458f3e321906013d4ca6dee411a7af2b4c9
---- /dev/null
-+++ b/config/environments/production.yaml
-@@ -0,0 +1,19 @@
-+debug: false
-+database:
-+  url: "${DATABASE_URL}"
-+  pool_size: 20
-+  echo: false
-+  ssl_mode: require
-+logging:
-+  level: INFO
-+  format: json
-+  file: "/var/log/app.log"
-+cache:
-+  type: redis
-+  enabled: true
-+security:
-+  csrf_protection: true
-+  rate_limiting: strict
-+  session_timeout: 3600
-+health_checks:
-+  enabled: true
-diff --git a/config/environments/staging.yaml b/config/environments/staging.yaml
-new file mode 100644
-index 0000000000000000000000000000000000000000..50d1d2fa70415b72219834e01cbbce6fb81200fb
---- /dev/null
-+++ b/config/environments/staging.yaml
-@@ -0,0 +1,15 @@
-+debug: false
-+database:
-+  url: "postgresql://staging.db.example.com/app"
-+  pool_size: 10
-+  echo: false
-+logging:
-+  level: INFO
-+  format: json
-+  console: true
-+cache:
-+  type: redis
-+  enabled: true
-+security:
-+  csrf_protection: true
-+  rate_limiting: medium
-diff --git a/config/environments/testing.yaml b/config/environments/testing.yaml
-new file mode 100644
-index 0000000000000000000000000000000000000000..53a9f8f0d130158923a0fabbf1fedf30375dab12
---- /dev/null
-+++ b/config/environments/testing.yaml
-@@ -0,0 +1,14 @@
-+debug: true
-+database:
-+  url: "sqlite:///test.db"
-+  pool_size: 5
-+  echo: false
-+logging:
-+  level: DEBUG
-+  format: detailed
-+  console: true
-+cache:
-+  enabled: false
-+security:
-+  csrf_protection: false
-+  rate_limiting: false
-diff --git a/config/schemas/config_schema.json b/config/schemas/config_schema.json
-new file mode 100644
-index 0000000000000000000000000000000000000000..2205bd752fb16aea1adcbd0cdeb1293dfcf9fa64
---- /dev/null
-+++ b/config/schemas/config_schema.json
-@@ -0,0 +1,50 @@
-+{
-+  "$schema": "http://json-schema.org/draft-07/schema#",
-+  "type": "object",
-+  "required": ["debug", "database", "logging", "security"],
-+  "properties": {
-+    "debug": {"type": "boolean"},
-+    "database": {
-+      "type": "object",
-+      "required": ["url", "pool_size", "echo"],
-+      "properties": {
-+        "url": {"type": "string"},
-+        "pool_size": {"type": "integer"},
-+        "echo": {"type": "boolean"},
-+        "ssl_mode": {"type": ["string", "null"]}
-+      }
-+    },
-+    "logging": {
-+      "type": "object",
-+      "required": ["level", "format"],
-+      "properties": {
-+        "level": {"type": "string"},
-+        "format": {"type": "string"},
-+        "console": {"type": ["boolean", "null"]},
-+        "file": {"type": ["string", "null"]}
-+      }
-+    },
-+    "security": {
-+      "type": "object",
-+      "required": ["csrf_protection", "rate_limiting"],
-+      "properties": {
-+        "csrf_protection": {"type": "boolean"},
-+        "rate_limiting": {"type": ["string", "boolean"]},
-+        "session_timeout": {"type": ["integer", "null"]}
-+      }
-+    },
-+    "cache": {
-+      "type": "object",
-+      "properties": {
-+        "enabled": {"type": "boolean"},
-+        "type": {"type": "string"}
-+      }
-+    },
-+    "health_checks": {
-+      "type": "object",
-+      "properties": {
-+        "enabled": {"type": "boolean"}
-+      }
-+    }
-+  }
-+}
-diff --git a/config/secrets/.env.template b/config/secrets/.env.template
-new file mode 100644
-index 0000000000000000000000000000000000000000..54c6d7dcc0ed2319b27134a2e5906244ed8f8dfe
---- /dev/null
-+++ b/config/secrets/.env.template
-@@ -0,0 +1,5 @@
-+# Environment variable secrets template
-+DATABASE_URL=postgresql://user:pass@localhost:5432/db
-+API_KEYS={"service":"key"}
-+ENCRYPTION_KEYS=changeme
-+OAUTH_SECRETS={"client_id":"id","client_secret":"secret"}
-diff --git a/streamlit_extension/config/environment.py b/streamlit_extension/config/environment.py
-new file mode 100644
-index 0000000000000000000000000000000000000000..7adcf79043d4ac4ea70e8cd7a809584dde02b027
---- /dev/null
-+++ b/streamlit_extension/config/environment.py
-@@ -0,0 +1,98 @@
++++ b/streamlit_extension/utils/exceptions.py
+@@ -0,0 +1,432 @@
++"""Global exception handling system for Streamlit application."""
++
 +from __future__ import annotations
++import traceback
++import sys
++from typing import Optional, Dict, Any, Callable, Type
++from functools import wraps
++from datetime import datetime
++from dataclasses import dataclass
++from enum import Enum
++import streamlit as st
 +
-+"""Environment configuration system with validation and merging."""
++from .logging_config import get_logger, LogLevel
 +
-+import os
++
++class ErrorSeverity(Enum):
++    """Error severity levels."""
++    LOW = "low"
++    MEDIUM = "medium"
++    HIGH = "high"
++    CRITICAL = "critical"
++
++
++class ErrorCategory(Enum):
++    """Error categories for classification."""
++    DATABASE = "database"
++    AUTHENTICATION = "authentication"
++    VALIDATION = "validation"
++    SECURITY = "security"
++    BUSINESS_LOGIC = "business_logic"
++    EXTERNAL_API = "external_api"
++    SYSTEM = "system"
++    USER_INPUT = "user_input"
++
++
++@dataclass
++class ErrorContext:
++    """Error context information."""
++    user_id: Optional[int] = None
++    session_id: Optional[str] = None
++    request_id: Optional[str] = None
++    function_name: Optional[str] = None
++    module_name: Optional[str] = None
++    additional_data: Optional[Dict[str, Any]] = None
++
++
++@dataclass
++class ApplicationError:
++    """Structured application error."""
++    error_id: str
++    message: str
++    severity: ErrorSeverity
++    category: ErrorCategory
++    timestamp: datetime
++    context: ErrorContext
++    exception: Optional[Exception] = None
++    stack_trace: Optional[str] = None
++    user_message: Optional[str] = None
++    suggested_action: Optional[str] = None
++
++
++class DatabaseError(Exception):
++    """Database-related errors."""
++    def __init__(self, message: str, query: Optional[str] = None, params: Optional[tuple] = None):
++        super().__init__(message)
++        self.query = query
++        self.params = params
++        self.category = ErrorCategory.DATABASE
++
++
++class ValidationError(Exception):
++    """Validation-related errors."""
++    def __init__(self, message: str, field: Optional[str] = None, value: Optional[Any] = None):
++        super().__init__(message)
++        self.field = field
++        self.value = value
++        self.category = ErrorCategory.VALIDATION
++
++
++class SecurityError(Exception):
++    """Security-related errors."""
++    def __init__(self, message: str, threat_type: Optional[str] = None, source_ip: Optional[str] = None):
++        super().__init__(message)
++        self.threat_type = threat_type
++        self.source_ip = source_ip
++        self.category = ErrorCategory.SECURITY
++
++
++class BusinessLogicError(Exception):
++    """Business logic errors."""
++    def __init__(self, message: str, operation: Optional[str] = None, entity: Optional[str] = None):
++        super().__init__(message)
++        self.operation = operation
++        self.entity = entity
++        self.category = ErrorCategory.BUSINESS_LOGIC
++
++
++class GlobalExceptionHandler:
++    """Global exception handler with logging and user-friendly error pages."""
++    
++    def __init__(self):
++        self.logger = get_logger(__name__)
++        self._error_counter = 0
++        self._error_handlers: Dict[Type[Exception], Callable] = {}
++        self._setup_default_handlers()
++    
++    def _setup_default_handlers(self):
++        """Setup default exception handlers."""
++        self._error_handlers = {
++            DatabaseError: self._handle_database_error,
++            ValidationError: self._handle_validation_error,
++            SecurityError: self._handle_security_error,
++            BusinessLogicError: self._handle_business_logic_error,
++            PermissionError: self._handle_permission_error,
++            FileNotFoundError: self._handle_file_not_found_error,
++            ConnectionError: self._handle_connection_error,
++            TimeoutError: self._handle_timeout_error,
++            ValueError: self._handle_value_error,
++            KeyError: self._handle_key_error,
++            AttributeError: self._handle_attribute_error,
++            Exception: self._handle_generic_error
++        }
++    
++    def generate_error_id(self) -> str:
++        """Generate unique error ID."""
++        self._error_counter += 1
++        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
++        return f"ERR_{timestamp}_{self._error_counter:04d}"
++    
++    def get_error_context(self) -> ErrorContext:
++        """Get current error context from Streamlit session."""
++        return ErrorContext(
++            user_id=st.session_state.get("current_user", {}).get("id"),
++            session_id=st.session_state.get("session_id"),
++            request_id=st.session_state.get("request_id"),
++            additional_data={
++                "page": getattr(st, "current_page", "unknown"),
++                "timestamp": datetime.now().isoformat()
++            }
++        )
++    
++    def sanitize_error_message(self, message: str) -> str:
++        """Sanitize error message to remove sensitive information."""
++        # Remove potential file paths
++        import re
++        message = re.sub(r'/[a-zA-Z0-9_./]+', '[PATH_REDACTED]', message)
++        
++        # Remove potential database connection strings
++        message = re.sub(r'sqlite:///[^\s]+', '[DB_PATH_REDACTED]', message)
++        
++        # Remove potential email addresses in errors
++        message = re.sub(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b', '[EMAIL_REDACTED]', message)
++        
++        # Remove potential passwords or tokens
++        message = re.sub(r'(password|token|secret|key)[\s=:]+[^\s]+', r'\1=[REDACTED]', message, flags=re.IGNORECASE)
++        
++        return message
++    
++    def create_application_error(self, exception: Exception, context: ErrorContext, 
++                               severity: ErrorSeverity = ErrorSeverity.MEDIUM) -> ApplicationError:
++        """Create structured application error."""
++        error_id = self.generate_error_id()
++        
++        # Determine category based on exception type
++        category = getattr(exception, 'category', ErrorCategory.SYSTEM)
++        
++        # Get stack trace
++        stack_trace = traceback.format_exc() if exception else None
++        
++        # Sanitize error message
++        sanitized_message = self.sanitize_error_message(str(exception))
++        
++        # Generate user-friendly message
++        user_message = self._generate_user_message(exception, category)
++        
++        # Generate suggested action
++        suggested_action = self._generate_suggested_action(exception, category)
++        
++        return ApplicationError(
++            error_id=error_id,
++            message=sanitized_message,
++            severity=severity,
++            category=category,
++            timestamp=datetime.now(),
++            context=context,
++            exception=exception,
++            stack_trace=stack_trace,
++            user_message=user_message,
++            suggested_action=suggested_action
++        )
++    
++    def _generate_user_message(self, exception: Exception, category: ErrorCategory) -> str:
++        """Generate user-friendly error message."""
++        user_messages = {
++            ErrorCategory.DATABASE: "Database operation failed. Please try again.",
++            ErrorCategory.AUTHENTICATION: "Authentication error. Please log in again.",
++            ErrorCategory.VALIDATION: "Input validation failed. Please check your data.",
++            ErrorCategory.SECURITY: "Security error detected. Access denied.",
++            ErrorCategory.BUSINESS_LOGIC: "Operation could not be completed due to business rules.",
++            ErrorCategory.EXTERNAL_API: "External service unavailable. Please try again later.",
++            ErrorCategory.SYSTEM: "System error occurred. Please contact support.",
++            ErrorCategory.USER_INPUT: "Invalid input provided. Please correct and try again."
++        }
++        
++        return user_messages.get(category, "An unexpected error occurred. Please try again.")
++    
++    def _generate_suggested_action(self, exception: Exception, category: ErrorCategory) -> str:
++        """Generate suggested action for error resolution."""
++        actions = {
++            ErrorCategory.DATABASE: "Check your connection and try again",
++            ErrorCategory.AUTHENTICATION: "Please log in again",
++            ErrorCategory.VALIDATION: "Correct the highlighted fields and resubmit",
++            ErrorCategory.SECURITY: "Contact system administrator",
++            ErrorCategory.BUSINESS_LOGIC: "Review the operation requirements",
++            ErrorCategory.EXTERNAL_API: "Wait a moment and try again",
++            ErrorCategory.SYSTEM: "Contact technical support",
++            ErrorCategory.USER_INPUT: "Review your input and try again"
++        }
++        
++        return actions.get(category, "Try again or contact support")
++    
++    def handle_exception(self, exception: Exception, context: Optional[ErrorContext] = None) -> ApplicationError:
++        """Handle exception with logging and user notification."""
++        if context is None:
++            context = self.get_error_context()
++        
++        # Determine severity
++        severity = self._determine_severity(exception)
++        
++        # Create application error
++        app_error = self.create_application_error(exception, context, severity)
++        
++        # Log the error
++        self._log_error(app_error)
++        
++        # Handle UI display
++        self._display_error(app_error)
++        
++        return app_error
++    
++    def _determine_severity(self, exception: Exception) -> ErrorSeverity:
++        """Determine error severity based on exception type."""
++        critical_exceptions = (SecurityError, DatabaseError)
++        high_exceptions = (PermissionError, ConnectionError)
++        medium_exceptions = (ValidationError, BusinessLogicError, ValueError)
++        
++        if isinstance(exception, critical_exceptions):
++            return ErrorSeverity.CRITICAL
++        elif isinstance(exception, high_exceptions):
++            return ErrorSeverity.HIGH
++        elif isinstance(exception, medium_exceptions):
++            return ErrorSeverity.MEDIUM
++        else:
++            return ErrorSeverity.LOW
++    
++    def _log_error(self, app_error: ApplicationError):
++        """Log error with appropriate level."""
++        log_data = {
++            "error_id": app_error.error_id,
++            "category": app_error.category.value,
++            "severity": app_error.severity.value,
++            "user_id": app_error.context.user_id,
++            "session_id": app_error.context.session_id,
++            "function": app_error.context.function_name,
++            "module": app_error.context.module_name
++        }
++        
++        if app_error.severity == ErrorSeverity.CRITICAL:
++            self.logger.critical(f"Critical error: {app_error.message}", extra=log_data)
++        elif app_error.severity == ErrorSeverity.HIGH:
++            self.logger.error(f"High severity error: {app_error.message}", extra=log_data)
++        elif app_error.severity == ErrorSeverity.MEDIUM:
++            self.logger.warning(f"Medium severity error: {app_error.message}", extra=log_data)
++        else:
++            self.logger.info(f"Low severity error: {app_error.message}", extra=log_data)
++        
++        # Log stack trace for debugging (only in debug mode)
++        if app_error.stack_trace and self.logger.isEnabledFor(LogLevel.DEBUG.value):
++            self.logger.debug(f"Stack trace for {app_error.error_id}: {app_error.stack_trace}")
++    
++    def _display_error(self, app_error: ApplicationError):
++        """Display error in Streamlit UI."""
++        if app_error.severity == ErrorSeverity.CRITICAL:
++            st.error(f"🚨 Critical Error: {app_error.user_message}")
++            st.error(f"Error ID: {app_error.error_id}")
++            st.stop()
++        elif app_error.severity == ErrorSeverity.HIGH:
++            st.error(f"❌ Error: {app_error.user_message}")
++            if app_error.suggested_action:
++                st.info(f"💡 Suggestion: {app_error.suggested_action}")
++        elif app_error.severity == ErrorSeverity.MEDIUM:
++            st.warning(f"⚠️ Warning: {app_error.user_message}")
++            if app_error.suggested_action:
++                st.info(f"💡 Suggestion: {app_error.suggested_action}")
++        else:
++            st.info(f"ℹ️ Notice: {app_error.user_message}")
++    
++    # Specific error handlers
++    def _handle_database_error(self, error: DatabaseError, context: ErrorContext) -> ApplicationError:
++        """Handle database-specific errors."""
++        return self.create_application_error(error, context, ErrorSeverity.CRITICAL)
++    
++    def _handle_validation_error(self, error: ValidationError, context: ErrorContext) -> ApplicationError:
++        """Handle validation errors."""
++        return self.create_application_error(error, context, ErrorSeverity.MEDIUM)
++    
++    def _handle_security_error(self, error: SecurityError, context: ErrorContext) -> ApplicationError:
++        """Handle security errors."""
++        return self.create_application_error(error, context, ErrorSeverity.CRITICAL)
++    
++    def _handle_business_logic_error(self, error: BusinessLogicError, context: ErrorContext) -> ApplicationError:
++        """Handle business logic errors."""
++        return self.create_application_error(error, context, ErrorSeverity.MEDIUM)
++    
++    def _handle_permission_error(self, error: PermissionError, context: ErrorContext) -> ApplicationError:
++        """Handle permission errors."""
++        return self.create_application_error(error, context, ErrorSeverity.HIGH)
++    
++    def _handle_file_not_found_error(self, error: FileNotFoundError, context: ErrorContext) -> ApplicationError:
++        """Handle file not found errors."""
++        return self.create_application_error(error, context, ErrorSeverity.MEDIUM)
++    
++    def _handle_connection_error(self, error: ConnectionError, context: ErrorContext) -> ApplicationError:
++        """Handle connection errors."""
++        return self.create_application_error(error, context, ErrorSeverity.HIGH)
++    
++    def _handle_timeout_error(self, error: TimeoutError, context: ErrorContext) -> ApplicationError:
++        """Handle timeout errors."""
++        return self.create_application_error(error, context, ErrorSeverity.HIGH)
++    
++    def _handle_value_error(self, error: ValueError, context: ErrorContext) -> ApplicationError:
++        """Handle value errors."""
++        return self.create_application_error(error, context, ErrorSeverity.MEDIUM)
++    
++    def _handle_key_error(self, error: KeyError, context: ErrorContext) -> ApplicationError:
++        """Handle key errors."""
++        return self.create_application_error(error, context, ErrorSeverity.MEDIUM)
++    
++    def _handle_attribute_error(self, error: AttributeError, context: ErrorContext) -> ApplicationError:
++        """Handle attribute errors."""
++        return self.create_application_error(error, context, ErrorSeverity.MEDIUM)
++    
++    def _handle_generic_error(self, error: Exception, context: ErrorContext) -> ApplicationError:
++        """Handle generic errors."""
++        return self.create_application_error(error, context, ErrorSeverity.MEDIUM)
++
++
++# Global exception handler instance
++_global_exception_handler: Optional[GlobalExceptionHandler] = None
++
++
++def get_exception_handler() -> GlobalExceptionHandler:
++    """Get global exception handler instance."""
++    global _global_exception_handler
++    if _global_exception_handler is None:
++        _global_exception_handler = GlobalExceptionHandler()
++    return _global_exception_handler
++
++
++def handle_exception(exception: Exception, context: Optional[ErrorContext] = None) -> ApplicationError:
++    """Handle exception using global handler."""
++    handler = get_exception_handler()
++    return handler.handle_exception(exception, context)
++
++
++def safe_execute(func: Callable, *args, **kwargs) -> Any:
++    """Execute function with exception handling."""
++    try:
++        return func(*args, **kwargs)
++    except Exception as e:
++        handle_exception(e)
++        return None
++
++
++def exception_handler(func: Callable):
++    """Decorator for automatic exception handling."""
++    @wraps(func)
++    def wrapper(*args, **kwargs):
++        try:
++            return func(*args, **kwargs)
++        except Exception as e:
++            context = ErrorContext(
++                function_name=func.__name__,
++                module_name=func.__module__
++            )
++            handle_exception(e, context)
++            return None
++    return wrapper
++
++
++def streamlit_exception_handler(func: Callable):
++    """Exception handler specifically for Streamlit functions."""
++    @wraps(func)
++    def wrapper(*args, **kwargs):
++        try:
++            return func(*args, **kwargs)
++        except Exception as e:
++            context = ErrorContext(
++                function_name=func.__name__,
++                module_name=func.__module__,
++                user_id=st.session_state.get("current_user", {}).get("id"),
++                session_id=st.session_state.get("session_id")
++            )
++            app_error = handle_exception(e, context)
++            
++            # For critical errors, stop execution
++            if app_error.severity == ErrorSeverity.CRITICAL:
++                st.stop()
++            
++            return None
++    return wrapper
++
++
++def setup_global_exception_handling():
++    """Setup global exception handling for the application."""
++    def handle_unhandled_exception(exc_type, exc_value, exc_traceback):
++        """Handle unhandled exceptions."""
++        if issubclass(exc_type, KeyboardInterrupt):
++            # Allow keyboard interrupts to pass through
++            sys.__excepthook__(exc_type, exc_value, exc_traceback)
++            return
++        
++        # Handle other exceptions
++        context = ErrorContext(
++            function_name="global",
++            module_name="__main__"
++        )
++        handle_exception(exc_value, context)
++    
++    # Set global exception handler
++    sys.excepthook = handle_unhandled_exception
++
+diff --git a/streamlit_extension/utils/logging_config.py b/streamlit_extension/utils/logging_config.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..f25818a39434da4f72296555d2a4ed2e0b7d89b6
+--- /dev/null
++++ b/streamlit_extension/utils/logging_config.py
+@@ -0,0 +1,352 @@
++"""Structured logging configuration for the application."""
++
++from __future__ import annotations
++import logging
++import logging.handlers
 +import json
++import sys
++from datetime import datetime
++from typing import Dict, Any, Optional
 +from enum import Enum
 +from pathlib import Path
-+from typing import Any, Dict
-+
-+import yaml
-+from jsonschema import validate, ValidationError
++import streamlit as st
 +
 +
-+class Environment(str, Enum):
-+    """Supported deployment environments."""
-+
-+    DEVELOPMENT = "development"
-+    STAGING = "staging"
-+    PRODUCTION = "production"
-+    TESTING = "testing"
-+
-+
-+class ConfigLoader:
-+    """Loads and validates YAML configuration files."""
-+
-+    def __init__(self, base_path: Path | None = None) -> None:
-+        self.base_path = base_path or Path("config/environments")
-+
-+    def load_yaml_config(self, environment: Environment) -> Dict[str, Any]:
-+        """Load YAML configuration for the given environment."""
-+        file_path = self.base_path / f"{environment.value}.yaml"
-+        with file_path.open("r", encoding="utf-8") as fh:
-+            data: Dict[str, Any] = yaml.safe_load(fh) or {}
-+        return self.apply_environment_overrides(data)
-+
-+    def validate_schema(self, config: Dict[str, Any], schema_path: Path | None = None) -> bool:
-+        """Validate configuration against JSON schema."""
-+        schema_path = schema_path or Path("config/schemas/config_schema.json")
-+        with schema_path.open("r", encoding="utf-8") as fh:
-+            schema = json.load(fh)
-+        validate(instance=config, schema=schema)
-+        return True
-+
-+    def apply_environment_overrides(self, config: Dict[str, Any]) -> Dict[str, Any]:
-+        """Apply environment variable overrides in ${VAR} format."""
-+
-+        def resolve(value: Any) -> Any:
-+            if isinstance(value, str) and value.startswith("${") and value.endswith("}"):
-+                var = value[2:-1]
-+                return os.getenv(var, "")
-+            if isinstance(value, dict):
-+                return {k: resolve(v) for k, v in value.items()}
-+            if isinstance(value, list):
-+                return [resolve(v) for v in value]
-+            return value
-+
-+        return resolve(config)
++class LogLevel(Enum):
++    """Logging levels."""
++    DEBUG = logging.DEBUG
++    INFO = logging.INFO
++    WARNING = logging.WARNING
++    ERROR = logging.ERROR
++    CRITICAL = logging.CRITICAL
 +
 +
-+class EnvironmentManager:
-+    """High level manager for environment configurations."""
-+
-+    def __init__(self, environment: Environment | None = None) -> None:
-+        self.environment = environment or self.get_current_environment()
-+        self.loader = ConfigLoader()
-+
-+    def get_current_environment(self) -> Environment:
-+        """Detect current environment from APP_ENV variable."""
-+        env = os.getenv("APP_ENV", Environment.DEVELOPMENT.value).lower()
-+        try:
-+            return Environment(env)
-+        except ValueError:
-+            return Environment.DEVELOPMENT
-+
-+    def load_environment_config(self) -> Dict[str, Any]:
-+        """Load and validate configuration for current environment."""
-+        config = self.loader.load_yaml_config(self.environment)
-+        self.validate_config(config)
-+        return config
-+
-+    def validate_config(self, config: Dict[str, Any]) -> bool:
-+        """Validate configuration structure."""
-+        try:
-+            return self.loader.validate_schema(config)
-+        except ValidationError as exc:
-+            raise ValueError(str(exc)) from exc
-+
-+    def merge_configs(self, base: Dict[str, Any], override: Dict[str, Any]) -> Dict[str, Any]:
-+        """Recursively merge two configuration dictionaries."""
-+        merged = dict(base)
-+        for key, value in override.items():
-+            if key in merged and isinstance(merged[key], dict) and isinstance(value, dict):
-+                merged[key] = self.merge_configs(merged[key], value)
-+            else:
-+                merged[key] = value
-+        return merged
-+
-diff --git a/streamlit_extension/config/feature_flags.py b/streamlit_extension/config/feature_flags.py
-new file mode 100644
-index 0000000000000000000000000000000000000000..afd690ec9bae3698aa7af44579bf25eeed4737a0
---- /dev/null
-+++ b/streamlit_extension/config/feature_flags.py
-@@ -0,0 +1,40 @@
-+from __future__ import annotations
-+
-+"""Simple feature flag management."""
-+
-+import os
-+from enum import Enum
-+from typing import Any, Dict
++class LogFormat(Enum):
++    """Logging formats."""
++    JSON = "json"
++    TEXT = "text"
++    STRUCTURED = "structured"
 +
 +
-+class FeatureFlag(str, Enum):
-+    NEW_CLIENT_FORM = "NEW_CLIENT_FORM"
-+    ADVANCED_ANALYTICS = "ADVANCED_ANALYTICS"
-+    BETA_FEATURES = "BETA_FEATURES"
-+    MAINTENANCE_MODE = "MAINTENANCE_MODE"
-+
-+
-+class FeatureFlagManager:
-+    """Manage feature flags with environment overrides."""
-+
-+    def __init__(self) -> None:
-+        self.flags: Dict[FeatureFlag, bool] = {flag: False for flag in FeatureFlag}
-+        self.refresh_flags()
-+
-+    def is_enabled(self, flag: FeatureFlag) -> bool:
-+        return bool(self.flags.get(flag, False))
-+
-+    def get_flag_value(self, flag: FeatureFlag) -> Any:
-+        return self.flags.get(flag)
-+
-+    def refresh_flags(self) -> Dict[FeatureFlag, bool]:
-+        for flag in FeatureFlag:
-+            env_var = f"FF_{flag.value}"
-+            if env_var in os.environ:
-+                value = os.environ[env_var]
-+                self.flags[flag] = value.lower() in {"1", "true", "yes", "on"}
-+        return self.flags
-+
-+    def override_flag(self, flag: FeatureFlag, value: bool) -> None:
-+        self.flags[flag] = value
-+
-diff --git a/streamlit_extension/config/secrets_manager.py b/streamlit_extension/config/secrets_manager.py
-new file mode 100644
-index 0000000000000000000000000000000000000000..96d7ac9cd7d8db0e1806dd15fb72af9e5666bf80
---- /dev/null
-+++ b/streamlit_extension/config/secrets_manager.py
-@@ -0,0 +1,79 @@
-+from __future__ import annotations
-+
-+"""Secrets management with environment variables and vault support."""
-+
-+import os
-+from enum import Enum
-+from typing import Any, Dict, Optional
-+
-+
-+class SecretType(str, Enum):
-+    """Types of secrets supported."""
-+
-+    DATABASE_URL = "DATABASE_URL"
-+    API_KEYS = "API_KEYS"
-+    ENCRYPTION_KEYS = "ENCRYPTION_KEYS"
-+    OAUTH_SECRETS = "OAUTH_SECRETS"
-+
-+
-+class VaultIntegration:
-+    """Simple in-memory vault integration simulation."""
-+
-+    def __init__(self) -> None:
-+        self._cache: Dict[SecretType, Any] = {}
-+
-+    def connect_to_vault(self) -> bool:
-+        return True
-+
-+    def retrieve_secrets(self) -> Dict[SecretType, Any]:
-+        secrets = {
-+            SecretType.DATABASE_URL: "vault-db-url",
-+            SecretType.API_KEYS: {"service": "vault-key"},
-+            SecretType.ENCRYPTION_KEYS: "vault-encryption-key",
-+            SecretType.OAUTH_SECRETS: {"client_id": "vault-client"},
++class StructuredFormatter(logging.Formatter):
++    """Custom formatter for structured logging."""
++    
++    def __init__(self, format_type: LogFormat = LogFormat.JSON):
++        super().__init__()
++        self.format_type = format_type
++    
++    def format(self, record: logging.LogRecord) -> str:
++        """Format log record as structured data."""
++        # Basic log data
++        log_data = {
++            "timestamp": datetime.fromtimestamp(record.created).isoformat(),
++            "level": record.levelname,
++            "logger": record.name,
++            "message": record.getMessage(),
++            "module": record.module,
++            "function": record.funcName,
++            "line": record.lineno
 +        }
-+        self.cache_secrets(secrets)
-+        return secrets
-+
-+    def cache_secrets(self, secrets: Dict[SecretType, Any]) -> None:
-+        self._cache.update(secrets)
-+
-+    def get_cached(self, secret_type: SecretType) -> Any:
-+        return self._cache.get(secret_type)
-+
-+
-+class SecretsManager:
-+    """Manage application secrets from env vars or vault."""
-+
-+    def __init__(self, vault: VaultIntegration | None = None) -> None:
-+        self.vault = vault or VaultIntegration()
-+        self._secrets: Dict[SecretType, Any] = {}
-+
-+    def load_from_env_vars(self) -> Dict[SecretType, Any]:
-+        for secret in SecretType:
-+            if secret.value in os.environ:
-+                self._secrets[secret] = os.environ[secret.value]
-+        return self._secrets
-+
-+    def load_from_vault(self) -> Dict[SecretType, Any]:
-+        if self.vault.connect_to_vault():
-+            secrets = self.vault.retrieve_secrets()
-+            self._secrets.update(secrets)
-+            return secrets
-+        return {}
-+
-+    def get_secret(self, secret_type: SecretType) -> Optional[Any]:
-+        return self._secrets.get(secret_type)
-+
-+    def rotate_secrets(self) -> Dict[SecretType, Any]:
-+        rotated = {secret: f"rotated-{secret.value.lower()}" for secret in SecretType}
-+        self._secrets.update(rotated)
-+        self.vault.cache_secrets(rotated)
-+        return rotated
-+
-+    def validate_secrets(self) -> bool:
-+        missing = [s.value for s in SecretType if s not in self._secrets]
-+        if missing:
-+            raise ValueError(f"Missing secrets: {', '.join(missing)}")
-+        return True
-+
-diff --git a/tests/test_environment_config.py b/tests/test_environment_config.py
-index 0682f19e1c4b2a515510c3fce42a8c09bf1ad04a..5b8b3f83c6d25fbfd62ade36616b48d3c06e7cdf 100644
---- a/tests/test_environment_config.py
-+++ b/tests/test_environment_config.py
-@@ -1,71 +1,137 @@
--"""Test environment configuration system."""
-+"""Tests for environment configuration, secrets and feature flags."""
- 
- import os
- import sys
- from pathlib import Path
-+
-+sys.path.append(str(Path(__file__).resolve().parents[1]))
- from unittest.mock import patch
- 
- import pytest
- 
--# Add project root to path for imports
--sys.path.append(str(Path(__file__).resolve().parents[1]))
-+from streamlit_extension.config.environment import EnvironmentManager, Environment
-+from streamlit_extension.config.secrets_manager import (
-+    SecretsManager,
-+    SecretType,
-+    VaultIntegration,
-+)
-+from streamlit_extension.config.feature_flags import FeatureFlagManager, FeatureFlag
-+
-+
-+# ---------------------------------------------------------------------------
-+# Environment configuration tests
-+# ---------------------------------------------------------------------------
-+
-+def test_load_development_config():
-+    manager = EnvironmentManager(Environment.DEVELOPMENT)
-+    config = manager.load_environment_config()
-+    assert config["debug"] is True
-+    assert config["database"]["url"] == "sqlite:///framework_dev.db"
++        
++        # Add exception info if present
++        if record.exc_info:
++            log_data["exception"] = {
++                "type": record.exc_info[0].__name__ if record.exc_info[0] else None,
++                "message": str(record.exc_info[1]) if record.exc_info[1] else None,
++                "traceback": self.formatException(record.exc_info) if record.exc_info else None
++            }
++        
++        # Add extra fields
++        extra_fields = {}
++        for key, value in record.__dict__.items():
++            if key not in ('name', 'msg', 'args', 'levelname', 'levelno', 'pathname',
++                          'filename', 'module', 'lineno', 'funcName', 'created',
++                          'msecs', 'relativeCreated', 'thread', 'threadName',
++                          'processName', 'process', 'message', 'exc_info', 'exc_text',
++                          'stack_info'):
++                extra_fields[key] = value
++        
++        if extra_fields:
++            log_data["extra"] = extra_fields
++        
++        # Add Streamlit session context if available
++        try:
++            if hasattr(st, 'session_state') and st.session_state:
++                session_context = {
++                    "user_id": st.session_state.get("current_user", {}).get("id"),
++                    "session_id": st.session_state.get("session_id"),
++                    "page": getattr(st, "current_page", "unknown")
++                }
++                log_data["session"] = {k: v for k, v in session_context.items() if v is not None}
++        except Exception:
++            # Ignore session state errors during logging
++            pass
++        
++        # Format based on type
++        if self.format_type == LogFormat.JSON:
++            return json.dumps(log_data, default=str, ensure_ascii=False)
++        elif self.format_type == LogFormat.STRUCTURED:
++            return self._format_structured(log_data)
++        else:
++            return self._format_text(log_data)
++    
++    def _format_structured(self, log_data: Dict[str, Any]) -> str:
++        """Format as structured text."""
++        parts = [
++            f"[{log_data['timestamp']}]",
++            f"[{log_data['level']}]",
++            f"[{log_data['logger']}]",
++            log_data['message']
++        ]
++        
++        if 'session' in log_data:
++            session = log_data['session']
++            if session.get('user_id'):
++                parts.append(f"user={session['user_id']}")
++            if session.get('session_id'):
++                parts.append(f"session={session['session_id'][:8]}...")
++        
++        if 'extra' in log_data:
++            for key, value in log_data['extra'].items():
++                parts.append(f"{key}={value}")
++        
++        result = " ".join(parts)
++        
++        if 'exception' in log_data:
++            result += f"\nException: {log_data['exception']['type']}: {log_data['exception']['message']}"
++        
++        return result
++    
++    def _format_text(self, log_data: Dict[str, Any]) -> str:
++        """Format as simple text."""
++        timestamp = log_data['timestamp'][:19]  # Remove microseconds
++        return f"{timestamp} [{log_data['level']}] {log_data['logger']}: {log_data['message']}"
 +
 +
-+def test_load_production_config():
-+    with patch.dict(os.environ, {"DATABASE_URL": "postgres://prod/db"}):
-+        manager = EnvironmentManager(Environment.PRODUCTION)
-+        config = manager.load_environment_config()
-+        assert config["database"]["url"] == "postgres://prod/db"
-+        assert config["security"]["csrf_protection"] is True
++class LoggingConfig:
++    """Centralized logging configuration."""
++    
++    def __init__(self, 
++                 level: LogLevel = LogLevel.INFO,
++                 format_type: LogFormat = LogFormat.STRUCTURED,
++                 log_file: Optional[str] = None,
++                 max_file_size: int = 10 * 1024 * 1024,  # 10MB
++                 backup_count: int = 5,
++                 console_output: bool = True):
++        
++        self.level = level
++        self.format_type = format_type
++        self.log_file = log_file
++        self.max_file_size = max_file_size
++        self.backup_count = backup_count
++        self.console_output = console_output
++        self._loggers: Dict[str, logging.Logger] = {}
++        
++        # Setup root logger
++        self._setup_root_logger()
++    
++    def _setup_root_logger(self):
++        """Setup root logger configuration."""
++        root_logger = logging.getLogger()
++        root_logger.setLevel(self.level.value)
++        
++        # Clear existing handlers
++        root_logger.handlers.clear()
++        
++        # Create formatter
++        formatter = StructuredFormatter(self.format_type)
++        
++        # Console handler
++        if self.console_output:
++            console_handler = logging.StreamHandler(sys.stdout)
++            console_handler.setLevel(self.level.value)
++            console_handler.setFormatter(formatter)
++            root_logger.addHandler(console_handler)
++        
++        # File handler
++        if self.log_file:
++            self._setup_file_handler(root_logger, formatter)
++        
++        # Prevent duplicate logs
++        root_logger.propagate = False
++    
++    def _setup_file_handler(self, logger: logging.Logger, formatter: StructuredFormatter):
++        """Setup rotating file handler."""
++        # Ensure log directory exists
++        log_path = Path(self.log_file)
++        log_path.parent.mkdir(parents=True, exist_ok=True)
++        
++        # Create rotating file handler
++        file_handler = logging.handlers.RotatingFileHandler(
++            self.log_file,
++            maxBytes=self.max_file_size,
++            backupCount=self.backup_count,
++            encoding='utf-8'
++        )
++        
++        file_handler.setLevel(self.level.value)
++        file_handler.setFormatter(formatter)
++        logger.addHandler(file_handler)
++    
++    def get_logger(self, name: str) -> logging.Logger:
++        """Get logger for specific module."""
++        if name in self._loggers:
++            return self._loggers[name]
++        
++        logger = logging.getLogger(name)
++        logger.setLevel(self.level.value)
++        
++        # Don't add handlers to child loggers (they inherit from root)
++        logger.propagate = True
++        
++        self._loggers[name] = logger
++        return logger
++    
++    def set_level(self, level: LogLevel):
++        """Change logging level dynamically."""
++        self.level = level
++        root_logger = logging.getLogger()
++        root_logger.setLevel(level.value)
++        
++        for handler in root_logger.handlers:
++            handler.setLevel(level.value)
++        
++        for logger in self._loggers.values():
++            logger.setLevel(level.value)
++    
++    def add_custom_handler(self, handler: logging.Handler):
++        """Add custom logging handler."""
++        formatter = StructuredFormatter(self.format_type)
++        handler.setFormatter(formatter)
++        handler.setLevel(self.level.value)
++        
++        root_logger = logging.getLogger()
++        root_logger.addHandler(handler)
++    
++    def create_correlation_id(self) -> str:
++        """Create correlation ID for request tracking."""
++        import uuid
++        return str(uuid.uuid4())
++    
++    def set_correlation_id(self, correlation_id: str):
++        """Set correlation ID in session state."""
++        if hasattr(st, 'session_state'):
++            st.session_state.correlation_id = correlation_id
++    
++    def get_correlation_id(self) -> Optional[str]:
++        """Get correlation ID from session state."""
++        if hasattr(st, 'session_state'):
++            return st.session_state.get('correlation_id')
++        return None
 +
 +
-+def test_environment_detection():
-+    with patch.dict(os.environ, {"APP_ENV": "testing"}, clear=True):
-+        manager = EnvironmentManager()
-+        assert manager.environment == Environment.TESTING
++# Global logging configuration
++_logging_config: Optional[LoggingConfig] = None
 +
 +
-+def test_config_validation():
-+    manager = EnvironmentManager(Environment.DEVELOPMENT)
-+    config = manager.load_environment_config()
-+    assert manager.validate_config(config) is True
-+    del config["database"]["url"]
-+    with pytest.raises(ValueError):
-+        manager.validate_config(config)
++def setup_logging(level: LogLevel = LogLevel.INFO,
++                 format_type: LogFormat = LogFormat.STRUCTURED,
++                 log_file: Optional[str] = None,
++                 console_output: bool = True) -> LoggingConfig:
++    """Setup global logging configuration."""
++    global _logging_config
++    
++    # Default log file location
++    if log_file is None:
++        log_file = "logs/app.log"
++    
++    _logging_config = LoggingConfig(
++        level=level,
++        format_type=format_type,
++        log_file=log_file,
++        console_output=console_output
++    )
++    
++    return _logging_config
 +
 +
-+def test_merge_configs():
-+    manager = EnvironmentManager(Environment.DEVELOPMENT)
-+    base = {"a": 1, "b": {"c": 2}}
-+    override = {"b": {"d": 3}, "e": 4}
-+    merged = manager.merge_configs(base, override)
-+    assert merged == {"a": 1, "b": {"c": 2, "d": 3}, "e": 4}
++def get_logging_config() -> LoggingConfig:
++    """Get global logging configuration."""
++    global _logging_config
++    if _logging_config is None:
++        _logging_config = setup_logging()
++    return _logging_config
 +
 +
-+# ---------------------------------------------------------------------------
-+# Secrets management tests
-+# ---------------------------------------------------------------------------
-+
-+def test_load_secrets_from_env():
-+    env = {secret.value: f"value_{i}" for i, secret in enumerate(SecretType)}
-+    with patch.dict(os.environ, env, clear=True):
-+        manager = SecretsManager()
-+        loaded = manager.load_from_env_vars()
-+        assert len(loaded) == len(SecretType)
++def get_logger(name: str) -> logging.Logger:
++    """Get logger for specific module."""
++    config = get_logging_config()
++    return config.get_logger(name)
 +
 +
-+def test_secrets_validation():
-+    manager = SecretsManager()
-+    manager._secrets = {SecretType.DATABASE_URL: "url"}
-+    with pytest.raises(ValueError):
-+        manager.validate_secrets()
-+    manager.load_from_vault()
-+    assert manager.validate_secrets() is True
++def log_function_call(func_name: str, args: tuple = (), kwargs: Dict[str, Any] = None):
++    """Log function call with parameters."""
++    logger = get_logger("function_calls")
++    
++    # Sanitize arguments for logging
++    safe_args = []
++    for arg in args:
++        if isinstance(arg, str) and len(arg) > 100:
++            safe_args.append(f"{arg[:97]}...")
++        else:
++            safe_args.append(repr(arg))
++    
++    safe_kwargs = {}
++    if kwargs:
++        for key, value in kwargs.items():
++            if isinstance(value, str) and len(value) > 100:
++                safe_kwargs[key] = f"{value[:97]}..."
++            else:
++                safe_kwargs[key] = repr(value)
++    
++    logger.debug(f"Function call: {func_name}", extra={
++        "function": func_name,
++        "args": safe_args,
++        "kwargs": safe_kwargs
++    })
 +
 +
-+def test_secrets_caching():
-+    vault = VaultIntegration()
-+    manager = SecretsManager(vault)
-+    manager.load_from_vault()
-+    assert vault.get_cached(SecretType.DATABASE_URL) == "vault-db-url"
++def log_performance(func_name: str, duration: float, additional_data: Dict[str, Any] = None):
++    """Log performance metrics."""
++    logger = get_logger("performance")
++    
++    log_data = {
++        "function": func_name,
++        "duration_ms": round(duration * 1000, 2)
++    }
++    
++    if additional_data:
++        log_data.update(additional_data)
++    
++    logger.info(f"Performance: {func_name} took {duration:.3f}s", extra=log_data)
 +
 +
-+def test_secrets_rotation():
-+    manager = SecretsManager()
-+    manager.load_from_vault()
-+    rotated = manager.rotate_secrets()
-+    for secret in SecretType:
-+        assert manager.get_secret(secret) == rotated[secret]
++def log_user_action(action: str, user_id: Optional[int] = None, additional_data: Dict[str, Any] = None):
++    """Log user actions for audit trail."""
++    logger = get_logger("user_actions")
++    
++    log_data = {
++        "action": action,
++        "user_id": user_id or st.session_state.get("current_user", {}).get("id")
++    }
++    
++    if additional_data:
++        log_data.update(additional_data)
++    
++    logger.info(f"User action: {action}", extra=log_data)
 +
 +
-+def test_get_secret():
-+    manager = SecretsManager()
-+    with patch.dict(os.environ, {SecretType.API_KEYS.value: "key"}):
-+        manager.load_from_env_vars()
-+    assert manager.get_secret(SecretType.API_KEYS) == "key"
++def log_security_event(event_type: str, severity: str, details: Dict[str, Any] = None):
++    """Log security events."""
++    logger = get_logger("security")
++    
++    log_data = {
++        "event_type": event_type,
++        "severity": severity
++    }
++    
++    if details:
++        log_data.update(details)
++    
++    logger.warning(f"Security event: {event_type}", extra=log_data)
 +
-+
-+# ---------------------------------------------------------------------------
-+# Feature flag tests
-+# ---------------------------------------------------------------------------
-+
-+def test_feature_flag_enabled():
-+    with patch.dict(os.environ, {"FF_NEW_CLIENT_FORM": "1"}):
-+        manager = FeatureFlagManager()
-+        assert manager.is_enabled(FeatureFlag.NEW_CLIENT_FORM)
-+
-+
-+def test_feature_flag_disabled():
-+    manager = FeatureFlagManager()
-+    assert manager.is_enabled(FeatureFlag.BETA_FEATURES) is False
-+
-+
-+def test_feature_flag_override():
-+    manager = FeatureFlagManager()
-+    manager.override_flag(FeatureFlag.BETA_FEATURES, True)
-+    assert manager.is_enabled(FeatureFlag.BETA_FEATURES)
-+
-+
-+def test_feature_flag_refresh():
-+    manager = FeatureFlagManager()
-+    with patch.dict(os.environ, {"FF_ADVANCED_ANALYTICS": "true"}):
-+        manager.refresh_flags()
-+    assert manager.is_enabled(FeatureFlag.ADVANCED_ANALYTICS)
-+
-+
-+def test_feature_flag_get_value():
-+    manager = FeatureFlagManager()
-+    assert manager.get_flag_value(FeatureFlag.MAINTENANCE_MODE) is False
- 
--from streamlit_extension.config.env_manager import EnvironmentManager
--
--
--class TestEnvironmentManager:
--    def test_environment_detection(self):
--        """Test automatic environment detection."""
--        with patch.dict(os.environ, {}, clear=True):
--            manager = EnvironmentManager()
--            assert manager.environment == "development"
--        with patch.dict(os.environ, {"APP_ENV": "staging"}, clear=True):
--            manager = EnvironmentManager()
--            assert manager.environment == "staging"
--        with patch.dict(os.environ, {"APP_ENV": "staging"}, clear=True):
--            manager = EnvironmentManager(environment="production")
--            assert manager.environment == "production"
--
--    def test_config_loading(self):
--        """Test configuration loading for each environment."""
--        expected = {
--            "development": "dev_framework.db",
--            "staging": "staging_framework.db",
--            "production": "${DB_PATH}/framework.db",
--        }
--        for env, path in expected.items():
--            manager = EnvironmentManager(environment=env)
--            assert manager.database_config["framework_db_path"] == path
--
--    def test_env_var_substitution(self):
--        """Test environment variable substitution."""
--        vars = {
--            "DB_PATH": "/data",
--            "REDIS_PASSWORD": "secret",
--            "REDIS_HOST": "prod-redis",
--            "REDIS_PORT": "6380",
--        }
--        with patch.dict(os.environ, vars, clear=True):
--            manager = EnvironmentManager(environment="production")
--            db_config = manager.get_database_config()
--            assert db_config["framework_db_path"] == "/data/framework.db"
--            redis_config = manager.get_redis_config()
--            assert redis_config["password"] == "secret"
--            assert redis_config["host"] == "prod-redis"
--            assert redis_config["port"] == "6380"
--
--    def test_config_validation(self):
--        """Test configuration validation."""
--        manager = EnvironmentManager(environment="development")
--        assert manager.validate_config() is True
--        manager.database_config.pop("framework_db_path")
--        with pytest.raises(ValueError):
--            manager.validate_config()
--
--    def test_hot_reload(self):
--        """Test configuration hot reloading."""
--        manager = EnvironmentManager(environment="development")
--        assert manager.get_database_config()["framework_db_path"] == "dev_framework.db"
--        manager.environment = "staging"
--        manager.reload_config()
--        assert manager.get_database_config()["framework_db_path"] == "staging_framework.db"
  
 EOF
 )

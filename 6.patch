@@ -1,304 +1,1817 @@
  (cd "$(git rev-parse --show-toplevel)" && git apply --3way <<'EOF' 
-diff --git a/streamlit_extension/utils/pagination.py b/streamlit_extension/utils/pagination.py
-new file mode 100644
-index 0000000000000000000000000000000000000000..14ff93970e6ebcefe788d58e5ed77d716ad9f734
---- /dev/null
-+++ b/streamlit_extension/utils/pagination.py
-@@ -0,0 +1,170 @@
-+"""
-+📄 Pagination System - Enterprise Large Dataset Management
+diff --git a/streamlit_extension/middleware/__init__.py b/streamlit_extension/middleware/__init__.py
+index c8b4a097f670ec396cca4e06449322ade410d8b3..4709a275f60de91676643202c00338b99a6ea44d 100644
+--- a/streamlit_extension/middleware/__init__.py
++++ b/streamlit_extension/middleware/__init__.py
+@@ -1 +1,38 @@
+-"""Middleware utilities for correlation and context management."""
+\ No newline at end of file
++"""Middleware package for rate limiting and DoS protection."""
 +
-+Resolves report.md bottleneck: Heavy SQL queries without pagination.
-+Features:
-+- LIMIT/OFFSET pagination for all database operations
-+- Configurable page sizes (10, 25, 50, 100, 250)
-+- Thread-safe page tracking
-+- Performance metrics
-+- Integration with existing DatabaseManager
-+- Streamlit UI components for pagination controls
-+"""
++from .rate_limiter import (
++    RateLimiter,
++    RateLimitResult,
++    RateLimitConfig,
++    rate_limit_decorator,
++    apply_rate_limiting,
++)
++from .dos_protection import (
++    DoSProtection,
++    DoSDetector,
++    DoSConfig,
++    dos_protection_decorator,
++    apply_dos_protection,
++)
++from .request_tracker import RequestTracker, RequestMetrics
++from .circuit_breaker import CircuitBreaker, CircuitState
++from .middleware_manager import MiddlewareManager, apply_middleware
++
++__all__ = [
++    "RateLimiter",
++    "RateLimitResult",
++    "RateLimitConfig",
++    "rate_limit_decorator",
++    "apply_rate_limiting",
++    "DoSProtection",
++    "DoSDetector",
++    "DoSConfig",
++    "dos_protection_decorator",
++    "apply_dos_protection",
++    "RequestTracker",
++    "RequestMetrics",
++    "CircuitBreaker",
++    "CircuitState",
++    "MiddlewareManager",
++    "apply_middleware",
++]
+diff --git a/streamlit_extension/middleware/admin_panel.py b/streamlit_extension/middleware/admin_panel.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..7e6a67a21742d990ecb2c3044566fe80c181d782
+--- /dev/null
++++ b/streamlit_extension/middleware/admin_panel.py
+@@ -0,0 +1,280 @@
++"""Admin panel for monitoring and managing middleware."""
++
++import streamlit as st
++from datetime import datetime, timedelta
++from .middleware_manager import get_middleware_manager, get_middleware_status
++from .dos_protection import get_dos_protection
++from .rate_limiter import get_rate_limiter
++from . import rate_limit_decorator, dos_protection_decorator
++
++
++@rate_limit_decorator
++@dos_protection_decorator
++def render_middleware_admin():
++    """Render middleware administration panel."""
++    st.title("🛡️ Middleware Administration")
++    
++    # Check admin permissions
++    if not _check_admin_permissions():
++        st.error("🔒 Admin access required")
++        return
++    
++    tabs = st.tabs([
++        "📊 Overview", 
++        "🚦 Rate Limiting", 
++        "🛡️ DoS Protection", 
++        "⚡ Circuit Breakers",
++        "👥 User Management"
++    ])
++    
++    with tabs[0]:
++        render_overview()
++    
++    with tabs[1]:
++        render_rate_limiting_admin()
++    
++    with tabs[2]:
++        render_dos_protection_admin()
++    
++    with tabs[3]:
++        render_circuit_breaker_admin()
++    
++    with tabs[4]:
++        render_user_management()
++
++
++def _check_admin_permissions() -> bool:
++    """Check if current user has admin permissions."""
++    current_user = st.session_state.get("current_user")
++    if current_user and current_user.get("role") == "admin":
++        return True
++    return False
++
++
++def render_overview():
++    """Render middleware overview."""
++    st.header("📊 Middleware Overview")
++    
++    status = get_middleware_status()
++    
++    # Overall status
++    st.subheader("System Status")
++    
++    col1, col2, col3 = st.columns(3)
++    
++    with col1:
++        st.metric("Middleware Enabled", "✅" if status["middleware_enabled"] else "❌")
++    
++    with col2:
++        active_components = len(status.get("components", {}))
++        st.metric("Active Components", active_components)
++    
++    with col3:
++        st.metric("Last Updated", datetime.now().strftime("%H:%M:%S"))
++    
++    # Component status
++    if "components" in status:
++        st.subheader("Component Status")
++        
++        for component_name, component_data in status["components"].items():
++            with st.expander(f"🔧 {component_name.replace('_', ' ').title()}"):
++                st.json(component_data)
++
++
++def render_rate_limiting_admin():
++    """Render rate limiting administration."""
++    st.header("🚦 Rate Limiting Administration")
++    
++    rate_limiter = get_rate_limiter()
++    stats = rate_limiter.get_stats()
++    
++    # Configuration
++    st.subheader("Configuration")
++    config = stats["config"]
++    
++    col1, col2 = st.columns(2)
++    
++    with col1:
++        st.write(f"**Requests per minute:** {config['requests_per_minute']}")
++        st.write(f"**Burst limit:** {config['burst_limit']}")
++        st.write(f"**Algorithm:** {config['algorithm']}")
++    
++    with col2:
++        st.write(f"**Enabled:** {'✅' if config['enabled'] else '❌'}")
++        st.write(f"**Active users:** {stats['stats']['active_users']}")
++    
++    # Manual controls
++    st.subheader("Manual Controls")
++    
++    col1, col2 = st.columns(2)
++    
++    with col1:
++        if st.button("🧹 Cleanup Expired Data"):
++            rate_limiter.cleanup_expired_data()
++            st.success("Cleanup completed")
++    
++    with col2:
++        user_key = st.text_input("Reset limits for user:")
++        if st.button("🔄 Reset User Limits") and user_key:
++            rate_limiter.reset_user_limits(user_key)
++            st.success(f"Reset limits for user: {user_key}")
++
++
++def render_dos_protection_admin():
++    """Render DoS protection administration."""
++    st.header("🛡️ DoS Protection Administration")
++    
++    dos_protection = get_dos_protection()
++    status = dos_protection.get_protection_status()
++    
++    # Current status
++    st.subheader("Current Status")
++    
++    col1, col2, col3 = st.columns(3)
++    
++    with col1:
++        stats = status["stats"]["current_state"]
++        st.metric("Active Users", stats["active_users"])
++    
++    with col2:
++        st.metric("Banned Users", stats["banned_users"])
++    
++    with col3:
++        st.metric("Suspicious Users", stats["suspicious_users"])
++    
++    # Recent events
++    st.subheader("Recent Events")
++    
++    recent_events = dos_protection.detector.get_recent_events(1)  # Last hour
++    
++    if recent_events:
++        for event in recent_events[-10:]:  # Show last 10 events
++            severity_color = {
++                "low": "🟢",
++                "medium": "🟡", 
++                "high": "🟠",
++                "critical": "🔴"
++            }
++            
++            st.write(f"{severity_color.get(event.threat_level.value, '⚪')} "
++                    f"{event.timestamp.strftime('%H:%M:%S')} - "
++                    f"{event.event_type} - {event.user_key} - {event.action_taken}")
++    else:
++        st.info("No recent DoS events")
++    
++    # Manual controls
++    st.subheader("Manual Controls")
++    
++    col1, col2 = st.columns(2)
++    
++    with col1:
++        ban_user = st.text_input("Ban user:")
++        ban_reason = st.text_input("Ban reason:", value="Manual ban")
++        if st.button("🚫 Ban User") and ban_user:
++            dos_protection.detector.ban_user(ban_user, ban_reason)
++            st.success(f"Banned user: {ban_user}")
++    
++    with col2:
++        unban_user = st.text_input("Unban user:")
++        if st.button("✅ Unban User") and unban_user:
++            dos_protection.detector.unban_user(unban_user)
++            st.success(f"Unbanned user: {unban_user}")
++
++
++def render_circuit_breaker_admin():
++    """Render circuit breaker administration."""
++    st.header("⚡ Circuit Breaker Administration")
++    
++    manager = get_middleware_manager()
++    status = get_middleware_status()
++    
++    if "circuit_breakers" in status.get("components", {}):
++        breakers = status["components"]["circuit_breakers"]
++        
++        for name, breaker_stats in breakers.items():
++            with st.expander(f"🔌 {name.title()} Circuit Breaker"):
++                col1, col2 = st.columns(2)
++                
++                with col1:
++                    state_color = {
++                        "closed": "🟢",
++                        "open": "🔴",
++                        "half_open": "🟡"
++                    }
++                    st.write(f"**State:** {state_color.get(breaker_stats['state'], '⚪')} {breaker_stats['state'].title()}")
++                    st.write(f"**Failure Count:** {breaker_stats['failure_count']}")
++                
++                with col2:
++                    st.write(f"**Success Count:** {breaker_stats['success_count']}")
++                    if st.button(f"🔄 Reset {name}", key=f"reset_{name}"):
++                        breaker = manager.get_circuit_breaker(name)
++                        if breaker:
++                            breaker.reset()
++                            st.success(f"Reset circuit breaker: {name}")
++    else:
++        st.info("No circuit breakers configured")
++
++
++def render_user_management():
++    """Render user management for middleware."""
++    st.header("👥 User Management")
++    
++    # User search and actions
++    st.subheader("User Actions")
++    
++    user_key = st.text_input("User key:")
++    
++    if user_key:
++        col1, col2, col3 = st.columns(3)
++        
++        with col1:
++            if st.button("🔄 Reset All Limits"):
++                manager = get_middleware_manager()
++                manager.reset_user_limits(user_key)
++                st.success(f"Reset all limits for: {user_key}")
++        
++        with col2:
++            if st.button("📊 View User Stats"):
++                # Show user-specific stats
++                dos_protection = get_dos_protection()
++                
++                # Check if banned
++                is_banned = dos_protection.detector.is_user_banned(user_key)
++                ban_info = dos_protection.detector.get_ban_info(user_key)
++                
++                st.write(f"**User:** {user_key}")
++                st.write(f"**Banned:** {'Yes' if is_banned else 'No'}")
++                
++                if ban_info:
++                    st.write(f"**Ban expires:** {ban_info.strftime('%Y-%m-%d %H:%M:%S')}")
++        
++        with col3:
++            if st.button("🚫 Emergency Ban"):
++                dos_protection = get_dos_protection()
++                dos_protection.detector.ban_user(user_key, "Emergency manual ban")
++                st.success(f"Emergency ban applied to: {user_key}")
++    
++    # Bulk actions
++    st.subheader("Bulk Actions")
++    
++    col1, col2 = st.columns(2)
++    
++    with col1:
++        if st.button("🧹 Cleanup All Expired Data"):
++            rate_limiter = get_rate_limiter()
++            dos_protection = get_dos_protection()
++            
++            rate_limiter.cleanup_expired_data()
++            dos_protection.detector.cleanup_old_data()
++            
++            st.success("Cleaned up all expired data")
++    
++    with col2:
++        if st.button("📊 Export Middleware Logs"):
++            status = get_middleware_status()
++            st.download_button(
++                label="💾 Download Status JSON",
++                data=str(status),
++                file_name=f"middleware_status_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json",
++                mime="application/json"
++            )
+diff --git a/streamlit_extension/middleware/circuit_breaker.py b/streamlit_extension/middleware/circuit_breaker.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..b7a4090bc0e22b727fc87e80c9bf59b3f69101d6
+--- /dev/null
++++ b/streamlit_extension/middleware/circuit_breaker.py
+@@ -0,0 +1,153 @@
++"""Circuit breaker pattern for fault tolerance."""
 +
 +from __future__ import annotations
-+
 +import time
 +import threading
++from enum import Enum
 +from dataclasses import dataclass
-+from typing import Callable, Any, Iterable, Dict, List, Optional, Tuple
-+
-+# Graceful Streamlit import
-+try:  # pragma: no cover - import check
-+    import streamlit as st
-+    STREAMLIT_AVAILABLE = True
-+except Exception:  # pragma: no cover - environment without streamlit
-+    st = None  # type: ignore
-+    STREAMLIT_AVAILABLE = False
++from typing import Callable, Any, Optional
++from datetime import datetime, timedelta
 +
 +
-+class PaginationConfig:
-+    """Pagination configuration and constants."""
-+
-+    DEFAULT_PAGE_SIZE = 25
-+    PAGE_SIZES = [10, 25, 50, 100, 250]
-+    MAX_PAGE_SIZE = 1000
++class CircuitState(Enum):
++    """Circuit breaker states."""
++    CLOSED = "closed"      # Normal operation
++    OPEN = "open"          # Failing, blocking requests
++    HALF_OPEN = "half_open"  # Testing if service recovered
 +
 +
 +@dataclass
-+class PaginationResult:
-+    """Pagination result with metadata."""
-+
-+    data: Iterable[Any]
-+    page: int
-+    page_size: int
-+    total_count: int
-+
-+    def __post_init__(self) -> None:
-+        if self.total_count == 0:
-+            self.total_pages = 0
-+            self.has_next = False
-+            self.has_previous = False
-+            self.start_index = 0
-+            self.end_index = 0
-+        else:
-+            self.total_pages = (self.total_count + self.page_size - 1) // self.page_size
-+            self.has_next = self.page < self.total_pages
-+            self.has_previous = self.page > 1
-+            self.start_index = (self.page - 1) * self.page_size + 1
-+            self.end_index = min(self.page * self.page_size, self.total_count)
++class CircuitBreakerConfig:
++    """Circuit breaker configuration."""
++    failure_threshold: int = 5      # Failures before opening
++    timeout_seconds: int = 60       # Time to wait before trying again
++    success_threshold: int = 3      # Successes to close from half-open
++    enabled: bool = True
 +
 +
-+class PaginationManager:
-+    """Enterprise pagination manager for large datasets."""
-+
-+    def __init__(self) -> None:
-+        self._lock = threading.Lock()
-+        self.last_query_time: float = 0.0
-+        self.query_history: List[float] = []
-+
-+    def paginate_query(
-+        self,
-+        query_func: Callable[..., Tuple[Iterable[Any], int]],
-+        page: int = 1,
-+        page_size: int = PaginationConfig.DEFAULT_PAGE_SIZE,
-+        **kwargs: Any,
-+    ) -> PaginationResult:
-+        """Apply pagination to any query function.
-+
-+        Args:
-+            query_func: Function accepting ``limit`` and ``offset`` and returning
-+                ``(data, total_count)``.
-+            page: 1-based page number.
-+            page_size: Number of items per page.
-+            **kwargs: Additional keyword arguments passed to ``query_func``.
-+
-+        Returns:
-+            PaginationResult containing paginated data and metadata.
-+        """
-+
-+        if page < 1:
-+            raise ValueError("page must be >= 1")
-+        if page_size < 1 or page_size > PaginationConfig.MAX_PAGE_SIZE:
-+            raise ValueError(
-+                f"page_size must be between 1 and {PaginationConfig.MAX_PAGE_SIZE}"
-+            )
-+
-+        offset = (page - 1) * page_size
-+
-+        start = time.perf_counter()
-+        data, total_count = query_func(limit=page_size, offset=offset, **kwargs)
-+        end = time.perf_counter()
-+        elapsed = (end - start) * 1000.0  # milliseconds
-+
-+        with self._lock:
-+            self.last_query_time = elapsed
-+            self.query_history.append(elapsed)
-+
-+        return PaginationResult(data=data, page=page, page_size=page_size, total_count=total_count)
-+
-+    def get_page_info(self, total_count: int, page: int, page_size: int) -> Dict[str, int]:
-+        """Get pagination metadata."""
-+
-+        result = PaginationResult([], page, page_size, total_count)
++class CircuitBreaker:
++    """Circuit breaker implementation for database operations."""
++    
++    def __init__(self, name: str, config: CircuitBreakerConfig):
++        self.name = name
++        self.config = config
++        self.state = CircuitState.CLOSED
++        self.failure_count = 0
++        self.success_count = 0
++        self.last_failure_time = None
++        self.lock = threading.Lock()
++    
++    def call(self, func: Callable, *args, **kwargs) -> Any:
++        """Execute function with circuit breaker protection."""
++        if not self.config.enabled:
++            return func(*args, **kwargs)
++        
++        with self.lock:
++            # Check if we should attempt the call
++            if self.state == CircuitState.OPEN:
++                if self._should_attempt_reset():
++                    self.state = CircuitState.HALF_OPEN
++                    self.success_count = 0
++                else:
++                    raise CircuitBreakerOpenError(
++                        f"Circuit breaker '{self.name}' is OPEN"
++                    )
++        
++        try:
++            # Attempt the call
++            result = func(*args, **kwargs)
++            self._on_success()
++            return result
++            
++        except Exception as e:
++            self._on_failure()
++            raise
++    
++    def _should_attempt_reset(self) -> bool:
++        """Check if enough time has passed to attempt reset."""
++        if self.last_failure_time is None:
++            return True
++        
++        time_since_failure = time.time() - self.last_failure_time
++        return time_since_failure >= self.config.timeout_seconds
++    
++    def _on_success(self):
++        """Handle successful operation."""
++        with self.lock:
++            if self.state == CircuitState.HALF_OPEN:
++                self.success_count += 1
++                if self.success_count >= self.config.success_threshold:
++                    self.state = CircuitState.CLOSED
++                    self.failure_count = 0
++                    self.success_count = 0
++            elif self.state == CircuitState.CLOSED:
++                self.failure_count = 0
++    
++    def _on_failure(self):
++        """Handle failed operation."""
++        with self.lock:
++            self.failure_count += 1
++            self.last_failure_time = time.time()
++            
++            if (self.failure_count >= self.config.failure_threshold and
++                self.state == CircuitState.CLOSED):
++                self.state = CircuitState.OPEN
++            elif self.state == CircuitState.HALF_OPEN:
++                self.state = CircuitState.OPEN
++    
++    def reset(self):
++        """Manually reset circuit breaker."""
++        with self.lock:
++            self.state = CircuitState.CLOSED
++            self.failure_count = 0
++            self.success_count = 0
++            self.last_failure_time = None
++    
++    def get_state(self) -> CircuitState:
++        """Get current circuit breaker state."""
++        return self.state
++    
++    def get_stats(self) -> dict:
++        """Get circuit breaker statistics."""
 +        return {
-+            "total_pages": result.total_pages,
-+            "has_next": int(result.has_next),
-+            "has_previous": int(result.has_previous),
-+            "start_index": result.start_index,
-+            "end_index": result.end_index,
++            "name": self.name,
++            "state": self.state.value,
++            "failure_count": self.failure_count,
++            "success_count": self.success_count,
++            "last_failure_time": self.last_failure_time,
++            "config": {
++                "failure_threshold": self.config.failure_threshold,
++                "timeout_seconds": self.config.timeout_seconds,
++                "success_threshold": self.config.success_threshold,
++                "enabled": self.config.enabled
++            }
 +        }
 +
-+    def generate_page_numbers(
-+        self, current_page: int, total_pages: int, window: int = 5
-+    ) -> List[int]:
-+        """Generate page number list for UI."""
 +
-+        start_page = max(1, current_page - window)
-+        end_page = min(total_pages, current_page + window)
-+        return list(range(start_page, end_page + 1))
++class CircuitBreakerOpenError(Exception):
++    """Exception raised when circuit breaker is open."""
++    pass
 +
-+    def render_streamlit_pagination(
-+        self, pagination_result: PaginationResult, key_prefix: str = "pagination"
-+    ) -> Optional[Dict[str, Any]]:
-+        """Render Streamlit pagination controls."""
 +
-+        if not STREAMLIT_AVAILABLE:  # pragma: no cover - handled in tests via patch
-+            return None
++# Global circuit breakers for different operations
++_circuit_breakers = {}
 +
-+        st.write(
-+            f"Showing {pagination_result.start_index}-{pagination_result.end_index} "
-+            f"of {pagination_result.total_count}"
-+        )
-+        cols = st.columns(3)
-+        prev = cols[0].button(
-+            "Previous", key=f"{key_prefix}_prev", disabled=not pagination_result.has_previous
-+        )
-+        page_input = cols[1].number_input(
-+            "Page",
-+            min_value=1,
-+            max_value=max(1, pagination_result.total_pages),
-+            value=pagination_result.page,
-+            key=f"{key_prefix}_page",
-+        )
-+        next_ = cols[2].button(
-+            "Next", key=f"{key_prefix}_next", disabled=not pagination_result.has_next
-+        )
-+        page_size = st.selectbox(
-+            "Page size",
-+            PaginationConfig.PAGE_SIZES,
-+            index=PaginationConfig.PAGE_SIZES.index(pagination_result.page_size)
-+            if pagination_result.page_size in PaginationConfig.PAGE_SIZES
-+            else 0,
-+            key=f"{key_prefix}_size",
-+        )
-+        return {
-+            "prev": prev,
-+            "next": next_,
-+            "page": int(page_input),
-+            "page_size": int(page_size),
-+        }
-diff --git a/tests/test_pagination.py b/tests/test_pagination.py
++
++def get_circuit_breaker(name: str, config: Optional[CircuitBreakerConfig] = None) -> CircuitBreaker:
++    """Get or create circuit breaker for operation."""
++    if name not in _circuit_breakers:
++        if config is None:
++            config = CircuitBreakerConfig()
++        _circuit_breakers[name] = CircuitBreaker(name, config)
++    
++    return _circuit_breakers[name]
++
++
++def circuit_breaker_decorator(name: str, config: Optional[CircuitBreakerConfig] = None):
++    """Decorator to apply circuit breaker to functions."""
++    def decorator(func):
++        def wrapper(*args, **kwargs):
++            breaker = get_circuit_breaker(name, config)
++            return breaker.call(func, *args, **kwargs)
++        return wrapper
++    return decorator
+diff --git a/streamlit_extension/middleware/dos_protection.py b/streamlit_extension/middleware/dos_protection.py
 new file mode 100644
-index 0000000000000000000000000000000000000000..c1cbbc5ea6164e6cca5844ac2e14b014ed5e1778
+index 0000000000000000000000000000000000000000..e23f6f12f3e086f583bc2c03b7e8b937b61a1362
 --- /dev/null
-+++ b/tests/test_pagination.py
-@@ -0,0 +1,118 @@
-+"""Test suite for pagination system with edge cases."""
++++ b/streamlit_extension/middleware/dos_protection.py
+@@ -0,0 +1,361 @@
++"""DoS (Denial of Service) protection implementation."""
 +
++from __future__ import annotations
 +import time
-+import sys
-+from pathlib import Path
-+from typing import List, Tuple
-+
-+import pytest
-+
-+sys.path.append(str(Path(__file__).resolve().parent.parent))
-+
-+from streamlit_extension.utils.pagination import (
-+    PaginationManager,
-+    PaginationResult,
-+    PaginationConfig,
-+)
++import threading
++from collections import defaultdict, deque
++from dataclasses import dataclass
++from typing import Dict, List, Optional, Set
++from datetime import datetime, timedelta
++from enum import Enum
++import streamlit as st
 +
 +
-+# Helper query function
-+def list_query(data: List[int]) -> callable:
-+    def _query(limit: int, offset: int) -> Tuple[List[int], int]:
-+        sliced = data[offset : offset + limit]
-+        return sliced, len(data)
++class ThreatLevel(Enum):
++    """DoS threat levels."""
++    LOW = "low"
++    MEDIUM = "medium"
++    HIGH = "high"
++    CRITICAL = "critical"
 +
-+    return _query
++
++@dataclass
++class DoSConfig:
++    """DoS protection configuration."""
++    max_requests_per_second: int = 10
++    max_requests_per_minute: int = 100
++    suspicious_threshold: int = 50
++    ban_threshold: int = 100
++    ban_duration_minutes: int = 15
++    connection_timeout_seconds: int = 30
++    max_concurrent_connections: int = 100
++    enabled: bool = True
++    auto_ban: bool = True
 +
 +
-+class TestPaginationManager:
-+    def test_basic_pagination(self):
-+        """Test basic pagination functionality."""
-+        data = list(range(100))
-+        manager = PaginationManager()
-+        result = manager.paginate_query(list_query(data), page=2, page_size=10)
++@dataclass
++class DoSEvent:
++    """DoS attack event."""
++    timestamp: datetime
++    user_key: str
++    threat_level: ThreatLevel
++    event_type: str
++    details: Dict[str, any]
++    action_taken: str
 +
-+        assert isinstance(result, PaginationResult)
-+        assert list(result.data) == list(range(10, 20))
-+        assert result.page == 2
-+        assert result.page_size == 10
-+        assert result.total_count == 100
-+        assert result.total_pages == 10
-+        assert result.has_next is True
-+        assert result.has_previous is True
-+        assert result.start_index == 11
-+        assert result.end_index == 20
 +
-+    def test_edge_cases(self):
-+        """Test edge cases: empty results, single page, large datasets."""
-+        manager = PaginationManager()
++class DoSDetector:
++    """DoS attack detector with pattern recognition."""
++    
++    def __init__(self, config: DoSConfig):
++        self.config = config
++        self.request_history: Dict[str, deque] = defaultdict(deque)
++        self.connection_counts: Dict[str, int] = defaultdict(int)
++        self.banned_users: Dict[str, datetime] = {}
++        self.suspicious_users: Set[str] = set()
++        self.dos_events: List[DoSEvent] = []
++        self.lock = threading.Lock()
++    
++    def record_request(self, user_key: str):
++        """Record a request from user."""
++        now = time.time()
++        
++        with self.lock:
++            # Add request to history
++            if user_key not in self.request_history:
++                self.request_history[user_key] = deque()
++            
++            self.request_history[user_key].append(now)
++            
++            # Clean old requests (keep last 60 seconds)
++            while (self.request_history[user_key] and 
++                   self.request_history[user_key][0] < now - 60):
++                self.request_history[user_key].popleft()
++    
++    def analyze_request_pattern(self, user_key: str) -> ThreatLevel:
++        """Analyze request pattern for DoS indicators."""
++        if not self.config.enabled:
++            return ThreatLevel.LOW
++        
++        now = time.time()
++        
++        with self.lock:
++            if user_key not in self.request_history:
++                return ThreatLevel.LOW
++            
++            requests = self.request_history[user_key]
++            
++            # Count requests in last second
++            recent_requests = sum(1 for req_time in requests if req_time > now - 1)
++            
++            # Count requests in last minute
++            minute_requests = len(requests)
++            
++            # Determine threat level
++            if recent_requests > self.config.max_requests_per_second * 2:
++                return ThreatLevel.CRITICAL
++            elif minute_requests > self.config.ban_threshold:
++                return ThreatLevel.HIGH
++            elif minute_requests > self.config.suspicious_threshold:
++                return ThreatLevel.MEDIUM
++            elif recent_requests > self.config.max_requests_per_second:
++                return ThreatLevel.MEDIUM
++            else:
++                return ThreatLevel.LOW
++    
++    def detect_dos_attack(self, user_key: str) -> Optional[DoSEvent]:
++        """Detect potential DoS attack."""
++        threat_level = self.analyze_request_pattern(user_key)
++        
++        if threat_level in [ThreatLevel.HIGH, ThreatLevel.CRITICAL]:
++            # Count recent requests for details
++            now = time.time()
++            recent_requests = len([
++                req_time for req_time in self.request_history[user_key]
++                if req_time > now - 60
++            ])
++            
++            event = DoSEvent(
++                timestamp=datetime.now(),
++                user_key=user_key,
++                threat_level=threat_level,
++                event_type="excessive_requests",
++                details={
++                    "requests_per_minute": recent_requests,
++                    "threshold": self.config.ban_threshold
++                },
++                action_taken="monitoring"
++            )
++            
++            self.dos_events.append(event)
++            
++            # Auto-ban if configured
++            if (self.config.auto_ban and 
++                threat_level == ThreatLevel.CRITICAL and
++                user_key not in self.banned_users):
++                
++                self.ban_user(user_key, "Automatic DoS protection")
++                event.action_taken = "banned"
++            
++            return event
++        
++        return None
++    
++    def ban_user(self, user_key: str, reason: str = "DoS protection"):
++        """Ban user for configured duration."""
++        with self.lock:
++            ban_until = datetime.now() + timedelta(minutes=self.config.ban_duration_minutes)
++            self.banned_users[user_key] = ban_until
++            
++            # Log ban event
++            event = DoSEvent(
++                timestamp=datetime.now(),
++                user_key=user_key,
++                threat_level=ThreatLevel.CRITICAL,
++                event_type="user_banned",
++                details={
++                    "reason": reason,
++                    "ban_until": ban_until.isoformat(),
++                    "duration_minutes": self.config.ban_duration_minutes
++                },
++                action_taken="banned"
++            )
++            
++            self.dos_events.append(event)
++    
++    def is_user_banned(self, user_key: str) -> bool:
++        """Check if user is currently banned."""
++        with self.lock:
++            if user_key in self.banned_users:
++                ban_until = self.banned_users[user_key]
++                if datetime.now() < ban_until:
++                    return True
++                else:
++                    # Ban expired, remove
++                    del self.banned_users[user_key]
++            return False
++    
++    def get_ban_info(self, user_key: str) -> Optional[datetime]:
++        """Get ban expiration time for user."""
++        with self.lock:
++            return self.banned_users.get(user_key)
++    
++    def unban_user(self, user_key: str):
++        """Manually unban user."""
++        with self.lock:
++            if user_key in self.banned_users:
++                del self.banned_users[user_key]
++                
++                event = DoSEvent(
++                    timestamp=datetime.now(),
++                    user_key=user_key,
++                    threat_level=ThreatLevel.LOW,
++                    event_type="user_unbanned",
++                    details={"reason": "manual_unban"},
++                    action_taken="unbanned"
++                )
++                
++                self.dos_events.append(event)
++    
++    def get_recent_events(self, hours: int = 24) -> List[DoSEvent]:
++        """Get recent DoS events."""
++        cutoff = datetime.now() - timedelta(hours=hours)
++        return [event for event in self.dos_events if event.timestamp > cutoff]
++    
++    def cleanup_old_data(self):
++        """Clean up old tracking data."""
++        now = time.time()
++        cutoff = datetime.now() - timedelta(hours=24)
++        
++        with self.lock:
++            # Clean old request history
++            for user_key in list(self.request_history.keys()):
++                requests = self.request_history[user_key]
++                while requests and requests[0] < now - 3600:  # Keep 1 hour of history
++                    requests.popleft()
++                
++                # Remove empty histories
++                if not requests:
++                    del self.request_history[user_key]
++            
++            # Clean old events
++            self.dos_events = [event for event in self.dos_events if event.timestamp > cutoff]
++            
++            # Clean expired bans
++            expired_bans = [
++                user_key for user_key, ban_time in self.banned_users.items()
++                if datetime.now() > ban_time
++            ]
++            for user_key in expired_bans:
++                del self.banned_users[user_key]
++    
++    def get_stats(self) -> Dict[str, any]:
++        """Get DoS protection statistics."""
++        with self.lock:
++            recent_events = self.get_recent_events(1)  # Last hour
++            
++            return {
++                "config": {
++                    "enabled": self.config.enabled,
++                    "max_requests_per_second": self.config.max_requests_per_second,
++                    "max_requests_per_minute": self.config.max_requests_per_minute,
++                    "ban_threshold": self.config.ban_threshold,
++                    "ban_duration_minutes": self.config.ban_duration_minutes
++                },
++                "current_state": {
++                    "active_users": len(self.request_history),
++                    "banned_users": len(self.banned_users),
++                    "suspicious_users": len(self.suspicious_users)
++                },
++                "recent_activity": {
++                    "events_last_hour": len(recent_events),
++                    "threat_levels": {
++                        level.value: len([e for e in recent_events if e.threat_level == level])
++                        for level in ThreatLevel
++                    }
++                }
++            }
 +
-+        # Empty dataset
-+        empty_result = manager.paginate_query(list_query([]), page=1, page_size=10)
-+        assert empty_result.total_pages == 0
-+        assert empty_result.start_index == 0
-+        assert empty_result.end_index == 0
 +
-+        # Single page dataset
-+        single_data = list(range(5))
-+        single_result = manager.paginate_query(list_query(single_data), page=1, page_size=10)
-+        assert single_result.total_pages == 1
-+        assert single_result.has_next is False
-+        assert single_result.has_previous is False
-+
-+        # Large dataset
-+        large_data = list(range(1000))
-+        large_result = manager.paginate_query(list_query(large_data), page=5, page_size=100)
-+        assert list(large_result.data) == list(range(400, 500))
-+        assert large_result.total_pages == 10
-+
-+    def test_performance_large_datasets(self):
-+        """Test performance with large datasets."""
-+        data = list(range(10000))
-+        manager = PaginationManager()
-+        start = time.perf_counter()
-+        manager.paginate_query(list_query(data), page=1, page_size=50)
-+        elapsed = (time.perf_counter() - start) * 1000
-+        assert elapsed < 100, f"Pagination took too long: {elapsed}ms"
-+
-+    def test_streamlit_integration(self, monkeypatch):
-+        """Test Streamlit UI component integration."""
-+        manager = PaginationManager()
-+        result = PaginationResult(data=[], page=1, page_size=10, total_count=100)
-+
-+        # Create dummy streamlit object
-+        class DummyStreamlit:
-+            def __init__(self):
-+                self.calls = []
-+
-+            def write(self, *args, **kwargs):
-+                self.calls.append("write")
-+
-+            def columns(self, n):
-+                return [self, self, self]
-+
-+            def button(self, *args, **kwargs):
-+                self.calls.append("button")
++class DoSProtection:
++    """Main DoS protection system."""
++    
++    def __init__(self, config: Optional[DoSConfig] = None):
++        self.config = config or DoSConfig()
++        self.detector = DoSDetector(self.config)
++        self.last_cleanup = time.time()
++    
++    def _get_user_key(self) -> str:
++        """Get unique key for current user/session."""
++        # Try to get user ID from session
++        if hasattr(st, 'session_state') and 'current_user' in st.session_state:
++            user_id = st.session_state.current_user.get('id')
++            if user_id:
++                return f"user_{user_id}"
++        
++        # Fallback to session ID
++        if hasattr(st, 'session_state') and 'session_id' in st.session_state:
++            return f"session_{st.session_state.session_id}"
++        
++        # Ultimate fallback
++        return "default_user"
++    
++    def check_request(self) -> bool:
++        """Check if request should be allowed."""
++        if not self.config.enabled:
++            return True
++        
++        user_key = self._get_user_key()
++        
++        # Check if user is banned
++        if self.detector.is_user_banned(user_key):
++            ban_until = self.detector.get_ban_info(user_key)
++            if ban_until:
++                time_left = (ban_until - datetime.now()).total_seconds()
++                st.error(f"🚫 Access temporarily blocked due to suspicious activity.")
++                st.error(f"Try again in {int(time_left)} seconds.")
++            else:
++                st.error("🚫 Access denied.")
++            st.stop()
++            return False
++        
++        # Record request
++        self.detector.record_request(user_key)
++        
++        # Analyze for DoS patterns
++        dos_event = self.detector.detect_dos_attack(user_key)
++        
++        if dos_event:
++            if dos_event.threat_level == ThreatLevel.CRITICAL:
++                st.error("🚫 Too many requests. Access temporarily blocked.")
++                st.stop()
 +                return False
++            elif dos_event.threat_level == ThreatLevel.HIGH:
++                st.warning("⚠️ Unusual activity detected. Please slow down your requests.")
++        
++        # Periodic cleanup
++        now = time.time()
++        if now - self.last_cleanup > 300:  # Every 5 minutes
++            self.detector.cleanup_old_data()
++            self.last_cleanup = now
++        
++        return True
++    
++    def get_protection_status(self) -> Dict[str, any]:
++        """Get current protection status."""
++        user_key = self._get_user_key()
++        
++        return {
++            "user_key": user_key,
++            "is_banned": self.detector.is_user_banned(user_key),
++            "ban_info": self.detector.get_ban_info(user_key),
++            "threat_level": self.detector.analyze_request_pattern(user_key).value,
++            "stats": self.detector.get_stats()
++        }
 +
-+            def number_input(self, *args, **kwargs):
-+                self.calls.append("number_input")
-+                return 1
 +
-+            def selectbox(self, *args, **kwargs):
-+                self.calls.append("selectbox")
-+                return 10
++# Global DoS protection instance
++_dos_protection: Optional[DoSProtection] = None
 +
-+        dummy = DummyStreamlit()
-+        monkeypatch.setattr(
-+            "streamlit_extension.utils.pagination.st", dummy, raising=False
++
++def get_dos_protection() -> DoSProtection:
++    """Get global DoS protection instance."""
++    global _dos_protection
++    if _dos_protection is None:
++        _dos_protection = DoSProtection()
++    return _dos_protection
++
++
++def apply_dos_protection() -> bool:
++    """Apply DoS protection to current request."""
++    protection = get_dos_protection()
++    return protection.check_request()
++
++
++def dos_protection_decorator(func):
++    """Decorator to apply DoS protection to functions."""
++    def wrapper(*args, **kwargs):
++        if apply_dos_protection():
++            return func(*args, **kwargs)
++        return None
++    return wrapper
+diff --git a/streamlit_extension/middleware/middleware_manager.py b/streamlit_extension/middleware/middleware_manager.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..ee7392ae44f572de76dc07855da1be88d734b8fb
+--- /dev/null
++++ b/streamlit_extension/middleware/middleware_manager.py
+@@ -0,0 +1,133 @@
++"""Middleware manager for coordinating all protection systems."""
++
++from __future__ import annotations
++import streamlit as st
++from typing import List, Dict, Any, Optional
++from dataclasses import dataclass
++
++from .rate_limiter import RateLimiter, RateLimitConfig, get_rate_limiter
++from .dos_protection import DoSProtection, DoSConfig, get_dos_protection
++from .circuit_breaker import CircuitBreaker, CircuitBreakerConfig, get_circuit_breaker
++
++
++@dataclass
++class MiddlewareConfig:
++    """Overall middleware configuration."""
++    rate_limiting_enabled: bool = True
++    dos_protection_enabled: bool = True
++    circuit_breaker_enabled: bool = True
++    
++    rate_limit_config: Optional[RateLimitConfig] = None
++    dos_config: Optional[DoSConfig] = None
++    circuit_breaker_configs: Optional[Dict[str, CircuitBreakerConfig]] = None
++
++
++class MiddlewareManager:
++    """Manages all middleware components."""
++    
++    def __init__(self, config: Optional[MiddlewareConfig] = None):
++        self.config = config or MiddlewareConfig()
++        self._rate_limiter: Optional[RateLimiter] = None
++        self._dos_protection: Optional[DoSProtection] = None
++        self._circuit_breakers: Dict[str, CircuitBreaker] = {}
++        
++        self._initialize_middleware()
++    
++    def _initialize_middleware(self):
++        """Initialize all middleware components."""
++        # Initialize rate limiter
++        if self.config.rate_limiting_enabled:
++            rate_config = self.config.rate_limit_config or RateLimitConfig()
++            self._rate_limiter = RateLimiter(rate_config)
++        
++        # Initialize DoS protection
++        if self.config.dos_protection_enabled:
++            dos_config = self.config.dos_config or DoSConfig()
++            self._dos_protection = DoSProtection(dos_config)
++        
++        # Initialize circuit breakers
++        if self.config.circuit_breaker_enabled and self.config.circuit_breaker_configs:
++            for name, cb_config in self.config.circuit_breaker_configs.items():
++                self._circuit_breakers[name] = CircuitBreaker(name, cb_config)
++    
++    def apply_middleware(self) -> bool:
++        """Apply all enabled middleware to current request."""
++        # Apply DoS protection first (most restrictive)
++        if self._dos_protection:
++            if not self._dos_protection.check_request():
++                return False
++        
++        # Apply rate limiting
++        if self._rate_limiter:
++            result = self._rate_limiter.check_rate_limit()
++            if not result.allowed:
++                st.error(f"🚦 Rate limit exceeded: {result.message}")
++                if result.retry_after:
++                    st.info(f"Please wait {result.retry_after} seconds before trying again.")
++                st.stop()
++                return False
++        
++        return True
++    
++    def get_status(self) -> Dict[str, Any]:
++        """Get status of all middleware components."""
++        status = {
++            "middleware_enabled": True,
++            "components": {}
++        }
++        
++        if self._rate_limiter:
++            status["components"]["rate_limiter"] = self._rate_limiter.get_stats()
++        
++        if self._dos_protection:
++            status["components"]["dos_protection"] = self._dos_protection.get_protection_status()
++        
++        if self._circuit_breakers:
++            status["components"]["circuit_breakers"] = {
++                name: breaker.get_stats()
++                for name, breaker in self._circuit_breakers.items()
++            }
++        
++        return status
++    
++    def reset_user_limits(self, user_key: str):
++        """Reset all limits for specific user."""
++        if self._rate_limiter:
++            self._rate_limiter.reset_user_limits(user_key)
++        
++        if self._dos_protection:
++            self._dos_protection.detector.unban_user(user_key)
++    
++    def get_circuit_breaker(self, name: str) -> Optional[CircuitBreaker]:
++        """Get circuit breaker by name."""
++        return self._circuit_breakers.get(name)
++
++
++# Global middleware manager
++_middleware_manager: Optional[MiddlewareManager] = None
++
++
++def get_middleware_manager() -> MiddlewareManager:
++    """Get global middleware manager."""
++    global _middleware_manager
++    if _middleware_manager is None:
++        _middleware_manager = MiddlewareManager()
++    return _middleware_manager
++
++
++def apply_middleware() -> bool:
++    """Apply all middleware to current request."""
++    manager = get_middleware_manager()
++    return manager.apply_middleware()
++
++
++def get_middleware_status() -> Dict[str, Any]:
++    """Get status of all middleware."""
++    manager = get_middleware_manager()
++    return manager.get_status()
++
++
++def reset_user_middleware(user_key: str):
++    """Reset middleware limits for user."""
++    manager = get_middleware_manager()
++    manager.reset_user_limits(user_key)
+diff --git a/streamlit_extension/middleware/rate_limiter.py b/streamlit_extension/middleware/rate_limiter.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..dc30ffcb7c5ccbb80881e0f17ada5c3d85d8083d
+--- /dev/null
++++ b/streamlit_extension/middleware/rate_limiter.py
+@@ -0,0 +1,397 @@
++"""Rate limiting implementation with multiple algorithms."""
++
++from __future__ import annotations
++import time
++import threading
++from collections import defaultdict, deque
++from dataclasses import dataclass
++from typing import Dict, Optional, Tuple, List
++from enum import Enum
++from datetime import datetime, timedelta
++import streamlit as st
++
++
++class RateLimitAlgorithm(Enum):
++    """Rate limiting algorithms."""
++    TOKEN_BUCKET = "token_bucket"
++    SLIDING_WINDOW = "sliding_window"
++    FIXED_WINDOW = "fixed_window"
++
++
++@dataclass
++class RateLimitConfig:
++    """Rate limiting configuration."""
++    requests_per_minute: int = 60
++    requests_per_hour: int = 1000
++    burst_limit: int = 10
++    algorithm: RateLimitAlgorithm = RateLimitAlgorithm.TOKEN_BUCKET
++    whitelist_ips: List[str] = None
++    enabled: bool = True
++    
++    def __post_init__(self):
++        if self.whitelist_ips is None:
++            self.whitelist_ips = ["127.0.0.1", "::1"]
++
++
++@dataclass
++class RateLimitResult:
++    """Result of rate limit check."""
++    allowed: bool
++    remaining: int
++    reset_time: datetime
++    retry_after: Optional[int] = None
++    message: str = ""
++
++
++class TokenBucket:
++    """Token bucket algorithm implementation."""
++    
++    def __init__(self, capacity: int, refill_rate: float):
++        self.capacity = capacity
++        self.tokens = capacity
++        self.refill_rate = refill_rate  # tokens per second
++        self.last_refill = time.time()
++        self.lock = threading.Lock()
++    
++    def consume(self, tokens: int = 1) -> bool:
++        """Try to consume tokens from bucket."""
++        with self.lock:
++            now = time.time()
++            
++            # Refill tokens based on time passed
++            time_passed = now - self.last_refill
++            tokens_to_add = time_passed * self.refill_rate
++            self.tokens = min(self.capacity, self.tokens + tokens_to_add)
++            self.last_refill = now
++            
++            # Check if we have enough tokens
++            if self.tokens >= tokens:
++                self.tokens -= tokens
++                return True
++            
++            return False
++    
++    def get_tokens(self) -> int:
++        """Get current token count."""
++        with self.lock:
++            now = time.time()
++            time_passed = now - self.last_refill
++            tokens_to_add = time_passed * self.refill_rate
++            self.tokens = min(self.capacity, self.tokens + tokens_to_add)
++            return int(self.tokens)
++
++
++class SlidingWindow:
++    """Sliding window algorithm implementation."""
++    
++    def __init__(self, window_size_seconds: int, max_requests: int):
++        self.window_size = window_size_seconds
++        self.max_requests = max_requests
++        self.requests = deque()
++        self.lock = threading.Lock()
++    
++    def is_allowed(self) -> Tuple[bool, int]:
++        """Check if request is allowed."""
++        with self.lock:
++            now = time.time()
++            
++            # Remove old requests outside window
++            while self.requests and self.requests[0] <= now - self.window_size:
++                self.requests.popleft()
++            
++            # Check if we're under limit
++            if len(self.requests) < self.max_requests:
++                self.requests.append(now)
++                return True, self.max_requests - len(self.requests)
++            
++            return False, 0
++
++
++class FixedWindow:
++    """Fixed window algorithm implementation."""
++    
++    def __init__(self, window_size_seconds: int, max_requests: int):
++        self.window_size = window_size_seconds
++        self.max_requests = max_requests
++        self.window_start = time.time()
++        self.request_count = 0
++        self.lock = threading.Lock()
++    
++    def is_allowed(self) -> Tuple[bool, int]:
++        """Check if request is allowed."""
++        with self.lock:
++            now = time.time()
++            
++            # Reset window if expired
++            if now >= self.window_start + self.window_size:
++                self.window_start = now
++                self.request_count = 0
++            
++            # Check if we're under limit
++            if self.request_count < self.max_requests:
++                self.request_count += 1
++                return True, self.max_requests - self.request_count
++            
++            return False, 0
++
++
++class RateLimiter:
++    """Comprehensive rate limiter with multiple algorithms."""
++    
++    def __init__(self, config: RateLimitConfig):
++        self.config = config
++        self.user_buckets: Dict[str, TokenBucket] = {}
++        self.user_windows: Dict[str, SlidingWindow] = {}
++        self.user_fixed_windows: Dict[str, FixedWindow] = {}
++        self.lock = threading.Lock()
++        self.start_time = time.time()
++    
++    def _get_user_key(self) -> str:
++        """Get unique key for current user/session."""
++        # Try to get user ID from session
++        if hasattr(st, 'session_state') and 'current_user' in st.session_state:
++            user_id = st.session_state.current_user.get('id')
++            if user_id:
++                return f"user_{user_id}"
++        
++        # Fallback to session ID
++        if hasattr(st, 'session_state') and 'session_id' in st.session_state:
++            return f"session_{st.session_state.session_id}"
++        
++        # Ultimate fallback to IP (simulation)
++        return "default_user"
++    
++    def _get_user_ip(self) -> str:
++        """Get user IP address (simulated for Streamlit)."""
++        # In a real deployment, this would extract from request headers
++        return "127.0.0.1"  # Localhost for Streamlit
++    
++    def _is_whitelisted(self, user_key: str, ip: str) -> bool:
++        """Check if user/IP is whitelisted."""
++        return ip in self.config.whitelist_ips
++    
++    def _get_token_bucket(self, user_key: str) -> TokenBucket:
++        """Get or create token bucket for user."""
++        if user_key not in self.user_buckets:
++            # Convert requests per minute to tokens per second
++            refill_rate = self.config.requests_per_minute / 60.0
++            self.user_buckets[user_key] = TokenBucket(
++                capacity=self.config.burst_limit,
++                refill_rate=refill_rate
++            )
++        return self.user_buckets[user_key]
++    
++    def _get_sliding_window(self, user_key: str) -> SlidingWindow:
++        """Get or create sliding window for user."""
++        if user_key not in self.user_windows:
++            self.user_windows[user_key] = SlidingWindow(
++                window_size_seconds=60,  # 1 minute window
++                max_requests=self.config.requests_per_minute
++            )
++        return self.user_windows[user_key]
++    
++    def _get_fixed_window(self, user_key: str) -> FixedWindow:
++        """Get or create fixed window for user."""
++        if user_key not in self.user_fixed_windows:
++            self.user_fixed_windows[user_key] = FixedWindow(
++                window_size_seconds=60,  # 1 minute window
++                max_requests=self.config.requests_per_minute
++            )
++        return self.user_fixed_windows[user_key]
++    
++    def check_rate_limit(self) -> RateLimitResult:
++        """Check if current request should be rate limited."""
++        if not self.config.enabled:
++            return RateLimitResult(
++                allowed=True,
++                remaining=999,
++                reset_time=datetime.now() + timedelta(minutes=1),
++                message="Rate limiting disabled"
++            )
++        
++        user_key = self._get_user_key()
++        user_ip = self._get_user_ip()
++        
++        # Check whitelist
++        if self._is_whitelisted(user_key, user_ip):
++            return RateLimitResult(
++                allowed=True,
++                remaining=999,
++                reset_time=datetime.now() + timedelta(minutes=1),
++                message="Whitelisted"
++            )
++        
++        # Apply rate limiting based on algorithm
++        if self.config.algorithm == RateLimitAlgorithm.TOKEN_BUCKET:
++            return self._check_token_bucket(user_key)
++        elif self.config.algorithm == RateLimitAlgorithm.SLIDING_WINDOW:
++            return self._check_sliding_window(user_key)
++        elif self.config.algorithm == RateLimitAlgorithm.FIXED_WINDOW:
++            return self._check_fixed_window(user_key)
++        
++        # Fallback to allow
++        return RateLimitResult(
++            allowed=True,
++            remaining=0,
++            reset_time=datetime.now() + timedelta(minutes=1),
++            message="Unknown algorithm"
 +        )
-+        monkeypatch.setattr(
-+            "streamlit_extension.utils.pagination.STREAMLIT_AVAILABLE", True
++    
++    def _check_token_bucket(self, user_key: str) -> RateLimitResult:
++        """Check rate limit using token bucket algorithm."""
++        bucket = self._get_token_bucket(user_key)
++        
++        if bucket.consume(1):
++            return RateLimitResult(
++                allowed=True,
++                remaining=bucket.get_tokens(),
++                reset_time=datetime.now() + timedelta(seconds=60),
++                message="Request allowed"
++            )
++        else:
++            # Calculate retry after
++            tokens_needed = 1
++            refill_rate = self.config.requests_per_minute / 60.0
++            retry_after = int(tokens_needed / refill_rate)
++            
++            return RateLimitResult(
++                allowed=False,
++                remaining=0,
++                reset_time=datetime.now() + timedelta(seconds=retry_after),
++                retry_after=retry_after,
++                message="Rate limit exceeded (token bucket)"
++            )
++    
++    def _check_sliding_window(self, user_key: str) -> RateLimitResult:
++        """Check rate limit using sliding window algorithm."""
++        window = self._get_sliding_window(user_key)
++        allowed, remaining = window.is_allowed()
++        
++        if allowed:
++            return RateLimitResult(
++                allowed=True,
++                remaining=remaining,
++                reset_time=datetime.now() + timedelta(minutes=1),
++                message="Request allowed"
++            )
++        else:
++            return RateLimitResult(
++                allowed=False,
++                remaining=0,
++                reset_time=datetime.now() + timedelta(minutes=1),
++                retry_after=60,
++                message="Rate limit exceeded (sliding window)"
++            )
++    
++    def _check_fixed_window(self, user_key: str) -> RateLimitResult:
++        """Check rate limit using fixed window algorithm."""
++        window = self._get_fixed_window(user_key)
++        allowed, remaining = window.is_allowed()
++        
++        if allowed:
++            return RateLimitResult(
++                allowed=True,
++                remaining=remaining,
++                reset_time=datetime.now() + timedelta(minutes=1),
++                message="Request allowed"
++            )
++        else:
++            # Calculate time until window reset
++            window_end = window.window_start + window.window_size
++            retry_after = max(1, int(window_end - time.time()))
++            
++            return RateLimitResult(
++                allowed=False,
++                remaining=0,
++                reset_time=datetime.fromtimestamp(window_end),
++                retry_after=retry_after,
++                message="Rate limit exceeded (fixed window)"
++            )
++    
++    def get_stats(self) -> Dict[str, any]:
++        """Get rate limiter statistics."""
++        with self.lock:
++            return {
++                "config": {
++                    "requests_per_minute": self.config.requests_per_minute,
++                    "requests_per_hour": self.config.requests_per_hour,
++                    "burst_limit": self.config.burst_limit,
++                    "algorithm": self.config.algorithm.value,
++                    "enabled": self.config.enabled
++                },
++                "stats": {
++                    "active_users": len(self.user_buckets),
++                    "uptime_seconds": int(time.time() - self.start_time)
++                }
++            }
++    
++    def reset_user_limits(self, user_key: str):
++        """Reset rate limits for specific user."""
++        with self.lock:
++            if user_key in self.user_buckets:
++                del self.user_buckets[user_key]
++            if user_key in self.user_windows:
++                del self.user_windows[user_key]
++            if user_key in self.user_fixed_windows:
++                del self.user_fixed_windows[user_key]
++    
++    def cleanup_expired_data(self):
++        """Clean up expired user data."""
++        now = time.time()
++        
++        with self.lock:
++            # Remove buckets for users inactive for >1 hour
++            expired_users = []
++            for user_key, bucket in self.user_buckets.items():
++                if now - bucket.last_refill > 3600:  # 1 hour
++                    expired_users.append(user_key)
++            
++            for user_key in expired_users:
++                if user_key in self.user_buckets:
++                    del self.user_buckets[user_key]
++                if user_key in self.user_windows:
++                    del self.user_windows[user_key]
++                if user_key in self.user_fixed_windows:
++                    del self.user_fixed_windows[user_key]
++
++
++# Global rate limiter instance
++_rate_limiter: Optional[RateLimiter] = None
++
++
++def get_rate_limiter() -> RateLimiter:
++    """Get global rate limiter instance."""
++    global _rate_limiter
++    if _rate_limiter is None:
++        config = RateLimitConfig()
++        _rate_limiter = RateLimiter(config)
++    return _rate_limiter
++
++
++def check_rate_limit() -> RateLimitResult:
++    """Check rate limit for current request."""
++    limiter = get_rate_limiter()
++    return limiter.check_rate_limit()
++
++
++def apply_rate_limiting() -> bool:
++    """Apply rate limiting to current request."""
++    result = check_rate_limit()
++    
++    if not result.allowed:
++        st.error(f"🚦 Rate limit exceeded: {result.message}")
++        if result.retry_after:
++            st.info(f"Please wait {result.retry_after} seconds before trying again.")
++        st.stop()
++        return False
++    
++    return True
++
++
++def rate_limit_decorator(func):
++    """Decorator to apply rate limiting to functions."""
++    def wrapper(*args, **kwargs):
++        if apply_rate_limiting():
++            return func(*args, **kwargs)
++        return None
++    return wrapper
+diff --git a/streamlit_extension/middleware/request_tracker.py b/streamlit_extension/middleware/request_tracker.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..3a474710a6e84e09ef40199a10077c68c5e7552f
+--- /dev/null
++++ b/streamlit_extension/middleware/request_tracker.py
+@@ -0,0 +1,43 @@
++"""Utilities for tracking request metrics."""
++
++from __future__ import annotations
++import time
++import threading
++from dataclasses import dataclass
++from typing import Dict
++
++
++@dataclass
++class RequestMetrics:
++    """Basic metrics for tracking requests."""
++    total_requests: int = 0
++    start_time: float = time.time()
++
++    def increment(self) -> None:
++        self.total_requests += 1
++
++    def requests_per_minute(self) -> float:
++        elapsed = max(1.0, time.time() - self.start_time)
++        return (self.total_requests / elapsed) * 60
++
++
++class RequestTracker:
++    """Simple in-memory request tracker."""
++
++    def __init__(self):
++        self._metrics: Dict[str, RequestMetrics] = {}
++        self._lock = threading.Lock()
++
++    def record(self, key: str) -> None:
++        with self._lock:
++            if key not in self._metrics:
++                self._metrics[key] = RequestMetrics()
++            self._metrics[key].increment()
++
++    def get_metrics(self, key: str) -> RequestMetrics:
++        with self._lock:
++            return self._metrics.get(key, RequestMetrics())
++
++    def get_all_metrics(self) -> Dict[str, RequestMetrics]:
++        with self._lock:
++            return dict(self._metrics)
+diff --git a/streamlit_extension/pages/__init__.py b/streamlit_extension/pages/__init__.py
+index b5678790692fb2c0e2d8ef096df8dd73a65ac42b..331b825bb23a7e291571d52e0142deec931b1928 100644
+--- a/streamlit_extension/pages/__init__.py
++++ b/streamlit_extension/pages/__init__.py
+@@ -1,44 +1,46 @@
+ """
+ 📄 Pages Package - Streamlit Extension
+ 
+ Multi-page navigation system for TDD Framework:
+ - Analytics dashboard with productivity metrics
+ - Interactive Kanban board for task management
+ - Gantt chart timeline visualization
+ - Dedicated timer interface with TDAH support
+ - Comprehensive settings and configuration
+ """
+ 
+ from importlib import import_module
++import streamlit as st
+ from streamlit_extension.utils.exception_handler import (
+     handle_streamlit_exceptions,
+     streamlit_error_boundary,
+     safe_streamlit_operation,
+     get_error_statistics,
+ )
+ 
++from streamlit_extension.middleware.admin_panel import render_middleware_admin
+ 
+ def _import_page(module_name: str, func_name: str):
+     module = safe_streamlit_operation(
+         import_module,
+         f"{__name__}.{module_name}",
+         default_return=None,
+         operation_name=f"import_{module_name}",
+     )
+     if module and hasattr(module, func_name):
+         return getattr(module, func_name), True
+     return None, False
+ 
+ 
+ render_analytics_page, ANALYTICS_AVAILABLE = _import_page("analytics", "render_analytics_page")
+ render_kanban_page, KANBAN_AVAILABLE = _import_page("kanban", "render_kanban_page")
+ render_gantt_page, GANTT_AVAILABLE = _import_page("gantt", "render_gantt_page")
+ render_timer_page, TIMER_AVAILABLE = _import_page("timer", "render_timer_page")
+ render_settings_page, SETTINGS_AVAILABLE = _import_page("settings", "render_settings_page")
+ render_clients_page, CLIENTS_AVAILABLE = _import_page("clients", "render_clients_page")
+ render_projects_page, PROJECTS_AVAILABLE = _import_page("projects", "render_projects_page")
+ 
+ 
+ # Page registry for navigation
+ PAGE_REGISTRY = {
+     "dashboard": {
+@@ -74,74 +76,86 @@ PAGE_REGISTRY = {
+         "icon": "⏱️",
+         "description": "TDAH-optimized focus sessions",
+         "render_func": render_timer_page,
+         "available": TIMER_AVAILABLE
+     },
+     "settings": {
+         "title": "⚙️ Settings",
+         "icon": "⚙️",
+         "description": "Configuration and preferences",
+         "render_func": render_settings_page,
+         "available": SETTINGS_AVAILABLE
+     },
+     "clients": {
+         "title": "👥 Clients",
+         "icon": "👥",
+         "description": "Client management and contacts",
+         "render_func": render_clients_page,
+         "available": CLIENTS_AVAILABLE
+     },
+     "projects": {
+         "title": "📁 Projects",
+         "icon": "📁",
+         "description": "Project management and tracking",
+         "render_func": render_projects_page,
+         "available": PROJECTS_AVAILABLE
++    },
++    "middleware_admin": {
++        "title": "🛡️ Middleware Admin",
++        "icon": "🛡️",
++        "description": "Middleware administration panel",
++        "render_func": render_middleware_admin,
++        "available": True
+     }
+ }
+ 
+ 
+ def get_available_pages():
+     """Get list of available pages for navigation."""
++    def _is_admin():
++        user = st.session_state.get("current_user")
++        return user and user.get("role") == "admin"
++
+     return {
+-        page_id: page_info 
+-        for page_id, page_info in PAGE_REGISTRY.items() 
+-        if page_info["available"]
++        page_id: page_info
++        for page_id, page_info in PAGE_REGISTRY.items()
++        if page_info["available"] and (page_id != "middleware_admin" or _is_admin())
+     }
+ 
+ 
+ def render_page(page_id: str):
+     """Render a specific page by ID."""
+     if page_id not in PAGE_REGISTRY:
+         return {"error": f"Unknown page: {page_id}"}
+     
+     page_info = PAGE_REGISTRY[page_id]
+     
+     if not page_info["available"]:
+         return {"error": f"Page '{page_id}' is not available"}
+     
+     render_func = page_info["render_func"]
+     if render_func:
+         return render_func()
+     else:
+         return {"error": f"No render function for page: {page_id}"}
+ 
+ 
+ __all__ = [
+     "render_analytics_page",
+     "render_kanban_page", 
+     "render_gantt_page",
+     "render_timer_page",
+     "render_settings_page",
+     "render_clients_page",
+     "render_projects_page",
++    "render_middleware_admin",
+     "PAGE_REGISTRY",
+     "get_available_pages",
+     "render_page",
+     "ANALYTICS_AVAILABLE",
+     "KANBAN_AVAILABLE",
+     "GANTT_AVAILABLE", 
+     "TIMER_AVAILABLE",
+     "SETTINGS_AVAILABLE",
+     "CLIENTS_AVAILABLE",
+     "PROJECTS_AVAILABLE"
+ ]
+\ No newline at end of file
+diff --git a/streamlit_extension/streamlit_app.py b/streamlit_extension/streamlit_app.py
+index 28a5f742dfa486bd1b28799781f0e1e59cb267af..0356cb4b0656075b08222afe2dfc2c92117e2490 100644
+--- a/streamlit_extension/streamlit_app.py
++++ b/streamlit_extension/streamlit_app.py
+@@ -57,61 +57,62 @@ if STREAMLIT_AVAILABLE:
+             - 📊 Analytics and productivity tracking
+             - 🎮 Gamification system
+             - 🐙 GitHub integration
+             
+             **Version:** 1.2.1
+             **Phase:** Enhanced Dashboard
+             """
+         }
+     )
+ 
+ # Import components
+ try:
+     from streamlit_extension.components.sidebar import render_sidebar
+     from streamlit_extension.components.timer import TimerComponent
+     from streamlit_extension.components.dashboard_widgets import (
+         WelcomeHeader, DailyStats, ProductivityHeatmap,
+         ProgressRing, SparklineChart, AchievementCard,
+         NotificationToast, NotificationData, QuickActionButton
+     )
+     from streamlit_extension.utils.database import DatabaseManager
+     from streamlit_extension.utils.auth import GoogleOAuthManager, require_authentication, render_user_menu, get_authenticated_user
+     from streamlit_extension.config import load_config, load_config
+     
+     # Import global exception handler
+     from streamlit_extension.utils.exception_handler import (
+-        install_global_exception_handler, handle_streamlit_exceptions, 
++        install_global_exception_handler, handle_streamlit_exceptions,
+         streamlit_error_boundary, safe_streamlit_operation,
+         show_error_dashboard, get_error_statistics
+     )
+     EXCEPTION_HANDLER_AVAILABLE = True
+ except ImportError as e:
+     EXCEPTION_HANDLER_AVAILABLE = False
+     st.error(f"❌ Import Error: {e}")
+     st.error("Make sure to run from the project root directory")
+     st.stop()
+ 
++from streamlit_extension.middleware import apply_middleware
+ 
+ @handle_streamlit_exceptions(show_error=True, attempt_recovery=True)
+ def initialize_session_state():
+     """Initialize Streamlit session state variables."""
+     
+     # Install global exception handler on first run
+     if EXCEPTION_HANDLER_AVAILABLE and "exception_handler_installed" not in st.session_state:
+         install_global_exception_handler()
+         st.session_state.exception_handler_installed = True
+     
+     # Core app state
+     if "config" not in st.session_state:
+         with streamlit_error_boundary("configuration_loading"):
+             st.session_state.config = load_config()
+     
+     if "db_manager" not in st.session_state:
+         with streamlit_error_boundary("database_initialization"):
+             config = st.session_state.config
+             st.session_state.db_manager = DatabaseManager(
+                 framework_db_path=str(config.get_database_path()),
+                 timer_db_path=str(config.get_timer_database_path())
+             )
+     
+     # Timer component
+     if "timer_component" not in st.session_state:
+@@ -596,50 +597,61 @@ def render_quick_actions():
+             icon="📊",
+             callback=lambda: st.session_state.update({"current_page": "gantt"}),
+             color="secondary",
+             tooltip="View project timeline"
+         )
+     
+     with col4:
+         config = st.session_state.config
+         if config.is_github_configured():
+             QuickActionButton.render(
+                 label="Sync",
+                 icon="🔄",
+                 callback=lambda: st.info("GitHub sync coming soon!"),
+                 color="secondary",
+                 tooltip="Sync with GitHub"
+             )
+         else:
+             QuickActionButton.render(
+                 label="Settings",
+                 icon="⚙️",
+                 callback=lambda: st.session_state.update({"current_page": "settings"}),
+                 color="secondary",
+                 tooltip="Configure settings"
+             )
+ 
++    current_user = get_authenticated_user()
++    if current_user and current_user.get("role") == "admin":
++        st.markdown("### 🛠️ Admin Tools")
++        QuickActionButton.render(
++            label="Middleware Admin",
++            icon="🛡️",
++            callback=lambda: st.session_state.update({"current_page": "middleware_admin"}),
++            color="danger",
++            tooltip="Middleware administration",
 +        )
 +
-+        ui_result = manager.render_streamlit_pagination(result)
-+        assert ui_result is not None
-+        assert set(ui_result.keys()) == {"prev", "next", "page", "page_size"}
-+        assert dummy.calls  # ensure methods were called
+ 
+ def render_recent_activity():
+     """Render recent activity feed."""
+     
+     st.markdown("### 📋 Recent Activity")
+     
+     db_manager = st.session_state.db_manager
+     tasks = db_manager.get_tasks()
+     
+     if tasks:
+         # Show last 5 tasks with activity
+         recent_tasks = tasks[:5]
+         
+         for task in recent_tasks:
+             col1, col2, col3 = st.columns([3, 1, 1])
+             
+             with col1:
+                 status_emoji = {
+                     "todo": "📝",
+                     "in_progress": "🔄",
+                     "completed": "✅"
+                 }.get(task.get("status", "todo"), "⚪")
+                 
+                 st.markdown(f"{status_emoji} **{task['title']}**")
+                 st.caption(f"Epic: {task.get('epic_name', 'None')}")
+@@ -677,57 +689,61 @@ def render_debug_panel():
+         
+         st.markdown("#### Database Health")
+         st.json(st.session_state.db_health_check)
+         
+         st.markdown("#### Session State Keys")
+         st.write(list(st.session_state.keys()))
+         
+         st.markdown("#### Cache Statistics")
+         with streamlit_error_boundary("cache_stats"):
+             cache_stats = safe_streamlit_operation(
+                 st.session_state.db_manager.get_cache_stats,
+                 default_return={"error": "Unable to retrieve cache stats"},
+                 operation_name="get_cache_stats"
+             )
+             st.json(cache_stats)
+         
+         # Error monitoring dashboard
+         if EXCEPTION_HANDLER_AVAILABLE:
+             st.markdown("#### Error Monitoring")
+             show_error_dashboard()
+ 
+ 
+ @handle_streamlit_exceptions(show_error=True, attempt_recovery=True)
+ def main():
+     """Main application entry point with centralized authentication gateway."""
+-    
 +
+     # Check if running in headless mode
+     if not STREAMLIT_AVAILABLE:
+         print("📊 Dashboard functions available for testing")
+         print("Run 'streamlit run streamlit_app.py' for full UI")
+         return
+-    
++
++    # Apply all middleware (rate limiting, DoS protection, etc.)
++    if not apply_middleware():
++        return  # Request blocked by middleware
++
+     # Initialize session state with error boundary
+     with streamlit_error_boundary("session_initialization"):
+         initialize_session_state()
+     
+     # Initialize authentication manager
+     with streamlit_error_boundary("authentication_initialization"):
+         auth_manager = safe_streamlit_operation(
+             GoogleOAuthManager,
+             default_return=None,
+             operation_name="auth_manager_init"
+         )
+         
+         if auth_manager is None:
+             st.error("❌ Authentication initialization failed")
+             st.stop()
+     
+     # 🔐 CENTRALIZED AUTHENTICATION GATEWAY
+     # Check authentication status - if not authenticated, show login page
+     if not auth_manager.is_authenticated():
+         render_landing_login_page(auth_manager)
+         return
+     
+     # ✅ USER IS AUTHENTICATED - Proceed with full application
+     
+     # Check database connectivity
+@@ -994,26 +1010,26 @@ def render_landing_login_page(auth_manager):
+                     </div>
+                 """, unsafe_allow_html=True)
+ 
+ 
+ def render_footer():
+     """Render the application footer."""
+     # Footer with enhanced information
+     st.markdown("---")
+     col1, col2, col3, col4 = st.columns(4)
+     
+     with col1:
+         st.caption("🚀 TDD Framework v1.2.1")
+     
+     with col2:
+         st.caption("📍 Enhanced Dashboard")
+     
+     with col3:
+         st.caption(f"🕐 {datetime.now().strftime('%H:%M:%S')}")
+     
+     with col4:
+         if st.button("🔄 Refresh", key="footer_refresh"):
+             st.rerun()
+ 
+ 
+ if __name__ == "__main__":
+-    main()
+\ No newline at end of file
++    main()
  
 EOF
 )

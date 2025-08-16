@@ -1,934 +1,1512 @@
  (cd "$(git rev-parse --show-toplevel)" && git apply --3way <<'EOF' 
-diff --git a/migration/__init__.py b/migration/__init__.py
-new file mode 100644
-index 0000000000000000000000000000000000000000..3561181363dc8fb859e9eb7327ae387d5157333e
---- /dev/null
-+++ b/migration/__init__.py
-@@ -0,0 +1,17 @@
-+"""Migration package providing database schema management utilities."""
+diff --git a/streamlit_extension/pages/clients.py b/streamlit_extension/pages/clients.py
+index bb89b60ddb0f8779b79adb8a8173acde7b80d3d5..5aabc0b9894917579b6da69df39d05f311b5d971 100644
+--- a/streamlit_extension/pages/clients.py
++++ b/streamlit_extension/pages/clients.py
+@@ -15,50 +15,51 @@ from typing import Dict, Any, List, Optional
+ from datetime import datetime
+ 
+ # Add parent directory to path
+ sys.path.append(str(Path(__file__).parent.parent.parent))
+ 
+ # Graceful imports
+ try:
+     import streamlit as st
+     STREAMLIT_AVAILABLE = True
+ except ImportError:
+     STREAMLIT_AVAILABLE = False
+     st = None
+ 
+ # Local imports
+ try:
+     from streamlit_extension.utils.database import DatabaseManager
+     from streamlit_extension.utils.validators import validate_client_data, validate_email_uniqueness, validate_client_key_uniqueness
+     from streamlit_extension.utils.security import (
+         create_safe_client, sanitize_display, validate_form, check_rate_limit,
+         security_manager
+     )
+     from streamlit_extension.config import load_config
+     from streamlit_extension.config.constants import (
+         GeneralStatus, ClientTier, CompanySize, UIConstants, FormFields
+     )
++    from streamlit_extension.security import SecureFormManager, sanitize_input
+     DATABASE_UTILS_AVAILABLE = True
+ except ImportError:
+     DATABASE_UTILS_AVAILABLE = False
+     DatabaseManager = validate_client_data = load_config = None
+     create_safe_client = sanitize_display = validate_form = None
+     GeneralStatus = ClientTier = CompanySize = UIConstants = FormFields = None
+ 
+ from streamlit_extension.utils.exception_handler import (
+     handle_streamlit_exceptions,
+     streamlit_error_boundary,
+     safe_streamlit_operation,
+     get_error_statistics,
+ )
+ 
+ try:
+     from streamlit_extension.utils.auth import require_authentication
+ except ImportError:
+     # Fallback if auth module not available
+     def require_authentication(func):
+         return func
+ 
+ 
+ def render_client_card(client: Dict[str, Any], db_manager: DatabaseManager):
+     """Render an individual client card."""
+     if not STREAMLIT_AVAILABLE:
+@@ -298,128 +299,126 @@ def render_delete_client_modal(client: Dict[str, Any], db_manager: DatabaseManag
+             if st.button("🗑️ Delete Client", use_container_width=True):
+                 # Check rate limit for database write
+                 db_rate_allowed, db_rate_error = check_rate_limit("db_write") if check_rate_limit else (True, None)
+                 if not db_rate_allowed:
+                     st.error(f"🚦 Database {db_rate_error}")
+                     return
+                 
+                 success = db_manager.delete_client(client['id'], soft_delete=True)
+                 if success:
+                     st.success("✅ Client deleted successfully!")
+                     st.session_state[f"delete_client_{client['id']}"] = False
+                     st.rerun()
+                 else:
+                     st.error("❌ Failed to delete client")
+         
+         with col2:
+             if st.button("❌ Cancel", use_container_width=True):
+                 st.session_state[f"delete_client_{client['id']}"] = False
+                 st.rerun()
+ 
+ 
+ def render_create_client_form(db_manager: DatabaseManager):
+     """Render the create new client form."""
+     if not STREAMLIT_AVAILABLE:
+         return
+-    
 +
-+from .schema_migrations import MigrationManager, Migration, SchemaValidator
-+from .query_builder import QueryBuilder, SQLBuilder, QueryExecutor
-+from .cleanup_scripts import CacheCleanup, DataCleanup, RepositoryCleanup
++    form_manager = SecureFormManager("create_client_form")
++
+     with st.expander("➕ Create New Client", expanded=False):
+         with st.form("create_client_form"):
+             st.markdown("### 📝 New Client Information")
+-            
+-            # Generate CSRF token for form protection
+-            csrf_form_id = "create_client_form"
+-            csrf_field = security_manager.get_csrf_form_field(csrf_form_id) if security_manager else None
+-            
++
+             col1, col2 = st.columns(2)
+             
+             with col1:
+                 st.markdown("#### Basic Information")
+                 client_key = st.text_input("Client Key*", placeholder="e.g., client_xyz")
+                 name = st.text_input("Client Name*", placeholder="e.g., Company ABC")
+                 description = st.text_area("Description", placeholder="Brief description of the client...")
+                 
+                 industry = st.text_input("Industry", placeholder="e.g., Technology")
+                 company_size_options = CompanySize.get_all_values() if CompanySize else ["startup", "small", "medium", "large", "enterprise"]
+                 company_size = st.selectbox("Company Size", options=company_size_options)
+             
+             with col2:
+                 st.markdown("#### Contact Information")
+                 primary_contact_name = st.text_input("Contact Name", placeholder="e.g., John Doe")
+                 primary_contact_email = st.text_input("Contact Email*", placeholder="john@company.com")
+                 primary_contact_phone = st.text_input("Contact Phone", placeholder="+55 (11) 99999-9999")
+                 
+                 st.markdown("#### Business Settings")
+                 status_options = GeneralStatus.get_all_values() if GeneralStatus else ["active", "inactive", "suspended", "archived"]
+                 status = st.selectbox("Status", options=status_options, index=0)
+                 tier_options = ClientTier.get_all_values() if ClientTier else ["basic", "standard", "premium", "enterprise"]
+                 tier_default_index = tier_options.index(ClientTier.get_default()) if ClientTier else 1
+                 client_tier = st.selectbox("Client Tier", options=tier_options, index=tier_default_index)
+                 hourly_rate = st.number_input("Hourly Rate (R$)", value=0.0, min_value=0.0)
+             
+             if st.form_submit_button("🚀 Create Client", use_container_width=True):
+-                # CSRF Protection
+-                if csrf_field and security_manager:
+-                    csrf_valid, csrf_error = security_manager.require_csrf_protection(
+-                        csrf_form_id, csrf_field.get("token_value")
+-                    )
+-                    if not csrf_valid:
+-                        st.error(f"🔒 Security Error: {csrf_error}")
+-                        return
+-                
+                 # Check rate limit for form submission
+                 rate_allowed, rate_error = check_rate_limit("form_submit") if check_rate_limit else (True, None)
+                 if not rate_allowed:
+                     st.error(f"🚦 {rate_error}")
+                     return
+-                
+-                # Create raw data
+-                raw_data = {
++
++                form_data = {
+                     'client_key': client_key,
+                     'name': name,
+                     'description': description,
+                     'industry': industry,
+                     'company_size': company_size,
+                     'primary_contact_name': primary_contact_name,
+                     'primary_contact_email': primary_contact_email,
+                     'primary_contact_phone': primary_contact_phone,
+                     'status': status,
+                     'client_tier': client_tier,
+                     'hourly_rate': hourly_rate
+                 }
+-                
+-                # Security validation
+-                if validate_form:
+-                    security_valid, security_errors = validate_form(raw_data)
+-                    if not security_valid:
+-                        for error in security_errors:
+-                            st.error(f"🔒 Security: {error}")
+-                        return
+-                
+-                # Sanitize data for security
+-                client_data = create_safe_client(raw_data) if create_safe_client else raw_data
+-                
+-                is_valid, errors = validate_client_data(client_data)
++
++                success, error = form_manager.validate_submission(form_data, [
++                    'client_key', 'name', 'primary_contact_email'
++                ])
++                if not success:
++                    st.error(f"Validation failed: {error}")
++                    return
++
++                sanitized_data = sanitize_input(form_data)
++
++                client_key = sanitized_data['client_key']
++                name = sanitized_data['name']
++                description = sanitized_data.get('description')
++                industry = sanitized_data.get('industry')
++                company_size = sanitized_data.get('company_size')
++                primary_contact_name = sanitized_data.get('primary_contact_name')
++                primary_contact_email = sanitized_data.get('primary_contact_email')
++                primary_contact_phone = sanitized_data.get('primary_contact_phone')
++                status = sanitized_data.get('status')
++                client_tier = sanitized_data.get('client_tier')
++                hourly_rate = sanitized_data.get('hourly_rate')
++
++                is_valid, errors = validate_client_data(sanitized_data)
+                 
+                 if is_valid:
+                     # Check uniqueness
+                     existing_clients_result = db_manager.get_clients(include_inactive=True)
+                     existing_clients = existing_clients_result.get("data", []) if isinstance(existing_clients_result, dict) else []
+                     
+                     if not validate_email_uniqueness(primary_contact_email, existing_clients):
+                         st.error("❌ Email already exists for another client")
+                     elif not validate_client_key_uniqueness(client_key, existing_clients):
+                         st.error("❌ Client key already exists")
+                     else:
+                         # Check rate limit for database write
+                         db_rate_allowed, db_rate_error = check_rate_limit("db_write") if check_rate_limit else (True, None)
+                         if not db_rate_allowed:
+                             st.error(f"🚦 Database {db_rate_error}")
+                             return
+                         
+                         # Create client
+                         client_id = db_manager.create_client(
+                             client_key=client_key,
+                             name=name,
+                             description=description,
+                             industry=industry,
+                             company_size=company_size,
+                             primary_contact_name=primary_contact_name,
+diff --git a/streamlit_extension/pages/projects.py b/streamlit_extension/pages/projects.py
+index b972e85a1725b23b4253e032294f0191454fb3e2..95be7bbd918b81f0e85ac3e3897a2bd207062603 100644
+--- a/streamlit_extension/pages/projects.py
++++ b/streamlit_extension/pages/projects.py
+@@ -12,50 +12,51 @@ Comprehensive project management interface with CRUD operations:
+ import sys
+ from pathlib import Path
+ from typing import Dict, Any, List, Optional
+ from datetime import datetime, date
+ 
+ # Add parent directory to path
+ sys.path.append(str(Path(__file__).parent.parent.parent))
+ 
+ # Graceful imports
+ try:
+     import streamlit as st
+     STREAMLIT_AVAILABLE = True
+ except ImportError:
+     STREAMLIT_AVAILABLE = False
+     st = None
+ 
+ # Local imports
+ try:
+     from streamlit_extension.utils.database import DatabaseManager
+     from streamlit_extension.utils.validators import validate_project_data, validate_project_key_uniqueness
+     from streamlit_extension.utils.security import (
+         create_safe_project, sanitize_display, validate_form, check_rate_limit,
+         security_manager
+     )
+     from streamlit_extension.config import load_config
++    from streamlit_extension.security import SecureFormManager, sanitize_input
+     DATABASE_UTILS_AVAILABLE = True
+ except ImportError:
+     DATABASE_UTILS_AVAILABLE = False
+     DatabaseManager = validate_project_data = load_config = None
+     create_safe_project = sanitize_display = validate_form = None
+ 
+ 
+ def render_project_card(project: Dict[str, Any], db_manager: DatabaseManager, clients_map: Dict[int, str]):
+     """Render an individual project card."""
+     if not STREAMLIT_AVAILABLE:
+         return
+     
+     with st.container():
+         # Card header with status indicator
+         status_colors = {
+             "planning": "🟡",
+             "in_progress": "🟢", 
+             "completed": "✅",
+             "on_hold": "⏸️",
+             "cancelled": "🔴"
+         }
+         status_emoji = status_colors.get(project.get("status", "planning"), "⚪")
+         
+         col1, col2, col3 = st.columns([3, 1, 1])
+         
+@@ -315,152 +316,152 @@ def render_delete_project_modal(project: Dict[str, Any], db_manager: DatabaseMan
+         except:
+             pass
+         
+         col1, col2 = st.columns(2)
+         
+         with col1:
+             if st.button("🗑️ Delete Project", use_container_width=True):
+                 success = db_manager.delete_project(project['id'], soft_delete=True)
+                 if success:
+                     st.success("✅ Project deleted successfully!")
+                     st.session_state[f"delete_project_{project['id']}"] = False
+                     st.rerun()
+                 else:
+                     st.error("❌ Failed to delete project")
+         
+         with col2:
+             if st.button("❌ Cancel", use_container_width=True):
+                 st.session_state[f"delete_project_{project['id']}"] = False
+                 st.rerun()
+ 
+ 
+ def render_create_project_form(db_manager: DatabaseManager, clients_map: Dict[int, str]):
+     """Render the create new project form."""
+     if not STREAMLIT_AVAILABLE:
+         return
+-    
++
++    form_manager = SecureFormManager("create_project_form")
++
+     with st.expander("➕ Create New Project", expanded=False):
+         with st.form("create_project_form"):
+             st.markdown("### 📝 New Project Information")
+-            
+-            # Generate CSRF token for form protection
+-            csrf_form_id = "create_project_form"
+-            csrf_field = security_manager.get_csrf_form_field(csrf_form_id) if security_manager else None
+-            
++
+             col1, col2 = st.columns(2)
+             
+             with col1:
+                 st.markdown("#### Basic Information")
+                 
+                 # Client selection
+                 if not clients_map:
+                     st.error("❌ No clients available. Please create a client first.")
+                     return
+                 
+                 client_options = list(clients_map.values())
+                 selected_client_name = st.selectbox("Client*", options=client_options)
+                 selected_client_id = next(id for id, name in clients_map.items() if name == selected_client_name)
+                 
+                 project_key = st.text_input("Project Key*", placeholder="e.g., project_abc")
+                 name = st.text_input("Project Name*", placeholder="e.g., Website Development")
+                 description = st.text_area("Description", placeholder="Brief description of the project...")
+                 
+                 project_type = st.selectbox("Project Type", 
+                     options=["development", "maintenance", "consulting", "research", "support"],
+                     index=0
+                 )
+                 methodology = st.selectbox("Methodology",
+                     options=["agile", "waterfall", "kanban", "scrum", "lean", "hybrid"],
+                     index=0
+                 )
+             
+             with col2:
+                 st.markdown("#### Timeline & Budget")
+                 
+                 planned_start_date = st.date_input("Planned Start Date*", value=date.today())
+                 planned_end_date = st.date_input("Planned End Date*", value=date.today())
+                 
+                 budget_amount = st.number_input("Budget Amount", value=0.0, min_value=0.0)
+                 budget_currency = st.selectbox("Currency", options=["BRL", "USD", "EUR"], index=0)
+                 estimated_hours = st.number_input("Estimated Hours", value=0.0, min_value=0.0)
+                 
+                 status = st.selectbox("Status*", 
+                     options=["planning", "in_progress", "completed", "on_hold", "cancelled"],
+                     index=0
+                 )
+                 
+                 health_status = st.selectbox("Health Status",
+                     options=["green", "yellow", "red"],
+                     index=0
+                 )
+             
+             if st.form_submit_button("🚀 Create Project", use_container_width=True):
+-                # CSRF Protection
+-                if csrf_field and security_manager:
+-                    csrf_valid, csrf_error = security_manager.require_csrf_protection(
+-                        csrf_form_id, csrf_field.get("token_value")
+-                    )
+-                    if not csrf_valid:
+-                        st.error(f"🔒 Security Error: {csrf_error}")
+-                        return
+-                
+                 # Check rate limit for form submission
+                 rate_allowed, rate_error = check_rate_limit("form_submit") if check_rate_limit else (True, None)
+                 if not rate_allowed:
+                     st.error(f"🚦 {rate_error}")
+                     return
+-                
+-                # Create raw data
+-                raw_data = {
++
++                form_data = {
+                     'client_id': selected_client_id,
+                     'project_key': project_key,
+                     'name': name,
+                     'description': description,
+                     'project_type': project_type,
+                     'methodology': methodology,
+                     'planned_start_date': planned_start_date.isoformat(),
+                     'planned_end_date': planned_end_date.isoformat(),
+                     'budget_amount': budget_amount,
+                     'budget_currency': budget_currency,
+                     'estimated_hours': estimated_hours,
+                     'status': status,
+                     'health_status': health_status,
+                     'completion_percentage': 0.0
+                 }
+-                
+-                # Security validation
+-                if validate_form:
+-                    security_valid, security_errors = validate_form(raw_data)
+-                    if not security_valid:
+-                        for error in security_errors:
+-                            st.error(f"🔒 Security: {error}")
+-                        return
+-                
+-                # Sanitize data for security
+-                project_data = create_safe_project(raw_data) if create_safe_project else raw_data
+-                
+-                is_valid, errors = validate_project_data(project_data)
++
++                success, error = form_manager.validate_submission(form_data, [
++                    'project_key', 'name'
++                ])
++                if not success:
++                    st.error(f"Validation failed: {error}")
++                    return
++
++                sanitized_data = sanitize_input(form_data)
++
++                selected_client_id = sanitized_data['client_id']
++                project_key = sanitized_data['project_key']
++                name = sanitized_data['name']
++                description = sanitized_data.get('description')
++                project_type = sanitized_data.get('project_type')
++                methodology = sanitized_data.get('methodology')
++                planned_start_date = sanitized_data.get('planned_start_date')
++                planned_end_date = sanitized_data.get('planned_end_date')
++                budget_amount = sanitized_data.get('budget_amount')
++                budget_currency = sanitized_data.get('budget_currency')
++                estimated_hours = sanitized_data.get('estimated_hours')
++                status = sanitized_data.get('status')
++                health_status = sanitized_data.get('health_status')
++
++                is_valid, errors = validate_project_data(sanitized_data)
+                 
+                 if is_valid:
+                     # Check uniqueness
+                     existing_projects = db_manager.get_projects(include_inactive=True)
+                     
+                     if not validate_project_key_uniqueness(project_key, selected_client_id, existing_projects):
+                         st.error("❌ Project key already exists for this client")
+                     else:
+                         # Check rate limit for database write
+                         db_rate_allowed, db_rate_error = check_rate_limit("db_write") if check_rate_limit else (True, None)
+                         if not db_rate_allowed:
+                             st.error(f"🚦 Database {db_rate_error}")
+                             return
+                         
+                         # Create project
+                         project_id = db_manager.create_project(
+                             client_id=selected_client_id,
+                             project_key=project_key,
+                             name=name,
+                             description=description,
+                             project_type=project_type,
+                             methodology=methodology
+                         )
+                         
+                         if project_id:
+diff --git a/streamlit_extension/security/__init__.py b/streamlit_extension/security/__init__.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..249a0432c543956e7bdf2352c1f19192ce6da5a7
+--- /dev/null
++++ b/streamlit_extension/security/__init__.py
+@@ -0,0 +1,22 @@
++"""Security package for CSRF protection and XSS sanitization."""
++
++from .csrf_protection import CSRFProtection, generate_csrf_token, validate_csrf_token
++from .xss_sanitizer import XSSSanitizer, sanitize_input, sanitize_html
++from .security_headers import SecurityHeaders, apply_security_headers
++from .input_validator import InputValidator, validate_form_input
++from .security_middleware import security_middleware, require_csrf
 +
 +__all__ = [
-+    "MigrationManager",
-+    "Migration",
-+    "SchemaValidator",
-+    "QueryBuilder",
-+    "SQLBuilder",
-+    "QueryExecutor",
-+    "CacheCleanup",
-+    "DataCleanup",
-+    "RepositoryCleanup",
++    "CSRFProtection",
++    "generate_csrf_token", 
++    "validate_csrf_token",
++    "XSSSanitizer",
++    "sanitize_input",
++    "sanitize_html",
++    "SecurityHeaders",
++    "apply_security_headers",
++    "InputValidator",
++    "validate_form_input",
++    "security_middleware",
++    "require_csrf"
 +]
-diff --git a/migration/cleanup_scripts.py b/migration/cleanup_scripts.py
+diff --git a/streamlit_extension/security/csrf_protection.py b/streamlit_extension/security/csrf_protection.py
 new file mode 100644
-index 0000000000000000000000000000000000000000..586f2bdd826ab58c7ef0cbbc96ecfc13f41e5c12
+index 0000000000000000000000000000000000000000..b826ac665383b6d7e517e879d9ba404b453d9adb
 --- /dev/null
-+++ b/migration/cleanup_scripts.py
-@@ -0,0 +1,91 @@
++++ b/streamlit_extension/security/csrf_protection.py
+@@ -0,0 +1,201 @@
++"""CSRF (Cross-Site Request Forgery) protection implementation."""
++
 +from __future__ import annotations
-+
-+"""Utilities for cleaning cache directories and repository artifacts."""
-+
-+from pathlib import Path
-+import shutil
-+from typing import Iterable
-+import sqlite3
-+
-+
-+class CacheCleanup:
-+    """Handle removal of temporary cache directories and gitignore updates."""
-+
-+    def __init__(self, base_path: Path | str = "."):
-+        self.base_path = Path(base_path)
-+
-+    def remove_streamlit_cache(self) -> None:
-+        for target in [".streamlit_cache", ".streamlit"]:
-+            path = self.base_path / target
-+            if path.exists():
-+                if path.is_dir():
-+                    shutil.rmtree(path)
-+                else:
-+                    path.unlink()
-+
-+    def clean_temp_files(self) -> None:
-+        for pattern in ("**/__pycache__", "**/*.pyc", "**/.pytest_cache"):
-+            for item in self.base_path.glob(pattern):
-+                if item.is_dir():
-+                    shutil.rmtree(item, ignore_errors=True)
-+                else:
-+                    item.unlink(missing_ok=True)
-+
-+    def update_gitignore(self) -> None:
-+        gitignore = self.base_path / ".gitignore"
-+        entries = [".streamlit_cache/", "__pycache__/", "*.pyc", ".pytest_cache/"]
-+        lines = []
-+        if gitignore.exists():
-+            lines = gitignore.read_text().splitlines()
-+        updated = False
-+        for entry in entries:
-+            if entry not in lines:
-+                lines.append(entry)
-+                updated = True
-+        if updated:
-+            gitignore.write_text("\n".join(lines) + "\n")
-+
-+    def validate_cleanup(self) -> bool:
-+        return not (self.base_path / ".streamlit_cache").exists()
-+
-+
-+class DataCleanup:
-+    """Basic data cleanup operations for SQLite databases."""
-+
-+    def __init__(self, conn: sqlite3.Connection):
-+        self.conn = conn
-+
-+    def remove_orphaned_records(self) -> None:
-+        self.conn.execute(
-+            "DELETE FROM framework_tasks WHERE epic_id NOT IN (SELECT id FROM framework_epics)"
-+        )
-+        self.conn.commit()
-+
-+    def normalize_data(self) -> None:
-+        self.conn.execute(
-+            "UPDATE framework_epics SET status='pending' WHERE status IS NULL OR status=''"
-+        )
-+        self.conn.commit()
-+
-+    def fix_inconsistencies(self) -> None:
-+        # Example placeholder: ensure priority defaults to 1
-+        self.conn.execute(
-+            "UPDATE framework_epics SET priority=1 WHERE priority IS NULL"
-+        )
-+        self.conn.commit()
-+
-+    def vacuum_database(self) -> None:
-+        self.conn.execute("VACUUM")
-+
-+
-+class RepositoryCleanup:
-+    """Placeholder for repository cleanup operations."""
-+
-+    def clean_git_history(self) -> None:  # pragma: no cover - demonstration only
-+        pass
-+
-+    def remove_large_files(self) -> None:  # pragma: no cover - demonstration only
-+        pass
-+
-+    def optimize_repository(self) -> None:  # pragma: no cover - demonstration only
-+        pass
-diff --git a/migration/migrations/001_add_missing_columns.sql b/migration/migrations/001_add_missing_columns.sql
-new file mode 100644
-index 0000000000000000000000000000000000000000..9b4de106bd42c1aed1e169d95ba9726a5767aeb3
---- /dev/null
-+++ b/migration/migrations/001_add_missing_columns.sql
-@@ -0,0 +1,15 @@
-+-- Adicionar colunas identificadas no report.md
-+ALTER TABLE framework_epics ADD COLUMN points_value INTEGER DEFAULT 0;
-+ALTER TABLE framework_epics ADD COLUMN due_date DATE;
-+ALTER TABLE framework_epics ADD COLUMN icon VARCHAR(50) DEFAULT 'default';
-+ALTER TABLE framework_epics ADD COLUMN priority INTEGER DEFAULT 1;
-+ALTER TABLE framework_epics ADD COLUMN estimated_hours DECIMAL(10,2);
-+
-+-- Adicionar colunas para auditing
-+ALTER TABLE framework_epics ADD COLUMN created_by VARCHAR(100);
-+ALTER TABLE framework_epics ADD COLUMN updated_by VARCHAR(100);
-+ALTER TABLE framework_epics ADD COLUMN version INTEGER DEFAULT 1;
-+
-+-- Adicionar soft delete
-+ALTER TABLE framework_epics ADD COLUMN deleted_at TIMESTAMP NULL;
-+ALTER TABLE framework_tasks ADD COLUMN deleted_at TIMESTAMP NULL;
-diff --git a/migration/migrations/002_add_indexes.sql b/migration/migrations/002_add_indexes.sql
-new file mode 100644
-index 0000000000000000000000000000000000000000..1e29442427b5cd601386d242b559def8f430ddae
---- /dev/null
-+++ b/migration/migrations/002_add_indexes.sql
-@@ -0,0 +1,13 @@
-+-- Índices para performance
-+CREATE INDEX idx_epics_status ON framework_epics(status);
-+CREATE INDEX idx_epics_priority ON framework_epics(priority);
-+CREATE INDEX idx_epics_due_date ON framework_epics(due_date);
-+CREATE INDEX idx_epics_deleted_at ON framework_epics(deleted_at);
-+
-+CREATE INDEX idx_tasks_epic_id ON framework_tasks(epic_id);
-+CREATE INDEX idx_tasks_status ON framework_tasks(status);
-+CREATE INDEX idx_tasks_deleted_at ON framework_tasks(deleted_at);
-+
-+-- Índices compostos
-+CREATE INDEX idx_epics_status_priority ON framework_epics(status, priority);
-+CREATE INDEX idx_tasks_epic_status ON framework_tasks(epic_id, status);
-diff --git a/migration/migrations/003_cleanup_data.sql b/migration/migrations/003_cleanup_data.sql
-new file mode 100644
-index 0000000000000000000000000000000000000000..05cec800c700dd30b99331721832dea68f4ea22d
---- /dev/null
-+++ b/migration/migrations/003_cleanup_data.sql
-@@ -0,0 +1,10 @@
-+-- Limpeza de dados inconsistentes
-+UPDATE framework_epics SET points_value = 0 WHERE points_value IS NULL;
-+UPDATE framework_epics SET priority = 1 WHERE priority IS NULL;
-+
-+-- Normalização de status
-+UPDATE framework_epics SET status = 'pending' WHERE status = '';
-+UPDATE framework_tasks SET status = 'pending' WHERE status = '';
-+
-+-- Remove registros órfãos (se existirem)
-+DELETE FROM framework_tasks WHERE epic_id NOT IN (SELECT id FROM framework_epics);
-diff --git a/migration/query_builder.py b/migration/query_builder.py
-new file mode 100644
-index 0000000000000000000000000000000000000000..20a4ff7b6a328615fea6b2fe5c3ed955996f8b46
---- /dev/null
-+++ b/migration/query_builder.py
-@@ -0,0 +1,168 @@
-+from __future__ import annotations
-+
-+"""Simple SQL query builder used to replace ad-hoc SQL strings."""
-+
-+from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
-+
-+import sqlite3
-+
-+
-+class SQLBuilder:
-+    """Build SQL strings from QueryBuilder internal representation."""
-+
-+    @staticmethod
-+    def sanitize_params(params: Iterable[Any]) -> Tuple[Any, ...]:
-+        """Return parameters as a tuple ensuring safe binding."""
-+        return tuple(params)
-+
-+    @staticmethod
-+    def build_select_query(parts: Dict[str, Any]) -> Tuple[str, Sequence[Any]]:
-+        query = f"SELECT {', '.join(parts['select'])} FROM {parts['from']}"
-+        for join in parts.get("joins", []):
-+            query += f" {join[0]} JOIN {join[1]} ON {join[2]}"
-+        params: List[Any] = []
-+        if parts.get("where"):
-+            conditions = []
-+            for column, op, value in parts["where"]:
-+                conditions.append(f"{column} {op} ?")
-+                params.append(value)
-+            query += " WHERE " + " AND ".join(conditions)
-+        if parts.get("order_by"):
-+            col, direction = parts["order_by"]
-+            query += f" ORDER BY {col} {direction}"
-+        if parts.get("limit") is not None:
-+            query += f" LIMIT {parts['limit']}"
-+        return query, params
-+
-+    @staticmethod
-+    def build_insert_query(parts: Dict[str, Any]) -> Tuple[str, Sequence[Any]]:
-+        cols = ", ".join(parts["values"].keys())
-+        placeholders = ", ".join(["?"] * len(parts["values"]))
-+        query = f"INSERT INTO {parts['into']} ({cols}) VALUES ({placeholders})"
-+        params = list(parts["values"].values())
-+        return query, params
-+
-+    @staticmethod
-+    def build_update_query(parts: Dict[str, Any]) -> Tuple[str, Sequence[Any]]:
-+        sets = []
-+        params: List[Any] = []
-+        for column, value in parts["set"].items():
-+            sets.append(f"{column} = ?")
-+            params.append(value)
-+        query = f"UPDATE {parts['table']} SET {', '.join(sets)}"
-+        if parts.get("where"):
-+            conditions = []
-+            for column, op, value in parts["where"]:
-+                conditions.append(f"{column} {op} ?")
-+                params.append(value)
-+            query += " WHERE " + " AND ".join(conditions)
-+        return query, params
-+
-+    @staticmethod
-+    def build_delete_query(parts: Dict[str, Any]) -> Tuple[str, Sequence[Any]]:
-+        query = f"DELETE FROM {parts['from']}"
-+        params: List[Any] = []
-+        if parts.get("where"):
-+            conditions = []
-+            for column, op, value in parts["where"]:
-+                conditions.append(f"{column} {op} ?")
-+                params.append(value)
-+            query += " WHERE " + " AND ".join(conditions)
-+        return query, params
-+
-+
-+class QueryExecutor:
-+    """Execute SQL queries using a SQLite connection."""
-+
-+    def __init__(self, conn: sqlite3.Connection):
-+        self.conn = conn
-+
-+    def execute_query(self, query: str, params: Sequence[Any] | None = None):
-+        cur = self.conn.execute(query, params or [])
-+        try:
-+            return cur.fetchall()
-+        finally:
-+            cur.close()
-+
-+    def execute_transaction(self, queries: Iterable[Tuple[str, Sequence[Any] | None]]):
-+        with self.conn:
-+            for query, params in queries:
-+                self.conn.execute(query, params or [])
-+
-+    def batch_execute(self, query: str, param_list: Iterable[Sequence[Any]]):
-+        with self.conn:
-+            for params in param_list:
-+                self.conn.execute(query, params)
-+
-+
-+class QueryBuilder:
-+    """Fluent interface for building SQL queries."""
-+
-+    def __init__(self):
-+        self.parts: Dict[str, Any] = {}
-+        self.query_type: Optional[str] = None
-+
-+    # --- Core builders -------------------------------------------------
-+    def select(self, *columns: str) -> "QueryBuilder":
-+        self.query_type = "select"
-+        self.parts["select"] = columns or ["*"]
-+        return self
-+
-+    def insert_into(self, table: str) -> "QueryBuilder":
-+        self.query_type = "insert"
-+        self.parts["into"] = table
-+        return self
-+
-+    def update(self, table: str) -> "QueryBuilder":
-+        self.query_type = "update"
-+        self.parts["table"] = table
-+        return self
-+
-+    def delete(self) -> "QueryBuilder":
-+        self.query_type = "delete"
-+        return self
-+
-+    def from_table(self, table: str) -> "QueryBuilder":
-+        self.parts["from"] = table
-+        return self
-+
-+    def join(self, table: str, condition: str, join_type: str = "INNER") -> "QueryBuilder":
-+        self.parts.setdefault("joins", []).append((join_type, table, condition))
-+        return self
-+
-+    def where(self, column: str, op: str, value: Any) -> "QueryBuilder":
-+        self.parts.setdefault("where", []).append((column, op, value))
-+        return self
-+
-+    def order_by(self, column: str, direction: str = "ASC") -> "QueryBuilder":
-+        self.parts["order_by"] = (column, direction)
-+        return self
-+
-+    def limit(self, count: int) -> "QueryBuilder":
-+        self.parts["limit"] = count
-+        return self
-+
-+    def values(self, values: Dict[str, Any]) -> "QueryBuilder":
-+        self.parts["values"] = values
-+        return self
-+
-+    def set(self, column: str, value: Any) -> "QueryBuilder":
-+        self.parts.setdefault("set", {})[column] = value
-+        return self
-+
-+    # --- Build and execute ---------------------------------------------
-+    def build(self) -> Tuple[str, Sequence[Any]]:
-+        if self.query_type == "select":
-+            return SQLBuilder.build_select_query(self.parts)
-+        if self.query_type == "insert":
-+            return SQLBuilder.build_insert_query(self.parts)
-+        if self.query_type == "update":
-+            return SQLBuilder.build_update_query(self.parts)
-+        if self.query_type == "delete":
-+            return SQLBuilder.build_delete_query(self.parts)
-+        raise ValueError("Query type not specified")
-+
-+    def execute(self, conn: sqlite3.Connection):
-+        query, params = self.build()
-+        executor = QueryExecutor(conn)
-+        return executor.execute_query(query, params)
-diff --git a/migration/schema_migrations.py b/migration/schema_migrations.py
-new file mode 100644
-index 0000000000000000000000000000000000000000..e335a738d66b575cced7e9d359d7632fe06296e2
---- /dev/null
-+++ b/migration/schema_migrations.py
-@@ -0,0 +1,162 @@
-+from __future__ import annotations
-+
-+"""Lightweight database schema migration utilities.
-+
-+This module provides a minimal yet functional migration system used in tests.
-+It is not intended to be a full featured migration framework but rather a
-+simple helper that can apply SQL files in order and keep track of the current
-+schema version.  The implementation uses a SQLite connection which makes the
-+system fully self‑contained for unit tests.
-+"""
-+
-+from dataclasses import dataclass, field
-+from pathlib import Path
-+from typing import Iterable, List, Optional
-+
-+import sqlite3
-+
-+MIGRATIONS_DIR = Path(__file__).resolve().parent / "migrations"
++import secrets
++import hashlib
++import time
++from typing import Dict, Optional, Set
++from dataclasses import dataclass
++from datetime import datetime, timedelta
++import streamlit as st
 +
 +
 +@dataclass
-+class Migration:
-+    """Represents a single migration file."""
-+
-+    version: str
-+    sql: str
-+    rollback_sql: Optional[str] = None
-+    dependencies: List[str] = field(default_factory=list)
-+
-+    def execute(self, conn: sqlite3.Connection) -> None:
-+        """Execute the migration against the provided connection."""
-+        conn.executescript(self.sql)
-+
-+    def rollback(self, conn: sqlite3.Connection) -> None:
-+        """Rollback the migration if rollback SQL is provided."""
-+        if self.rollback_sql:
-+            conn.executescript(self.rollback_sql)
-+
-+    def validate(self, validator: "SchemaValidator") -> bool:
-+        """Validate using the provided validator instance."""
-+        return validator.validate_tables(["schema_migrations"])  # trivial check
-+
-+    def get_dependencies(self) -> List[str]:
-+        """Return a list of migration dependencies."""
-+        return list(self.dependencies)
++class CSRFToken:
++    """CSRF token data structure."""
++    token: str
++    created_at: datetime
++    expires_at: datetime
++    user_session: Optional[str] = None
++    
++    @property
++    def is_expired(self) -> bool:
++        """Check if token is expired."""
++        return datetime.now() > self.expires_at
++    
++    @property
++    def is_valid(self) -> bool:
++        """Check if token is valid and not expired."""
++        return not self.is_expired
 +
 +
-+class SchemaValidator:
-+    """Simple schema validation helpers for SQLite."""
-+
-+    def __init__(self, conn: sqlite3.Connection):
-+        self.conn = conn
-+
-+    def validate_tables(self, tables: Iterable[str]) -> bool:
-+        for table in tables:
-+            cur = self.conn.execute(
-+                "SELECT name FROM sqlite_master WHERE type='table' AND name=?",
-+                (table,),
-+            )
-+            if not cur.fetchone():
-+                raise ValueError(f"Missing table: {table}")
-+        return True
-+
-+    def validate_columns(self, table: str, columns: Iterable[str]) -> bool:
-+        cur = self.conn.execute(f"PRAGMA table_info({table})")
-+        existing = {row[1] for row in cur.fetchall()}
-+        for column in columns:
-+            if column not in existing:
-+                raise ValueError(f"Missing column {column} in table {table}")
-+        return True
-+
-+    def validate_indexes(self, table: str, indexes: Iterable[str]) -> bool:
-+        cur = self.conn.execute(f"PRAGMA index_list({table})")
-+        existing = {row[1] for row in cur.fetchall()}
-+        for index in indexes:
-+            if index not in existing:
-+                raise ValueError(f"Missing index {index} on table {table}")
-+        return True
-+
-+    def validate_constraints(self) -> bool:
-+        # For simplicity we do not enforce constraints in tests.
-+        return True
-+
-+
-+class MigrationManager:
-+    """Manage applying and tracking migrations."""
-+
-+    def __init__(self, conn: sqlite3.Connection, migrations_path: Path | None = None):
-+        self.conn = conn
-+        self.migrations_path = migrations_path or MIGRATIONS_DIR
-+        self._ensure_migration_table()
-+
-+    # ------------------------------------------------------------------
-+    def _ensure_migration_table(self) -> None:
-+        self.conn.execute(
-+            """
-+            CREATE TABLE IF NOT EXISTS schema_migrations (
-+                version TEXT PRIMARY KEY,
-+                applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-+            )
-+            """
++class CSRFProtection:
++    """CSRF protection manager with token generation and validation."""
++    
++    def __init__(self, token_lifetime_minutes: int = 60):
++        self.token_lifetime = timedelta(minutes=token_lifetime_minutes)
++        self._tokens: Dict[str, CSRFToken] = {}
++        self._used_tokens: Set[str] = set()
++        self._last_cleanup = time.time()
++    
++    def generate_token(self, session_id: Optional[str] = None) -> str:
++        """Generate new CSRF token."""
++        # Generate cryptographically secure token
++        token_data = f"{secrets.token_urlsafe(32)}{time.time()}{session_id or ''}"
++        token = hashlib.sha256(token_data.encode()).hexdigest()
++        
++        now = datetime.now()
++        csrf_token = CSRFToken(
++            token=token,
++            created_at=now,
++            expires_at=now + self.token_lifetime,
++            user_session=session_id
 +        )
-+        self.conn.commit()
-+
-+    # ------------------------------------------------------------------
-+    def get_current_version(self) -> str:
-+        cur = self.conn.execute(
-+            "SELECT version FROM schema_migrations ORDER BY version DESC LIMIT 1"
-+        )
-+        row = cur.fetchone()
-+        return row[0] if row else "000"
-+
-+    # ------------------------------------------------------------------
-+    def _load_migrations(self) -> List[Migration]:
-+        migrations: List[Migration] = []
-+        for path in sorted(self.migrations_path.glob("*.sql")):
-+            version = path.stem.split("_")[0]
-+            sql = path.read_text()
-+            migrations.append(Migration(version=version, sql=sql))
-+        return migrations
-+
-+    # ------------------------------------------------------------------
-+    def apply_migrations(self) -> List[str]:
-+        """Apply all pending migrations in order.
-+
-+        Returns a list of versions that were applied.
-+        """
-+        applied_versions = {
-+            row[0]
-+            for row in self.conn.execute("SELECT version FROM schema_migrations")
++        
++        self._tokens[token] = csrf_token
++        self._cleanup_expired_tokens()
++        
++        return token
++    
++    def validate_token(self, token: str, session_id: Optional[str] = None) -> bool:
++        """Validate CSRF token."""
++        if not token or token in self._used_tokens:
++            return False
++        
++        if token not in self._tokens:
++            return False
++        
++        csrf_token = self._tokens[token]
++        
++        # Check expiration
++        if csrf_token.is_expired:
++            del self._tokens[token]
++            return False
++        
++        # Check session binding if provided
++        if session_id and csrf_token.user_session != session_id:
++            return False
++        
++        # Mark token as used (one-time use)
++        self._used_tokens.add(token)
++        del self._tokens[token]
++        
++        return True
++    
++    def _cleanup_expired_tokens(self) -> None:
++        """Clean up expired tokens periodically."""
++        current_time = time.time()
++        
++        # Only cleanup every 5 minutes
++        if current_time - self._last_cleanup < 300:
++            return
++        
++        now = datetime.now()
++        expired_tokens = [
++            token for token, csrf_token in self._tokens.items()
++            if csrf_token.is_expired
++        ]
++        
++        for token in expired_tokens:
++            del self._tokens[token]
++        
++        # Clean up old used tokens (keep for 1 hour to prevent replay)
++        cleanup_time = now - timedelta(hours=1)
++        self._used_tokens = {
++            token for token in self._used_tokens
++            if token in self._tokens or 
++            any(t.created_at > cleanup_time for t in self._tokens.values() if t.token == token)
 +        }
-+        applied: List[str] = []
-+        for migration in self._load_migrations():
-+            if migration.version not in applied_versions:
-+                migration.execute(self.conn)
-+                self.conn.execute(
-+                    "INSERT INTO schema_migrations(version) VALUES(?)",
-+                    (migration.version,),
++        
++        self._last_cleanup = current_time
++    
++    def get_active_tokens_count(self) -> int:
++        """Get count of active tokens."""
++        self._cleanup_expired_tokens()
++        return len(self._tokens)
++
++
++# Global CSRF protection instance
++_csrf_protection: Optional[CSRFProtection] = None
++
++
++def get_csrf_protection() -> CSRFProtection:
++    """Get global CSRF protection instance."""
++    global _csrf_protection
++    if _csrf_protection is None:
++        _csrf_protection = CSRFProtection()
++    return _csrf_protection
++
++
++def generate_csrf_token() -> str:
++    """Generate CSRF token for current session."""
++    csrf = get_csrf_protection()
++    session_id = st.session_state.get("session_id")
++    return csrf.generate_token(session_id)
++
++
++def validate_csrf_token(token: str) -> bool:
++    """Validate CSRF token for current session."""
++    if not token:
++        return False
++    
++    csrf = get_csrf_protection()
++    session_id = st.session_state.get("session_id")
++    return csrf.validate_token(token, session_id)
++
++
++def require_csrf_token(form_data: Dict) -> bool:
++    """Require and validate CSRF token in form data."""
++    csrf_token = form_data.get("csrf_token")
++    
++    if not csrf_token:
++        st.error("🔒 Security Error: Missing CSRF token")
++        return False
++    
++    if not validate_csrf_token(csrf_token):
++        st.error("🔒 Security Error: Invalid or expired CSRF token")
++        return False
++    
++    return True
++
++
++def csrf_form_wrapper(form_key: str):
++    """Decorator to add CSRF protection to Streamlit forms."""
++    def decorator(func):
++        def wrapper(*args, **kwargs):
++            # Generate CSRF token for the form
++            if f"csrf_token_{form_key}" not in st.session_state:
++                st.session_state[f"csrf_token_{form_key}"] = generate_csrf_token()
++            
++            return func(*args, **kwargs)
++        return wrapper
++    return decorator
++
++
++def add_csrf_field(form_key: str) -> str:
++    """Add CSRF token field to form and return token."""
++    if f"csrf_token_{form_key}" not in st.session_state:
++        st.session_state[f"csrf_token_{form_key}"] = generate_csrf_token()
++    
++    token = st.session_state[f"csrf_token_{form_key}"]
++    
++    # Add hidden field (in Streamlit, we'll store in session state)
++    st.session_state[f"form_csrf_{form_key}"] = token
++    
++    return token
++
++
++def validate_form_csrf(form_key: str, submitted_token: str) -> bool:
++    """Validate CSRF token for specific form."""
++    expected_token = st.session_state.get(f"form_csrf_{form_key}")
++    
++    if not expected_token or not submitted_token:
++        return False
++    
++    # Clear the token after use
++    if f"csrf_token_{form_key}" in st.session_state:
++        del st.session_state[f"csrf_token_{form_key}"]
++    if f"form_csrf_{form_key}" in st.session_state:
++        del st.session_state[f"form_csrf_{form_key}"]
++    
++    return validate_csrf_token(submitted_token)
+diff --git a/streamlit_extension/security/input_validator.py b/streamlit_extension/security/input_validator.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..f89088ea437d57bd12a58db932d4878ba3a4d4e6
+--- /dev/null
++++ b/streamlit_extension/security/input_validator.py
+@@ -0,0 +1,195 @@
++"""Input validation for forms and user data."""
++
++from __future__ import annotations
++import re
++from typing import Dict, List, Optional, Any, Union
++from dataclasses import dataclass
++from enum import Enum
++
++
++class ValidationError(Exception):
++    """Validation error exception."""
++    pass
++
++
++class ValidationType(Enum):
++    """Types of validation."""
++    EMAIL = "email"
++    USERNAME = "username"
++    PASSWORD = "password"
++    PHONE = "phone"
++    URL = "url"
++    TEXT = "text"
++    NUMBER = "number"
++    DATE = "date"
++
++
++@dataclass
++class ValidationRule:
++    """Validation rule definition."""
++    field_name: str
++    validation_type: ValidationType
++    required: bool = True
++    min_length: Optional[int] = None
++    max_length: Optional[int] = None
++    pattern: Optional[str] = None
++    custom_validator: Optional[callable] = None
++    error_message: Optional[str] = None
++
++
++class InputValidator:
++    """Comprehensive input validator."""
++    
++    # Regex patterns for common validations
++    PATTERNS = {
++        ValidationType.EMAIL: r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$',
++        ValidationType.USERNAME: r'^[a-zA-Z0-9_]{3,30}$',
++        ValidationType.PASSWORD: r'^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)[a-zA-Z\d@$!%*?&]{8,}$',
++        ValidationType.PHONE: r'^\+?[\d\s\-\(\)]{10,15}$',
++        ValidationType.URL: r'^https?://[^\s/$.?#].[^\s]*$',
++        ValidationType.NUMBER: r'^\d+(\.\d+)?$',
++        ValidationType.DATE: r'^\d{4}-\d{2}-\d{2}$'
++    }
++    
++    # Default error messages
++    DEFAULT_ERRORS = {
++        ValidationType.EMAIL: "Invalid email format",
++        ValidationType.USERNAME: "Username must be 3-30 characters, letters/numbers/underscore only",
++        ValidationType.PASSWORD: "Password must be 8+ chars with uppercase, lowercase, and number",
++        ValidationType.PHONE: "Invalid phone number format",
++        ValidationType.URL: "Invalid URL format (must start with http:// or https://)",
++        ValidationType.TEXT: "Invalid text input",
++        ValidationType.NUMBER: "Must be a valid number",
++        ValidationType.DATE: "Date must be in YYYY-MM-DD format"
++    }
++    
++    def __init__(self):
++        self.compiled_patterns = {
++            vtype: re.compile(pattern) 
++            for vtype, pattern in self.PATTERNS.items()
++        }
++    
++    def validate_field(self, value: Any, rule: ValidationRule) -> List[str]:
++        """Validate a single field against a rule."""
++        errors = []
++        
++        # Convert to string for validation
++        str_value = str(value) if value is not None else ""
++        
++        # Check required
++        if rule.required and not str_value.strip():
++            errors.append(f"{rule.field_name} is required")
++            return errors
++        
++        # Skip other validations if empty and not required
++        if not str_value.strip() and not rule.required:
++            return errors
++        
++        # Check length constraints
++        if rule.min_length and len(str_value) < rule.min_length:
++            errors.append(f"{rule.field_name} must be at least {rule.min_length} characters")
++        
++        if rule.max_length and len(str_value) > rule.max_length:
++            errors.append(f"{rule.field_name} must be no more than {rule.max_length} characters")
++        
++        # Check pattern
++        pattern_to_use = rule.pattern or self.PATTERNS.get(rule.validation_type)
++        if pattern_to_use:
++            regex = self.compiled_patterns.get(rule.validation_type) or re.compile(pattern_to_use)
++            if not regex.match(str_value):
++                error_msg = rule.error_message or self.DEFAULT_ERRORS.get(
++                    rule.validation_type, f"Invalid {rule.field_name} format"
 +                )
-+                applied.append(migration.version)
-+        self.conn.commit()
-+        return applied
++                errors.append(error_msg)
++        
++        # Custom validator
++        if rule.custom_validator:
++            try:
++                if not rule.custom_validator(value):
++                    errors.append(f"Custom validation failed for {rule.field_name}")
++            except Exception as e:
++                errors.append(f"Validation error for {rule.field_name}: {str(e)}")
++        
++        return errors
++    
++    def validate_form(self, form_data: Dict[str, Any], rules: List[ValidationRule]) -> Dict[str, List[str]]:
++        """Validate entire form against rules."""
++        all_errors = {}
++        
++        for rule in rules:
++            field_value = form_data.get(rule.field_name)
++            field_errors = self.validate_field(field_value, rule)
++            
++            if field_errors:
++                all_errors[rule.field_name] = field_errors
++        
++        return all_errors
++    
++    def is_valid_form(self, form_data: Dict[str, Any], rules: List[ValidationRule]) -> bool:
++        """Check if form is valid."""
++        errors = self.validate_form(form_data, rules)
++        return len(errors) == 0
++    
++    def validate_and_raise(self, form_data: Dict[str, Any], rules: List[ValidationRule]) -> None:
++        """Validate form and raise ValidationError if invalid."""
++        errors = self.validate_form(form_data, rules)
++        if errors:
++            error_messages = []
++            for field, field_errors in errors.items():
++                error_messages.extend(field_errors)
++            raise ValidationError("; ".join(error_messages))
 +
-+    # ------------------------------------------------------------------
-+    def rollback_migration(self, version: str) -> None:
-+        cur = self.conn.execute(
-+            "SELECT version FROM schema_migrations WHERE version=?",
-+            (version,),
-+        )
-+        if not cur.fetchone():
-+            raise ValueError(f"Migration {version} not applied")
-+        # Rollback simply removes the entry; actual rollback SQL is optional
-+        self.conn.execute(
-+            "DELETE FROM schema_migrations WHERE version=?",
-+            (version,),
-+        )
-+        self.conn.commit()
 +
-+    # ------------------------------------------------------------------
-+    def validate_schema(self) -> bool:
-+        validator = SchemaValidator(self.conn)
-+        return validator.validate_tables(["schema_migrations"])
-diff --git a/scripts/cleanup_cache.py b/scripts/cleanup_cache.py
++# Predefined validation rules for common fields
++COMMON_VALIDATION_RULES = {
++    "username": ValidationRule("username", ValidationType.USERNAME, required=True),
++    "email": ValidationRule("email", ValidationType.EMAIL, required=True),
++    "password": ValidationRule("password", ValidationType.PASSWORD, required=True),
++    "client_name": ValidationRule("client_name", ValidationType.TEXT, required=True, min_length=2, max_length=100),
++    "project_name": ValidationRule("project_name", ValidationType.TEXT, required=True, min_length=2, max_length=100),
++    "epic_title": ValidationRule("epic_title", ValidationType.TEXT, required=True, min_length=3, max_length=200),
++    "description": ValidationRule("description", ValidationType.TEXT, required=False, max_length=1000),
++    "phone": ValidationRule("phone", ValidationType.PHONE, required=False),
++    "website": ValidationRule("website", ValidationType.URL, required=False)
++}
++
++
++# Global validator instance
++_input_validator: Optional[InputValidator] = None
++
++
++def get_input_validator() -> InputValidator:
++    """Get global input validator instance."""
++    global _input_validator
++    if _input_validator is None:
++        _input_validator = InputValidator()
++    return _input_validator
++
++
++def validate_form_input(form_data: Dict[str, Any], field_names: List[str]) -> Dict[str, List[str]]:
++    """Validate form input using common rules."""
++    validator = get_input_validator()
++    
++    rules = []
++    for field_name in field_names:
++        if field_name in COMMON_VALIDATION_RULES:
++            rules.append(COMMON_VALIDATION_RULES[field_name])
++        else:
++            # Default text validation
++            rules.append(ValidationRule(field_name, ValidationType.TEXT, required=True))
++    
++    return validator.validate_form(form_data, rules)
++
++
++def is_valid_email(email: str) -> bool:
++    """Quick email validation."""
++    validator = get_input_validator()
++    errors = validator.validate_field(email, COMMON_VALIDATION_RULES["email"])
++    return len(errors) == 0
++
++
++def is_strong_password(password: str) -> bool:
++    """Quick password strength validation."""
++    validator = get_input_validator()
++    errors = validator.validate_field(password, COMMON_VALIDATION_RULES["password"])
++    return len(errors) == 0
+diff --git a/streamlit_extension/security/security_headers.py b/streamlit_extension/security/security_headers.py
 new file mode 100644
-index 0000000000000000000000000000000000000000..deff96f1d0ff5b3f89f750511fcb3329df131556
+index 0000000000000000000000000000000000000000..a89a6a934ad257b774251f78e21f3d0c438fc977
 --- /dev/null
-+++ b/scripts/cleanup_cache.py
-@@ -0,0 +1,19 @@
++++ b/streamlit_extension/security/security_headers.py
+@@ -0,0 +1,100 @@
++"""Security headers for enhanced protection."""
++
++from typing import Dict, Optional
++from dataclasses import dataclass
++
++
++@dataclass
++class SecurityConfig:
++    """Security configuration for headers."""
++    content_security_policy: bool = True
++    x_frame_options: bool = True
++    x_content_type_options: bool = True
++    x_xss_protection: bool = True
++    strict_transport_security: bool = True
++    referrer_policy: bool = True
++    permissions_policy: bool = True
++
++
++class SecurityHeaders:
++    """Security headers manager."""
++    
++    def __init__(self, config: Optional[SecurityConfig] = None):
++        self.config = config or SecurityConfig()
++    
++    def get_csp_header(self) -> str:
++        """Get Content Security Policy header."""
++        csp_directives = [
++            "default-src 'self'",
++            "script-src 'self' 'unsafe-inline' 'unsafe-eval'",  # Streamlit needs these
++            "style-src 'self' 'unsafe-inline'",
++            "img-src 'self' data: blob:",
++            "font-src 'self' data:",
++            "connect-src 'self' ws: wss:",  # WebSocket for Streamlit
++            "media-src 'none'",
++            "object-src 'none'",
++            "base-uri 'self'",
++            "form-action 'self'",
++            "frame-ancestors 'none'"
++        ]
++        return "; ".join(csp_directives)
++    
++    def get_security_headers(self) -> Dict[str, str]:
++        """Get all security headers."""
++        headers = {}
++        
++        if self.config.content_security_policy:
++            headers["Content-Security-Policy"] = self.get_csp_header()
++        
++        if self.config.x_frame_options:
++            headers["X-Frame-Options"] = "DENY"
++        
++        if self.config.x_content_type_options:
++            headers["X-Content-Type-Options"] = "nosniff"
++        
++        if self.config.x_xss_protection:
++            headers["X-XSS-Protection"] = "1; mode=block"
++        
++        if self.config.strict_transport_security:
++            headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
++        
++        if self.config.referrer_policy:
++            headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
++        
++        if self.config.permissions_policy:
++            headers["Permissions-Policy"] = (
++                "camera=(), microphone=(), geolocation=(), "
++                "accelerometer=(), gyroscope=(), magnetometer=(), "
++                "payment=(), usb=()"
++            )
++        
++        return headers
++    
++    def apply_headers_to_response(self, response_headers: Dict[str, str]) -> None:
++        """Apply security headers to response."""
++        security_headers = self.get_security_headers()
++        response_headers.update(security_headers)
++
++
++# Global security headers instance
++_security_headers: Optional[SecurityHeaders] = None
++
++
++def get_security_headers() -> SecurityHeaders:
++    """Get global security headers instance."""
++    global _security_headers
++    if _security_headers is None:
++        _security_headers = SecurityHeaders()
++    return _security_headers
++
++
++def apply_security_headers() -> Dict[str, str]:
++    """Apply security headers and return them."""
++    headers_manager = get_security_headers()
++    return headers_manager.get_security_headers()
++
++
++def get_csp_policy() -> str:
++    """Get Content Security Policy."""
++    headers_manager = get_security_headers()
++    return headers_manager.get_csp_header()
+diff --git a/streamlit_extension/security/security_middleware.py b/streamlit_extension/security/security_middleware.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..0dc0a73672527889e56ce33101feb90f63639650
+--- /dev/null
++++ b/streamlit_extension/security/security_middleware.py
+@@ -0,0 +1,153 @@
++"""Security middleware for Streamlit applications."""
++
++from functools import wraps
++from typing import Callable, Dict, Any, Optional
++import streamlit as st
++
++from .csrf_protection import generate_csrf_token, validate_csrf_token
++from .xss_sanitizer import sanitize_input, detect_security_threats
++from .input_validator import validate_form_input
++from .security_headers import apply_security_headers
++
++
++def security_middleware() -> None:
++    """Apply security middleware to current Streamlit session."""
++    # Apply security headers
++    headers = apply_security_headers()
++    
++    # Store security headers in session state for reference
++    st.session_state.security_headers = headers
++    
++    # Initialize CSRF protection if not present
++    if "csrf_initialized" not in st.session_state:
++        st.session_state.csrf_initialized = True
++
++
++def require_csrf(form_key: str):
++    """Decorator to require CSRF protection for form submission."""
++    def decorator(func: Callable):
++        @wraps(func)
++        def wrapper(*args, **kwargs):
++            # Generate CSRF token if not exists
++            csrf_key = f"csrf_token_{form_key}"
++            if csrf_key not in st.session_state:
++                st.session_state[csrf_key] = generate_csrf_token()
++            
++            return func(*args, **kwargs)
++        return wrapper
++    return decorator
++
++
++def sanitize_form_data(form_data: Dict[str, Any]) -> Dict[str, Any]:
++    """Sanitize all form data."""
++    return sanitize_input(form_data)
++
++
++def validate_secure_form(form_data: Dict[str, Any], field_names: list, form_key: str) -> tuple[bool, Dict[str, list], list]:
++    """
++    Comprehensive form validation with security checks.
++    
++    Returns:
++        tuple: (is_valid, validation_errors, security_threats)
++    """
++    # Check CSRF token
++    csrf_token = form_data.get("csrf_token")
++    if not csrf_token or not validate_csrf_token(csrf_token):
++        return False, {"csrf": ["Invalid or missing CSRF token"]}, ["CSRF token invalid"]
++    
++    # Sanitize input data
++    sanitized_data = sanitize_form_data(form_data)
++    
++    # Detect security threats
++    security_threats = []
++    for field_name, value in form_data.items():
++        if isinstance(value, str):
++            threats = detect_security_threats(value)
++            if threats:
++                security_threats.extend([f"{field_name}: {threat}" for threat in threats])
++    
++    # Validate form fields
++    validation_errors = validate_form_input(sanitized_data, field_names)
++    
++    is_valid = len(validation_errors) == 0 and len(security_threats) == 0
++    
++    return is_valid, validation_errors, security_threats
++
++
++def secure_form_submit(form_data: Dict[str, Any], field_names: list, form_key: str) -> tuple[bool, Optional[str]]:
++    """
++    Handle secure form submission with comprehensive validation.
++    
++    Returns:
++        tuple: (success, error_message)
++    """
++    is_valid, validation_errors, security_threats = validate_secure_form(form_data, field_names, form_key)
++    
++    if not is_valid:
++        error_messages = []
++        
++        # Add validation errors
++        for field, errors in validation_errors.items():
++            error_messages.extend(errors)
++        
++        # Add security threat warnings
++        if security_threats:
++            error_messages.append("🔒 Security threats detected")
++            error_messages.extend(security_threats)
++        
++        return False, " | ".join(error_messages)
++    
++    return True, None
++
++
++def create_secure_form(form_key: str) -> str:
++    """Create a secure form with CSRF token."""
++    csrf_token = generate_csrf_token()
++    st.session_state[f"csrf_token_{form_key}"] = csrf_token
++    return csrf_token
++
++
++def add_csrf_to_form(form_key: str) -> str:
++    """Add CSRF token to existing form."""
++    if f"csrf_token_{form_key}" not in st.session_state:
++        st.session_state[f"csrf_token_{form_key}"] = generate_csrf_token()
++    
++    return st.session_state[f"csrf_token_{form_key}"]
++
++
++class SecureFormManager:
++    """Manager for secure forms with CSRF and XSS protection."""
++    
++    def __init__(self, form_key: str):
++        self.form_key = form_key
++        self.csrf_token = self._ensure_csrf_token()
++    
++    def _ensure_csrf_token(self) -> str:
++        """Ensure CSRF token exists for this form."""
++        csrf_key = f"csrf_token_{self.form_key}"
++        if csrf_key not in st.session_state:
++            st.session_state[csrf_key] = generate_csrf_token()
++        return st.session_state[csrf_key]
++    
++    def validate_submission(self, form_data: Dict[str, Any], field_names: list) -> tuple[bool, str]:
++        """Validate form submission."""
++        # Add CSRF token to form data
++        form_data["csrf_token"] = self.csrf_token
++        
++        success, error_message = secure_form_submit(form_data, field_names, self.form_key)
++        
++        if success:
++            # Regenerate CSRF token for next submission
++            self._regenerate_csrf_token()
++        
++        return success, error_message or ""
++    
++    def _regenerate_csrf_token(self):
++        """Regenerate CSRF token after successful submission."""
++        csrf_key = f"csrf_token_{self.form_key}"
++        st.session_state[csrf_key] = generate_csrf_token()
++        self.csrf_token = st.session_state[csrf_key]
++    
++    def get_csrf_token(self) -> str:
++        """Get current CSRF token."""
++        return self.csrf_token
+diff --git a/streamlit_extension/security/xss_sanitizer.py b/streamlit_extension/security/xss_sanitizer.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..6fab17fa029bb75f2a27ee57fcc9f777b7ad1e69
+--- /dev/null
++++ b/streamlit_extension/security/xss_sanitizer.py
+@@ -0,0 +1,230 @@
++"""XSS (Cross-Site Scripting) sanitization and prevention."""
++
 +from __future__ import annotations
-+
-+"""Command line utility to remove cache directories from the repository."""
-+
-+from pathlib import Path
-+
-+from migration.cleanup_scripts import CacheCleanup
++import re
++import html
++from typing import Dict, List, Optional, Union, Any
++from urllib.parse import urlparse
 +
 +
-+def cleanup_streamlit_cache(base_path: str | Path = ".") -> None:
-+    """Remove Streamlit cache directories and update .gitignore."""
-+    cleaner = CacheCleanup(base_path)
-+    cleaner.remove_streamlit_cache()
-+    cleaner.clean_temp_files()
-+    cleaner.update_gitignore()
++class XSSSanitizer:
++    """XSS sanitization with configurable rules."""
++    
++    # Dangerous HTML tags that should be removed
++    DANGEROUS_TAGS = {
++        'script', 'object', 'embed', 'form', 'input', 'button', 'select', 
++        'textarea', 'iframe', 'frame', 'frameset', 'meta', 'link', 'base',
++        'applet', 'bgsound', 'isindex', 'layer', 'ilayer', 'blink', 'marquee'
++    }
++    
++    # Event handlers that should be removed
++    EVENT_HANDLERS = {
++        'onabort', 'onblur', 'onchange', 'onclick', 'ondblclick', 'onerror',
++        'onfocus', 'onkeydown', 'onkeypress', 'onkeyup', 'onload', 'onmousedown',
++        'onmousemove', 'onmouseout', 'onmouseover', 'onmouseup', 'onreset',
++        'onresize', 'onselect', 'onsubmit', 'onunload', 'onbeforeunload',
++        'oncontextmenu', 'ondrag', 'ondragend', 'ondragenter', 'ondragleave',
++        'ondragover', 'ondragstart', 'ondrop', 'onscroll', 'onwheel'
++    }
++    
++    # JavaScript protocol patterns
++    JS_PROTOCOLS = [
++        r'javascript\s*:',
++        r'vbscript\s*:',
++        r'data\s*:.*text/html',
++        r'data\s*:.*application/.*script'
++    ]
++    
++    # SQL injection patterns
++    SQL_INJECTION_PATTERNS = [
++        r'(\bUNION\b.*\bSELECT\b)',
++        r'(\bINSERT\b.*\bINTO\b)',
++        r'(\bUPDATE\b.*\bSET\b)',
++        r'(\bDELETE\b.*\bFROM\b)',
++        r'(\bDROP\b.*\bTABLE\b)',
++        r'(\bCREATE\b.*\bTABLE\b)',
++        r'(\bALTER\b.*\bTABLE\b)',
++        r'(;\s*--)',
++        r'(/\*.*\*/)',
++        r'(\bOR\b.*=.*)',
++        r'(\bAND\b.*=.*)',
++        r'(\'.*OR.*\'.*=.*\')',
++        r'(\".*OR.*\".*=.*\")'
++    ]
++    
++    def __init__(self, strict_mode: bool = True):
++        self.strict_mode = strict_mode
++        self._compile_patterns()
++    
++    def _compile_patterns(self):
++        """Compile regex patterns for performance."""
++        self.js_pattern = re.compile(
++            '|'.join(self.JS_PROTOCOLS), 
++            re.IGNORECASE | re.MULTILINE
++        )
++        
++        self.sql_pattern = re.compile(
++            '|'.join(self.SQL_INJECTION_PATTERNS),
++            re.IGNORECASE | re.MULTILINE
++        )
++        
++        self.tag_pattern = re.compile(
++            r'<\s*(/?)(' + '|'.join(self.DANGEROUS_TAGS) + r')\b[^>]*>',
++            re.IGNORECASE
++        )
++        
++        self.event_pattern = re.compile(
++            r'\b(' + '|'.join(self.EVENT_HANDLERS) + r')\s*=\s*["\'][^"\']*["\']',
++            re.IGNORECASE
++        )
++    
++    def sanitize_string(self, input_str: str) -> str:
++        """Sanitize a single string input."""
++        if not isinstance(input_str, str):
++            return str(input_str)
++        
++        # HTML encode basic characters
++        sanitized = html.escape(input_str, quote=True)
++        
++        if self.strict_mode:
++            # Remove dangerous HTML tags
++            sanitized = self.tag_pattern.sub('', sanitized)
++            
++            # Remove event handlers
++            sanitized = self.event_pattern.sub('', sanitized)
++            
++            # Check for JavaScript protocols
++            if self.js_pattern.search(sanitized):
++                sanitized = self.js_pattern.sub('[BLOCKED]', sanitized)
++            
++            # Check for SQL injection patterns
++            if self.sql_pattern.search(sanitized):
++                sanitized = self.sql_pattern.sub('[BLOCKED]', sanitized)
++        
++        return sanitized.strip()
++    
++    def sanitize_dict(self, input_dict: Dict[str, Any]) -> Dict[str, Any]:
++        """Sanitize dictionary values recursively."""
++        sanitized = {}
++        
++        for key, value in input_dict.items():
++            # Sanitize key
++            clean_key = self.sanitize_string(str(key))
++            
++            # Sanitize value based on type
++            if isinstance(value, str):
++                sanitized[clean_key] = self.sanitize_string(value)
++            elif isinstance(value, dict):
++                sanitized[clean_key] = self.sanitize_dict(value)
++            elif isinstance(value, (list, tuple)):
++                sanitized[clean_key] = self.sanitize_list(value)
++            else:
++                sanitized[clean_key] = value
++        
++        return sanitized
++    
++    def sanitize_list(self, input_list: List[Any]) -> List[Any]:
++        """Sanitize list items recursively."""
++        sanitized = []
++        
++        for item in input_list:
++            if isinstance(item, str):
++                sanitized.append(self.sanitize_string(item))
++            elif isinstance(item, dict):
++                sanitized.append(self.sanitize_dict(item))
++            elif isinstance(item, (list, tuple)):
++                sanitized.append(self.sanitize_list(item))
++            else:
++                sanitized.append(item)
++        
++        return sanitized
++    
++    def is_safe_url(self, url: str) -> bool:
++        """Check if URL is safe (no JavaScript protocols)."""
++        if not url:
++            return True
++        
++        try:
++            parsed = urlparse(url.lower())
++            return parsed.scheme in ['http', 'https', 'mailto', 'tel', ''] and \
++                   not self.js_pattern.search(url)
++        except Exception:
++            return False
++    
++    def sanitize_html_content(self, html_content: str) -> str:
++        """Sanitize HTML content more thoroughly."""
++        if not html_content:
++            return ""
++        
++        # Remove dangerous tags completely
++        sanitized = self.tag_pattern.sub('', html_content)
++        
++        # Remove event handlers
++        sanitized = self.event_pattern.sub('', sanitized)
++        
++        # Remove JavaScript protocols
++        sanitized = self.js_pattern.sub('[BLOCKED]', sanitized)
++        
++        return sanitized
++    
++    def detect_threats(self, input_str: str) -> List[str]:
++        """Detect potential security threats in input."""
++        threats = []
++        
++        if self.js_pattern.search(input_str):
++            threats.append("JavaScript injection detected")
++        
++        if self.sql_pattern.search(input_str):
++            threats.append("SQL injection pattern detected")
++        
++        if self.tag_pattern.search(input_str):
++            threats.append("Dangerous HTML tags detected")
++        
++        if self.event_pattern.search(input_str):
++            threats.append("JavaScript event handlers detected")
++        
++        return threats
 +
 +
-+if __name__ == "__main__":  # pragma: no cover - manual execution
-+    cleanup_streamlit_cache()
-diff --git a/scripts/validate_migrations.py b/scripts/validate_migrations.py
-new file mode 100644
-index 0000000000000000000000000000000000000000..8992398adc46128f7cab2d9479c5bf79e43c9899
---- /dev/null
-+++ b/scripts/validate_migrations.py
-@@ -0,0 +1,21 @@
-+from __future__ import annotations
-+
-+"""Utility to apply and validate database migrations."""
-+
-+import sqlite3
-+from pathlib import Path
-+
-+from migration.schema_migrations import MigrationManager
++# Global sanitizer instance
++_xss_sanitizer: Optional[XSSSanitizer] = None
 +
 +
-+def validate(db_path: str = ":memory:") -> str:
-+    """Apply migrations and return current schema version."""
-+    conn = sqlite3.connect(db_path)
-+    manager = MigrationManager(conn)
-+    manager.apply_migrations()
-+    manager.validate_schema()
-+    return manager.get_current_version()
++def get_xss_sanitizer() -> XSSSanitizer:
++    """Get global XSS sanitizer instance."""
++    global _xss_sanitizer
++    if _xss_sanitizer is None:
++        _xss_sanitizer = XSSSanitizer(strict_mode=True)
++    return _xss_sanitizer
 +
 +
-+if __name__ == "__main__":  # pragma: no cover - manual execution
-+    print("Current version:", validate())
-diff --git a/tests/test_cleanup_scripts.py b/tests/test_cleanup_scripts.py
-new file mode 100644
-index 0000000000000000000000000000000000000000..627c32cf673acf348f607e68cf7faf081d8eb555
---- /dev/null
-+++ b/tests/test_cleanup_scripts.py
-@@ -0,0 +1,39 @@
-+import os
-+import sqlite3
-+import sys
-+from pathlib import Path
-+
-+sys.path.append(str(Path(__file__).resolve().parents[1]))
-+
-+from migration.cleanup_scripts import CacheCleanup, DataCleanup
++def sanitize_input(input_data: Union[str, Dict, List]) -> Union[str, Dict, List]:
++    """Sanitize input data (string, dict, or list)."""
++    sanitizer = get_xss_sanitizer()
++    
++    if isinstance(input_data, str):
++        return sanitizer.sanitize_string(input_data)
++    elif isinstance(input_data, dict):
++        return sanitizer.sanitize_dict(input_data)
++    elif isinstance(input_data, (list, tuple)):
++        return sanitizer.sanitize_list(input_data)
++    else:
++        return input_data
 +
 +
-+def test_cache_cleanup(tmp_path):
-+    cache_dir = tmp_path / ".streamlit_cache"
-+    cache_dir.mkdir()
-+    (cache_dir / "dummy.txt").write_text("data")
-+    cleaner = CacheCleanup(tmp_path)
-+    cleaner.remove_streamlit_cache()
-+    assert not cache_dir.exists()
++def sanitize_html(html_content: str) -> str:
++    """Sanitize HTML content."""
++    sanitizer = get_xss_sanitizer()
++    return sanitizer.sanitize_html_content(html_content)
 +
 +
-+def test_gitignore_update(tmp_path):
-+    gitignore = tmp_path / ".gitignore"
-+    gitignore.write_text("# test\n")
-+    cleaner = CacheCleanup(tmp_path)
-+    cleaner.update_gitignore()
-+    content = gitignore.read_text()
-+    assert ".streamlit_cache/" in content
++def validate_safe_url(url: str) -> bool:
++    """Validate that URL is safe."""
++    sanitizer = get_xss_sanitizer()
++    return sanitizer.is_safe_url(url)
 +
 +
-+def test_data_cleanup():
-+    conn = sqlite3.connect(":memory:")
-+    conn.execute("CREATE TABLE framework_epics (id INTEGER PRIMARY KEY)")
-+    conn.execute(
-+        "CREATE TABLE framework_tasks (id INTEGER PRIMARY KEY, epic_id INTEGER)"
-+    )
-+    conn.execute("INSERT INTO framework_tasks (id, epic_id) VALUES (1, 999)")
-+    cleanup = DataCleanup(conn)
-+    cleanup.remove_orphaned_records()
-+    remaining = conn.execute("SELECT COUNT(*) FROM framework_tasks").fetchone()[0]
-+    assert remaining == 0
-diff --git a/tests/test_migrations.py b/tests/test_migrations.py
-index 72691eac4df3f28dc22a8e7963223cf288a4c21a..835f25b0bc88924be0fab9ecaf5facfa3af2ec67 100644
---- a/tests/test_migrations.py
-+++ b/tests/test_migrations.py
-@@ -1,89 +1,59 @@
--"""Test database migration system."""
--import os
- import sqlite3
--import tempfile
--import shutil
- import sys
--sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-+from pathlib import Path
++def detect_security_threats(input_str: str) -> List[str]:
++    """Detect security threats in input string."""
++    sanitizer = get_xss_sanitizer()
++    return sanitizer.detect_threats(input_str)
+diff --git a/streamlit_extension/streamlit_app.py b/streamlit_extension/streamlit_app.py
+index 28a5f742dfa486bd1b28799781f0e1e59cb267af..eaada42982615dd47d723d8f50de527383dff910 100644
+--- a/streamlit_extension/streamlit_app.py
++++ b/streamlit_extension/streamlit_app.py
+@@ -54,54 +54,55 @@ if STREAMLIT_AVAILABLE:
+             Interactive development environment for TDD workflow with:
+             - ⏱️ Focus timer with TDAH support
+             - 📋 Task management with Kanban
+             - 📊 Analytics and productivity tracking
+             - 🎮 Gamification system
+             - 🐙 GitHub integration
+             
+             **Version:** 1.2.1
+             **Phase:** Enhanced Dashboard
+             """
+         }
+     )
  
--from streamlit_extension.utils.migrator import MigrationManager
-+sys.path.append(str(Path(__file__).resolve().parents[1]))
+ # Import components
+ try:
+     from streamlit_extension.components.sidebar import render_sidebar
+     from streamlit_extension.components.timer import TimerComponent
+     from streamlit_extension.components.dashboard_widgets import (
+         WelcomeHeader, DailyStats, ProductivityHeatmap,
+         ProgressRing, SparklineChart, AchievementCard,
+         NotificationToast, NotificationData, QuickActionButton
+     )
+     from streamlit_extension.utils.database import DatabaseManager
+     from streamlit_extension.utils.auth import GoogleOAuthManager, require_authentication, render_user_menu, get_authenticated_user
+     from streamlit_extension.config import load_config, load_config
+-    
++    from streamlit_extension.security import security_middleware
++
+     # Import global exception handler
+     from streamlit_extension.utils.exception_handler import (
+-        install_global_exception_handler, handle_streamlit_exceptions, 
++        install_global_exception_handler, handle_streamlit_exceptions,
+         streamlit_error_boundary, safe_streamlit_operation,
+         show_error_dashboard, get_error_statistics
+     )
+     EXCEPTION_HANDLER_AVAILABLE = True
+ except ImportError as e:
+     EXCEPTION_HANDLER_AVAILABLE = False
+     st.error(f"❌ Import Error: {e}")
+     st.error("Make sure to run from the project root directory")
+     st.stop()
  
-+from migration.schema_migrations import MigrationManager, Migration, SchemaValidator
  
--def _create_initial_schema(conn: sqlite3.Connection) -> None:
--    cur = conn.cursor()
--    cur.execute("CREATE TABLE framework_clients (id INTEGER PRIMARY KEY, name TEXT, status TEXT);")
--    cur.execute(
--        "CREATE TABLE framework_projects (id INTEGER PRIMARY KEY, client_id INTEGER, status TEXT, created_at TEXT);"
--    )
--    cur.execute(
--        "CREATE TABLE framework_epics (id INTEGER PRIMARY KEY, project_id INTEGER, status TEXT, points_earned INTEGER);"
--    )
--    cur.execute(
--        "CREATE TABLE framework_tasks (id INTEGER PRIMARY KEY, epic_id INTEGER, status TEXT, tdd_phase TEXT, estimate_minutes INTEGER);"
--    )
--    conn.commit()
-+MIGRATIONS_PATH = Path("migration/migrations")
+ @handle_streamlit_exceptions(show_error=True, attempt_recovery=True)
+ def initialize_session_state():
+     """Initialize Streamlit session state variables."""
+     
+     # Install global exception handler on first run
+     if EXCEPTION_HANDLER_AVAILABLE and "exception_handler_installed" not in st.session_state:
+         install_global_exception_handler()
+         st.session_state.exception_handler_installed = True
+     
+     # Core app state
+     if "config" not in st.session_state:
+         with streamlit_error_boundary("configuration_loading"):
+             st.session_state.config = load_config()
+     
+@@ -677,51 +678,53 @@ def render_debug_panel():
+         
+         st.markdown("#### Database Health")
+         st.json(st.session_state.db_health_check)
+         
+         st.markdown("#### Session State Keys")
+         st.write(list(st.session_state.keys()))
+         
+         st.markdown("#### Cache Statistics")
+         with streamlit_error_boundary("cache_stats"):
+             cache_stats = safe_streamlit_operation(
+                 st.session_state.db_manager.get_cache_stats,
+                 default_return={"error": "Unable to retrieve cache stats"},
+                 operation_name="get_cache_stats"
+             )
+             st.json(cache_stats)
+         
+         # Error monitoring dashboard
+         if EXCEPTION_HANDLER_AVAILABLE:
+             st.markdown("#### Error Monitoring")
+             show_error_dashboard()
  
  
--class TestMigrationManager:
--    def setup_method(self):
--        self.tmpdir = tempfile.mkdtemp()
--        self.db_path = os.path.join(self.tmpdir, "test.db")
--        conn = sqlite3.connect(self.db_path)
--        _create_initial_schema(conn)
--        conn.close()
--        # migrations directory relative to repo root
--        self.migrations_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "migrations"))
--
--    def teardown_method(self):
--        shutil.rmtree(self.tmpdir)
-+def _setup_conn():
-+    conn = sqlite3.connect(":memory:")
-+    conn.execute("CREATE TABLE framework_epics (id INTEGER PRIMARY KEY, status TEXT)")
-+    conn.execute(
-+        "CREATE TABLE framework_tasks (id INTEGER PRIMARY KEY, epic_id INTEGER, status TEXT)"
-+    )
-+    return conn
+ @handle_streamlit_exceptions(show_error=True, attempt_recovery=True)
+ def main():
+     """Main application entry point with centralized authentication gateway."""
+-    
++    # Apply security middleware
++    security_middleware()
 +
-+
-+def test_apply_migration():
-+    conn = _setup_conn()
-+    manager = MigrationManager(conn, MIGRATIONS_PATH)
-+    applied = manager.apply_migrations()
-+    assert manager.get_current_version() == "003"
-+    assert "003" in applied
-+    # Validate columns added by migrations
-+    validator = SchemaValidator(conn)
-+    assert validator.validate_columns(
-+        "framework_epics",
-+        [
-+            "points_value",
-+            "due_date",
-+            "icon",
-+            "priority",
-+            "estimated_hours",
-+            "deleted_at",
-+        ],
-+    )
- 
--    def test_migration_discovery(self):
--        """Test migration file discovery."""
--        manager = MigrationManager(self.db_path, migrations_dir=self.migrations_dir)
--        pending = manager.get_pending_migrations()
--        assert pending, "No migrations discovered"
--        assert pending[0].version == 1
- 
--    def test_version_tracking(self):
--        """Test migration version tracking."""
--        manager = MigrationManager(self.db_path, migrations_dir=self.migrations_dir)
--        manager.execute_pending_migrations()
--        assert manager.get_current_version() >= 3
-+def test_rollback_migration():
-+    conn = _setup_conn()
-+    manager = MigrationManager(conn, MIGRATIONS_PATH)
-+    manager.apply_migrations()
-+    manager.rollback_migration("003")
-+    assert manager.get_current_version() == "002"
- 
--    def test_migration_execution(self):
--        """Test migration execution with rollback."""
--        manager = MigrationManager(self.db_path, migrations_dir=self.migrations_dir)
--        manager.execute_pending_migrations()
--        conn = sqlite3.connect(self.db_path)
--        cur = conn.cursor()
--        cur.execute("PRAGMA table_info(framework_epics)")
--        columns = {row[1] for row in cur.fetchall()}
--        conn.close()
--        assert {"points_value", "due_date", "icon"}.issubset(columns)
--        manager.rollback_migration(0)
--        conn = sqlite3.connect(self.db_path)
--        cur = conn.cursor()
--        cur.execute("PRAGMA table_info(framework_epics)")
--        columns = {row[1] for row in cur.fetchall()}
--        conn.close()
--        assert "points_value" not in columns
- 
--    def test_dry_run_mode(self):
--        """Test dry-run migration execution."""
--        manager = MigrationManager(self.db_path, migrations_dir=self.migrations_dir)
--        manager.execute_pending_migrations(dry_run=True)
--        assert manager.get_current_version() == 0
-+def test_migration_dependencies():
-+    migration = Migration("010", "SELECT 1", dependencies=["001", "002"])
-+    assert migration.get_dependencies() == ["001", "002"]
- 
--    def test_backup_creation(self):
--        """Test database backup before migration."""
--        manager = MigrationManager(self.db_path, migrations_dir=self.migrations_dir)
--        manager.execute_pending_migrations()
--        backups = [f for f in os.listdir(self.tmpdir) if f.startswith("test.db.backup")] 
--        assert backups, "Backup not created"
- 
--    def test_rollback_functionality(self):
--        """Test migration rollback."""
--        manager = MigrationManager(self.db_path, migrations_dir=self.migrations_dir)
--        manager.execute_pending_migrations()
--        manager.rollback_migration(0)
--        assert manager.get_current_version() == 0
-+def test_migration_validation():
-+    conn = _setup_conn()
-+    manager = MigrationManager(conn, MIGRATIONS_PATH)
-+    manager.apply_migrations()
-+    assert manager.validate_schema()
-diff --git a/tests/test_query_builder.py b/tests/test_query_builder.py
-index 283e2027791b13ed6793a13858cd257c0b069ea9..4027f79b02a546adb4b9edfeeea51e4e966e165d 100644
---- a/tests/test_query_builder.py
-+++ b/tests/test_query_builder.py
-@@ -1,115 +1,55 @@
--"""Test query builder implementation."""
--
--from streamlit_extension.utils.query_builder import (
--    QueryBuilder,
--    ClientQueryBuilder,
--    ProjectQueryBuilder,
--    EpicQueryBuilder,
--    TaskQueryBuilder,
--)
--
--
--class TestQueryBuilder:
--    def test_select_query_building(self):
--        """Test SELECT query construction."""
--        qb = (
--            QueryBuilder("users")
--            .select("id", "name")
--            .where("age > ?", 18)
--            .order_by("name")
--            .limit(10)
--            .offset(5)
--        )
--        query, params = qb.build()
--        assert (
--            query
--            == "SELECT id, name FROM users WHERE age > ? ORDER BY name ASC LIMIT 10 OFFSET 5"
--        )
--        assert params == (18,)
--
--    def test_insert_query_building(self):
--        """Test INSERT query construction."""
--        qb = QueryBuilder("users").insert(id=1, name="Alice")
--        query, params = qb.build()
--        assert query == "INSERT INTO users (id, name) VALUES (?, ?)"
--        assert params == (1, "Alice")
--
--    def test_update_query_building(self):
--        """Test UPDATE query construction."""
--        qb = QueryBuilder("users").update(name="Bob").where("id = ?", 1)
--        query, params = qb.build()
--        assert query == "UPDATE users SET name = ? WHERE id = ?"
--        assert params == ("Bob", 1)
--
--    def test_delete_query_building(self):
--        """Test DELETE query construction."""
--        qb = QueryBuilder("users").delete().where("id = ?", 1)
--        query, params = qb.build()
--        assert query == "DELETE FROM users WHERE id = ?"
--        assert params == (1,)
--
--    def test_join_operations(self):
--        """Test JOIN query construction."""
--        qb = (
--            QueryBuilder("users")
--            .select("users.*", "p.name")
--            .join("profiles p", "users.id = p.user_id")
--            .left_join("orders o", "users.id = o.user_id")
--        )
--        query, params = qb.build()
--        assert (
--            query
--            == "SELECT users.*, p.name FROM users INNER JOIN profiles p ON users.id = p.user_id LEFT JOIN orders o ON users.id = o.user_id"
--        )
--        assert params == ()
--
--    def test_parameter_binding(self):
--        """Test safe parameter binding."""
--        qb = (
--            QueryBuilder("users")
--            .select("*")
--            .where("age > ?", 18)
--            .where("name = ?", "Alice")
--        )
--        query, params = qb.build()
--        assert query == "SELECT * FROM users WHERE age > ? AND name = ?"
--        assert params == (18, "Alice")
--
--    def test_specialized_builders(self):
--        """Test specialized query builders."""
--        client_query, client_params = (
--            ClientQueryBuilder().active_only().with_project_count().build()
--        )
--        assert "framework_clients" in client_query
--        assert "COUNT(p.id) as project_count" in client_query
--        assert client_params == ("active",)
--
--        project_query, project_params = (
--            ProjectQueryBuilder()
--            .for_client(1)
--            .active_only()
--            .with_client_info()
--            .build()
--        )
--        assert "framework_clients" in project_query
--        assert project_params == (1, "active")
--
--        epic_query, epic_params = (
--            EpicQueryBuilder()
--            .for_project(2)
--            .by_status("open")
--            .with_task_stats()
--            .build()
--        )
--        assert "framework_tasks" in epic_query
--        assert epic_params == (2, "open")
--
--        task_query, task_params = (
--            TaskQueryBuilder()
--            .for_epic(3)
--            .by_status("pending")
--            .with_epic_info()
--            .build()
--        )
--        assert "framework_epics" in task_query
--        assert task_params == (3, "pending")
-+import sys
-+from pathlib import Path
-+
-+sys.path.append(str(Path(__file__).resolve().parents[1]))
-+
-+from migration.query_builder import QueryBuilder, SQLBuilder
-+
-+
-+def test_select_query_builder():
-+    qb = (
-+        QueryBuilder()
-+        .select("*")
-+        .from_table("framework_epics")
-+        .where("status", "=", "active")
-+        .order_by("priority", "DESC")
-+        .limit(10)
-+    )
-+    sql, params = qb.build()
-+    assert sql == (
-+        "SELECT * FROM framework_epics WHERE status = ? ORDER BY priority DESC LIMIT 10"
-+    )
-+    assert params == ["active"]
-+
-+
-+def test_insert_query_builder():
-+    qb = (
-+        QueryBuilder()
-+        .insert_into("framework_epics")
-+        .values({"title": "New Epic", "status": "pending", "priority": 1})
-+    )
-+    sql, params = qb.build()
-+    assert sql.startswith("INSERT INTO framework_epics")
-+    assert params == ["New Epic", "pending", 1]
-+
-+
-+def test_query_parameter_sanitization():
-+    params = SQLBuilder.sanitize_params([1, 2, 3])
-+    assert isinstance(params, tuple)
-+    assert params == (1, 2, 3)
-+
-+
-+def test_complex_join_queries():
-+    qb = (
-+        QueryBuilder()
-+        .select("e.title", "t.description")
-+        .from_table("framework_epics e")
-+        .join("framework_tasks t", "e.id = t.epic_id")
-+        .where("e.status", "=", "active")
-+    )
-+    sql, params = qb.build()
-+    assert (
-+        sql
-+        == "SELECT e.title, t.description FROM framework_epics e INNER JOIN framework_tasks t ON e.id = t.epic_id WHERE e.status = ?"
-+    )
-+    assert params == ["active"]
+     # Check if running in headless mode
+     if not STREAMLIT_AVAILABLE:
+         print("📊 Dashboard functions available for testing")
+         print("Run 'streamlit run streamlit_app.py' for full UI")
+         return
+     
+     # Initialize session state with error boundary
+     with streamlit_error_boundary("session_initialization"):
+         initialize_session_state()
+     
+     # Initialize authentication manager
+     with streamlit_error_boundary("authentication_initialization"):
+         auth_manager = safe_streamlit_operation(
+             GoogleOAuthManager,
+             default_return=None,
+             operation_name="auth_manager_init"
+         )
+         
+         if auth_manager is None:
+             st.error("❌ Authentication initialization failed")
+             st.stop()
+     
+     # 🔐 CENTRALIZED AUTHENTICATION GATEWAY
+     # Check authentication status - if not authenticated, show login page
+     if not auth_manager.is_authenticated():
  
 EOF
 )
