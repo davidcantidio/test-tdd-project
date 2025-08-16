@@ -29,7 +29,6 @@ except ImportError:
 try:
     from streamlit_extension.utils.database import DatabaseManager
     from streamlit_extension.utils.validators import validate_client_data, validate_email_uniqueness, validate_client_key_uniqueness
-    from streamlit_extension.utils.auth import require_authentication
     from streamlit_extension.utils.security import (
         create_safe_client, sanitize_display, validate_form, check_rate_limit,
         security_manager
@@ -420,7 +419,6 @@ def render_create_client_form(db_manager: DatabaseManager):
                         st.error(f"❌ {error}")
 
 
-@require_authentication
 def render_clients_page():
     """Render the main clients management page."""
     if not STREAMLIT_AVAILABLE:

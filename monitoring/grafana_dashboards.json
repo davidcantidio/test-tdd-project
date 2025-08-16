@@ -1,0 +1,273 @@
+{
+  "dashboard": {
+    "id": null,
+    "title": "TDD Framework - Performance & Security Monitoring",
+    "tags": ["tdd-framework", "performance", "security"],
+    "timezone": "browser",
+    "panels": [
+      {
+        "id": 1,
+        "title": "Request Rate",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "rate(tdd_framework_requests_total[5m])",
+            "legendFormat": "{{method}} {{endpoint}}"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 6, "x": 0, "y": 0},
+        "fieldConfig": {
+          "defaults": {
+            "unit": "reqps",
+            "color": {"mode": "palette-classic"}
+          }
+        }
+      },
+      {
+        "id": 2,
+        "title": "Response Time",
+        "type": "timeseries",
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.50, rate(tdd_framework_request_duration_seconds_bucket[5m]))",
+            "legendFormat": "50th percentile"
+          },
+          {
+            "expr": "histogram_quantile(0.95, rate(tdd_framework_request_duration_seconds_bucket[5m]))",
+            "legendFormat": "95th percentile"
+          },
+          {
+            "expr": "histogram_quantile(0.99, rate(tdd_framework_request_duration_seconds_bucket[5m]))",
+            "legendFormat": "99th percentile"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 6, "y": 0},
+        "fieldConfig": {
+          "defaults": {
+            "unit": "s",
+            "color": {"mode": "palette-classic"}
+          }
+        }
+      },
+      {
+        "id": 3,
+        "title": "Error Rate",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "rate(tdd_framework_errors_total[5m])",
+            "legendFormat": "{{component}} - {{error_type}}"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 6, "x": 18, "y": 0},
+        "fieldConfig": {
+          "defaults": {
+            "unit": "eps",
+            "color": {"mode": "thresholds"},
+            "thresholds": {
+              "steps": [
+                {"color": "green", "value": null},
+                {"color": "yellow", "value": 1},
+                {"color": "red", "value": 5}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 4,
+        "title": "Security Events",
+        "type": "barchart",
+        "targets": [
+          {
+            "expr": "increase(tdd_framework_security_events_total[1h])",
+            "legendFormat": "{{event_type}} - {{severity}}"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "palette-classic"}
+          }
+        }
+      },
+      {
+        "id": 5,
+        "title": "Authentication Attempts",
+        "type": "timeseries",
+        "targets": [
+          {
+            "expr": "rate(tdd_framework_auth_attempts_total{status=\"success\"}[5m])",
+            "legendFormat": "Successful"
+          },
+          {
+            "expr": "rate(tdd_framework_auth_attempts_total{status=\"failed\"}[5m])",
+            "legendFormat": "Failed"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8},
+        "fieldConfig": {
+          "defaults": {
+            "unit": "ops",
+            "color": {"mode": "palette-classic"}
+          }
+        }
+      },
+      {
+        "id": 6,
+        "title": "System Memory Usage",
+        "type": "timeseries",
+        "targets": [
+          {
+            "expr": "tdd_framework_memory_usage_bytes / 1024 / 1024",
+            "legendFormat": "Memory Usage (MB)"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 8, "x": 0, "y": 16},
+        "fieldConfig": {
+          "defaults": {
+            "unit": "decbytes",
+            "color": {"mode": "palette-classic"}
+          }
+        }
+      },
+      {
+        "id": 7,
+        "title": "CPU Usage",
+        "type": "timeseries",
+        "targets": [
+          {
+            "expr": "tdd_framework_cpu_usage_percent",
+            "legendFormat": "CPU Usage"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 8, "x": 8, "y": 16},
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "color": {"mode": "palette-classic"},
+            "max": 100
+          }
+        }
+      },
+      {
+        "id": 8,
+        "title": "Active Sessions",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "tdd_framework_active_sessions",
+            "legendFormat": "Sessions"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 8, "x": 16, "y": 16},
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "thresholds"},
+            "thresholds": {
+              "steps": [
+                {"color": "green", "value": null},
+                {"color": "yellow", "value": 50},
+                {"color": "red", "value": 100}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 9,
+        "title": "Database Connections",
+        "type": "timeseries",
+        "targets": [
+          {
+            "expr": "tdd_framework_database_connections",
+            "legendFormat": "Active Connections"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 24},
+        "fieldConfig": {
+          "defaults": {
+            "unit": "short",
+            "color": {"mode": "palette-classic"}
+          }
+        }
+      },
+      {
+        "id": 10,
+        "title": "Cache Hit Ratio",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "tdd_framework_cache_hit_ratio * 100",
+            "legendFormat": "Hit Ratio"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 24},
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "color": {"mode": "thresholds"},
+            "thresholds": {
+              "steps": [
+                {"color": "red", "value": null},
+                {"color": "yellow", "value": 70},
+                {"color": "green", "value": 90}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 11,
+        "title": "Top Error Components",
+        "type": "table",
+        "targets": [
+          {
+            "expr": "topk(10, sum by (component) (rate(tdd_framework_errors_total[1h])))",
+            "format": "table",
+            "instant": true
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 32},
+        "fieldConfig": {
+          "defaults": {
+            "custom": {
+              "displayMode": "list"
+            }
+          }
+        }
+      },
+      {
+        "id": 12,
+        "title": "Request Status Codes",
+        "type": "piechart",
+        "targets": [
+          {
+            "expr": "sum by (status) (rate(tdd_framework_requests_total[5m]))",
+            "legendFormat": "{{status}}"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 32},
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "palette-classic"}
+          }
+        }
+      }
+    ],
+    "time": {
+      "from": "now-1h",
+      "to": "now"
+    },
+    "refresh": "30s",
+    "schemaVersion": 30,
+    "version": 1,
+    "links": [
+      {
+        "title": "TDD Framework Logs",
+        "url": "/d/logs-dashboard",
+        "type": "dashboards"
+      }
+    ]
+  }
+}

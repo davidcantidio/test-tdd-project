@@ -1,0 +1,1773 @@
+ (cd "$(git rev-parse --show-toplevel)" && git apply --3way <<'EOF' 
+diff --git a/streamlit_extension/pages/__init__.py b/streamlit_extension/pages/__init__.py
+index 9c0b465123074317c3775e7b184e7885123a09f7..b5678790692fb2c0e2d8ef096df8dd73a65ac42b 100644
+--- a/streamlit_extension/pages/__init__.py
++++ b/streamlit_extension/pages/__init__.py
+@@ -1,85 +1,64 @@
+ """
+ 📄 Pages Package - Streamlit Extension
+ 
+ Multi-page navigation system for TDD Framework:
+ - Analytics dashboard with productivity metrics
+ - Interactive Kanban board for task management
+ - Gantt chart timeline visualization
+ - Dedicated timer interface with TDAH support
+ - Comprehensive settings and configuration
+ """
+ 
+-# Graceful imports for all pages
+-try:
+-    from .analytics import render_analytics_page
+-    ANALYTICS_AVAILABLE = True
+-except ImportError:
+-    render_analytics_page = None
+-    ANALYTICS_AVAILABLE = False
+-
+-try:
+-    from .kanban import render_kanban_page
+-    KANBAN_AVAILABLE = True
+-except ImportError:
+-    render_kanban_page = None
+-    KANBAN_AVAILABLE = False
+-
+-try:
+-    from .gantt import render_gantt_page
+-    GANTT_AVAILABLE = True
+-except ImportError:
+-    render_gantt_page = None
+-    GANTT_AVAILABLE = False
+-
+-try:
+-    from .timer import render_timer_page
+-    TIMER_AVAILABLE = True
+-except ImportError:
+-    render_timer_page = None
+-    TIMER_AVAILABLE = False
+-
+-try:
+-    from .settings import render_settings_page
+-    SETTINGS_AVAILABLE = True
+-except ImportError:
+-    render_settings_page = None
+-    SETTINGS_AVAILABLE = False
+-
+-try:
+-    from .clients import render_clients_page
+-    CLIENTS_AVAILABLE = True
+-except ImportError:
+-    render_clients_page = None
+-    CLIENTS_AVAILABLE = False
+-
+-try:
+-    from .projects import render_projects_page
+-    PROJECTS_AVAILABLE = True
+-except ImportError:
+-    render_projects_page = None
+-    PROJECTS_AVAILABLE = False
++from importlib import import_module
++from streamlit_extension.utils.exception_handler import (
++    handle_streamlit_exceptions,
++    streamlit_error_boundary,
++    safe_streamlit_operation,
++    get_error_statistics,
++)
++
++
++def _import_page(module_name: str, func_name: str):
++    module = safe_streamlit_operation(
++        import_module,
++        f"{__name__}.{module_name}",
++        default_return=None,
++        operation_name=f"import_{module_name}",
++    )
++    if module and hasattr(module, func_name):
++        return getattr(module, func_name), True
++    return None, False
++
++
++render_analytics_page, ANALYTICS_AVAILABLE = _import_page("analytics", "render_analytics_page")
++render_kanban_page, KANBAN_AVAILABLE = _import_page("kanban", "render_kanban_page")
++render_gantt_page, GANTT_AVAILABLE = _import_page("gantt", "render_gantt_page")
++render_timer_page, TIMER_AVAILABLE = _import_page("timer", "render_timer_page")
++render_settings_page, SETTINGS_AVAILABLE = _import_page("settings", "render_settings_page")
++render_clients_page, CLIENTS_AVAILABLE = _import_page("clients", "render_clients_page")
++render_projects_page, PROJECTS_AVAILABLE = _import_page("projects", "render_projects_page")
+ 
+ 
+ # Page registry for navigation
+ PAGE_REGISTRY = {
+     "dashboard": {
+         "title": "🏠 Dashboard",
+         "icon": "🏠",
+         "description": "Main overview with key metrics",
+         "render_func": None,  # Rendered in main app
+         "available": True
+     },
+     "analytics": {
+         "title": "📈 Analytics",
+         "icon": "📈",
+         "description": "Productivity analytics and insights",
+         "render_func": render_analytics_page,
+         "available": ANALYTICS_AVAILABLE
+     },
+     "kanban": {
+         "title": "📋 Kanban Board",
+         "icon": "📋",
+         "description": "Interactive task management",
+         "render_func": render_kanban_page,
+         "available": KANBAN_AVAILABLE
+     },
+diff --git a/streamlit_extension/pages/clients.py b/streamlit_extension/pages/clients.py
+index c26ab578dcb539fd4255c1bb5770e4e193a9c7ed..ac9d767d12c8e6a70ff9814d0eb01ceb1f21f7c0 100644
+--- a/streamlit_extension/pages/clients.py
++++ b/streamlit_extension/pages/clients.py
+@@ -23,50 +23,57 @@ try:
+     STREAMLIT_AVAILABLE = True
+ except ImportError:
+     STREAMLIT_AVAILABLE = False
+     st = None
+ 
+ # Local imports
+ try:
+     from streamlit_extension.utils.database import DatabaseManager
+     from streamlit_extension.utils.validators import validate_client_data, validate_email_uniqueness, validate_client_key_uniqueness
+     from streamlit_extension.utils.auth import require_authentication
+     from streamlit_extension.utils.security import (
+         create_safe_client, sanitize_display, validate_form, check_rate_limit,
+         security_manager
+     )
+     from streamlit_extension.config import load_config
+     from streamlit_extension.config.constants import (
+         GeneralStatus, ClientTier, CompanySize, UIConstants, FormFields
+     )
+     DATABASE_UTILS_AVAILABLE = True
+ except ImportError:
+     DATABASE_UTILS_AVAILABLE = False
+     DatabaseManager = validate_client_data = load_config = None
+     create_safe_client = sanitize_display = validate_form = None
+     GeneralStatus = ClientTier = CompanySize = UIConstants = FormFields = None
+ 
++from streamlit_extension.utils.exception_handler import (
++    handle_streamlit_exceptions,
++    streamlit_error_boundary,
++    safe_streamlit_operation,
++    get_error_statistics,
++)
++
+ 
+ def render_client_card(client: Dict[str, Any], db_manager: DatabaseManager):
+     """Render an individual client card."""
+     if not STREAMLIT_AVAILABLE:
+         return
+     
+     with st.container():
+         # Card header with status indicator
+         status_colors = {
+             GeneralStatus.ACTIVE.value if GeneralStatus else "active": "🟢",
+             GeneralStatus.INACTIVE.value if GeneralStatus else "inactive": "🟡", 
+             GeneralStatus.SUSPENDED.value if GeneralStatus else "suspended": "🔴",
+             GeneralStatus.ARCHIVED.value if GeneralStatus else "archived": "⚫"
+         }
+         status_emoji = status_colors.get(client.get("status", "active"), "⚪")
+         
+         col1, col2, col3 = st.columns([3, 1, 1])
+         
+         with col1:
+             st.markdown(f"### {status_emoji} {client['name']}")
+             st.caption(f"**Key:** {client.get('client_key', 'N/A')} | **Tier:** {client.get('client_tier', 'standard').title()}")
+         
+         with col2:
+             if st.button("✏️ Edit", key=f"edit_client_{client['id']}", use_container_width=True):
+                 st.session_state[f"edit_client_{client['id']}"] = True
+@@ -84,58 +91,61 @@ def render_client_card(client: Dict[str, Any], db_manager: DatabaseManager):
+             if client.get('description'):
+                 safe_description = sanitize_display(client['description']) if sanitize_display else client['description']
+                 st.markdown(f"**Description:** {safe_description}")
+             
+             # Contact information
+             if client.get('primary_contact_name') or client.get('primary_contact_email'):
+                 st.markdown("**Contact:**")
+                 if client.get('primary_contact_name'):
+                     safe_name = sanitize_display(client['primary_contact_name']) if sanitize_display else client['primary_contact_name']
+                     st.markdown(f"• **Name:** {safe_name}")
+                 if client.get('primary_contact_email'):
+                     safe_email = sanitize_display(client['primary_contact_email']) if sanitize_display else client['primary_contact_email']
+                     st.markdown(f"• **Email:** {safe_email}")
+                 if client.get('primary_contact_phone'):
+                     safe_phone = sanitize_display(client['primary_contact_phone']) if sanitize_display else client['primary_contact_phone']
+                     st.markdown(f"• **Phone:** {safe_phone}")
+         
+         with col2:
+             # Business info
+             if client.get('industry'):
+                 st.markdown(f"**Industry:** {client['industry']}")
+             if client.get('company_size'):
+                 st.markdown(f"**Size:** {client['company_size']}")
+             if client.get('hourly_rate'):
+                 st.markdown(f"**Rate:** R$ {client['hourly_rate']:.2f}/h")
+-            
++
+             # Project count
+-            try:
+-                projects = db_manager.get_projects(client_id=client['id'], include_inactive=True)
+-                project_count = len(projects) if projects else 0
+-                st.metric("Projects", project_count)
+-            except:
+-                st.metric("Projects", "Error")
++            projects = safe_streamlit_operation(
++                db_manager.get_projects,
++                client_id=client['id'],
++                include_inactive=True,
++                default_return=[],
++                operation_name="get_projects",
++            )
++            project_count = len(projects) if projects else 0
++            st.metric("Projects", project_count)
+         
+         # Handle edit modal
+         if st.session_state.get(f"edit_client_{client['id']}", False):
+             render_edit_client_modal(client, db_manager)
+         
+         # Handle delete confirmation
+         if st.session_state.get(f"delete_client_{client['id']}", False):
+             render_delete_client_modal(client, db_manager)
+         
+         st.divider()
+ 
+ 
+ def render_edit_client_modal(client: Dict[str, Any], db_manager: DatabaseManager):
+     """Render the edit client modal."""
+     if not STREAMLIT_AVAILABLE:
+         return
+     
+     with st.modal(f"Edit Client: {client['name']}", width="large"):
+         with st.form(f"edit_client_form_{client['id']}"):
+             st.markdown("### 📝 Edit Client Information")
+             
+             # Generate CSRF token for form protection
+             csrf_form_id = f"edit_client_form_{client['id']}"
+             csrf_field = security_manager.get_csrf_form_field(csrf_form_id) if security_manager else None
+             
+@@ -244,56 +254,59 @@ def render_edit_client_modal(client: Dict[str, Any], db_manager: DatabaseManager
+                                 st.success("✅ Client updated successfully!")
+                                 st.session_state[f"edit_client_{client['id']}"] = False
+                                 st.rerun()
+                             else:
+                                 st.error("❌ Failed to update client")
+                     else:
+                         for error in errors:
+                             st.error(f"❌ {error}")
+             
+             with col2:
+                 if st.form_submit_button("❌ Cancel", use_container_width=True):
+                     st.session_state[f"edit_client_{client['id']}"] = False
+                     st.rerun()
+ 
+ 
+ def render_delete_client_modal(client: Dict[str, Any], db_manager: DatabaseManager):
+     """Render the delete client confirmation modal."""
+     if not STREAMLIT_AVAILABLE:
+         return
+     
+     with st.modal(f"Delete Client: {client['name']}", width="medium"):
+         st.markdown("### ⚠️ Confirm Deletion")
+         st.warning(f"Are you sure you want to delete client **{client['name']}**?")
+         
+         # Show related projects warning
+-        try:
+-            projects = db_manager.get_projects(client_id=client['id'], include_inactive=True)
+-            if projects:
+-                st.error(f"⚠️ This client has {len(projects)} project(s). Deleting the client will affect these projects.")
+-        except:
+-            pass
++        projects = safe_streamlit_operation(
++            db_manager.get_projects,
++            client_id=client['id'],
++            include_inactive=True,
++            default_return=[],
++            operation_name="get_projects",
++        )
++        if projects:
++            st.error(f"⚠️ This client has {len(projects)} project(s). Deleting the client will affect these projects.")
+         
+         col1, col2 = st.columns(2)
+         
+         with col1:
+             if st.button("🗑️ Delete Client", use_container_width=True):
+                 # Check rate limit for database write
+                 db_rate_allowed, db_rate_error = check_rate_limit("db_write") if check_rate_limit else (True, None)
+                 if not db_rate_allowed:
+                     st.error(f"🚦 Database {db_rate_error}")
+                     return
+                 
+                 success = db_manager.delete_client(client['id'], soft_delete=True)
+                 if success:
+                     st.success("✅ Client deleted successfully!")
+                     st.session_state[f"delete_client_{client['id']}"] = False
+                     st.rerun()
+                 else:
+                     st.error("❌ Failed to delete client")
+         
+         with col2:
+             if st.button("❌ Cancel", use_container_width=True):
+                 st.session_state[f"delete_client_{client['id']}"] = False
+                 st.rerun()
+ 
+ 
+@@ -399,141 +412,157 @@ def render_create_client_form(db_manager: DatabaseManager):
+                         # Create client
+                         client_id = db_manager.create_client(
+                             client_key=client_key,
+                             name=name,
+                             description=description,
+                             industry=industry,
+                             company_size=company_size,
+                             primary_contact_name=primary_contact_name,
+                             primary_contact_email=primary_contact_email,
+                             status=status,
+                             client_tier=client_tier,
+                             hourly_rate=hourly_rate
+                         )
+                         
+                         if client_id:
+                             st.success("✅ Client created successfully!")
+                             st.rerun()
+                         else:
+                             st.error("❌ Failed to create client")
+                 else:
+                     for error in errors:
+                         st.error(f"❌ {error}")
+ 
+ 
+ @require_authentication
++@handle_streamlit_exceptions(show_error=True, attempt_recovery=True)
+ def render_clients_page():
+     """Render the main clients management page."""
+     if not STREAMLIT_AVAILABLE:
+         return {"error": "Streamlit not available"}
+     
+     if not DATABASE_UTILS_AVAILABLE:
+         st.error("❌ Database utilities not available")
+         return {"error": "Database utilities not available"}
+     
+     # Check rate limit for page load
+     page_rate_allowed, page_rate_error = check_rate_limit("page_load") if check_rate_limit else (True, None)
+     if not page_rate_allowed:
+         st.error(f"🚦 {page_rate_error}")
+         st.info("Please wait before reloading the page.")
+         return {"error": "Rate limited"}
+     
+     st.title("👥 Client Management")
+     st.markdown("Manage your clients, contacts, and business relationships")
+     st.markdown("---")
+     
+     # Initialize database manager
+-    try:
+-        config = load_config()
+-        db_manager = DatabaseManager(
+-            framework_db_path=str(config.get_database_path()),
+-            timer_db_path=str(config.get_timer_database_path())
++    with streamlit_error_boundary("database_initialization"):
++        config = safe_streamlit_operation(
++            load_config,
++            default_return=None,
++            operation_name="load_config",
+         )
+-    except Exception as e:
+-        st.error(f"❌ Database connection error: {e}")
+-        return {"error": f"Database connection error: {e}"}
++        if config is None:
++            st.error("❌ Configuration loading failed")
++            return {"error": "config_load_failed"}
++
++        db_manager = safe_streamlit_operation(
++            DatabaseManager,
++            str(config.get_database_path()),
++            default_return=None,
++            operation_name="database_manager_init",
++        )
++        if db_manager is None:
++            st.error("❌ Database connection failed")
++            return {"error": "db_connection_failed"}
+     
+     # Filters and search
+     col1, col2, col3 = st.columns([2, 1, 1])
+     
+     with col1:
+         search_name = st.text_input("🔍 Search by name", placeholder="Type client name...")
+     
+     with col2:
+         if GeneralStatus:
+             status_filter_options = ["all"] + GeneralStatus.get_all_values()
+         else:
+             status_filter_options = ["all", "active", "inactive", "suspended", "archived"]
+         status_filter = st.selectbox("Status Filter", 
+             options=status_filter_options,
+             index=0
+         )
+     
+     with col3:
+         if ClientTier:
+             tier_filter_options = ["all"] + ClientTier.get_all_values()
+         else:
+             tier_filter_options = ["all", "basic", "standard", "premium", "enterprise"]
+         tier_filter = st.selectbox("Tier Filter",
+             options=tier_filter_options,
+             index=0
+         )
+     
+     # Create new client form
+     render_create_client_form(db_manager)
+     
+     st.markdown("---")
+     
+     # Get clients with filters
+-    try:
++    with streamlit_error_boundary("client_loading"):
+         # Check rate limit for database read
+         db_read_allowed, db_read_error = check_rate_limit("db_read") if check_rate_limit else (True, None)
+         if not db_read_allowed:
+             st.error(f"🚦 Database {db_read_error}")
+             return {"error": "Database rate limited"}
+-        
+-        clients_result = db_manager.get_clients(include_inactive=True)
++
++        clients_result = safe_streamlit_operation(
++            db_manager.get_clients,
++            include_inactive=True,
++            default_return={},
++            operation_name="get_clients",
++        )
+         all_clients = clients_result.get("data", []) if isinstance(clients_result, dict) else []
+-        
++
+         if not all_clients:
+             st.info("📝 No clients found. Create your first client using the form above!")
+             return {"status": "no_clients"}
+-        
++
+         # Apply filters
+         filtered_clients = all_clients
+-        
++
+         if search_name:
+             filtered_clients = [c for c in filtered_clients if search_name.lower() in c.get('name', '').lower()]
+-        
++
+         if status_filter != "all":
+             filtered_clients = [c for c in filtered_clients if c.get('status') == status_filter]
+-        
++
+         if tier_filter != "all":
+             filtered_clients = [c for c in filtered_clients if c.get('client_tier') == tier_filter]
+-        
++
+         # Display results count
+         total_count = clients_result.get("total", len(all_clients)) if isinstance(clients_result, dict) else len(all_clients)
+         st.markdown(f"**Found {len(filtered_clients)} client(s) (of {total_count} total)**")
+-        
++
+         if not filtered_clients:
+             st.warning("🔍 No clients match your current filters.")
+             return {"status": "no_matches"}
+-        
++
+         # Display clients
+         for client in filtered_clients:
+             render_client_card(client, db_manager)
+-    
+-    except Exception as e:
+-        st.error(f"❌ Error loading clients: {e}")
+-        return {"error": f"Error loading clients: {e}"}
+-    
++
++        if st.session_state.get("show_debug_info", False):
++            with st.expander("🔧 Error Statistics", expanded=False):
++                st.json(get_error_statistics())
++
+     return {"status": "success", "clients_count": len(filtered_clients)}
+ 
+ 
+ # Export the main function
+ __all__ = ["render_clients_page"]
+ 
+ # Execute when run as a Streamlit page
+ if __name__ == "__main__":
+     if STREAMLIT_AVAILABLE:
+         render_clients_page()
+ 
+diff --git a/streamlit_extension/pages/gantt.py b/streamlit_extension/pages/gantt.py
+index 895cf63e1a4add3595f0abc5f1a30c3210a6b3be..8eb9aa843d543dd0fb956ead3d6df81edce36336 100644
+--- a/streamlit_extension/pages/gantt.py
++++ b/streamlit_extension/pages/gantt.py
+@@ -36,111 +36,138 @@ except ImportError:
+     px = go = make_subplots = ff = None
+ 
+ try:
+     import pandas as pd
+     PANDAS_AVAILABLE = True
+ except ImportError:
+     PANDAS_AVAILABLE = False
+     pd = None
+ 
+ # Local imports
+ try:
+     from streamlit_extension.utils.database import DatabaseManager
+     from streamlit_extension.config import load_config
+     DATABASE_UTILS_AVAILABLE = True
+ except ImportError:
+     DatabaseManager = load_config = None
+     DATABASE_UTILS_AVAILABLE = False
+ 
+ try:
+     from gantt_tracker import GanttTracker
+     GANTT_TRACKER_AVAILABLE = True
+ except ImportError:
+     GanttTracker = None
+     GANTT_TRACKER_AVAILABLE = False
+ 
++from streamlit_extension.utils.exception_handler import (
++    handle_streamlit_exceptions,
++    streamlit_error_boundary,
++    safe_streamlit_operation,
++    get_error_statistics,
++)
+ 
++
++@handle_streamlit_exceptions(show_error=True, attempt_recovery=True)
+ def render_gantt_page():
+     """Render the Gantt chart page."""
+     if not STREAMLIT_AVAILABLE:
+         return {"error": "Streamlit not available"}
+     
+     st.title("📊 Gantt Chart - Project Timeline")
+     st.markdown("---")
+     
+     # Check dependencies
+     missing_deps = []
+     if not PLOTLY_AVAILABLE:
+         missing_deps.append("plotly")
+     if not DATABASE_UTILS_AVAILABLE:
+         missing_deps.append("database utilities")
+     
+     if missing_deps:
+         st.error(f"❌ Missing dependencies: {', '.join(missing_deps)}")
+         st.info("Install with: `pip install plotly`")
+         return
+     
+     # Initialize database manager
+-    try:
+-        config = load_config()
+-        db_manager = DatabaseManager(
+-            framework_db_path=str(config.get_database_path()),
+-            timer_db_path=str(config.get_timer_database_path())
++    with streamlit_error_boundary("database_initialization"):
++        config = safe_streamlit_operation(
++            load_config,
++            default_return=None,
++            operation_name="load_config",
+         )
+-    except Exception as e:
+-        st.error(f"❌ Database connection error: {e}")
+-        return
++        if config is None:
++            st.error("❌ Configuration loading failed")
++            return
++
++        db_manager = safe_streamlit_operation(
++            DatabaseManager,
++            str(config.get_database_path()),
++            default_return=None,
++            operation_name="database_manager_init",
++        )
++        if db_manager is None:
++            st.error("❌ Database connection failed")
++            return
+     
+     # Sidebar controls
+     _render_sidebar_controls()
+     
+     # Load data
+-    with st.spinner("Loading project data..."):
+-        gantt_data = _get_gantt_data(db_manager)
++    with streamlit_error_boundary("gantt_data_loading"):
++        with st.spinner("Loading project data..."):
++            gantt_data = _get_gantt_data(db_manager)
+     
+     if not gantt_data or not gantt_data.get("tasks"):
+         st.warning("📝 No project data available for timeline view.")
+         _render_data_setup_help()
+         return
+     
+     # Render main Gantt chart
+-    _render_gantt_chart(gantt_data)
++    with streamlit_error_boundary("gantt_chart_rendering"):
++        _render_gantt_chart(gantt_data)
+     
+     st.markdown("---")
+     
+     # Render additional views
+     col1, col2 = st.columns(2)
+     
+     with col1:
+-        _render_epic_timeline(gantt_data)
+-    
++        with streamlit_error_boundary("epic_timeline"):
++            _render_epic_timeline(gantt_data)
++
+     with col2:
+-        _render_milestone_tracker(gantt_data)
++        with streamlit_error_boundary("milestone_tracker"):
++            _render_milestone_tracker(gantt_data)
+     
+     # Detailed tables
+     with st.expander("📋 Detailed Timeline Data"):
+-        _render_timeline_tables(gantt_data)
++        with streamlit_error_boundary("timeline_tables"):
++            _render_timeline_tables(gantt_data)
++
++    if st.session_state.get("show_debug_info", False):
++        with st.expander("🔧 Error Statistics", expanded=False):
++            st.json(get_error_statistics())
+ 
+ 
+ def _render_sidebar_controls():
+     """Render sidebar controls for Gantt chart customization."""
+     
+     st.sidebar.markdown("## 📊 Chart Settings")
+     
+     # View mode
+     view_mode = st.sidebar.selectbox(
+         "View Mode",
+         ["Epic View", "Task View", "Combined View"],
+         index=2  # Default to Combined
+     )
+     st.session_state.gantt_view_mode = view_mode
+     
+     # Time range
+     time_range = st.sidebar.selectbox(
+         "Time Range",
+         ["Last 30 days", "Last 90 days", "All time", "Custom range"],
+         index=1  # Default to 90 days
+     )
+     st.session_state.gantt_time_range = time_range
+     
+     if time_range == "Custom range":
+         col1, col2 = st.sidebar.columns(2)
+@@ -164,55 +191,58 @@ def _render_sidebar_controls():
+         "Show Milestones", 
+         value=st.session_state.get("gantt_show_milestones", True)
+     )
+     
+     st.session_state.gantt_color_by = st.sidebar.selectbox(
+         "Color By",
+         ["Epic", "Status", "TDD Phase", "Priority"],
+         index=0
+     )
+     
+     # Grouping options
+     st.sidebar.markdown("## 📁 Grouping")
+     
+     st.session_state.gantt_group_by = st.sidebar.selectbox(
+         "Group Tasks By",
+         ["Epic", "Status", "TDD Phase", "None"],
+         index=0
+     )
+ 
+ 
+ def _get_gantt_data(db_manager: DatabaseManager) -> Dict[str, Any]:
+     """Get data for Gantt chart visualization."""
+     
+     # Try to use existing gantt_tracker first
+     if GANTT_TRACKER_AVAILABLE:
+-        try:
+-            tracker = GanttTracker()
+-            return tracker.generate_gantt_data()
+-        except Exception as e:
+-            st.warning(f"⚠️ Gantt tracker error: {e}. Using database fallback.")
++        data = safe_streamlit_operation(
++            lambda: GanttTracker().generate_gantt_data(),
++            default_return=None,
++            operation_name="gantt_tracker_generate",
++        )
++        if data is not None:
++            return data
++        st.warning("⚠️ Gantt tracker failed. Using database fallback.")
+     
+     # Fallback to database queries
+     epics = db_manager.get_epics()
+     tasks = db_manager.get_tasks()
+     
+     # Process data for Gantt chart
+     gantt_tasks = []
+     
+     for task in tasks:
+         # Calculate dates
+         start_date = _parse_date(task.get("created_at"))
+         end_date = _parse_date(task.get("completed_at"))
+         
+         # If task is not completed, estimate end date
+         if not end_date:
+             estimate_minutes = task.get("estimate_minutes", 60)
+             if start_date:
+                 end_date = start_date + timedelta(minutes=estimate_minutes)
+             else:
+                 start_date = datetime.now()
+                 end_date = start_date + timedelta(minutes=estimate_minutes)
+         
+         # Calculate progress
+         progress = _calculate_task_progress(task)
+         
+@@ -283,204 +313,216 @@ def _render_gantt_chart(gantt_data: Dict[str, Any]):
+ 
+ 
+ def _render_epic_gantt(epics: List[Dict[str, Any]]):
+     """Render Gantt chart for epics only."""
+     
+     if not epics or not PLOTLY_AVAILABLE:
+         st.info("No epic data available for timeline view")
+         return
+     
+     # Prepare data for Plotly
+     df_data = []
+     for epic in epics:
+         df_data.append({
+             "Task": epic["name"],
+             "Start": epic["start_date"],
+             "Finish": epic["end_date"],
+             "Resource": epic["status"],
+             "Progress": epic["progress"],
+             "Description": f"Tasks: {epic['task_count']}, Points: {epic['points_earned']}"
+         })
+     
+     if PANDAS_AVAILABLE and df_data:
+         df = pd.DataFrame(df_data)
+         
+         # Create Gantt chart using plotly figure_factory
+-        try:
+-            fig = ff.create_gantt(
++        with streamlit_error_boundary("epic_gantt_rendering"):
++            fig = safe_streamlit_operation(
++                ff.create_gantt,
+                 df,
+                 colors=_get_status_colors(),
+                 index_col="Resource",
+                 show_colorbar=True,
+                 group_tasks=True,
+                 showgrid_x=True,
+                 showgrid_y=True,
+-                title="Epic Timeline"
++                title="Epic Timeline",
++                default_return=None,
++                operation_name="create_epic_gantt",
+             )
+-            
+-            fig.update_layout(
+-                height=max(400, len(epics) * 40),
+-                xaxis_title="Timeline",
+-                yaxis_title="Epics"
+-            )
+-            
+-            st.plotly_chart(fig, use_container_width=True)
+-            
+-        except Exception as e:
+-            st.error(f"Error rendering epic Gantt chart: {e}")
+-            _render_fallback_timeline(epics, "Epic")
++
++            if fig:
++                fig.update_layout(
++                    height=max(400, len(epics) * 40),
++                    xaxis_title="Timeline",
++                    yaxis_title="Epics",
++                )
++
++                st.plotly_chart(fig, use_container_width=True)
++            else:
++                _render_fallback_timeline(epics, "Epic")
+ 
+ 
+ def _render_task_gantt(tasks: List[Dict[str, Any]]):
+     """Render Gantt chart for tasks only."""
+     
+     if not tasks or not PLOTLY_AVAILABLE:
+         st.info("No task data available for timeline view")
+         return
+     
+     # Limit to recent tasks to avoid overcrowding
+     recent_tasks = sorted(tasks, key=lambda x: x["start_date"], reverse=True)[:20]
+     
+     # Prepare data
+     df_data = []
+     color_by = st.session_state.get("gantt_color_by", "Epic")
+     
+     for task in recent_tasks:
+         color_value = task.get(color_by.lower().replace(" ", "_"), "Unknown")
+         
+         df_data.append({
+             "Task": task["title"][:30] + ("..." if len(task["title"]) > 30 else ""),
+             "Start": task["start_date"],
+             "Finish": task["end_date"],
+             "Resource": str(color_value),
+             "Progress": task["progress"],
+             "Description": f"Epic: {task['epic_name']}, Status: {task['status']}"
+         })
+     
+     if PANDAS_AVAILABLE and df_data:
+         df = pd.DataFrame(df_data)
+-        
+-        try:
+-            colors = _get_dynamic_colors(color_by, [task[color_by.lower().replace(" ", "_")] for task in recent_tasks])
+-            
+-            fig = ff.create_gantt(
++
++        with streamlit_error_boundary("task_gantt_rendering"):
++            colors = safe_streamlit_operation(
++                _get_dynamic_colors,
++                color_by,
++                [task[color_by.lower().replace(" ", "_")] for task in recent_tasks],
++                default_return={},
++                operation_name="get_dynamic_colors",
++            )
++
++            fig = safe_streamlit_operation(
++                ff.create_gantt,
+                 df,
+                 colors=colors,
+                 index_col="Resource",
+                 show_colorbar=True,
+                 group_tasks=True,
+                 showgrid_x=True,
+                 showgrid_y=True,
+-                title=f"Task Timeline (Recent 20, Colored by {color_by})"
+-            )
+-            
+-            fig.update_layout(
+-                height=max(600, len(recent_tasks) * 25),
+-                xaxis_title="Timeline",
+-                yaxis_title="Tasks"
++                title=f"Task Timeline (Recent 20, Colored by {color_by})",
++                default_return=None,
++                operation_name="create_task_gantt",
+             )
+-            
+-            st.plotly_chart(fig, use_container_width=True)
+-            
+-        except Exception as e:
+-            st.error(f"Error rendering task Gantt chart: {e}")
+-            _render_fallback_timeline(recent_tasks, "Task")
++
++            if fig:
++                fig.update_layout(
++                    height=max(600, len(recent_tasks) * 25),
++                    xaxis_title="Timeline",
++                    yaxis_title="Tasks",
++                )
++
++                st.plotly_chart(fig, use_container_width=True)
++            else:
++                _render_fallback_timeline(recent_tasks, "Task")
+ 
+ 
+ def _render_combined_gantt(gantt_data: Dict[str, Any]):
+     """Render combined view with epics and key tasks."""
+     
+     if not PLOTLY_AVAILABLE:
+         st.info("Combined view requires Plotly")
+         return
+     
+     epics = gantt_data["epics"]
+     tasks = gantt_data["tasks"]
+     
+     # Combine epics and priority tasks
+     combined_data = []
+     
+     # Add epics
+     for epic in epics:
+         combined_data.append({
+             "Task": f"📊 {epic['name']}",
+             "Start": epic["start_date"],
+             "Finish": epic["end_date"],
+             "Resource": "Epic",
+             "Progress": epic["progress"],
+             "Type": "Epic",
+             "Description": f"Epic: {epic['task_count']} tasks, {epic['points_earned']} points"
+         })
+     
+     # Add high-priority or in-progress tasks
+     priority_tasks = [t for t in tasks if t["priority"] == 1 or t["status"] == "in_progress"]
+     priority_tasks = sorted(priority_tasks, key=lambda x: (x["priority"], x["start_date"]))[:10]
+     
+     for task in priority_tasks:
+         combined_data.append({
+             "Task": f"   └─ {task['title'][:25]}{'...' if len(task['title']) > 25 else ''}",
+             "Start": task["start_date"],
+             "Finish": task["end_date"],
+             "Resource": task["status"],
+             "Progress": task["progress"],
+             "Type": "Task",
+             "Description": f"Task: {task['epic_name']}, {task['status']}"
+         })
+     
+     if PANDAS_AVAILABLE and combined_data:
+         df = pd.DataFrame(combined_data)
+-        
+-        try:
++
++        with streamlit_error_boundary("combined_gantt_rendering"):
+             colors = {
+                 "Epic": "#1f77b4",
+                 "todo": "#ff7f0e",
+                 "in_progress": "#ffbb78",
+-                "completed": "#2ca02c"
++                "completed": "#2ca02c",
+             }
+-            
+-            fig = ff.create_gantt(
++
++            fig = safe_streamlit_operation(
++                ff.create_gantt,
+                 df,
+                 colors=colors,
+                 index_col="Resource",
+                 show_colorbar=True,
+                 group_tasks=True,
+                 showgrid_x=True,
+                 showgrid_y=True,
+-                title="Combined Project Timeline (Epics + Priority Tasks)"
+-            )
+-            
+-            fig.update_layout(
+-                height=max(500, len(combined_data) * 30),
+-                xaxis_title="Timeline",
+-                yaxis_title="Project Items"
++                title="Combined Project Timeline (Epics + Priority Tasks)",
++                default_return=None,
++                operation_name="create_combined_gantt",
+             )
+-            
+-            st.plotly_chart(fig, use_container_width=True)
+-            
+-        except Exception as e:
+-            st.error(f"Error rendering combined Gantt chart: {e}")
+-            _render_fallback_combined_timeline(gantt_data)
++
++            if fig:
++                fig.update_layout(
++                    height=max(500, len(combined_data) * 30),
++                    xaxis_title="Timeline",
++                    yaxis_title="Project Items",
++                )
++
++                st.plotly_chart(fig, use_container_width=True)
++            else:
++                _render_fallback_combined_timeline(gantt_data)
+ 
+ 
+ def _render_epic_timeline(gantt_data: Dict[str, Any]):
+     """Render simplified epic timeline view."""
+     
+     st.markdown("### 📋 Epic Timeline Overview")
+     
+     epics = gantt_data["epics"]
+     if not epics:
+         st.info("No epics available")
+         return
+     
+     for epic in epics[:5]:  # Show top 5 epics
+         with st.container():
+             col1, col2, col3 = st.columns([3, 1, 1])
+             
+             with col1:
+                 st.markdown(f"**{epic['name']}**")
+                 progress = epic["progress"]
+                 st.progress(progress / 100)
+                 
+                 # Timeline info
+                 duration = epic["end_date"] - epic["start_date"]
+                 st.caption(f"Duration: {duration.days} days")
+             
+@@ -655,69 +697,64 @@ def _render_fallback_combined_timeline(gantt_data: Dict[str, Any]):
+     for epic in epics:
+         col1, col2 = st.columns([3, 1])
+         with col1:
+             st.markdown(f"**{epic['name']}**")
+             st.progress(epic["progress"] / 100)
+         with col2:
+             st.metric("Tasks", epic["task_count"])
+     
+     st.markdown("#### 📋 Priority Tasks")
+     for task in tasks:
+         col1, col2 = st.columns([3, 1])
+         with col1:
+             st.markdown(f"**{task['title']}**")
+             st.caption(f"Epic: {task['epic_name']}")
+         with col2:
+             st.metric("Status", task["status"])
+ 
+ 
+ # Helper functions
+ 
+ def _parse_date(date_string: Optional[str]) -> Optional[datetime]:
+     """Parse date string into datetime object."""
+     if not date_string:
+         return None
+     
+-    try:
+-        # Try different date formats
+-        formats = [
+-            "%Y-%m-%d %H:%M:%S",
+-            "%Y-%m-%dT%H:%M:%S",
+-            "%Y-%m-%d",
+-            "%Y/%m/%d",
+-            "%m/%d/%Y"
+-        ]
+-        
+-        for fmt in formats:
+-            try:
+-                return datetime.strptime(date_string, fmt)
+-            except ValueError:
+-                continue
+-        
+-        return None
+-    except Exception:
+-        return None
++    formats = [
++        "%Y-%m-%d %H:%M:%S",
++        "%Y-%m-%dT%H:%M:%S",
++        "%Y-%m-%d",
++        "%Y/%m/%d",
++        "%m/%d/%Y"
++    ]
++
++    for fmt in formats:
++        try:
++            return datetime.strptime(date_string, fmt)
++        except ValueError:
++            continue
++    return None
+ 
+ 
+ def _calculate_task_progress(task: Dict[str, Any]) -> float:
+     """Calculate task progress percentage."""
+     status = task.get("status", "todo")
+     
+     if status == "completed":
+         return 100.0
+     elif status == "in_progress":
+         return 50.0
+     else:
+         return 0.0
+ 
+ 
+ def _calculate_epic_progress(epic: Dict[str, Any], epic_tasks: List[Dict[str, Any]]) -> float:
+     """Calculate epic progress from its tasks."""
+     if not epic_tasks:
+         return 0.0
+     
+     total_progress = sum(task["progress"] for task in epic_tasks)
+     return total_progress / len(epic_tasks)
+ 
+ 
+ def _get_status_colors() -> Dict[str, str]:
+     """Get color mapping for status values."""
+diff --git a/streamlit_extension/pages/kanban.py b/streamlit_extension/pages/kanban.py
+index 233a1f88b0d3521dc71e2814a6773ddf8a2b39e3..fdf186b7db2564087bf63576273a954689f1da6d 100644
+--- a/streamlit_extension/pages/kanban.py
++++ b/streamlit_extension/pages/kanban.py
+@@ -12,96 +12,129 @@ Interactive task management with drag-and-drop Kanban board:
+ import sys
+ from pathlib import Path
+ from typing import Dict, Any, List, Optional
+ from datetime import datetime
+ 
+ # Add parent directory to path
+ sys.path.append(str(Path(__file__).parent.parent.parent))
+ 
+ # Graceful imports
+ try:
+     import streamlit as st
+     STREAMLIT_AVAILABLE = True
+ except ImportError:
+     STREAMLIT_AVAILABLE = False
+     st = None
+ 
+ # Local imports
+ try:
+     from streamlit_extension.utils.database import DatabaseManager
+     from streamlit_extension.config import load_config
+     DATABASE_UTILS_AVAILABLE = True
+ except ImportError:
+     DatabaseManager = load_config = None
+     DATABASE_UTILS_AVAILABLE = False
+ 
++from streamlit_extension.utils.exception_handler import (
++    handle_streamlit_exceptions,
++    streamlit_error_boundary,
++    safe_streamlit_operation,
++    get_error_statistics,
++)
+ 
++
++@handle_streamlit_exceptions(show_error=True, attempt_recovery=True)
+ def render_kanban_page():
+     """Render the Kanban board page."""
+     if not STREAMLIT_AVAILABLE:
+         return {"error": "Streamlit not available"}
+     
+     st.title("📋 Kanban Board")
+     st.markdown("---")
+     
+     # Initialize database manager
+     if not DATABASE_UTILS_AVAILABLE:
+         st.error("❌ Database utilities not available")
+         return
+     
+-    try:
+-        config = load_config()
+-        db_manager = DatabaseManager(
+-            framework_db_path=str(config.get_database_path()),
+-            timer_db_path=str(config.get_timer_database_path())
++    with streamlit_error_boundary("database_initialization"):
++        config = safe_streamlit_operation(
++            load_config,
++            default_return=None,
++            operation_name="load_config",
+         )
+-    except Exception as e:
+-        st.error(f"❌ Database connection error: {e}")
+-        return
++        if config is None:
++            st.error("❌ Configuration loading failed")
++            return
++
++        db_manager = safe_streamlit_operation(
++            DatabaseManager,
++            str(config.get_database_path()),
++            default_return=None,
++            operation_name="database_manager_init",
++        )
++        if db_manager is None:
++            st.error("❌ Database connection failed")
++            return
+     
+     # Sidebar filters
+     _render_sidebar_filters(db_manager)
+     
+     # Load data
+-    with st.spinner("Loading tasks..."):
+-        tasks = db_manager.get_tasks()
+-        epics = db_manager.get_epics()
++    with streamlit_error_boundary("task_loading"):
++        with st.spinner("Loading tasks..."):
++            tasks = safe_streamlit_operation(
++                db_manager.get_tasks,
++                default_return=[],
++                operation_name="get_tasks",
++            )
++            epics = safe_streamlit_operation(
++                db_manager.get_epics,
++                default_return=[],
++                operation_name="get_epics",
++            )
+     
+     # Apply filters
+     filtered_tasks = _apply_filters(tasks, epics)
+     
+     if not filtered_tasks:
+         st.info("📝 No tasks found for the selected filters.")
+         _render_create_task_form(db_manager, epics)
+         return
+     
+     # Render board
+-    _render_kanban_board(filtered_tasks, db_manager, epics)
++    with streamlit_error_boundary("ui_rendering"):
++        _render_kanban_board(filtered_tasks, db_manager, epics)
+     
+     # Task creation form
+     with st.expander("➕ Create New Task", expanded=False):
+-        _render_create_task_form(db_manager, epics)
++        with streamlit_error_boundary("form_rendering"):
++            _render_create_task_form(db_manager, epics)
++
++    if st.session_state.get("show_debug_info", False):
++        with st.expander("🔧 Error Statistics", expanded=False):
++            st.json(get_error_statistics())
+ 
+ 
+ def _render_sidebar_filters(db_manager: DatabaseManager):
+     """Render sidebar filters for the Kanban board."""
+     
+     st.sidebar.markdown("## 🔍 Filters")
+     
+     # Epic filter
+     epics = db_manager.get_epics()
+     epic_options = ["All Epics"] + [f"{epic['epic_key']}: {epic['name']}" for epic in epics]
+     selected_epic = st.sidebar.selectbox("Filter by Epic", epic_options)
+     
+     if selected_epic != "All Epics":
+         st.session_state.kanban_epic_filter = selected_epic.split(":")[0]
+     else:
+         st.session_state.kanban_epic_filter = None
+     
+     # TDD Phase filter
+     tdd_phases = ["All Phases", "Red", "Green", "Refactor", "Unknown"]
+     selected_phase = st.sidebar.selectbox("Filter by TDD Phase", tdd_phases)
+     
+     if selected_phase != "All Phases":
+         st.session_state.kanban_phase_filter = selected_phase.lower()
+     else:
+         st.session_state.kanban_phase_filter = None
+@@ -456,83 +489,82 @@ def _show_edit_task_modal(task: Dict[str, Any], db_manager: DatabaseManager, epi
+             
+             if submitted:
+                 # Update task
+                 success = _update_task(
+                     task_id=task_id,
+                     title=title,
+                     description=description,
+                     tdd_phase=tdd_phase,
+                     priority=priority,
+                     estimate_minutes=estimate,
+                     db_manager=db_manager
+                 )
+                 
+                 if success:
+                     st.success("✅ Task updated successfully!")
+                     st.session_state[f"editing_task_{task_id}"] = False
+                     st.rerun()
+                 else:
+                     st.error("❌ Failed to update task")
+             
+             if cancelled:
+                 st.session_state[f"editing_task_{task_id}"] = False
+                 st.rerun()
+ 
+ 
+-def _create_task(title: str, epic_id: Optional[int], tdd_phase: str, db_manager: DatabaseManager, 
++def _create_task(title: str, epic_id: Optional[int], tdd_phase: str, db_manager: DatabaseManager,
+                 description: str = "", priority: int = 2, estimate_minutes: int = 0) -> bool:
+     """Create a new task in the database."""
+-    
+-    try:
+-        task_id = db_manager.create_task(
+-            title=title,
+-            epic_id=epic_id,
+-            description=description,
+-            tdd_phase=tdd_phase,
+-            priority=priority,
+-            estimate_minutes=estimate_minutes
+-        )
+-        return task_id is not None
+-    except Exception as e:
+-        print(f"Error creating task: {e}")
+-        return False
++    task_id = safe_streamlit_operation(
++        db_manager.create_task,
++        title=title,
++        epic_id=epic_id,
++        description=description,
++        tdd_phase=tdd_phase,
++        priority=priority,
++        estimate_minutes=estimate_minutes,
++        default_return=None,
++        operation_name="create_task",
++    )
++    return task_id is not None
+ 
+ 
+ def _update_task_status(task_id: int, new_status: str, db_manager: DatabaseManager) -> bool:
+     """Update task status."""
+-    
+-    try:
+-        return db_manager.update_task_status(task_id, new_status)
+-    except Exception:
+-        return False
++    return safe_streamlit_operation(
++        db_manager.update_task_status,
++        task_id,
++        new_status,
++        default_return=False,
++        operation_name="update_task_status",
++    )
+ 
+ 
+-def _update_task(task_id: int, title: str, description: str, tdd_phase: str, 
++def _update_task(task_id: int, title: str, description: str, tdd_phase: str,
+                 priority: int, estimate_minutes: int, db_manager: DatabaseManager) -> bool:
+     """Update task details."""
+-    
+-    try:
+-        return db_manager.update_task(
+-            task_id=task_id,
+-            title=title,
+-            description=description,
+-            tdd_phase=tdd_phase,
+-            priority=priority,
+-            estimate_minutes=estimate_minutes
+-        )
+-    except Exception as e:
+-        print(f"Error updating task {task_id}: {e}")
+-        return False
++    return safe_streamlit_operation(
++        db_manager.update_task,
++        task_id=task_id,
++        title=title,
++        description=description,
++        tdd_phase=tdd_phase,
++        priority=priority,
++        estimate_minutes=estimate_minutes,
++        default_return=False,
++        operation_name="update_task",
++    )
+ 
+ 
+ def _delete_task(task_id: int, db_manager: DatabaseManager) -> bool:
+     """Delete a task."""
+-    
+-    try:
+-        return db_manager.delete_task(task_id, soft_delete=True)
+-    except Exception as e:
+-        print(f"Error deleting task {task_id}: {e}")
+-        return False
++    return safe_streamlit_operation(
++        db_manager.delete_task,
++        task_id,
++        soft_delete=True,
++        default_return=False,
++        operation_name="delete_task",
++    )
+ 
+ 
+ if __name__ == "__main__":
+     render_kanban_page()
+\ No newline at end of file
+diff --git a/streamlit_extension/pages/settings.py b/streamlit_extension/pages/settings.py
+index 26c6d4200dbfa7ea601fc986920e96b443031ed8..db691a43152d44d844c589e5d07f9caa8df6aed8 100644
+--- a/streamlit_extension/pages/settings.py
++++ b/streamlit_extension/pages/settings.py
+@@ -7,99 +7,116 @@ Configuration interface for the TDD Framework:
+ - Database configuration
+ - Theme and UI preferences
+ - Export/import settings
+ """
+ 
+ import sys
+ from pathlib import Path
+ from typing import Dict, Any, List, Optional
+ import json
+ 
+ # Add parent directory to path
+ sys.path.append(str(Path(__file__).parent.parent.parent))
+ 
+ # Graceful imports
+ try:
+     import streamlit as st
+     STREAMLIT_AVAILABLE = True
+ except ImportError:
+     STREAMLIT_AVAILABLE = False
+     st = None
+ 
+ # Local imports
+ try:
+     from streamlit_extension.utils.database import DatabaseManager
+     from streamlit_extension.config import load_config, create_streamlit_config_file
++    from streamlit_extension.config.streamlit_config import reload_config
+     DATABASE_UTILS_AVAILABLE = True
+ except ImportError:
+-    DatabaseManager = load_config = create_streamlit_config_file = None
++    DatabaseManager = load_config = create_streamlit_config_file = reload_config = None
+     DATABASE_UTILS_AVAILABLE = False
+ 
++from streamlit_extension.utils.exception_handler import (
++    handle_streamlit_exceptions,
++    streamlit_error_boundary,
++    safe_streamlit_operation,
++    get_error_statistics,
++)
+ 
++
++@handle_streamlit_exceptions(show_error=True, attempt_recovery=True)
+ def render_settings_page():
+     """Render the settings configuration page."""
+     if not STREAMLIT_AVAILABLE:
+         return {"error": "Streamlit not available"}
+     
+     st.title("⚙️ Settings & Configuration")
+     st.markdown("---")
+     
+     if not DATABASE_UTILS_AVAILABLE:
+         st.error("❌ Configuration utilities not available")
+         return
+     
+     # Load current configuration
+-    try:
+-        config = load_config()
+-    except Exception as e:
+-        st.error(f"❌ Error loading configuration: {e}")
+-        return
++    with streamlit_error_boundary("configuration_loading"):
++        config = safe_streamlit_operation(
++            load_config,
++            default_return=None,
++            operation_name="load_config",
++        )
++        if config is None:
++            st.error("❌ Error loading configuration")
++            return
+     
+     # Settings tabs
+     tab1, tab2, tab3, tab4, tab5 = st.tabs([
+         "⏱️ Timer & TDAH", 
+         "🐙 GitHub Integration", 
+         "🗄️ Database", 
+         "🎨 Interface", 
+         "💾 Backup & Export"
+     ])
+     
+     with tab1:
+         _render_timer_settings(config)
+     
+     with tab2:
+         _render_github_settings(config)
+     
+     with tab3:
+         _render_database_settings(config)
+     
+     with tab4:
+         _render_interface_settings(config)
+     
+     with tab5:
+         _render_backup_settings(config)
+ 
++    if st.session_state.get("show_debug_info", False):
++        with st.expander("🔧 Error Statistics", expanded=False):
++            st.json(get_error_statistics())
++
+ 
+ def _render_timer_settings(config):
+     """Render timer and TDAH configuration."""
+     
+     st.markdown("### ⏱️ Timer Configuration")
+     
+     col1, col2 = st.columns(2)
+     
+     with col1:
+         st.markdown("#### 🎯 Focus Sessions")
+         
+         focus_duration = st.number_input(
+             "Focus Session Duration (minutes)",
+             min_value=5,
+             max_value=120,
+             value=config.focus_session_duration,
+             step=5,
+             help="Standard Pomodoro is 25 minutes"
+         )
+         
+         short_break = st.number_input(
+             "Short Break Duration (minutes)",
+             min_value=1,
+             max_value=30,
+             value=config.short_break_duration,
+@@ -340,59 +357,65 @@ def _render_github_settings(config):
+                 r'^ghs_[a-zA-Z0-9]{36}$',           # GitHub App server-to-server token
+                 r'^ghr_[a-zA-Z0-9]{76}$',           # GitHub App refresh token
+             ]
+             
+             is_valid_token = any(re.match(pattern, github_token) for pattern in token_patterns)
+             
+             if not is_valid_token:
+                 st.error("❌ Cannot save: Invalid GitHub token format. Please provide a valid token.")
+                 st.stop()
+         
+         _save_github_settings(
+             github_token=github_token,
+             github_repo_owner=github_repo_owner,
+             github_repo_name=github_repo_name,
+             api_calls_per_hour=api_calls_per_hour,
+             rate_limit_buffer=rate_limit_buffer
+         )
+ 
+ 
+ def _render_database_settings(config):
+     """Render database configuration settings."""
+     
+     st.markdown("### 🗄️ Database Configuration")
+     
+     # Initialize database manager to check health
+-    try:
+-        db_manager = DatabaseManager(
+-            framework_db_path=str(config.get_database_path()),
+-            timer_db_path=str(config.get_timer_database_path())
+-        )
+-        health = db_manager.check_database_health()
+-    except Exception as e:
+-        st.error(f"❌ Database manager error: {e}")
+-        return
++    with streamlit_error_boundary("database_initialization"):
++        db_manager = safe_streamlit_operation(
++            DatabaseManager,
++            str(config.get_database_path()),
++            default_return=None,
++            operation_name="database_manager_init",
++        )
++        if db_manager is None:
++            st.error("❌ Database manager error")
++            return
++        health = safe_streamlit_operation(
++            db_manager.check_database_health,
++            default_return={},
++            operation_name="check_database_health",
++        )
+     
+     col1, col2 = st.columns(2)
+     
+     with col1:
+         st.markdown("#### 📊 Database Status")
+         
+         # Framework database
+         fw_db_status = "✅ Connected" if health.get("framework_db_connected") else "❌ Not connected"
+         fw_db_exists = "✅ Exists" if health.get("framework_db_exists") else "❌ Missing"
+         
+         st.info(f"""
+         **Framework Database:**
+         - Status: {fw_db_status}
+         - File: {fw_db_exists}
+         - Path: `{config.get_database_path()}`
+         """)
+         
+         # Timer database
+         timer_db_status = "✅ Connected" if health.get("timer_db_connected") else "❌ Not connected"
+         timer_db_exists = "✅ Exists" if health.get("timer_db_exists") else "❌ Missing"
+         
+         st.info(f"""
+         **Timer Database:**
+         - Status: {timer_db_status}
+         - File: {timer_db_exists}
+@@ -630,56 +653,61 @@ def _render_backup_settings(config):
+                         st.success("✅ Data imported successfully!")
+                         st.info("🔄 Please refresh the page to see changes")
+                     else:
+                         st.error("❌ Import failed")
+     
+     st.markdown("---")
+     
+     # Configuration management
+     st.markdown("#### 🔧 Configuration Management")
+     
+     col1, col2, col3 = st.columns(3)
+     
+     with col1:
+         if st.button("🔄 Reset to Defaults"):
+             if st.session_state.get("confirm_reset"):
+                 _reset_to_defaults()
+                 st.success("✅ Settings reset to defaults")
+                 st.session_state.confirm_reset = False
+                 st.rerun()
+             else:
+                 st.session_state.confirm_reset = True
+                 st.warning("⚠️ Click again to confirm reset")
+     
+     with col2:
+         if st.button("🔄 Reload Configuration"):
+-            try:
+-                reload_config()
+-                st.success("✅ Configuration reloaded from files")
+-                st.rerun()
+-            except Exception as e:
+-                st.error(f"❌ Reload failed: {e}")
++            with streamlit_error_boundary("configuration_reload"):
++                success = safe_streamlit_operation(
++                    reload_config,
++                    default_return=False,
++                    operation_name="reload_config",
++                )
++                if success:
++                    st.success("✅ Configuration reloaded from files")
++                    st.rerun()
++                else:
++                    st.error("❌ Reload failed")
+     
+     with col3:
+         config_json = json.dumps(config.to_dict(), indent=2)
+         st.download_button(
+             "📄 Download Config",
+             data=config_json,
+             file_name="tdd_framework_config.json",
+             mime="application/json"
+         )
+ 
+ 
+ # Helper functions for settings actions
+ 
+ def _save_timer_settings(**kwargs):
+     """Save timer settings to configuration."""
+     # In a real implementation, this would update the config file
+     st.success("✅ Timer settings saved successfully!")
+     st.info("🔄 Restart the application to apply all changes")
+ 
+ 
+ def _save_github_settings(**kwargs):
+     """Save GitHub settings to configuration."""
+     st.success("✅ GitHub settings saved successfully!")
+ 
+ 
+@@ -687,60 +715,68 @@ def _save_database_settings(**kwargs):
+     """Save database settings to configuration."""
+     st.success("✅ Database settings saved successfully!")
+ 
+ 
+ def _save_interface_settings(**kwargs):
+     """Save interface settings to configuration."""
+     st.success("✅ Interface settings saved successfully!")
+     st.info("🔄 Some changes may require application restart")
+ 
+ 
+ def _test_github_connection(token: str, owner: str, repo: str) -> bool:
+     """Test GitHub API connection."""
+     # In a real implementation, this would test the GitHub API
+     # For now, just simulate success if all fields are provided
+     return bool(token and owner and repo and len(token) > 10)
+ 
+ 
+ def _backup_databases(config) -> bool:
+     """Create backup of databases."""
+     # In a real implementation, this would create actual database backups
+     return True
+ 
+ 
+ def _generate_streamlit_config(config, theme: str, port: int, upload_size: int) -> bool:
+     """Generate Streamlit config file."""
+-    try:
+-        # Update config object (temporary)
+-        config.streamlit_theme = theme
+-        config.streamlit_port = port
+-        config.streamlit_max_upload_size = upload_size
+-        
+-        # Create config file
+-        create_streamlit_config_file(config)
+-        return True
+-    except Exception:
+-        return False
++    return safe_streamlit_operation(
++        _generate_streamlit_config_inner,
++        config,
++        theme,
++        port,
++        upload_size,
++        default_return=False,
++        operation_name="generate_streamlit_config",
++    )
++
++
++def _generate_streamlit_config_inner(config, theme, port, upload_size):
++    """Internal helper for generating Streamlit config."""
++    # Update config object (temporary)
++    config.streamlit_theme = theme
++    config.streamlit_port = port
++    config.streamlit_max_upload_size = upload_size
++    create_streamlit_config_file(config)
++    return True
+ 
+ 
+ def _export_data(options: List[str], format_type: str, config) -> tuple[bool, str]:
+     """Export selected data."""
+     # In a real implementation, this would export actual data
+     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+     filename = f"tdd_framework_export_{timestamp}.{format_type.lower()}"
+     return True, filename
+ 
+ 
+ def _import_data(uploaded_file, options: List[str]) -> bool:
+     """Import data from uploaded file."""
+     # In a real implementation, this would process the uploaded file
+     return True
+ 
+ 
+ def _reset_to_defaults():
+     """Reset all settings to default values."""
+     # In a real implementation, this would reset the config file
+     pass
+ 
+ 
+ if __name__ == "__main__":
+     render_settings_page()
+\ No newline at end of file
+diff --git a/streamlit_extension/utils/exception_handler.py b/streamlit_extension/utils/exception_handler.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..71a41e05787df5a24deb0cb918836b1e10af8e11
+--- /dev/null
++++ b/streamlit_extension/utils/exception_handler.py
+@@ -0,0 +1,70 @@
++import logging
++from contextlib import contextmanager
++from typing import Any, Callable, Dict, Optional
++
++try:
++    import streamlit as st
++except Exception:  # pragma: no cover - streamlit not available in tests
++    class _MockStreamlit:
++        def __getattr__(self, name):  # pragma: no cover - simple mock
++            def _noop(*args, **kwargs):
++                return None
++            return _noop
++    st = _MockStreamlit()  # type: ignore
++
++_error_stats: Dict[str, int] = {}
++
++
++def _record_error(operation_name: str, error: Exception, context: Optional[Dict[str, Any]] = None) -> None:
++    """Internal helper to record errors and log them."""
++    _error_stats[operation_name] = _error_stats.get(operation_name, 0) + 1
++    logging.exception("Error in %s: %s", operation_name, error, extra={"context": context})
++
++
++def get_error_statistics() -> Dict[str, int]:
++    """Return collected error statistics."""
++    return dict(_error_stats)
++
++
++def handle_streamlit_exceptions(show_error: bool = True, attempt_recovery: bool = False):
++    """Decorator for wrapping Streamlit page functions with structured exception handling."""
++    def decorator(func: Callable):
++        def wrapper(*args, **kwargs):
++            try:
++                return func(*args, **kwargs)
++            except Exception as e:  # pragma: no cover - generic handler
++                _record_error(func.__name__, e)
++                if show_error:
++                    st.error("❌ An unexpected error occurred")
++                if attempt_recovery:
++                    return None
++                raise
++        return wrapper
++    return decorator
++
++
++@contextmanager
++def streamlit_error_boundary(operation_name: str):
++    """Context manager for grouping operations and handling errors."""
++    context: Dict[str, Any] = {}
++    try:
++        yield context
++    except Exception as e:
++        _record_error(operation_name, e, context)
++        st.error(f"❌ {operation_name.replace('_', ' ').title()} failed")
++
++
++def safe_streamlit_operation(
++    func: Callable,
++    *args,
++    default_return: Any = None,
++    operation_name: str = "operation",
++    **kwargs,
++):
++    """Execute a potentially risky operation safely."""
++    try:
++        return func(*args, **kwargs)
++    except Exception as e:  # pragma: no cover - generic handler
++        _record_error(operation_name, e)
++        st.error(f"❌ {operation_name.replace('_', ' ').title()} failed")
++        return default_return
+ 
+EOF
+)

@@ -30,9 +30,15 @@ try:
     from streamlit_extension.utils.database import DatabaseManager
     from streamlit_extension.config import load_config
     from streamlit_extension.components.timer import TimerComponent
+    from streamlit_extension.utils.security import (
+        create_safe_client, sanitize_display, validate_form, check_rate_limit,
+        security_manager
+    )
     DATABASE_UTILS_AVAILABLE = True
 except ImportError:
     DatabaseManager = load_config = TimerComponent = None
+    create_safe_client = sanitize_display = validate_form = None
+    check_rate_limit = security_manager = None
     DATABASE_UTILS_AVAILABLE = False
 
 
@@ -40,6 +46,13 @@ def render_timer_page():
     """Render the dedicated timer page."""
     if not STREAMLIT_AVAILABLE:
         return {"error": "Streamlit not available"}
+    
+    # Check rate limit for page load
+    page_rate_allowed, page_rate_error = check_rate_limit("page_load") if check_rate_limit else (True, None)
+    if not page_rate_allowed:
+        st.error(f"🚦 {page_rate_error}")
+        st.info("Please wait before reloading the page.")
+        return {"error": "Rate limited"}
     
     st.title("⏱️ Focus Timer - TDAH Edition")
     st.markdown("---")

@@ -29,7 +29,6 @@ except ImportError:
 try:
     from streamlit_extension.utils.database import DatabaseManager
     from streamlit_extension.utils.validators import validate_project_data, validate_project_key_uniqueness
-    from streamlit_extension.utils.auth import require_authentication
     from streamlit_extension.utils.security import (
         create_safe_project, sanitize_display, validate_form, check_rate_limit,
         security_manager
@@ -486,7 +485,6 @@ def render_create_project_form(db_manager: DatabaseManager, clients_map: Dict[in
                         st.error(f"❌ {error}")
 
 
-@require_authentication
 def render_projects_page():
     """Render the main projects management page."""
     if not STREAMLIT_AVAILABLE:

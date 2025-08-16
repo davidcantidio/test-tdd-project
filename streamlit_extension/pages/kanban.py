@@ -28,10 +28,18 @@ except ImportError:
 # Local imports
 try:
     from streamlit_extension.utils.database import DatabaseManager
+    from streamlit_extension.utils.security import (
+        security_manager, validate_form, check_rate_limit, sanitize_display
+    )
     from streamlit_extension.config import load_config
+    from streamlit_extension.config.constants import (
+        TaskStatus, TDDPhase, Priority, UIConstants
+    )
     DATABASE_UTILS_AVAILABLE = True
 except ImportError:
-    DatabaseManager = load_config = None
+    DatabaseManager = load_config = security_manager = None
+    validate_form = check_rate_limit = sanitize_display = None
+    TaskStatus = TDDPhase = Priority = UIConstants = None
     DATABASE_UTILS_AVAILABLE = False
 
 
@@ -40,7 +48,14 @@ def render_kanban_page():
     if not STREAMLIT_AVAILABLE:
         return {"error": "Streamlit not available"}
     
-    st.title("📋 Kanban Board")
+    # Page load rate limiting
+    page_rate_allowed, page_rate_error = check_rate_limit("page_load") if check_rate_limit else (True, None)
+    if not page_rate_allowed:
+        st.error(f"🚦 {page_rate_error}")
+        st.info("Please wait before reloading the page.")
+        return {"error": "Rate limited"}
+    
+    st.title(UIConstants.KANBAN_PAGE_TITLE if UIConstants else "📋 Kanban Board")
     st.markdown("---")
     
     # Initialize database manager
@@ -60,6 +75,13 @@ def render_kanban_page():
     
     # Sidebar filters
     _render_sidebar_filters(db_manager)
+    
+    # Database read rate limiting
+    db_read_allowed, db_read_error = check_rate_limit("db_read") if check_rate_limit else (True, None)
+    if not db_read_allowed:
+        st.error(f"🚦 Database {db_read_error}")
+        st.info("Please wait before refreshing the data.")
+        return {"error": "Rate limited"}
     
     # Load data
     with st.spinner("Loading tasks..."):
@@ -333,6 +355,10 @@ def _show_quick_add_modal(db_manager: DatabaseManager, epics: List[Dict[str, Any
         with st.form("quick_add_task"):
             st.markdown("### ➕ Quick Add Task")
             
+            # Generate CSRF token for form protection
+            csrf_form_id = "quick_add_task_form"
+            csrf_field = security_manager.get_csrf_form_field(csrf_form_id) if security_manager else None
+            
             title = st.text_input("Task Title*", placeholder="Enter task title...")
             
             col1, col2 = st.columns(2)
@@ -346,6 +372,35 @@ def _show_quick_add_modal(db_manager: DatabaseManager, epics: List[Dict[str, Any
             submitted = st.form_submit_button("Add Task")
             
             if submitted and title:
+                # Rate limiting for form submission
+                rate_allowed, rate_error = check_rate_limit("form_submit") if check_rate_limit else (True, None)
+                if not rate_allowed:
+                    st.error(f"🚦 Form {rate_error}")
+                    return
+                
+                # CSRF Protection
+                if csrf_field and security_manager:
+                    csrf_valid, csrf_error = security_manager.require_csrf_protection(
+                        csrf_form_id, csrf_field.get("token_value")
+                    )
+                    if not csrf_valid:
+                        st.error(f"🔒 Security Error: {csrf_error}")
+                        return
+                
+                # Form validation for security
+                raw_data = {
+                    "title": title,
+                    "epic": selected_epic,
+                    "tdd_phase": tdd_phase
+                }
+                
+                if validate_form:
+                    security_valid, security_errors = validate_form(raw_data)
+                    if not security_valid:
+                        for error in security_errors:
+                            st.error(f"🔒 Security: {error}")
+                        return
+                
                 # Get epic ID
                 epic_id = None
                 if selected_epic != "Select Epic":
@@ -354,6 +409,12 @@ def _show_quick_add_modal(db_manager: DatabaseManager, epics: List[Dict[str, Any
                         if epic.get("epic_key") == epic_key:
                             epic_id = epic.get("id")
                             break
+                
+                # Database write rate limiting
+                db_rate_allowed, db_rate_error = check_rate_limit("db_write") if check_rate_limit else (True, None)
+                if not db_rate_allowed:
+                    st.error(f"🚦 Database {db_rate_error}")
+                    return
                 
                 # Create task (simplified - would need proper database insertion)
                 success = _create_task(title, epic_id, tdd_phase, db_manager)
@@ -372,6 +433,10 @@ def _render_create_task_form(db_manager: DatabaseManager, epics: List[Dict[str, 
     with st.form("create_task"):
         st.markdown("### ➕ Create New Task")
         
+        # Generate CSRF token for form protection
+        csrf_form_id = "create_task_form"
+        csrf_field = security_manager.get_csrf_form_field(csrf_form_id) if security_manager else None
+        
         col1, col2 = st.columns(2)
         
         with col1:
@@ -389,6 +454,38 @@ def _render_create_task_form(db_manager: DatabaseManager, epics: List[Dict[str, 
         submitted = st.form_submit_button("Create Task", type="primary")
         
         if submitted:
+            # Rate limiting for form submission
+            rate_allowed, rate_error = check_rate_limit("form_submit") if check_rate_limit else (True, None)
+            if not rate_allowed:
+                st.error(f"🚦 Form {rate_error}")
+                return
+            
+            # CSRF Protection
+            if csrf_field and security_manager:
+                csrf_valid, csrf_error = security_manager.require_csrf_protection(
+                    csrf_form_id, csrf_field.get("token_value")
+                )
+                if not csrf_valid:
+                    st.error(f"🔒 Security Error: {csrf_error}")
+                    return
+            
+            # Form validation for security
+            raw_data = {
+                "title": title,
+                "description": description,
+                "epic": selected_epic,
+                "tdd_phase": tdd_phase,
+                "priority": priority,
+                "estimate": estimate
+            }
+            
+            if validate_form:
+                security_valid, security_errors = validate_form(raw_data)
+                if not security_valid:
+                    for error in security_errors:
+                        st.error(f"🔒 Security: {error}")
+                    return
+            
             if not title:
                 st.error("❌ Task title is required")
             elif selected_epic == "Select Epic":
@@ -401,6 +498,12 @@ def _render_create_task_form(db_manager: DatabaseManager, epics: List[Dict[str, 
                     if epic.get("epic_key") == epic_key:
                         epic_id = epic.get("id")
                         break
+                
+                # Database write rate limiting
+                db_rate_allowed, db_rate_error = check_rate_limit("db_write") if check_rate_limit else (True, None)
+                if not db_rate_allowed:
+                    st.error(f"🚦 Database {db_rate_error}")
+                    return
                 
                 # Create task
                 success = _create_task(
@@ -430,6 +533,10 @@ def _show_edit_task_modal(task: Dict[str, Any], db_manager: DatabaseManager, epi
         with st.form(f"edit_task_{task_id}"):
             st.markdown(f"### ✏️ Edit Task: {task.get('title', 'Unknown')}")
             
+            # Generate CSRF token for form protection
+            csrf_form_id = f"edit_task_form_{task_id}"
+            csrf_field = security_manager.get_csrf_form_field(csrf_form_id) if security_manager else None
+            
             col1, col2 = st.columns(2)
             
             with col1:
@@ -455,6 +562,43 @@ def _show_edit_task_modal(task: Dict[str, Any], db_manager: DatabaseManager, epi
                 cancelled = st.form_submit_button("Cancel")
             
             if submitted:
+                # Rate limiting for form submission
+                rate_allowed, rate_error = check_rate_limit("form_submit") if check_rate_limit else (True, None)
+                if not rate_allowed:
+                    st.error(f"🚦 Form {rate_error}")
+                    return
+                
+                # CSRF Protection
+                if csrf_field and security_manager:
+                    csrf_valid, csrf_error = security_manager.require_csrf_protection(
+                        csrf_form_id, csrf_field.get("token_value")
+                    )
+                    if not csrf_valid:
+                        st.error(f"🔒 Security Error: {csrf_error}")
+                        return
+                
+                # Form validation for security
+                raw_data = {
+                    "title": title,
+                    "description": description,
+                    "tdd_phase": tdd_phase,
+                    "priority": priority,
+                    "estimate": estimate
+                }
+                
+                if validate_form:
+                    security_valid, security_errors = validate_form(raw_data)
+                    if not security_valid:
+                        for error in security_errors:
+                            st.error(f"🔒 Security: {error}")
+                        return
+                
+                # Database write rate limiting
+                db_rate_allowed, db_rate_error = check_rate_limit("db_write") if check_rate_limit else (True, None)
+                if not db_rate_allowed:
+                    st.error(f"🚦 Database {db_rate_error}")
+                    return
+                
                 # Update task
                 success = _update_task(
                     task_id=task_id,

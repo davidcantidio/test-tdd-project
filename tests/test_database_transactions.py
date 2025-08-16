@@ -136,29 +136,75 @@ class TestDatabaseConnectionPool:
             assert final_count == 5
     
     def test_connection_pool_limit(self):
-        """Test that connection pool respects limits."""
-        # Acquire all connections
-        connections = []
+        """Test that connection pool respects limits with proper timeout handling."""
+        import time
+        import threading
+        
+        # Test connection pool behavior under load without deadlock
+        acquired_connections = []
         
         try:
+            # Acquire connections up to the pool limit
             for i in range(3):  # Pool limit is 3
                 conn = self.pool._acquire_connection()
-                connections.append(conn)
+                acquired_connections.append(conn)
             
-            # Pool should be at capacity
+            # Verify pool is at capacity
             assert len(self.pool._in_use) == 3
+            assert len(acquired_connections) == 3
             
-            # Trying to acquire another should create emergency connection
-            emergency_conn = self.pool._acquire_connection()
-            connections.append(emergency_conn)
+            # Test timeout behavior with a thread that tries to acquire when pool is full
+            timeout_occurred = threading.Event()
+            connection_acquired = threading.Event()
             
-            # Should have timeout recorded
-            assert self.pool.stats["connections_timeout"] >= 0
+            def try_acquire_with_timeout():
+                """Try to acquire connection when pool is at capacity."""
+                start_time = time.time()
+                try:
+                    # This should timeout based on pool's connection_timeout (0.1s)
+                    conn = self.pool._acquire_connection()
+                    connection_acquired.set()
+                    # If we get here, release immediately
+                    self.pool._release_connection(conn)
+                except Exception:
+                    elapsed = time.time() - start_time
+                    if elapsed >= 0.1:  # Pool timeout is 0.1s
+                        timeout_occurred.set()
+            
+            # Start thread that will timeout
+            timeout_thread = threading.Thread(target=try_acquire_with_timeout)
+            timeout_thread.start()
+            
+            # Wait for timeout to occur
+            timeout_thread.join(timeout=2.0)  # Give enough time for timeout
+            
+            # Verify timeout behavior
+            assert timeout_occurred.is_set() or connection_acquired.is_set(), "Thread should have either timed out or acquired emergency connection"
+            
+            # Test that releasing a connection allows others to proceed
+            if acquired_connections:
+                # Release one connection
+                conn_to_release = acquired_connections.pop()
+                self.pool._release_connection(conn_to_release)
+                
+                # Verify connection was properly released
+                assert len(self.pool._in_use) == 2
+                
+                # Now acquiring should work
+                new_conn = self.pool._acquire_connection()
+                acquired_connections.append(new_conn)
+                assert len(self.pool._in_use) == 3
             
         finally:
-            # Release all connections
-            for conn in connections:
-                self.pool._release_connection(conn)
+            # Clean up all acquired connections
+            for conn in acquired_connections:
+                try:
+                    self.pool._release_connection(conn)
+                except Exception:
+                    pass
+            
+            # Verify pool is cleaned up
+            assert len(self.pool._in_use) == 0
     
     def test_connection_health_check(self):
         """Test connection health checking."""

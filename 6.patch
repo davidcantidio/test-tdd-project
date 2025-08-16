@@ -1,0 +1,281 @@
+ (cd "$(git rev-parse --show-toplevel)" && git apply --3way <<'EOF' 
+diff --git a/config/environments/__init__.py b/config/environments/__init__.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..e69de29bb2d1d6434b8b29ae775ad8c2e48c5391
+diff --git a/config/environments/development.py b/config/environments/development.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..3a1401c2fb9ce47cd5beffce46bc1b9039b87ae7
+--- /dev/null
++++ b/config/environments/development.py
+@@ -0,0 +1,31 @@
++"""Development environment configuration."""
++
++DATABASE_CONFIG = {
++    "framework_db_path": "dev_framework.db",
++    "timer_db_path": "dev_task_timer.db",
++    "connection_pool_size": 5,
++    "query_timeout": 30
++}
++
++REDIS_CONFIG = {
++    "host": "localhost",
++    "port": 6379,
++    "db": 0,
++    "password": None,
++    "max_connections": 10
++}
++
++SECURITY_CONFIG = {
++    "enable_csrf": True,
++    "enable_rate_limiting": True,
++    "rate_limit_strict": False,
++    "session_timeout": 3600,
++    "enable_debug_mode": True
++}
++
++LOGGING_CONFIG = {
++    "level": "DEBUG",
++    "format": "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
++    "enable_file_logging": True,
++    "log_file": "logs/dev_app.log"
++}
+diff --git a/config/environments/production.py b/config/environments/production.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..88cc776082bba44a3cec6bf43b803f493f6c855e
+--- /dev/null
++++ b/config/environments/production.py
+@@ -0,0 +1,30 @@
++"""Production environment configuration."""
++
++DATABASE_CONFIG = {
++    "framework_db_path": "${DB_PATH}/framework.db",
++    "timer_db_path": "${DB_PATH}/task_timer.db",
++    "connection_pool_size": 20,
++    "query_timeout": 10,
++    "enable_backup": True,
++    "backup_schedule": "0 2 * * *"  # Daily at 2 AM
++}
++
++REDIS_CONFIG = {
++    "host": "${REDIS_HOST}",
++    "port": "${REDIS_PORT}",
++    "db": 0,
++    "password": "${REDIS_PASSWORD}",
++    "max_connections": 50,
++    "connection_pool_timeout": 5,
++    "ssl": True
++}
++
++SECURITY_CONFIG = {
++    "enable_csrf": True,
++    "enable_rate_limiting": True,
++    "rate_limit_strict": True,
++    "session_timeout": 900,
++    "enable_debug_mode": False,
++    "force_https": True,
++    "enable_audit_logging": True
++}
+diff --git a/config/environments/staging.py b/config/environments/staging.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..867a2dd986bea39588dd393489ccd2c2d0bf7a3e
+--- /dev/null
++++ b/config/environments/staging.py
+@@ -0,0 +1,24 @@
++"""Staging environment configuration."""
++
++DATABASE_CONFIG = {
++    "framework_db_path": "staging_framework.db",
++    "timer_db_path": "staging_task_timer.db", 
++    "connection_pool_size": 10,
++    "query_timeout": 15
++}
++
++REDIS_CONFIG = {
++    "host": "staging-redis.internal",
++    "port": 6379,
++    "db": 1,
++    "password": "${REDIS_PASSWORD}",
++    "max_connections": 20
++}
++
++SECURITY_CONFIG = {
++    "enable_csrf": True,
++    "enable_rate_limiting": True,
++    "rate_limit_strict": True,
++    "session_timeout": 1800,
++    "enable_debug_mode": False
++}
+diff --git a/streamlit_extension/config/env_manager.py b/streamlit_extension/config/env_manager.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..c09f1fc4f58691117af4486131525548bb301987
+--- /dev/null
++++ b/streamlit_extension/config/env_manager.py
+@@ -0,0 +1,88 @@
++"""
++🌍 Environment Configuration Manager
++
++Manages dev/staging/prod configurations with:
++- Environment variable substitution
++- Configuration validation
++- Hot reloading capabilities
++- Environment detection
++- Secrets management integration
++"""
++
++from __future__ import annotations
++
++import importlib
++import os
++import re
++from copy import deepcopy
++
++
++class EnvironmentManager:
++    """Manages environment-specific configurations."""
++
++    def __init__(self, environment: str | None = None) -> None:
++        """Initialize with auto-detection or explicit environment."""
++        self.environment = environment or os.getenv("APP_ENV", "development")
++        self.config_module = None
++        self.database_config: dict = {}
++        self.redis_config: dict = {}
++        self.security_config: dict = {}
++        self.load_config()
++
++    def load_config(self) -> None:
++        """Load configuration for current environment."""
++        module_name = f"config.environments.{self.environment}"
++        self.config_module = importlib.import_module(module_name)
++        self.database_config = deepcopy(getattr(self.config_module, "DATABASE_CONFIG", {}))
++        self.redis_config = deepcopy(getattr(self.config_module, "REDIS_CONFIG", {}))
++        self.security_config = deepcopy(getattr(self.config_module, "SECURITY_CONFIG", {}))
++
++    def get_database_config(self) -> dict:
++        """Get database configuration with env var substitution."""
++        return self.substitute_env_vars(deepcopy(self.database_config))
++
++    def get_redis_config(self) -> dict:
++        """Get Redis configuration with env var substitution."""
++        return self.substitute_env_vars(deepcopy(self.redis_config))
++
++    def get_security_config(self) -> dict:
++        """Get security configuration."""
++        return deepcopy(self.security_config)
++
++    def substitute_env_vars(self, config_dict: dict) -> dict:
++        """Substitute ${VAR} patterns with environment variables."""
++        pattern = re.compile(r"\$\{([^}]+)\}")
++        substituted = {}
++        for key, value in config_dict.items():
++            if isinstance(value, str):
++                substituted[key] = pattern.sub(lambda m: os.getenv(m.group(1), ""), value)
++            elif isinstance(value, dict):
++                substituted[key] = self.substitute_env_vars(value)
++            else:
++                substituted[key] = value
++        return substituted
++
++    def validate_config(self) -> bool:
++        """Validate configuration completeness and format."""
++        required = {
++            "database": ["framework_db_path", "timer_db_path"],
++            "redis": ["host", "port"],
++            "security": ["enable_csrf", "enable_rate_limiting"],
++        }
++        for name, keys in required.items():
++            cfg = getattr(self, f"{name}_config", {})
++            for key in keys:
++                if key not in cfg:
++                    raise ValueError(f"Missing {name} config key: {key}")
++        return True
++
++    def reload_config(self) -> None:
++        """Hot reload configuration from files."""
++        module_name = f"config.environments.{self.environment}"
++        if self.config_module and self.config_module.__name__ == module_name:
++            self.config_module = importlib.reload(self.config_module)
++        else:
++            self.config_module = importlib.import_module(module_name)
++        self.database_config = deepcopy(getattr(self.config_module, "DATABASE_CONFIG", {}))
++        self.redis_config = deepcopy(getattr(self.config_module, "REDIS_CONFIG", {}))
++        self.security_config = deepcopy(getattr(self.config_module, "SECURITY_CONFIG", {}))
+diff --git a/tests/test_environment_config.py b/tests/test_environment_config.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..0682f19e1c4b2a515510c3fce42a8c09bf1ad04a
+--- /dev/null
++++ b/tests/test_environment_config.py
+@@ -0,0 +1,71 @@
++"""Test environment configuration system."""
++
++import os
++import sys
++from pathlib import Path
++from unittest.mock import patch
++
++import pytest
++
++# Add project root to path for imports
++sys.path.append(str(Path(__file__).resolve().parents[1]))
++
++from streamlit_extension.config.env_manager import EnvironmentManager
++
++
++class TestEnvironmentManager:
++    def test_environment_detection(self):
++        """Test automatic environment detection."""
++        with patch.dict(os.environ, {}, clear=True):
++            manager = EnvironmentManager()
++            assert manager.environment == "development"
++        with patch.dict(os.environ, {"APP_ENV": "staging"}, clear=True):
++            manager = EnvironmentManager()
++            assert manager.environment == "staging"
++        with patch.dict(os.environ, {"APP_ENV": "staging"}, clear=True):
++            manager = EnvironmentManager(environment="production")
++            assert manager.environment == "production"
++
++    def test_config_loading(self):
++        """Test configuration loading for each environment."""
++        expected = {
++            "development": "dev_framework.db",
++            "staging": "staging_framework.db",
++            "production": "${DB_PATH}/framework.db",
++        }
++        for env, path in expected.items():
++            manager = EnvironmentManager(environment=env)
++            assert manager.database_config["framework_db_path"] == path
++
++    def test_env_var_substitution(self):
++        """Test environment variable substitution."""
++        vars = {
++            "DB_PATH": "/data",
++            "REDIS_PASSWORD": "secret",
++            "REDIS_HOST": "prod-redis",
++            "REDIS_PORT": "6380",
++        }
++        with patch.dict(os.environ, vars, clear=True):
++            manager = EnvironmentManager(environment="production")
++            db_config = manager.get_database_config()
++            assert db_config["framework_db_path"] == "/data/framework.db"
++            redis_config = manager.get_redis_config()
++            assert redis_config["password"] == "secret"
++            assert redis_config["host"] == "prod-redis"
++            assert redis_config["port"] == "6380"
++
++    def test_config_validation(self):
++        """Test configuration validation."""
++        manager = EnvironmentManager(environment="development")
++        assert manager.validate_config() is True
++        manager.database_config.pop("framework_db_path")
++        with pytest.raises(ValueError):
++            manager.validate_config()
++
++    def test_hot_reload(self):
++        """Test configuration hot reloading."""
++        manager = EnvironmentManager(environment="development")
++        assert manager.get_database_config()["framework_db_path"] == "dev_framework.db"
++        manager.environment = "staging"
++        manager.reload_config()
++        assert manager.get_database_config()["framework_db_path"] == "staging_framework.db"
+ 
+EOF
+)

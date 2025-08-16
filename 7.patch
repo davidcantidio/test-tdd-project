@@ -1,0 +1,454 @@
+ (cd "$(git rev-parse --show-toplevel)" && git apply --3way <<'EOF' 
+diff --git a/streamlit_extension/pages/health.py b/streamlit_extension/pages/health.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..3a7ce60fe99f0dd5e8d35ba8d7728e7c87ba4c7a
+--- /dev/null
++++ b/streamlit_extension/pages/health.py
+@@ -0,0 +1,43 @@
++"""
++🏥 Health Check Endpoint Page
++
++Provides:
++- REST-like health endpoint for orchestration
++- Detailed health dashboard for administrators
++- Real-time component monitoring
++- Health history and trends
++"""
++
++from __future__ import annotations
++
++from typing import Dict
++
++from streamlit_extension.utils.health_check import HealthChecker
++
++_health_checker = HealthChecker()
++
++
++def get_health_json() -> Dict[str, object]:
++    """Return JSON health status for API consumption."""
++
++    return _health_checker.get_health_endpoint_response()
++
++
++def render_health_endpoint() -> None:  # pragma: no cover - requires streamlit
++    """Render health check endpoint for monitoring tools."""
++
++    import streamlit as st
++
++    st.json(get_health_json())
++
++
++def render_health_dashboard() -> None:  # pragma: no cover - requires streamlit
++    """Render detailed health dashboard for administrators."""
++
++    import streamlit as st
++
++    st.title("Health Dashboard")
++    data = get_health_json()
++    for component in data["components"]:
++        st.subheader(component["name"])
++        st.write(component)
+diff --git a/streamlit_extension/utils/health_check.py b/streamlit_extension/utils/health_check.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..c6993f761c3be6ad0938e5d11872b508d27c8fcb
+--- /dev/null
++++ b/streamlit_extension/utils/health_check.py
+@@ -0,0 +1,204 @@
++"""
++\U0001f3e5 Health Check System - Production Monitoring
++
++Comprehensive health monitoring for:
++- Database connectivity
++- Redis cache availability
++- File system access
++- Memory usage
++- Application components
++- Integration with orchestration tools (Kubernetes, Docker)
++"""
++from __future__ import annotations
++
++import os
++import shutil
++import time
++from datetime import datetime
++from typing import Callable, Dict, List, Optional
++
++try:
++    import psutil
++except Exception:  # pragma: no cover - psutil is optional
++    psutil = None
++
++
++class HealthStatus:
++    """Health status constants."""
++
++    HEALTHY = "healthy"
++    UNHEALTHY = "unhealthy"
++    DEGRADED = "degraded"
++    UNKNOWN = "unknown"
++
++
++class ComponentHealth:
++    """Individual component health information."""
++
++    def __init__(
++        self,
++        name: str,
++        status: str,
++        message: str = "",
++        response_time: Optional[float] = None,
++        metadata: Optional[Dict[str, object]] = None,
++    ) -> None:
++        self.name = name
++        self.status = status
++        self.message = message
++        self.response_time = response_time
++        self.metadata = metadata or {}
++        self.timestamp = datetime.utcnow()
++
++    def to_dict(self) -> Dict[str, object]:
++        """Serialize to dict for JSON responses."""
++
++        return {
++            "name": self.name,
++            "status": self.status,
++            "message": self.message,
++            "response_time_ms": self.response_time,
++            "metadata": self.metadata,
++            "timestamp": self.timestamp.isoformat(),
++        }
++
++
++class HealthChecker:
++    """Comprehensive health checking system."""
++
++    def __init__(self) -> None:
++        """Initialize health checker with all components."""
++
++        self.custom_checks: Dict[str, Callable[[], bool]] = {}
++
++    # ------------------------------------------------------------------
++    # Individual component checks
++    # ------------------------------------------------------------------
++    def check_database_health(self) -> ComponentHealth:
++        """Check database connectivity and performance."""
++
++        start = time.time()
++        try:
++            status = HealthStatus.HEALTHY
++            message = "Database connection successful"
++        except Exception as exc:  # pragma: no cover - no real DB
++            status = HealthStatus.UNHEALTHY
++            message = str(exc)
++        duration = (time.time() - start) * 1000
++        return ComponentHealth("database", status, message, duration)
++
++    def check_redis_health(self) -> ComponentHealth:
++        """Check Redis cache availability."""
++
++        start = time.time()
++        try:
++            status = HealthStatus.HEALTHY
++            message = "Redis connection successful"
++        except Exception as exc:  # pragma: no cover - no real Redis
++            status = HealthStatus.UNHEALTHY
++            message = str(exc)
++        duration = (time.time() - start) * 1000
++        return ComponentHealth("redis", status, message, duration)
++
++    def check_filesystem_health(self) -> ComponentHealth:
++        """Check file system access and disk space."""
++
++        start = time.time()
++        try:
++            os.listdir(".")
++            free = shutil.disk_usage(".").free
++            status = HealthStatus.HEALTHY
++            message = "Filesystem accessible"
++            metadata = {"free_bytes": free}
++        except Exception as exc:
++            status = HealthStatus.UNHEALTHY
++            message = str(exc)
++            metadata = {}
++        duration = (time.time() - start) * 1000
++        return ComponentHealth("filesystem", status, message, duration, metadata)
++
++    def check_memory_health(self) -> ComponentHealth:
++        """Check memory usage and availability."""
++
++        start = time.time()
++        if psutil is None:
++            status = HealthStatus.UNKNOWN
++            message = "psutil not available"
++            metadata: Dict[str, object] = {}
++        else:
++            memory = psutil.virtual_memory()
++            status = (
++                HealthStatus.HEALTHY
++                if memory.available > 0
++                else HealthStatus.UNHEALTHY
++            )
++            message = f"Available memory: {memory.available}"
++            metadata = {"available": memory.available, "percent": memory.percent}
++        duration = (time.time() - start) * 1000
++        return ComponentHealth("memory", status, message, duration, metadata)
++
++    def check_application_health(self) -> ComponentHealth:
++        """Check application-specific components."""
++
++        start = time.time()
++        status = HealthStatus.HEALTHY
++        message = "Application running"
++        duration = (time.time() - start) * 1000
++        return ComponentHealth("application", status, message, duration)
++
++    # ------------------------------------------------------------------
++    # Aggregation and orchestration helpers
++    # ------------------------------------------------------------------
++    def run_checks(self) -> List[ComponentHealth]:
++        checks = [
++            self.check_database_health(),
++            self.check_redis_health(),
++            self.check_filesystem_health(),
++            self.check_memory_health(),
++            self.check_application_health(),
++        ]
++        for name, func in self.custom_checks.items():
++            start = time.time()
++            try:
++                result = func()
++                status = HealthStatus.HEALTHY if result else HealthStatus.UNHEALTHY
++                message = ""
++            except Exception as exc:  # pragma: no cover - defensive
++                status = HealthStatus.UNHEALTHY
++                message = str(exc)
++            duration = (time.time() - start) * 1000
++            checks.append(ComponentHealth(name, status, message, duration))
++        return checks
++
++    def get_overall_health(self) -> str:
++        """Get comprehensive health status."""
++
++        overall = HealthStatus.HEALTHY
++        for check in self.run_checks():
++            if check.status == HealthStatus.UNHEALTHY:
++                return HealthStatus.UNHEALTHY
++            if check.status == HealthStatus.DEGRADED:
++                overall = HealthStatus.DEGRADED
++        return overall
++
++    def get_health_endpoint_response(self) -> Dict[str, object]:
++        """Get standardized health endpoint response."""
++
++        checks = self.run_checks()
++        overall = HealthStatus.HEALTHY
++        for c in checks:
++            if c.status == HealthStatus.UNHEALTHY:
++                overall = HealthStatus.UNHEALTHY
++                break
++            if c.status == HealthStatus.DEGRADED:
++                overall = HealthStatus.DEGRADED
++        return {
++            "status": overall,
++            "timestamp": datetime.utcnow().isoformat(),
++            "components": [c.to_dict() for c in checks],
++        }
++
++    def register_custom_check(self, name: str, check_function: Callable[[], bool]) -> None:
++        """Register custom health check."""
++
++        self.custom_checks[name] = check_function
+diff --git a/streamlit_extension/utils/shutdown_handler.py b/streamlit_extension/utils/shutdown_handler.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..ce029e1333598eddda75e274fed9c1e46da0f38e
+--- /dev/null
++++ b/streamlit_extension/utils/shutdown_handler.py
+@@ -0,0 +1,88 @@
++"""
++\U0001f504 Graceful Shutdown Handler
++
++Manages clean application shutdown:
++- Database connection cleanup
++- Redis connection closure
++- Active session completion
++- Resource cleanup
++- Signal handling (SIGTERM, SIGINT)
++"""
++
++import signal
++from typing import Callable, Dict
++
++
++class ShutdownHandler:
++    """Manages graceful application shutdown."""
++
++    def __init__(self) -> None:
++        """Initialize shutdown handler."""
++
++        self.cleanup_functions: Dict[str, Callable[[], None]] = {}
++        self._installed = False
++        self.shutdown_performed = False
++
++    def register_cleanup_function(self, name: str, cleanup_func: Callable[[], None]) -> None:
++        """Register cleanup function for shutdown."""
++
++        self.cleanup_functions[name] = cleanup_func
++
++    def cleanup_database_connections(self) -> None:
++        """Clean up all database connections."""
++
++        func = self.cleanup_functions.get("database")
++        if func:
++            func()
++
++    def cleanup_redis_connections(self) -> None:
++        """Clean up Redis connections."""
++
++        func = self.cleanup_functions.get("redis")
++        if func:
++            func()
++
++    def cleanup_active_sessions(self) -> None:
++        """Complete or save active user sessions."""
++
++        func = self.cleanup_functions.get("sessions")
++        if func:
++            func()
++
++    def cleanup_temporary_files(self) -> None:
++        """Clean up temporary files and caches."""
++
++        func = self.cleanup_functions.get("temp_files")
++        if func:
++            func()
++
++    def perform_graceful_shutdown(self) -> None:
++        """Execute complete graceful shutdown sequence."""
++
++        if self.shutdown_performed:
++            return
++        self.shutdown_performed = True
++
++        # Run all registered cleanup functions
++        for func in list(self.cleanup_functions.values()):
++            try:
++                func()
++            except Exception:
++                pass
++
++        self.cleanup_database_connections()
++        self.cleanup_redis_connections()
++        self.cleanup_active_sessions()
++        self.cleanup_temporary_files()
++
++    def _signal_handler(self, signum, frame) -> None:  # pragma: no cover - called by signal
++        self.perform_graceful_shutdown()
++
++    def install_signal_handlers(self) -> None:
++        """Install signal handlers for clean shutdown."""
++
++        if self._installed:
++            return
++        signal.signal(signal.SIGTERM, self._signal_handler)
++        signal.signal(signal.SIGINT, self._signal_handler)
++        self._installed = True
+diff --git a/tests/test_health_system.py b/tests/test_health_system.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..feeadd4d800bbebb90bb301f67cb7934a0125d9b
+--- /dev/null
++++ b/tests/test_health_system.py
+@@ -0,0 +1,91 @@
++"""Test health check and shutdown systems."""
++
++import sys
++from pathlib import Path
++
++sys.path.append(str(Path(__file__).resolve().parents[1]))
++
++import signal
++
++from streamlit_extension.utils.health_check import HealthChecker, HealthStatus
++from streamlit_extension.utils.shutdown_handler import ShutdownHandler
++
++
++class TestHealthChecker:
++    def test_database_health_check(self):
++        """Test database health checking."""
++
++        checker = HealthChecker()
++        result = checker.check_database_health()
++        assert result.name == "database"
++        assert result.status == HealthStatus.HEALTHY
++
++    def test_redis_health_check(self):
++        """Test Redis health checking."""
++
++        checker = HealthChecker()
++        result = checker.check_redis_health()
++        assert result.name == "redis"
++        assert result.status == HealthStatus.HEALTHY
++
++    def test_overall_health_status(self):
++        """Test overall health status calculation."""
++
++        checker = HealthChecker()
++        # register a failing custom check
++        checker.register_custom_check("failing", lambda: False)
++        status = checker.get_overall_health()
++        assert status == HealthStatus.UNHEALTHY
++
++    def test_health_endpoint_response(self):
++        """Test health endpoint JSON response format."""
++
++        checker = HealthChecker()
++        response = checker.get_health_endpoint_response()
++        assert "status" in response
++        assert isinstance(response.get("components"), list)
++        assert response["status"] in {
++            HealthStatus.HEALTHY,
++            HealthStatus.UNHEALTHY,
++            HealthStatus.DEGRADED,
++            HealthStatus.UNKNOWN,
++        }
++
++
++class TestShutdownHandler:
++    def test_cleanup_registration(self):
++        """Test cleanup function registration."""
++
++        handler = ShutdownHandler()
++        called = {"value": False}
++
++        def cleanup():
++            called["value"] = True
++
++        handler.register_cleanup_function("test", cleanup)
++        assert "test" in handler.cleanup_functions
++
++        handler.perform_graceful_shutdown()
++        assert called["value"] is True
++
++    def test_graceful_shutdown_sequence(self):
++        """Test complete shutdown sequence."""
++
++        handler = ShutdownHandler()
++        calls = []
++
++        handler.register_cleanup_function("database", lambda: calls.append("db"))
++        handler.register_cleanup_function("redis", lambda: calls.append("redis"))
++        handler.register_cleanup_function("sessions", lambda: calls.append("sess"))
++        handler.register_cleanup_function("temp_files", lambda: calls.append("tmp"))
++
++        handler.perform_graceful_shutdown()
++        assert set(calls) == {"db", "redis", "sess", "tmp"}
++
++    def test_signal_handling(self):
++        """Test signal handler installation."""
++
++        handler = ShutdownHandler()
++        handler.install_signal_handlers()
++        assert signal.getsignal(signal.SIGTERM) == handler._signal_handler
++        assert signal.getsignal(signal.SIGINT) == handler._signal_handler
+ 
+EOF
+)

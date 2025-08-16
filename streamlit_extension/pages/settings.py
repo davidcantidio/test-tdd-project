@@ -29,9 +29,15 @@ except ImportError:
 try:
     from streamlit_extension.utils.database import DatabaseManager
     from streamlit_extension.config import load_config, create_streamlit_config_file
+    from streamlit_extension.utils.security import (
+        create_safe_client, sanitize_display, validate_form, check_rate_limit,
+        security_manager
+    )
     DATABASE_UTILS_AVAILABLE = True
 except ImportError:
     DatabaseManager = load_config = create_streamlit_config_file = None
+    create_safe_client = sanitize_display = validate_form = None
+    check_rate_limit = security_manager = None
     DATABASE_UTILS_AVAILABLE = False
 
 
@@ -39,6 +45,13 @@ def render_settings_page():
     """Render the settings configuration page."""
     if not STREAMLIT_AVAILABLE:
         return {"error": "Streamlit not available"}
+    
+    # Check rate limit for page load
+    page_rate_allowed, page_rate_error = check_rate_limit("page_load") if check_rate_limit else (True, None)
+    if not page_rate_allowed:
+        st.error(f"🚦 {page_rate_error}")
+        st.info("Please wait before reloading the page.")
+        return {"error": "Rate limited"}
     
     st.title("⚙️ Settings & Configuration")
     st.markdown("---")
@@ -220,6 +233,12 @@ def _render_timer_settings(config):
     
     # Save timer settings
     if st.button("💾 Save Timer Settings", type="primary"):
+        # Check rate limit for form submission
+        rate_allowed, rate_error = check_rate_limit("form_submit") if check_rate_limit else (True, None)
+        if not rate_allowed:
+            st.error(f"🚦 {rate_error}")
+            return
+        
         _save_timer_settings(
             focus_duration=focus_duration,
             short_break=short_break,
@@ -329,6 +348,12 @@ def _render_github_settings(config):
     
     # Save GitHub settings
     if st.button("💾 Save GitHub Settings"):
+        # Check rate limit for form submission
+        rate_allowed, rate_error = check_rate_limit("form_submit") if check_rate_limit else (True, None)
+        if not rate_allowed:
+            st.error(f"🚦 {rate_error}")
+            return
+        
         # Validate token format before saving
         if github_token:
             import re
@@ -416,12 +441,24 @@ def _render_database_settings(config):
             st.rerun()
         
         if st.button("🧹 Run Database Maintenance"):
+            # Check rate limit for database operations
+            db_rate_allowed, db_rate_error = check_rate_limit("db_write") if check_rate_limit else (True, None)
+            if not db_rate_allowed:
+                st.error(f"🚦 Database {db_rate_error}")
+                return
+            
             with st.spinner("Running database maintenance..."):
                 # This would run database maintenance script
                 st.success("✅ Database maintenance completed")
                 # TODO: Implement actual maintenance call
         
         if st.button("💾 Backup Databases"):
+            # Check rate limit for database operations
+            db_rate_allowed, db_rate_error = check_rate_limit("db_write") if check_rate_limit else (True, None)
+            if not db_rate_allowed:
+                st.error(f"🚦 Database {db_rate_error}")
+                return
+            
             with st.spinner("Creating database backup..."):
                 success = _backup_databases(config)
                 if success:
@@ -453,6 +490,12 @@ def _render_database_settings(config):
     
     # Save database settings
     if st.button("💾 Save Database Settings"):
+        # Check rate limit for form submission
+        rate_allowed, rate_error = check_rate_limit("form_submit") if check_rate_limit else (True, None)
+        if not rate_allowed:
+            st.error(f"🚦 {rate_error}")
+            return
+        
         _save_database_settings(
             analytics_retention_days=analytics_retention,
             cache_ttl_seconds=cache_ttl
@@ -554,6 +597,12 @@ def _render_interface_settings(config):
     
     # Save interface settings
     if st.button("💾 Save Interface Settings"):
+        # Check rate limit for form submission
+        rate_allowed, rate_error = check_rate_limit("form_submit") if check_rate_limit else (True, None)
+        if not rate_allowed:
+            st.error(f"🚦 {rate_error}")
+            return
+        
         _save_interface_settings(
             streamlit_theme=streamlit_theme,
             streamlit_port=streamlit_port,
@@ -588,6 +637,12 @@ def _render_backup_settings(config):
         )
         
         if st.button("📤 Export Data"):
+            # Check rate limit for database operations
+            db_rate_allowed, db_rate_error = check_rate_limit("db_read") if check_rate_limit else (True, None)
+            if not db_rate_allowed:
+                st.error(f"🚦 Database {db_rate_error}")
+                return
+            
             with st.spinner("Exporting data..."):
                 success, file_path = _export_data(export_options, export_format, config)
                 
@@ -623,6 +678,12 @@ def _render_backup_settings(config):
             )
             
             if st.button("📥 Import Data"):
+                # Check rate limit for database operations
+                db_rate_allowed, db_rate_error = check_rate_limit("db_write") if check_rate_limit else (True, None)
+                if not db_rate_allowed:
+                    st.error(f"🚦 Database {db_rate_error}")
+                    return
+                
                 with st.spinner("Importing data..."):
                     success = _import_data(uploaded_file, import_options)
                     

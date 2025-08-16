@@ -78,5 +78,10 @@ task_timer.db
 *.tmp
 *_cache.json
 
-# Streamlit cache
-.streamlit_cache/.streamlit/secrets.toml
+# Streamlit cache (CRITICAL CLEANUP)
+.streamlit_cache/
+.streamlit/
+*.streamlit_cache
+**/streamlit_cache/
+**/.streamlit_cache/
+.streamlit/secrets.toml

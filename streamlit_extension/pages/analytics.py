@@ -45,11 +45,16 @@ except ImportError:
 # Local imports
 try:
     from streamlit_extension.utils.database import DatabaseManager
-    from streamlit_extension.utils.auth import require_authentication
+    from streamlit_extension.utils.security import (
+        create_safe_client, sanitize_display, validate_form, check_rate_limit,
+        security_manager
+    )
     from streamlit_extension.config import load_config
     DATABASE_UTILS_AVAILABLE = True
 except ImportError:
     DatabaseManager = load_config = None
+    create_safe_client = sanitize_display = validate_form = None
+    check_rate_limit = security_manager = None
     DATABASE_UTILS_AVAILABLE = False
 
 try:
@@ -196,6 +201,12 @@ def optimize_database_queries(db_manager: DatabaseManager, days: int, filters: D
                 if filters.get("selected_session_types"):
                     session_query_filters["session_types"] = filters["selected_session_types"]
 
+            # Check rate limit for database read
+            db_read_allowed, db_read_error = check_rate_limit("db_read") if check_rate_limit else (True, None)
+            if not db_read_allowed:
+                st.error(f"🚦 Database {db_read_error}")
+                return {"error": "Database rate limited"}
+            
             query_results["timer_sessions"] = db_manager.get_timer_sessions(days)
 
             # Query 2: Get tasks with pre-filtering
@@ -224,11 +235,17 @@ def optimize_database_queries(db_manager: DatabaseManager, days: int, filters: D
         }
 
 
-@require_authentication
 def render_analytics_page():
     """Render the analytics dashboard page."""
     if not STREAMLIT_AVAILABLE:
         return {"error": "Streamlit not available"}
+
+    # Check rate limit for page load
+    page_rate_allowed, page_rate_error = check_rate_limit("page_load") if check_rate_limit else (True, None)
+    if not page_rate_allowed:
+        st.error(f"🚦 {page_rate_error}")
+        st.info("Please wait before reloading the page.")
+        return {"error": "Rate limited"}
 
     st.title("📊 Analytics Dashboard")
     st.markdown("---")

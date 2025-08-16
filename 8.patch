@@ -1,0 +1,355 @@
+ (cd "$(git rev-parse --show-toplevel)" && git apply --3way <<'EOF' 
+diff --git a/migrations/001_add_missing_columns.sql b/migrations/001_add_missing_columns.sql
+new file mode 100644
+index 0000000000000000000000000000000000000000..ed9736a0f73570d2d67b8915bf704766ab373c8f
+--- /dev/null
++++ b/migrations/001_add_missing_columns.sql
+@@ -0,0 +1,24 @@
++-- Migration: Add missing columns identified in report.md
++-- Date: 2025-01-15
++-- Description: Add points_value, due_date, icon columns to framework_epics table
++
++-- Add points_value column for epic scoring
++ALTER TABLE framework_epics 
++ADD COLUMN points_value INTEGER DEFAULT 0;
++
++-- Add due_date column for deadline tracking
++ALTER TABLE framework_epics 
++ADD COLUMN due_date TEXT;
++
++-- Add icon column for visual identification
++ALTER TABLE framework_epics 
++ADD COLUMN icon TEXT DEFAULT '📋';
++
++-- Update existing records with default values
++UPDATE framework_epics 
++SET points_value = COALESCE(points_earned, 0)
++WHERE points_value IS NULL;
++
++-- Add constraints
++CREATE INDEX idx_epics_due_date ON framework_epics(due_date);
++CREATE INDEX idx_epics_points_value ON framework_epics(points_value);
+diff --git a/migrations/002_create_indexes.sql b/migrations/002_create_indexes.sql
+new file mode 100644
+index 0000000000000000000000000000000000000000..40d5ef62c140f68245a08997083f90e57472df0b
+--- /dev/null
++++ b/migrations/002_create_indexes.sql
+@@ -0,0 +1,19 @@
++-- Migration: Create performance indexes
++-- Date: 2025-01-15
++-- Description: Add indexes for heavy queries identified in report.md
++
++-- Client search optimization
++CREATE INDEX idx_clients_name_search ON framework_clients(name);
++CREATE INDEX idx_clients_status_active ON framework_clients(status) WHERE status = 'active';
++
++-- Project filtering optimization
++CREATE INDEX idx_projects_client_status ON framework_projects(client_id, status);
++CREATE INDEX idx_projects_created_date ON framework_projects(created_at);
++
++-- Epic progress calculation optimization
++CREATE INDEX idx_epics_project_status ON framework_epics(project_id, status);
++CREATE INDEX idx_epics_progress_calc ON framework_epics(project_id, status, points_earned);
++
++-- Task query optimization
++CREATE INDEX idx_tasks_epic_status ON framework_tasks(epic_id, status);
++CREATE INDEX idx_tasks_tdd_phase ON framework_tasks(tdd_phase, status);
+diff --git a/migrations/003_data_cleanup.sql b/migrations/003_data_cleanup.sql
+new file mode 100644
+index 0000000000000000000000000000000000000000..00281c2f1e8f887e24ddac154e7ef4fff8ed39ad
+--- /dev/null
++++ b/migrations/003_data_cleanup.sql
+@@ -0,0 +1,17 @@
++-- Migration: Data cleanup and normalization
++-- Date: 2025-01-15
++-- Description: Clean up data inconsistencies
++
++-- Normalize status values
++UPDATE framework_clients SET status = 'active' WHERE status IN ('Active', 'ACTIVE');
++UPDATE framework_projects SET status = 'active' WHERE status IN ('Active', 'ACTIVE');
++UPDATE framework_epics SET status = 'active' WHERE status IN ('Active', 'ACTIVE');
++
++-- Clean up null/empty values
++UPDATE framework_epics SET icon = '📋' WHERE icon IS NULL OR icon = '';
++UPDATE framework_tasks SET estimate_minutes = 60 WHERE estimate_minutes IS NULL OR estimate_minutes = 0;
++
++-- Ensure referential integrity
++DELETE FROM framework_projects WHERE client_id NOT IN (SELECT id FROM framework_clients);
++DELETE FROM framework_epics WHERE project_id NOT IN (SELECT id FROM framework_projects);
++DELETE FROM framework_tasks WHERE epic_id NOT IN (SELECT id FROM framework_epics);
+diff --git a/streamlit_extension/utils/migrator.py b/streamlit_extension/utils/migrator.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..b7121622c7b1ac5419adcef1bfa5463607c4223f
+--- /dev/null
++++ b/streamlit_extension/utils/migrator.py
+@@ -0,0 +1,172 @@
++"""
++🔄 Database Migration System
++
++Enterprise-grade migration management:
++- Version tracking
++- Rollback capabilities
++- Dry-run mode
++- Migration validation
++- Backup before migration
++- Progress tracking
++"""
++from __future__ import annotations
++
++import os
++import shutil
++import sqlite3
++from dataclasses import dataclass
++from datetime import datetime
++from typing import List, Optional
++
++
++@dataclass
++class Migration:
++    """Individual migration representation."""
++
++    version: int
++    name: str
++    sql_file: str
++    description: str = ""
++    executed_at: Optional[str] = None
++    rollback_sql: Optional[str] = None
++
++
++class MigrationManager:
++    """Manages database migrations with version control."""
++
++    def __init__(self, db_path: str, migrations_dir: str = "migrations"):
++        """Initialize migration manager."""
++        self.db_path = db_path
++        self.migrations_dir = migrations_dir
++        os.makedirs(self.migrations_dir, exist_ok=True)
++        self.create_migration_table()
++
++    # database helpers
++    def _connect(self):
++        return sqlite3.connect(self.db_path)
++
++    def create_migration_table(self):
++        """Create migrations tracking table."""
++        with self._connect() as conn:
++            conn.execute(
++                """
++                CREATE TABLE IF NOT EXISTS migrations (
++                    version INTEGER PRIMARY KEY,
++                    name TEXT NOT NULL,
++                    description TEXT,
++                    executed_at TEXT NOT NULL
++                )
++                """
++            )
++            conn.commit()
++
++    # information helpers
++    def get_current_version(self) -> int:
++        """Get current database schema version."""
++        with self._connect() as conn:
++            cur = conn.execute("SELECT MAX(version) FROM migrations")
++            row = cur.fetchone()
++            return row[0] if row and row[0] is not None else 0
++
++    def _discover_migration_files(self) -> List[str]:
++        files = []
++        for name in os.listdir(self.migrations_dir):
++            if name.endswith(".sql") and name[:3].isdigit():
++                files.append(name)
++        return sorted(files)
++
++    def get_pending_migrations(self) -> List[Migration]:
++        """Get list of pending migrations."""
++        current_version = self.get_current_version()
++        migrations: List[Migration] = []
++        for fname in self._discover_migration_files():
++            version = int(fname.split("_", 1)[0])
++            if version > current_version:
++                migrations.append(
++                    Migration(version=version, name=fname, sql_file=os.path.join(self.migrations_dir, fname))
++                )
++        return migrations
++
++    def get_applied_migrations(self) -> List[Migration]:
++        """Get list of applied migrations."""
++        with self._connect() as conn:
++            cur = conn.execute("SELECT version, name, description, executed_at FROM migrations ORDER BY version")
++            rows = cur.fetchall()
++        result = []
++        for row in rows:
++            result.append(
++                Migration(version=row[0], name=row[1], sql_file="", description=row[2] or "", executed_at=row[3])
++            )
++        return result
++
++    def validate_migration(self, migration: Migration) -> bool:
++        """Validate migration before execution."""
++        return os.path.isfile(migration.sql_file)
++
++    def backup_database(self) -> str:
++        """Create database backup before migration."""
++        current_version = self.get_current_version()
++        timestamp = datetime.utcnow().strftime("%Y%m%d%H%M%S")
++        backup_path = f"{self.db_path}.backup.v{current_version}.{timestamp}"
++        shutil.copy2(self.db_path, backup_path)
++        return backup_path
++
++    def _run_sql_file(self, conn: sqlite3.Connection, sql_path: str) -> None:
++        with open(sql_path, "r", encoding="utf-8") as f:
++            conn.executescript(f.read())
++
++    def execute_migration(self, migration: Migration, dry_run: bool = False) -> None:
++        """Execute single migration with validation."""
++        if not self.validate_migration(migration):
++            raise FileNotFoundError(migration.sql_file)
++
++        if dry_run:
++            # in dry run, just attempt to parse SQL
++            with open(migration.sql_file, "r", encoding="utf-8") as f:
++                f.read()
++            return
++
++        # backup before executing
++        self.backup_database()
++
++        with self._connect() as conn:
++            self._run_sql_file(conn, migration.sql_file)
++            conn.execute(
++                "INSERT INTO migrations(version, name, description, executed_at) VALUES (?, ?, ?, ?)",
++                (
++                    migration.version,
++                    migration.name,
++                    migration.description,
++                    datetime.utcnow().isoformat(),
++                ),
++            )
++            conn.commit()
++
++    def execute_pending_migrations(self, dry_run: bool = False) -> List[Migration]:
++        """Execute all pending migrations."""
++        executed = []
++        for migration in self.get_pending_migrations():
++            self.execute_migration(migration, dry_run=dry_run)
++            if not dry_run:
++                executed.append(migration)
++        return executed
++
++    def rollback_migration(self, target_version: int) -> None:
++        """Rollback to specific version."""
++        backup_candidates = [
++            f
++            for f in os.listdir(os.path.dirname(self.db_path))
++            if f.startswith(os.path.basename(self.db_path) + f".backup.v{target_version}")
++        ]
++        if not backup_candidates:
++            raise FileNotFoundError("Backup for target version not found")
++        backup_path = os.path.join(os.path.dirname(self.db_path), sorted(backup_candidates)[-1])
++        shutil.copy2(backup_path, self.db_path)
++
++    def generate_migration_report(self) -> dict:
++        """Generate migration status report."""
++        return {
++            "current_version": self.get_current_version(),
++            "applied": [m.version for m in self.get_applied_migrations()],
++            "pending": [m.version for m in self.get_pending_migrations()],
++        }
+diff --git a/tests/test_migrations.py b/tests/test_migrations.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..72691eac4df3f28dc22a8e7963223cf288a4c21a
+--- /dev/null
++++ b/tests/test_migrations.py
+@@ -0,0 +1,89 @@
++"""Test database migration system."""
++import os
++import sqlite3
++import tempfile
++import shutil
++import sys
++sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
++
++from streamlit_extension.utils.migrator import MigrationManager
++
++
++def _create_initial_schema(conn: sqlite3.Connection) -> None:
++    cur = conn.cursor()
++    cur.execute("CREATE TABLE framework_clients (id INTEGER PRIMARY KEY, name TEXT, status TEXT);")
++    cur.execute(
++        "CREATE TABLE framework_projects (id INTEGER PRIMARY KEY, client_id INTEGER, status TEXT, created_at TEXT);"
++    )
++    cur.execute(
++        "CREATE TABLE framework_epics (id INTEGER PRIMARY KEY, project_id INTEGER, status TEXT, points_earned INTEGER);"
++    )
++    cur.execute(
++        "CREATE TABLE framework_tasks (id INTEGER PRIMARY KEY, epic_id INTEGER, status TEXT, tdd_phase TEXT, estimate_minutes INTEGER);"
++    )
++    conn.commit()
++
++
++class TestMigrationManager:
++    def setup_method(self):
++        self.tmpdir = tempfile.mkdtemp()
++        self.db_path = os.path.join(self.tmpdir, "test.db")
++        conn = sqlite3.connect(self.db_path)
++        _create_initial_schema(conn)
++        conn.close()
++        # migrations directory relative to repo root
++        self.migrations_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "migrations"))
++
++    def teardown_method(self):
++        shutil.rmtree(self.tmpdir)
++
++    def test_migration_discovery(self):
++        """Test migration file discovery."""
++        manager = MigrationManager(self.db_path, migrations_dir=self.migrations_dir)
++        pending = manager.get_pending_migrations()
++        assert pending, "No migrations discovered"
++        assert pending[0].version == 1
++
++    def test_version_tracking(self):
++        """Test migration version tracking."""
++        manager = MigrationManager(self.db_path, migrations_dir=self.migrations_dir)
++        manager.execute_pending_migrations()
++        assert manager.get_current_version() >= 3
++
++    def test_migration_execution(self):
++        """Test migration execution with rollback."""
++        manager = MigrationManager(self.db_path, migrations_dir=self.migrations_dir)
++        manager.execute_pending_migrations()
++        conn = sqlite3.connect(self.db_path)
++        cur = conn.cursor()
++        cur.execute("PRAGMA table_info(framework_epics)")
++        columns = {row[1] for row in cur.fetchall()}
++        conn.close()
++        assert {"points_value", "due_date", "icon"}.issubset(columns)
++        manager.rollback_migration(0)
++        conn = sqlite3.connect(self.db_path)
++        cur = conn.cursor()
++        cur.execute("PRAGMA table_info(framework_epics)")
++        columns = {row[1] for row in cur.fetchall()}
++        conn.close()
++        assert "points_value" not in columns
++
++    def test_dry_run_mode(self):
++        """Test dry-run migration execution."""
++        manager = MigrationManager(self.db_path, migrations_dir=self.migrations_dir)
++        manager.execute_pending_migrations(dry_run=True)
++        assert manager.get_current_version() == 0
++
++    def test_backup_creation(self):
++        """Test database backup before migration."""
++        manager = MigrationManager(self.db_path, migrations_dir=self.migrations_dir)
++        manager.execute_pending_migrations()
++        backups = [f for f in os.listdir(self.tmpdir) if f.startswith("test.db.backup")] 
++        assert backups, "Backup not created"
++
++    def test_rollback_functionality(self):
++        """Test migration rollback."""
++        manager = MigrationManager(self.db_path, migrations_dir=self.migrations_dir)
++        manager.execute_pending_migrations()
++        manager.rollback_migration(0)
++        assert manager.get_current_version() == 0
+ 
+EOF
+)

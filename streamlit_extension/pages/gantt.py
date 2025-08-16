@@ -46,9 +46,15 @@ except ImportError:
 try:
     from streamlit_extension.utils.database import DatabaseManager
     from streamlit_extension.config import load_config
+    from streamlit_extension.utils.security import (
+        create_safe_client, sanitize_display, validate_form, check_rate_limit,
+        security_manager
+    )
     DATABASE_UTILS_AVAILABLE = True
 except ImportError:
     DatabaseManager = load_config = None
+    create_safe_client = sanitize_display = validate_form = None
+    check_rate_limit = security_manager = None
     DATABASE_UTILS_AVAILABLE = False
 
 try:
@@ -63,6 +69,13 @@ def render_gantt_page():
     """Render the Gantt chart page."""
     if not STREAMLIT_AVAILABLE:
         return {"error": "Streamlit not available"}
+    
+    # Check rate limit for page load
+    page_rate_allowed, page_rate_error = check_rate_limit("page_load") if check_rate_limit else (True, None)
+    if not page_rate_allowed:
+        st.error(f"🚦 {page_rate_error}")
+        st.info("Please wait before reloading the page.")
+        return {"error": "Rate limited"}
     
     st.title("📊 Gantt Chart - Project Timeline")
     st.markdown("---")
@@ -193,6 +206,12 @@ def _get_gantt_data(db_manager: DatabaseManager) -> Dict[str, Any]:
             st.warning(f"⚠️ Gantt tracker error: {e}. Using database fallback.")
     
     # Fallback to database queries
+    # Check rate limit for database read
+    db_read_allowed, db_read_error = check_rate_limit("db_read") if check_rate_limit else (True, None)
+    if not db_read_allowed:
+        st.error(f"🚦 Database {db_read_error}")
+        return {"error": "Database rate limited"}
+    
     epics = db_manager.get_epics()
     tasks = db_manager.get_tasks()
     
@@ -613,6 +632,12 @@ def _render_data_setup_help():
     """)
     
     if st.button("🔄 Refresh Data"):
+        # Check rate limit for form submission
+        rate_allowed, rate_error = check_rate_limit("form_submit") if check_rate_limit else (True, None)
+        if not rate_allowed:
+            st.error(f"🚦 {rate_error}")
+            return
+        
         st.rerun()
 
 

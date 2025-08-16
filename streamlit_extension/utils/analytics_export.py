@@ -58,9 +58,10 @@ except ImportError:
 try:
     from .analytics_integration import StreamlitAnalyticsEngine, AnalyticsReport
     from .database import DatabaseManager
+    from .security import security_manager
     ANALYTICS_AVAILABLE = True
 except ImportError:
-    StreamlitAnalyticsEngine = AnalyticsReport = DatabaseManager = None
+    StreamlitAnalyticsEngine = AnalyticsReport = DatabaseManager = security_manager = None
     ANALYTICS_AVAILABLE = False
 
 
@@ -587,6 +588,10 @@ def render_analytics_export_ui(db_manager: DatabaseManager) -> None:
     
     # Configuration form
     with st.form("export_config_form"):
+        # Generate CSRF token for form protection
+        csrf_form_id = "analytics_export_form"
+        csrf_field = security_manager.get_csrf_form_field(csrf_form_id) if security_manager else None
+        
         col1, col2 = st.columns(2)
         
         with col1:
@@ -667,6 +672,15 @@ def render_analytics_export_ui(db_manager: DatabaseManager) -> None:
         generate_report = st.form_submit_button("📊 Generate Report", type="primary")
     
     if generate_report:
+        # CSRF Protection
+        if csrf_field and security_manager:
+            csrf_valid, csrf_error = security_manager.require_csrf_protection(
+                csrf_form_id, csrf_field.get("token_value")
+            )
+            if not csrf_valid:
+                st.error(f"🔒 Security Error: {csrf_error}")
+                return
+        
         # Create export configuration
         config = ExportConfig(
             format=ExportFormat(export_format),

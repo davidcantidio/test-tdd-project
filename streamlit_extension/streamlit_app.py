@@ -76,29 +76,42 @@ try:
     from streamlit_extension.utils.database import DatabaseManager
     from streamlit_extension.utils.auth import GoogleOAuthManager, require_authentication, render_user_menu, get_authenticated_user
     from streamlit_extension.config import load_config, load_config
+    
+    # Import global exception handler
+    from streamlit_extension.utils.exception_handler import (
+        install_global_exception_handler, handle_streamlit_exceptions, 
+        streamlit_error_boundary, safe_streamlit_operation,
+        show_error_dashboard, get_error_statistics
+    )
+    EXCEPTION_HANDLER_AVAILABLE = True
 except ImportError as e:
+    EXCEPTION_HANDLER_AVAILABLE = False
     st.error(f"❌ Import Error: {e}")
     st.error("Make sure to run from the project root directory")
     st.stop()
 
 
+@handle_streamlit_exceptions(show_error=True, attempt_recovery=True)
 def initialize_session_state():
     """Initialize Streamlit session state variables."""
     
+    # Install global exception handler on first run
+    if EXCEPTION_HANDLER_AVAILABLE and "exception_handler_installed" not in st.session_state:
+        install_global_exception_handler()
+        st.session_state.exception_handler_installed = True
+    
     # Core app state
     if "config" not in st.session_state:
-        try:
+        with streamlit_error_boundary("configuration_loading"):
             st.session_state.config = load_config()
-        except Exception as e:
-            st.error(f"❌ Configuration Error: {e}")
-            st.stop()
     
     if "db_manager" not in st.session_state:
-        config = st.session_state.config
-        st.session_state.db_manager = DatabaseManager(
-            framework_db_path=str(config.get_database_path()),
-            timer_db_path=str(config.get_timer_database_path())
-        )
+        with streamlit_error_boundary("database_initialization"):
+            config = st.session_state.config
+            st.session_state.db_manager = DatabaseManager(
+                framework_db_path=str(config.get_database_path()),
+                timer_db_path=str(config.get_timer_database_path())
+            )
     
     # Timer component
     if "timer_component" not in st.session_state:
@@ -114,7 +127,8 @@ def initialize_session_state():
     
     # Database health
     if "db_health_check" not in st.session_state:
-        st.session_state.db_health_check = st.session_state.db_manager.check_database_health()
+        with streamlit_error_boundary("database_health_check"):
+            st.session_state.db_health_check = st.session_state.db_manager.check_database_health()
     
     # Dashboard preferences
     if "dashboard_view_mode" not in st.session_state:
@@ -288,7 +302,12 @@ def render_enhanced_epic_cards():
             st.write(f"- Timer DB Exists: {db_manager.timer_db_path.exists()}")
     
     try:
-        epics = db_manager.get_epics()
+        with streamlit_error_boundary("get_epics"):
+            epics = safe_streamlit_operation(
+                db_manager.get_epics,
+                default_return=[],
+                operation_name="get_epics"
+            )
         
         if not epics:
             st.info("📝 No epics found. Create your first epic to get started!")
@@ -310,8 +329,21 @@ def render_enhanced_epic_cards():
 
             try:
                 with st.expander(f"**{epic_name}** - Epic {epic.get('epic_key', 'N/A')}", expanded=False):
-                    # Get progress with robust error handling
-                    progress = db_manager.get_epic_progress(epic_id)
+                    # Get progress with robust error handling and error boundary
+                    with streamlit_error_boundary(f"epic_progress_{epic_id}"):
+                        progress = safe_streamlit_operation(
+                            db_manager.get_epic_progress, 
+                            epic_id,
+                            default_return={
+                                "progress_percentage": 0,
+                                "total_tasks": 0,
+                                "completed_tasks": 0,
+                                "in_progress_tasks": 0,
+                                "points_earned": 0
+                            },
+                            operation_name=f"get_epic_progress_{epic_id}"
+                        )
+                    
                     print(f"DEBUG: Progress received: {progress}, type: {type(progress)}")
                     
                     # SAFEGUARD: Ensure progress structure is valid
@@ -650,13 +682,23 @@ def render_debug_panel():
         st.write(list(st.session_state.keys()))
         
         st.markdown("#### Cache Statistics")
-        cache_stats = st.session_state.db_manager.get_cache_stats()
-        st.json(cache_stats)
+        with streamlit_error_boundary("cache_stats"):
+            cache_stats = safe_streamlit_operation(
+                st.session_state.db_manager.get_cache_stats,
+                default_return={"error": "Unable to retrieve cache stats"},
+                operation_name="get_cache_stats"
+            )
+            st.json(cache_stats)
+        
+        # Error monitoring dashboard
+        if EXCEPTION_HANDLER_AVAILABLE:
+            st.markdown("#### Error Monitoring")
+            show_error_dashboard()
 
 
-@require_authentication
+@handle_streamlit_exceptions(show_error=True, attempt_recovery=True)
 def main():
-    """Main application entry point with enhanced dashboard."""
+    """Main application entry point with centralized authentication gateway."""
     
     # Check if running in headless mode
     if not STREAMLIT_AVAILABLE:
@@ -664,59 +706,99 @@ def main():
         print("Run 'streamlit run streamlit_app.py' for full UI")
         return
     
-    # Initialize session state
-    initialize_session_state()
+    # Initialize session state with error boundary
+    with streamlit_error_boundary("session_initialization"):
+        initialize_session_state()
     
     # Initialize authentication manager
-    try:
-        auth_manager = GoogleOAuthManager()
-    except Exception as e:
-        st.error(f"❌ Authentication initialization failed: {e}")
-        st.stop()
+    with streamlit_error_boundary("authentication_initialization"):
+        auth_manager = safe_streamlit_operation(
+            GoogleOAuthManager,
+            default_return=None,
+            operation_name="auth_manager_init"
+        )
+        
+        if auth_manager is None:
+            st.error("❌ Authentication initialization failed")
+            st.stop()
+    
+    # 🔐 CENTRALIZED AUTHENTICATION GATEWAY
+    # Check authentication status - if not authenticated, show login page
+    if not auth_manager.is_authenticated():
+        render_landing_login_page(auth_manager)
+        return
+    
+    # ✅ USER IS AUTHENTICATED - Proceed with full application
     
     # Check database connectivity
-    health = st.session_state.db_health_check
-    if not health["framework_db_connected"]:
-        st.error("❌ **Database Connection Error**")
-        st.error("Cannot connect to framework.db. Please check:")
-        st.code("python database_maintenance.py health")
-        
-        with st.expander("🔧 Database Health Details"):
-            st.json(health)
-        
-        st.stop()
+    with streamlit_error_boundary("database_health_validation"):
+        health = st.session_state.db_health_check
+        if not health.get("framework_db_connected", False):
+            st.error("❌ **Database Connection Error**")
+            st.error("Cannot connect to framework.db. Please check:")
+            st.code("python database_maintenance.py health")
+            
+            with st.expander("🔧 Database Health Details"):
+                st.json(health)
+            
+            st.stop()
     
     # Render sidebar
-    sidebar_state = render_sidebar()
+    with streamlit_error_boundary("sidebar_rendering"):
+        sidebar_state = safe_streamlit_operation(
+            render_sidebar,
+            default_return={},
+            operation_name="render_sidebar"
+        )
     
     # Render user menu in sidebar
-    render_user_menu(auth_manager)
+    with streamlit_error_boundary("user_menu_rendering"):
+        safe_streamlit_operation(
+            render_user_menu,
+            auth_manager,
+            operation_name="render_user_menu"
+        )
     
     # Page navigation logic
     current_page = st.session_state.get("current_page", "Dashboard")
     
     # Import page registry and functions
-    try:
-        from streamlit_extension.pages import PAGE_REGISTRY, render_page
-        
-        # Render the appropriate page
-        if current_page == "Dashboard" or current_page not in PAGE_REGISTRY:
-            # Render main dashboard
-            render_main_dashboard()
-        else:
-            # Render selected page
-            page_result = render_page(current_page)
-            if page_result and "error" in page_result:
-                st.error(f"❌ Error loading page: {page_result['error']}")
-                # Fallback to dashboard
-                st.session_state.current_page = "Dashboard"
+    with streamlit_error_boundary("page_system_loading"):
+        try:
+            from streamlit_extension.pages import PAGE_REGISTRY, render_page
+            
+            # Render the appropriate page
+            if current_page == "Dashboard" or current_page not in PAGE_REGISTRY:
+                # Render main dashboard
+                with streamlit_error_boundary("main_dashboard_rendering"):
+                    render_main_dashboard()
+            else:
+                # Render selected page
+                with streamlit_error_boundary(f"page_rendering_{current_page}"):
+                    page_result = safe_streamlit_operation(
+                        render_page,
+                        current_page,
+                        default_return={"error": "Page rendering failed"},
+                        operation_name=f"render_page_{current_page}"
+                    )
+                    
+                    if page_result and "error" in page_result:
+                        st.error(f"❌ Error loading page: {page_result['error']}")
+                        # Fallback to dashboard
+                        st.session_state.current_page = "Dashboard"
+                        with streamlit_error_boundary("fallback_dashboard_rendering"):
+                            render_main_dashboard()
+        except ImportError as e:
+            st.error(f"❌ Page system not available: {e}")
+            with streamlit_error_boundary("fallback_dashboard_rendering"):
                 render_main_dashboard()
-    except ImportError as e:
-        st.error(f"❌ Page system not available: {e}")
-        render_main_dashboard()
     
     # Footer
-    render_footer()
+    with streamlit_error_boundary("footer_rendering"):
+        safe_streamlit_operation(
+            render_footer,
+            operation_name="render_footer"
+        )
 
 
 def render_main_dashboard():
@@ -762,6 +844,155 @@ def render_main_dashboard():
         
         # Debug panel (if enabled)
         render_debug_panel()
+
+
+def render_landing_login_page(auth_manager):
+    """Render the centralized landing page with authentication."""
+    
+    # Full-screen landing page design
+    st.markdown("""
+        <style>
+        .main-header {
+            text-align: center;
+            padding: 2rem 0;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-radius: 10px;
+            margin-bottom: 2rem;
+        }
+        .feature-card {
+            background: #f8f9fa;
+            padding: 1.5rem;
+            border-radius: 8px;
+            border-left: 4px solid #667eea;
+            margin-bottom: 1rem;
+        }
+        </style>
+    """, unsafe_allow_html=True)
+    
+    # Main header
+    st.markdown("""
+        <div class="main-header">
+            <h1>🚀 TDD Framework</h1>
+            <p style="font-size: 1.2em; margin: 0;">Advanced Development Environment for Test-Driven Development</p>
+            <p style="opacity: 0.9; margin: 0.5rem 0 0 0;">Enterprise-Grade Security • Real-time Analytics • TDAH Support</p>
+        </div>
+    """, unsafe_allow_html=True)
+    
+    # Handle OAuth callback
+    query_params = st.query_params
+    
+    if 'code' in query_params and 'state' in query_params:
+        with st.spinner("🔄 Authenticating with Google..."):
+            try:
+                auth_code = query_params['code']
+                state = query_params['state']
+                
+                # Handle OAuth callback
+                session_data = auth_manager.handle_callback(auth_code, state)
+                
+                # Clear query parameters and redirect
+                st.query_params.clear()
+                st.success(f"✅ Welcome, {session_data['user_info']['name']}!")
+                st.balloons()
+                st.rerun()
+                
+            except Exception as e:
+                st.error(f"❌ Authentication failed: {e}")
+                st.query_params.clear()
+                st.rerun()
+    
+    else:
+        # Two-column layout
+        col1, col2 = st.columns([1, 1])
+        
+        with col1:
+            st.markdown("## 🔐 Secure Access Required")
+            st.markdown("Please authenticate with your Google account to access the TDD Framework.")
+            
+            # Login button (centered)
+            col_login1, col_login2, col_login3 = st.columns([0.5, 1, 0.5])
+            with col_login2:
+                if st.button("🔗 Sign in with Google", use_container_width=True, type="primary"):
+                    with st.spinner("🔄 Redirecting to Google..."):
+                        try:
+                            auth_url, state = auth_manager.get_authorization_url()
+                            
+                            # JavaScript redirect to OAuth URL
+                            st.markdown(
+                                f"""
+                                <meta http-equiv="refresh" content="0; url={auth_url}">
+                                <script>
+                                    window.location.href = "{auth_url}";
+                                </script>
+                                """,
+                                unsafe_allow_html=True
+                            )
+                            
+                        except Exception as e:
+                            st.error(f"❌ Failed to initiate authentication: {e}")
+            
+            # Security info
+            with st.expander("🛡️ Security & Privacy", expanded=False):
+                st.markdown("""
+                **Enterprise-Grade Security:**
+                - ✅ Google OAuth 2.0 Authentication
+                - ✅ CSRF Protection Active
+                - ✅ XSS Prevention Enabled
+                - ✅ Rate Limiting Protection
+                - ✅ Encrypted Session Management
+                
+                **Privacy Commitment:**
+                - We only access basic profile information
+                - No passwords are stored locally
+                - You can revoke access anytime
+                - All data transmission is encrypted
+                """)
+        
+        with col2:
+            st.markdown("## ⚡ Features Waiting for You")
+            
+            # Feature cards
+            features = [
+                {
+                    "icon": "📋",
+                    "title": "Kanban Board",
+                    "desc": "Visual task management with TDD phase tracking"
+                },
+                {
+                    "icon": "⏱️",
+                    "title": "Focus Timer",
+                    "desc": "TDAH-optimized Pomodoro technique with analytics"
+                },
+                {
+                    "icon": "📊",
+                    "title": "Analytics Dashboard",
+                    "desc": "Real-time productivity insights and trends"
+                },
+                {
+                    "icon": "👥",
+                    "title": "Client Management",
+                    "desc": "Professional client and project tracking"
+                },
+                {
+                    "icon": "🎮",
+                    "title": "Gamification",
+                    "desc": "Achievement system and progress rewards"
+                },
+                {
+                    "icon": "🔄",
+                    "title": "GitHub Integration",
+                    "desc": "Seamless synchronization with your repositories"
+                }
+            ]
+            
+            for feature in features:
+                st.markdown(f"""
+                    <div class="feature-card">
+                        <h4>{feature['icon']} {feature['title']}</h4>
+                        <p style="margin: 0; color: #666;">{feature['desc']}</p>
+                    </div>
+                """, unsafe_allow_html=True)
 
 
 def render_footer():

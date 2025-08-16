@@ -1,0 +1,252 @@
+# Prometheus Alert Rules for TDD Framework
+# 
+# These rules define alerts for:
+# - High error rates
+# - Performance degradation
+# - Security incidents
+# - System resource issues
+# - Application availability
+
+groups:
+  - name: tdd_framework_performance
+    interval: 30s
+    rules:
+      # High Error Rate Alert
+      - alert: HighErrorRate
+        expr: rate(tdd_framework_errors_total[5m]) > 0.1
+        for: 2m
+        labels:
+          severity: warning
+          service: tdd-framework
+        annotations:
+          summary: "High error rate detected"
+          description: "Error rate is {{ $value }} errors/second for {{ $labels.component }}"
+          runbook_url: "https://docs.tddframework.dev/runbooks/high-error-rate"
+
+      # Critical Error Rate Alert
+      - alert: CriticalErrorRate
+        expr: rate(tdd_framework_errors_total[5m]) > 0.5
+        for: 1m
+        labels:
+          severity: critical
+          service: tdd-framework
+        annotations:
+          summary: "Critical error rate detected"
+          description: "Error rate is {{ $value }} errors/second for {{ $labels.component }}"
+          runbook_url: "https://docs.tddframework.dev/runbooks/critical-error-rate"
+
+      # High Response Time Alert
+      - alert: HighResponseTime
+        expr: histogram_quantile(0.95, rate(tdd_framework_request_duration_seconds_bucket[5m])) > 2.0
+        for: 5m
+        labels:
+          severity: warning
+          service: tdd-framework
+        annotations:
+          summary: "High response time detected"
+          description: "95th percentile response time is {{ $value }}s for {{ $labels.endpoint }}"
+          runbook_url: "https://docs.tddframework.dev/runbooks/high-response-time"
+
+      # Very High Response Time Alert
+      - alert: VeryHighResponseTime
+        expr: histogram_quantile(0.95, rate(tdd_framework_request_duration_seconds_bucket[5m])) > 5.0
+        for: 2m
+        labels:
+          severity: critical
+          service: tdd-framework
+        annotations:
+          summary: "Very high response time detected"
+          description: "95th percentile response time is {{ $value }}s for {{ $labels.endpoint }}"
+          runbook_url: "https://docs.tddframework.dev/runbooks/very-high-response-time"
+
+      # Low Cache Hit Ratio Alert
+      - alert: LowCacheHitRatio
+        expr: tdd_framework_cache_hit_ratio < 0.7
+        for: 10m
+        labels:
+          severity: warning
+          service: tdd-framework
+        annotations:
+          summary: "Low cache hit ratio"
+          description: "Cache hit ratio is {{ $value | humanizePercentage }}"
+          runbook_url: "https://docs.tddframework.dev/runbooks/low-cache-hit-ratio"
+
+  - name: tdd_framework_security
+    interval: 30s
+    rules:
+      # High Security Events Alert
+      - alert: HighSecurityEvents
+        expr: rate(tdd_framework_security_events_total[5m]) > 0.5
+        for: 1m
+        labels:
+          severity: warning
+          service: tdd-framework
+        annotations:
+          summary: "High security event rate"
+          description: "Security event rate is {{ $value }} events/second for {{ $labels.event_type }}"
+          runbook_url: "https://docs.tddframework.dev/runbooks/high-security-events"
+
+      # Critical Security Events Alert
+      - alert: CriticalSecurityEvents
+        expr: increase(tdd_framework_security_events_total{severity="critical"}[5m]) > 0
+        for: 0m
+        labels:
+          severity: critical
+          service: tdd-framework
+        annotations:
+          summary: "Critical security event detected"
+          description: "{{ $value }} critical security events in the last 5 minutes"
+          runbook_url: "https://docs.tddframework.dev/runbooks/critical-security-events"
+
+      # Failed Authentication Attempts
+      - alert: HighFailedAuthAttempts
+        expr: rate(tdd_framework_auth_attempts_total{status="failed"}[5m]) > 0.2
+        for: 2m
+        labels:
+          severity: warning
+          service: tdd-framework
+        annotations:
+          summary: "High failed authentication rate"
+          description: "Failed authentication rate is {{ $value }} attempts/second"
+          runbook_url: "https://docs.tddframework.dev/runbooks/high-failed-auth"
+
+      # Brute Force Attack Detection
+      - alert: BruteForceAttack
+        expr: rate(tdd_framework_auth_attempts_total{status="failed"}[1m]) > 1.0
+        for: 30s
+        labels:
+          severity: critical
+          service: tdd-framework
+        annotations:
+          summary: "Potential brute force attack"
+          description: "{{ $value }} failed login attempts per second"
+          runbook_url: "https://docs.tddframework.dev/runbooks/brute-force-attack"
+
+  - name: tdd_framework_system
+    interval: 60s
+    rules:
+      # High Memory Usage Alert
+      - alert: HighMemoryUsage
+        expr: tdd_framework_memory_usage_bytes / 1024 / 1024 / 1024 > 2.0
+        for: 5m
+        labels:
+          severity: warning
+          service: tdd-framework
+        annotations:
+          summary: "High memory usage"
+          description: "Memory usage is {{ $value | humanize }}GB"
+          runbook_url: "https://docs.tddframework.dev/runbooks/high-memory-usage"
+
+      # High CPU Usage Alert
+      - alert: HighCPUUsage
+        expr: tdd_framework_cpu_usage_percent > 80
+        for: 5m
+        labels:
+          severity: warning
+          service: tdd-framework
+        annotations:
+          summary: "High CPU usage"
+          description: "CPU usage is {{ $value | humanizePercentage }}"
+          runbook_url: "https://docs.tddframework.dev/runbooks/high-cpu-usage"
+
+      # Too Many Database Connections
+      - alert: HighDatabaseConnections
+        expr: tdd_framework_database_connections > 50
+        for: 3m
+        labels:
+          severity: warning
+          service: tdd-framework
+        annotations:
+          summary: "High database connection count"
+          description: "{{ $value }} active database connections"
+          runbook_url: "https://docs.tddframework.dev/runbooks/high-db-connections"
+
+      # Too Many Active Sessions
+      - alert: HighActiveSessions
+        expr: tdd_framework_active_sessions > 100
+        for: 5m
+        labels:
+          severity: warning
+          service: tdd-framework
+        annotations:
+          summary: "High active session count"
+          description: "{{ $value }} active user sessions"
+          runbook_url: "https://docs.tddframework.dev/runbooks/high-active-sessions"
+
+  - name: tdd_framework_availability
+    interval: 30s
+    rules:
+      # Application Down Alert
+      - alert: ApplicationDown
+        expr: up{job="tdd-framework"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: tdd-framework
+        annotations:
+          summary: "TDD Framework application is down"
+          description: "The TDD Framework application has been down for more than 1 minute"
+          runbook_url: "https://docs.tddframework.dev/runbooks/application-down"
+
+      # Metrics Endpoint Down
+      - alert: MetricsEndpointDown
+        expr: up{job="tdd-framework", instance="localhost:8000"} == 0
+        for: 2m
+        labels:
+          severity: warning
+          service: tdd-framework
+        annotations:
+          summary: "Metrics endpoint unreachable"
+          description: "The metrics endpoint has been unreachable for more than 2 minutes"
+          runbook_url: "https://docs.tddframework.dev/runbooks/metrics-endpoint-down"
+
+      # Low Request Rate (possible issue)
+      - alert: LowRequestRate
+        expr: rate(tdd_framework_requests_total[10m]) < 0.01
+        for: 15m
+        labels:
+          severity: info
+          service: tdd-framework
+        annotations:
+          summary: "Very low request rate"
+          description: "Request rate is {{ $value }} requests/second over the last 10 minutes"
+          runbook_url: "https://docs.tddframework.dev/runbooks/low-request-rate"
+
+  - name: tdd_framework_business_logic
+    interval: 60s
+    rules:
+      # High Failed Client Creation Rate
+      - alert: HighFailedClientCreation
+        expr: rate(tdd_framework_errors_total{component="client_management", error_type="creation_failed"}[10m]) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+          service: tdd-framework
+        annotations:
+          summary: "High client creation failure rate"
+          description: "Client creation failure rate is {{ $value }} failures/second"
+          runbook_url: "https://docs.tddframework.dev/runbooks/client-creation-failures"
+
+      # Database Operation Failures
+      - alert: DatabaseOperationFailures
+        expr: rate(tdd_framework_errors_total{component="database"}[5m]) > 0.05
+        for: 3m
+        labels:
+          severity: warning
+          service: tdd-framework
+        annotations:
+          summary: "High database operation failure rate"
+          description: "Database operation failure rate is {{ $value }} failures/second"
+          runbook_url: "https://docs.tddframework.dev/runbooks/database-operation-failures"
+
+      # Long Running Operations
+      - alert: LongRunningOperations
+        expr: histogram_quantile(0.99, rate(tdd_framework_request_duration_seconds_bucket{endpoint=~".*create.*|.*update.*"}[5m])) > 10.0
+        for: 2m
+        labels:
+          severity: warning
+          service: tdd-framework
+        annotations:
+          summary: "Long running CRUD operations"
+          description: "99th percentile for {{ $labels.endpoint }} is {{ $value }}s"
+          runbook_url: "https://docs.tddframework.dev/runbooks/long-running-operations"
