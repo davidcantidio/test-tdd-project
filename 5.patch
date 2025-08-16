@@ -1,304 +1,556 @@
  (cd "$(git rev-parse --show-toplevel)" && git apply --3way <<'EOF' 
-diff --git a/streamlit_extension/utils/pagination.py b/streamlit_extension/utils/pagination.py
+diff --git a/streamlit_extension/middleware/__init__.py b/streamlit_extension/middleware/__init__.py
 new file mode 100644
-index 0000000000000000000000000000000000000000..14ff93970e6ebcefe788d58e5ed77d716ad9f734
+index 0000000000000000000000000000000000000000..cd61c06fc084b9f7b6c51ee21a60acbf8f139eb3
 --- /dev/null
-+++ b/streamlit_extension/utils/pagination.py
-@@ -0,0 +1,170 @@
-+"""
-+📄 Pagination System - Enterprise Large Dataset Management
++++ b/streamlit_extension/middleware/__init__.py
+@@ -0,0 +1 @@
++"""Middleware package for the Streamlit extension."""
+diff --git a/streamlit_extension/middleware/rate_limiting/__init__.py b/streamlit_extension/middleware/rate_limiting/__init__.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..e8848a76df3007389d1a7d032cf769e45e9c7b34
+--- /dev/null
++++ b/streamlit_extension/middleware/rate_limiting/__init__.py
+@@ -0,0 +1,6 @@
++"""Rate limiting middleware and utilities."""
 +
-+Resolves report.md bottleneck: Heavy SQL queries without pagination.
-+Features:
-+- LIMIT/OFFSET pagination for all database operations
-+- Configurable page sizes (10, 25, 50, 100, 250)
-+- Thread-safe page tracking
-+- Performance metrics
-+- Integration with existing DatabaseManager
-+- Streamlit UI components for pagination controls
-+"""
++from .core import RateLimiter
++from .middleware import RateLimitingMiddleware
++
++__all__ = ["RateLimiter", "RateLimitingMiddleware"]
+diff --git a/streamlit_extension/middleware/rate_limiting/algorithms.py b/streamlit_extension/middleware/rate_limiting/algorithms.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..1419a5781d0c7ea3f3215e769132ef79d3c93e32
+--- /dev/null
++++ b/streamlit_extension/middleware/rate_limiting/algorithms.py
+@@ -0,0 +1,76 @@
++"""Collection of rate limiting algorithm implementations."""
 +
 +from __future__ import annotations
 +
 +import time
-+import threading
++from collections import deque
++from typing import Deque
++
++
++class TokenBucketRateLimiter:
++    """Simple token bucket implementation."""
++
++    def __init__(self, capacity: int, refill_rate: float, refill_period: float = 1.0) -> None:
++        self.capacity = capacity
++        self.refill_rate = refill_rate
++        self.refill_period = refill_period
++        self.tokens = float(capacity)
++        self.last_refill = time.time()
++
++    def _refill_tokens(self) -> None:
++        now = time.time()
++        elapsed = now - self.last_refill
++        tokens_to_add = (elapsed / self.refill_period) * self.refill_rate
++        if tokens_to_add > 0:
++            self.tokens = min(self.capacity, self.tokens + tokens_to_add)
++            self.last_refill = now
++
++    def is_allowed(self, tokens_requested: int = 1) -> bool:
++        """Return True if the requested number of tokens is available."""
++        self._refill_tokens()
++        if self.tokens >= tokens_requested:
++            self.tokens -= tokens_requested
++            return True
++        return False
++
++
++class SlidingWindowRateLimiter:
++    """Sliding window implementation tracking individual request timestamps."""
++
++    def __init__(self, window_size: int, max_requests: int) -> None:
++        self.window_size = window_size
++        self.max_requests = max_requests
++        self.requests: Deque[float] = deque()
++
++    def is_allowed(self, timestamp: float | None = None) -> bool:
++        if timestamp is None:
++            timestamp = time.time()
++        cutoff = timestamp - self.window_size
++        while self.requests and self.requests[0] <= cutoff:
++            self.requests.popleft()
++        if len(self.requests) < self.max_requests:
++            self.requests.append(timestamp)
++            return True
++        return False
++
++
++class FixedWindowRateLimiter:
++    """Fixed window counter implementation."""
++
++    def __init__(self, window_size: int, max_requests: int) -> None:
++        self.window_size = window_size
++        self.max_requests = max_requests
++        self.window_start = int(time.time())
++        self.counter = 0
++
++    def is_allowed(self, timestamp: float | None = None) -> bool:
++        if timestamp is None:
++            timestamp = time.time()
++        current_window = int(timestamp) // self.window_size
++        if current_window != self.window_start:
++            self.window_start = current_window
++            self.counter = 0
++        if self.counter < self.max_requests:
++            self.counter += 1
++            return True
++        return False
+diff --git a/streamlit_extension/middleware/rate_limiting/core.py b/streamlit_extension/middleware/rate_limiting/core.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..542c6545416d840f4439069fde765c4559c005bc
+--- /dev/null
++++ b/streamlit_extension/middleware/rate_limiting/core.py
+@@ -0,0 +1,119 @@
++"""Core rate limiting engine supporting multiple strategies."""
++
++from __future__ import annotations
++
++import time
 +from dataclasses import dataclass
-+from typing import Callable, Any, Iterable, Dict, List, Optional, Tuple
++from typing import Dict, Optional
 +
-+# Graceful Streamlit import
-+try:  # pragma: no cover - import check
-+    import streamlit as st
-+    STREAMLIT_AVAILABLE = True
-+except Exception:  # pragma: no cover - environment without streamlit
-+    st = None  # type: ignore
-+    STREAMLIT_AVAILABLE = False
-+
-+
-+class PaginationConfig:
-+    """Pagination configuration and constants."""
-+
-+    DEFAULT_PAGE_SIZE = 25
-+    PAGE_SIZES = [10, 25, 50, 100, 250]
-+    MAX_PAGE_SIZE = 1000
++from .algorithms import (
++    FixedWindowRateLimiter,
++    SlidingWindowRateLimiter,
++    TokenBucketRateLimiter,
++)
++from .policies import ENDPOINT_LIMITS, USER_TIER_LIMITS
++from .storage import MemoryRateLimitStorage
 +
 +
 +@dataclass
-+class PaginationResult:
-+    """Pagination result with metadata."""
-+
-+    data: Iterable[Any]
-+    page: int
-+    page_size: int
-+    total_count: int
-+
-+    def __post_init__(self) -> None:
-+        if self.total_count == 0:
-+            self.total_pages = 0
-+            self.has_next = False
-+            self.has_previous = False
-+            self.start_index = 0
-+            self.end_index = 0
-+        else:
-+            self.total_pages = (self.total_count + self.page_size - 1) // self.page_size
-+            self.has_next = self.page < self.total_pages
-+            self.has_previous = self.page > 1
-+            self.start_index = (self.page - 1) * self.page_size + 1
-+            self.end_index = min(self.page * self.page_size, self.total_count)
++class RateLimitResult:
++    allowed: bool
++    reason: Optional[str] = None
 +
 +
-+class PaginationManager:
-+    """Enterprise pagination manager for large datasets."""
++class RateLimiter:
++    """High level rate limiter handling IP, user and endpoint limits."""
 +
 +    def __init__(self) -> None:
-+        self._lock = threading.Lock()
-+        self.last_query_time: float = 0.0
-+        self.query_history: List[float] = []
++        self.storage = MemoryRateLimitStorage()
++        self.limiters: Dict[str, object] = {}
 +
-+    def paginate_query(
++    # ------------------------------------------------------------------
++    # Helper parsing utilities
++    # ------------------------------------------------------------------
++    @staticmethod
++    def _parse_rate(rate: str) -> tuple[int, int]:
++        """Return (count, period_in_seconds) from a rate string."""
++        count_part, _, rest = rate.partition(" per ")
++        count = int(count_part.strip())
++        amount_str, unit = rest.strip().split()
++        amount = int(amount_str)
++        unit = unit.lower()
++        if unit.startswith("second"):
++            period = amount
++        elif unit.startswith("minute"):
++            period = amount * 60
++        elif unit.startswith("hour"):
++            period = amount * 3600
++        else:
++            period = amount * 86400
++        return count, period
++
++    @staticmethod
++    def _match_endpoint(endpoint: str) -> Optional[Dict[str, str]]:
++        if endpoint in ENDPOINT_LIMITS:
++            return ENDPOINT_LIMITS[endpoint]
++        for pattern, config in ENDPOINT_LIMITS.items():
++            if pattern.endswith("*") and endpoint.startswith(pattern[:-1]):
++                return config
++        return None
++
++    # ------------------------------------------------------------------
++    # Rate limit checks
++    # ------------------------------------------------------------------
++    def check_user_rate_limit(self, user_id: str, tier: str) -> bool:
++        limits = USER_TIER_LIMITS.get(tier, USER_TIER_LIMITS["free"])
++        rpm = limits.get("requests_per_minute", -1)
++        if rpm < 0:
++            return True
++        key = f"user:{user_id}"
++        limiter = self.limiters.get(key)
++        if limiter is None:
++            limiter = TokenBucketRateLimiter(capacity=rpm, refill_rate=rpm / 60)
++            self.limiters[key] = limiter
++        return limiter.is_allowed()
++
++    def check_ip_rate_limit(self, ip: str) -> bool:
++        key = f"ip:{ip}"
++        limiter = self.limiters.get(key)
++        if limiter is None:
++            limiter = SlidingWindowRateLimiter(window_size=60, max_requests=100)
++            self.limiters[key] = limiter
++        return limiter.is_allowed()
++
++    def check_endpoint_rate_limit(self, endpoint: str) -> bool:
++        config = self._match_endpoint(endpoint)
++        if not config:
++            return True
++        count, period = self._parse_rate(config["rate_limit"])
++        alg = config.get("algorithm", "sliding_window")
++        key = f"endpoint:{endpoint}"
++        limiter = self.limiters.get(key)
++        if limiter is None:
++            if alg == "token_bucket":
++                refill_rate = count / period
++                burst = config.get("burst_capacity", count)
++                limiter = TokenBucketRateLimiter(capacity=burst, refill_rate=refill_rate, refill_period=1)
++            elif alg == "fixed_window":
++                limiter = FixedWindowRateLimiter(window_size=period, max_requests=count)
++            else:
++                limiter = SlidingWindowRateLimiter(window_size=period, max_requests=count)
++            self.limiters[key] = limiter
++        return limiter.is_allowed()
++
++    # ------------------------------------------------------------------
++    def is_allowed(
 +        self,
-+        query_func: Callable[..., Tuple[Iterable[Any], int]],
-+        page: int = 1,
-+        page_size: int = PaginationConfig.DEFAULT_PAGE_SIZE,
-+        **kwargs: Any,
-+    ) -> PaginationResult:
-+        """Apply pagination to any query function.
-+
-+        Args:
-+            query_func: Function accepting ``limit`` and ``offset`` and returning
-+                ``(data, total_count)``.
-+            page: 1-based page number.
-+            page_size: Number of items per page.
-+            **kwargs: Additional keyword arguments passed to ``query_func``.
-+
-+        Returns:
-+            PaginationResult containing paginated data and metadata.
-+        """
-+
-+        if page < 1:
-+            raise ValueError("page must be >= 1")
-+        if page_size < 1 or page_size > PaginationConfig.MAX_PAGE_SIZE:
-+            raise ValueError(
-+                f"page_size must be between 1 and {PaginationConfig.MAX_PAGE_SIZE}"
-+            )
-+
-+        offset = (page - 1) * page_size
-+
-+        start = time.perf_counter()
-+        data, total_count = query_func(limit=page_size, offset=offset, **kwargs)
-+        end = time.perf_counter()
-+        elapsed = (end - start) * 1000.0  # milliseconds
-+
-+        with self._lock:
-+            self.last_query_time = elapsed
-+            self.query_history.append(elapsed)
-+
-+        return PaginationResult(data=data, page=page, page_size=page_size, total_count=total_count)
-+
-+    def get_page_info(self, total_count: int, page: int, page_size: int) -> Dict[str, int]:
-+        """Get pagination metadata."""
-+
-+        result = PaginationResult([], page, page_size, total_count)
-+        return {
-+            "total_pages": result.total_pages,
-+            "has_next": int(result.has_next),
-+            "has_previous": int(result.has_previous),
-+            "start_index": result.start_index,
-+            "end_index": result.end_index,
-+        }
-+
-+    def generate_page_numbers(
-+        self, current_page: int, total_pages: int, window: int = 5
-+    ) -> List[int]:
-+        """Generate page number list for UI."""
-+
-+        start_page = max(1, current_page - window)
-+        end_page = min(total_pages, current_page + window)
-+        return list(range(start_page, end_page + 1))
-+
-+    def render_streamlit_pagination(
-+        self, pagination_result: PaginationResult, key_prefix: str = "pagination"
-+    ) -> Optional[Dict[str, Any]]:
-+        """Render Streamlit pagination controls."""
-+
-+        if not STREAMLIT_AVAILABLE:  # pragma: no cover - handled in tests via patch
-+            return None
-+
-+        st.write(
-+            f"Showing {pagination_result.start_index}-{pagination_result.end_index} "
-+            f"of {pagination_result.total_count}"
-+        )
-+        cols = st.columns(3)
-+        prev = cols[0].button(
-+            "Previous", key=f"{key_prefix}_prev", disabled=not pagination_result.has_previous
-+        )
-+        page_input = cols[1].number_input(
-+            "Page",
-+            min_value=1,
-+            max_value=max(1, pagination_result.total_pages),
-+            value=pagination_result.page,
-+            key=f"{key_prefix}_page",
-+        )
-+        next_ = cols[2].button(
-+            "Next", key=f"{key_prefix}_next", disabled=not pagination_result.has_next
-+        )
-+        page_size = st.selectbox(
-+            "Page size",
-+            PaginationConfig.PAGE_SIZES,
-+            index=PaginationConfig.PAGE_SIZES.index(pagination_result.page_size)
-+            if pagination_result.page_size in PaginationConfig.PAGE_SIZES
-+            else 0,
-+            key=f"{key_prefix}_size",
-+        )
-+        return {
-+            "prev": prev,
-+            "next": next_,
-+            "page": int(page_input),
-+            "page_size": int(page_size),
-+        }
-diff --git a/tests/test_pagination.py b/tests/test_pagination.py
++        ip: Optional[str] = None,
++        user_id: Optional[str] = None,
++        tier: str = "free",
++        endpoint: str = "/",
++    ) -> RateLimitResult:
++        """Return a RateLimitResult for the given request details."""
++        if ip and not self.check_ip_rate_limit(ip):
++            return RateLimitResult(False, "ip")
++        if user_id and not self.check_user_rate_limit(user_id, tier):
++            return RateLimitResult(False, "user")
++        if endpoint and not self.check_endpoint_rate_limit(endpoint):
++            return RateLimitResult(False, "endpoint")
++        return RateLimitResult(True)
+diff --git a/streamlit_extension/middleware/rate_limiting/middleware.py b/streamlit_extension/middleware/rate_limiting/middleware.py
 new file mode 100644
-index 0000000000000000000000000000000000000000..c1cbbc5ea6164e6cca5844ac2e14b014ed5e1778
+index 0000000000000000000000000000000000000000..8798e9e4e9cc830893b2a2f3d39ba7cb772a928e
 --- /dev/null
-+++ b/tests/test_pagination.py
-@@ -0,0 +1,118 @@
-+"""Test suite for pagination system with edge cases."""
++++ b/streamlit_extension/middleware/rate_limiting/middleware.py
+@@ -0,0 +1,47 @@
++"""Simple middleware integrating rate limiting and DoS protection."""
++
++from __future__ import annotations
++
++from dataclasses import dataclass
++from typing import Any, Dict, Optional
++
++from .core import RateLimiter
++from streamlit_extension.utils.dos_protection import DoSProtectionSystem
++
++
++@dataclass
++class MiddlewareResponse:
++    allowed: bool
++    status_code: int = 200
++    message: str = ""
++
++
++class RateLimitingMiddleware:
++    """Process requests enforcing DoS protection and rate limits."""
++
++    def __init__(self, config: Optional[Dict[str, Any]] = None) -> None:
++        self.rate_limiter = RateLimiter()
++        self.dos = DoSProtectionSystem()
++
++    def extract_request_info(self, request: Dict[str, Any]) -> Dict[str, Any]:
++        """Extract minimal request information."""
++        return {
++            "ip": request.get("ip"),
++            "user_id": request.get("user_id"),
++            "tier": request.get("tier", "free"),
++            "endpoint": request.get("endpoint", "/"),
++        }
++
++    def process_request(self, request: Dict[str, Any]) -> MiddlewareResponse:
++        info = self.extract_request_info(request)
++        if not self.dos.record_request(info["ip"]):
++            return MiddlewareResponse(False, 429, "DoS attack detected")
++        result = self.rate_limiter.is_allowed(
++            ip=info["ip"],
++            user_id=info["user_id"],
++            tier=info["tier"],
++            endpoint=info["endpoint"],
++        )
++        if not result.allowed:
++            return MiddlewareResponse(False, 429, f"Rate limit exceeded ({result.reason})")
++        return MiddlewareResponse(True)
+diff --git a/streamlit_extension/middleware/rate_limiting/policies.py b/streamlit_extension/middleware/rate_limiting/policies.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..925262603ecb98dac6fb413b26ab81d0efd69e55
+--- /dev/null
++++ b/streamlit_extension/middleware/rate_limiting/policies.py
+@@ -0,0 +1,23 @@
++"""Rate limiting policy definitions."""
++
++USER_TIER_LIMITS = {
++    "free": {
++        "requests_per_minute": 60,
++    },
++    "premium": {
++        "requests_per_minute": 300,
++    },
++    "enterprise": {
++        "requests_per_minute": 1000,
++    },
++    "admin": {
++        "requests_per_minute": -1,
++    },
++}
++
++ENDPOINT_LIMITS = {
++    "/api/auth/login": {"rate_limit": "5 per 5 minutes", "algorithm": "sliding_window"},
++    "/api/client/create": {"rate_limit": "10 per minute", "algorithm": "token_bucket", "burst_capacity": 3},
++    "/api/search": {"rate_limit": "100 per minute", "algorithm": "sliding_window"},
++    "/api/bulk/*": {"rate_limit": "1 per 10 seconds", "algorithm": "fixed_window"},
++}
+diff --git a/streamlit_extension/middleware/rate_limiting/storage.py b/streamlit_extension/middleware/rate_limiting/storage.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..a1fed6c494e9404983b8b36186240de658c1b216
+--- /dev/null
++++ b/streamlit_extension/middleware/rate_limiting/storage.py
+@@ -0,0 +1,36 @@
++"""Storage backends for rate limiting state."""
++
++from __future__ import annotations
++
++import threading
++import time
++from typing import Any, Dict
++
++
++class MemoryRateLimitStorage:
++    """In-memory storage suitable for tests and single process usage."""
++
++    def __init__(self) -> None:
++        self.data: Dict[str, Dict[str, Any]] = {}
++        self.lock = threading.RLock()
++
++    def get_bucket_state(self, key: str) -> Dict[str, Any]:
++        with self.lock:
++            return self.data.get(key, {"tokens": 0.0, "last_refill": time.time()})
++
++    def update_bucket_state(self, key: str, tokens: float, last_refill: float) -> None:
++        with self.lock:
++            self.data[key] = {"tokens": tokens, "last_refill": last_refill}
++
++    def increment(self, key: str, timestamp: float) -> int:
++        """Increment sliding window counter and return current count."""
++        with self.lock:
++            window = self.data.setdefault(key, {"timestamps": []})["timestamps"]
++            window.append(timestamp)
++            return len(window)
++
++    def prune(self, key: str, cutoff: float) -> None:
++        with self.lock:
++            window = self.data.setdefault(key, {"timestamps": []})["timestamps"]
++            while window and window[0] <= cutoff:
++                window.pop(0)
+diff --git a/streamlit_extension/utils/dos_protection.py b/streamlit_extension/utils/dos_protection.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..c7d8280802d32c5b3ee87e6f3e5bfc2e163c9b63
+--- /dev/null
++++ b/streamlit_extension/utils/dos_protection.py
+@@ -0,0 +1,31 @@
++"""Very small DoS protection helper used by the middleware tests."""
++
++from __future__ import annotations
 +
 +import time
-+import sys
-+from pathlib import Path
-+from typing import List, Tuple
++from typing import Dict
 +
-+import pytest
++from streamlit_extension.middleware.rate_limiting.algorithms import SlidingWindowRateLimiter
 +
-+sys.path.append(str(Path(__file__).resolve().parent.parent))
 +
-+from streamlit_extension.utils.pagination import (
-+    PaginationManager,
-+    PaginationResult,
-+    PaginationConfig,
++class DoSProtectionSystem:
++    """Detects suspicious request rates from individual IPs."""
++
++    def __init__(self, threshold: int = 100, window: int = 60) -> None:
++        self.threshold = threshold
++        self.window = window
++        self.limiters: Dict[str, SlidingWindowRateLimiter] = {}
++
++    def record_request(self, ip: str | None, timestamp: float | None = None) -> bool:
++        """Record a request and return True if under threshold."""
++        if ip is None:
++            return True
++        limiter = self.limiters.get(ip)
++        if limiter is None:
++            limiter = SlidingWindowRateLimiter(self.window, self.threshold)
++            self.limiters[ip] = limiter
++        return limiter.is_allowed(timestamp)
++
++    def detect_attack(self, ip: str | None) -> bool:
++        """Return True if the request rate for the IP is suspicious."""
++        return not self.record_request(ip)
+diff --git a/streamlit_extension/utils/fair_usage.py b/streamlit_extension/utils/fair_usage.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..ff15e9340f2754cb40cc4e1ce3b2dc5c719d6dfe
+--- /dev/null
++++ b/streamlit_extension/utils/fair_usage.py
+@@ -0,0 +1,29 @@
++"""Utility to monitor resource usage per user."""
++
++from __future__ import annotations
++
++from dataclasses import dataclass
++from typing import Dict
++
++
++@dataclass
++class UsageAssessment:
++    current_usage: int
++    quota: int
++    percentage: float
++    is_fair: bool
++
++
++class FairUsageMonitor:
++    """Track usage for users and compare against quotas."""
++
++    def __init__(self) -> None:
++        self.usage: Dict[str, Dict[str, int]] = {}
++
++    def add_usage(self, user_id: str, resource: str, amount: int = 1) -> None:
++        self.usage.setdefault(user_id, {})[resource] = self.usage.setdefault(user_id, {}).get(resource, 0) + amount
++
++    def check_fair_usage(self, user_id: str, resource: str, quota: int) -> UsageAssessment:
++        current = self.usage.setdefault(user_id, {}).get(resource, 0)
++        percentage = (current / quota) * 100 if quota else 0.0
++        return UsageAssessment(current, quota, percentage, percentage <= 100)
+diff --git a/streamlit_extension/utils/rate_limiter.py b/streamlit_extension/utils/rate_limiter.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..ee4c5364933fd396ea0f4b6f9852d4522f83d85e
+--- /dev/null
++++ b/streamlit_extension/utils/rate_limiter.py
+@@ -0,0 +1,16 @@
++"""Convenience wrapper exposing a singleton rate limiter."""
++
++from __future__ import annotations
++
++from streamlit_extension.middleware.rate_limiting.core import RateLimiter
++from streamlit_extension.utils.dos_protection import DoSProtectionSystem
++
++_rate_limiter = RateLimiter()
++_dos = DoSProtectionSystem()
++
++
++def is_request_allowed(ip: str | None, user_id: str | None, tier: str, endpoint: str) -> bool:
++    """Check whether a request should be processed."""
++    if _dos.detect_attack(ip):
++        return False
++    return _rate_limiter.is_allowed(ip=ip, user_id=user_id, tier=tier, endpoint=endpoint).allowed
+diff --git a/tests/test_dos_protection.py b/tests/test_dos_protection.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..500a367b4ca11913bfae1c68ae5739e050e6f9d2
+--- /dev/null
++++ b/tests/test_dos_protection.py
+@@ -0,0 +1,13 @@
++"""Tests for the tiny DoS protection helper."""
++
++from streamlit_extension.utils.dos_protection import DoSProtectionSystem
++
++
++def test_attack_detection():
++    dos = DoSProtectionSystem(threshold=3, window=60)
++    ip = "1.2.3.4"
++    assert dos.record_request(ip)
++    assert dos.record_request(ip)
++    assert dos.record_request(ip)
++    assert not dos.record_request(ip)
++    assert dos.detect_attack(ip)
+diff --git a/tests/test_rate_limiting_comprehensive.py b/tests/test_rate_limiting_comprehensive.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..50c55f105041361ad15d5aeaada8e52d6cbf85d5
+--- /dev/null
++++ b/tests/test_rate_limiting_comprehensive.py
+@@ -0,0 +1,83 @@
++"""Comprehensive tests for the lightweight rate limiting system."""
++
++from __future__ import annotations
++
++import time
++
++from streamlit_extension.middleware.rate_limiting.algorithms import (
++    SlidingWindowRateLimiter,
++    TokenBucketRateLimiter,
 +)
++from streamlit_extension.middleware.rate_limiting.core import RateLimiter
 +
 +
-+# Helper query function
-+def list_query(data: List[int]) -> callable:
-+    def _query(limit: int, offset: int) -> Tuple[List[int], int]:
-+        sliced = data[offset : offset + limit]
-+        return sliced, len(data)
++# ---------------------------------------------------------------------------
++# Algorithm tests
++# ---------------------------------------------------------------------------
 +
-+    return _query
++def test_token_bucket_algorithm():
++    limiter = TokenBucketRateLimiter(capacity=2, refill_rate=1, refill_period=1)
++    assert limiter.is_allowed()
++    assert limiter.is_allowed()
++    assert not limiter.is_allowed()
++    time.sleep(1.1)
++    assert limiter.is_allowed()
 +
 +
-+class TestPaginationManager:
-+    def test_basic_pagination(self):
-+        """Test basic pagination functionality."""
-+        data = list(range(100))
-+        manager = PaginationManager()
-+        result = manager.paginate_query(list_query(data), page=2, page_size=10)
++def test_sliding_window_algorithm():
++    limiter = SlidingWindowRateLimiter(window_size=3, max_requests=2)
++    assert limiter.is_allowed(timestamp=1000)
++    assert limiter.is_allowed(timestamp=1001)
++    assert not limiter.is_allowed(timestamp=1002)
++    assert limiter.is_allowed(timestamp=1004)
 +
-+        assert isinstance(result, PaginationResult)
-+        assert list(result.data) == list(range(10, 20))
-+        assert result.page == 2
-+        assert result.page_size == 10
-+        assert result.total_count == 100
-+        assert result.total_pages == 10
-+        assert result.has_next is True
-+        assert result.has_previous is True
-+        assert result.start_index == 11
-+        assert result.end_index == 20
 +
-+    def test_edge_cases(self):
-+        """Test edge cases: empty results, single page, large datasets."""
-+        manager = PaginationManager()
++# ---------------------------------------------------------------------------
++# Policy enforcement
++# ---------------------------------------------------------------------------
 +
-+        # Empty dataset
-+        empty_result = manager.paginate_query(list_query([]), page=1, page_size=10)
-+        assert empty_result.total_pages == 0
-+        assert empty_result.start_index == 0
-+        assert empty_result.end_index == 0
++def test_user_tier_enforcement():
++    rl = RateLimiter()
++    for _ in range(60):
++        assert rl.is_allowed(user_id="u1", tier="free").allowed
++    assert not rl.is_allowed(user_id="u1", tier="free").allowed
 +
-+        # Single page dataset
-+        single_data = list(range(5))
-+        single_result = manager.paginate_query(list_query(single_data), page=1, page_size=10)
-+        assert single_result.total_pages == 1
-+        assert single_result.has_next is False
-+        assert single_result.has_previous is False
 +
-+        # Large dataset
-+        large_data = list(range(1000))
-+        large_result = manager.paginate_query(list_query(large_data), page=5, page_size=100)
-+        assert list(large_result.data) == list(range(400, 500))
-+        assert large_result.total_pages == 10
++def test_endpoint_specific_limits():
++    rl = RateLimiter()
++    endpoint = "/api/auth/login"
++    for _ in range(5):
++        assert rl.is_allowed(endpoint=endpoint).allowed
++    assert not rl.is_allowed(endpoint=endpoint).allowed
 +
-+    def test_performance_large_datasets(self):
-+        """Test performance with large datasets."""
-+        data = list(range(10000))
-+        manager = PaginationManager()
-+        start = time.perf_counter()
-+        manager.paginate_query(list_query(data), page=1, page_size=50)
-+        elapsed = (time.perf_counter() - start) * 1000
-+        assert elapsed < 100, f"Pagination took too long: {elapsed}ms"
 +
-+    def test_streamlit_integration(self, monkeypatch):
-+        """Test Streamlit UI component integration."""
-+        manager = PaginationManager()
-+        result = PaginationResult(data=[], page=1, page_size=10, total_count=100)
++# ---------------------------------------------------------------------------
++# Burst and progressive penalties
++# ---------------------------------------------------------------------------
 +
-+        # Create dummy streamlit object
-+        class DummyStreamlit:
-+            def __init__(self):
-+                self.calls = []
++class ProgressiveRateLimiter:
++    """Simple progressive penalty helper."""
 +
-+            def write(self, *args, **kwargs):
-+                self.calls.append("write")
++    def __init__(self) -> None:
++        self.violations = {}
++        self.delays = [1, 5, 15]
 +
-+            def columns(self, n):
-+                return [self, self, self]
++    def record_violation(self, ident: str) -> None:
++        self.violations[ident] = self.violations.get(ident, 0) + 1
 +
-+            def button(self, *args, **kwargs):
-+                self.calls.append("button")
-+                return False
++    def get_delay(self, ident: str) -> int:
++        count = self.violations.get(ident, 0)
++        if count == 0:
++            return 0
++        idx = min(count - 1, len(self.delays) - 1)
++        return self.delays[idx]
 +
-+            def number_input(self, *args, **kwargs):
-+                self.calls.append("number_input")
-+                return 1
 +
-+            def selectbox(self, *args, **kwargs):
-+                self.calls.append("selectbox")
-+                return 10
-+
-+        dummy = DummyStreamlit()
-+        monkeypatch.setattr(
-+            "streamlit_extension.utils.pagination.st", dummy, raising=False
-+        )
-+        monkeypatch.setattr(
-+            "streamlit_extension.utils.pagination.STREAMLIT_AVAILABLE", True
-+        )
-+
-+        ui_result = manager.render_streamlit_pagination(result)
-+        assert ui_result is not None
-+        assert set(ui_result.keys()) == {"prev", "next", "page", "page_size"}
-+        assert dummy.calls  # ensure methods were called
-+
++def test_progressive_penalties():
++    prl = ProgressiveRateLimiter()
++    prl.record_violation("a")
++    assert prl.get_delay("a") == 1
++    prl.record_violation("a")
++    assert prl.get_delay("a") == 5
++    prl.record_violation("a")
++    assert prl.get_delay("a") == 15
  
 EOF
 )

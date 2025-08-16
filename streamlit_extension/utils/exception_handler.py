@@ -555,7 +555,6 @@ def handle_streamlit_exceptions(show_error: bool = True, attempt_recovery: bool 
 
 
 @contextmanager
-<<<<<<< ours
 def streamlit_error_boundary(operation_name: str = "operation"):
     """
     Context manager for error boundary around Streamlit operations.

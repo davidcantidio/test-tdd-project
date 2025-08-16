@@ -1,281 +1,304 @@
  (cd "$(git rev-parse --show-toplevel)" && git apply --3way <<'EOF' 
-diff --git a/config/environments/__init__.py b/config/environments/__init__.py
+diff --git a/streamlit_extension/utils/pagination.py b/streamlit_extension/utils/pagination.py
 new file mode 100644
-index 0000000000000000000000000000000000000000..e69de29bb2d1d6434b8b29ae775ad8c2e48c5391
-diff --git a/config/environments/development.py b/config/environments/development.py
-new file mode 100644
-index 0000000000000000000000000000000000000000..3a1401c2fb9ce47cd5beffce46bc1b9039b87ae7
+index 0000000000000000000000000000000000000000..14ff93970e6ebcefe788d58e5ed77d716ad9f734
 --- /dev/null
-+++ b/config/environments/development.py
-@@ -0,0 +1,31 @@
-+"""Development environment configuration."""
-+
-+DATABASE_CONFIG = {
-+    "framework_db_path": "dev_framework.db",
-+    "timer_db_path": "dev_task_timer.db",
-+    "connection_pool_size": 5,
-+    "query_timeout": 30
-+}
-+
-+REDIS_CONFIG = {
-+    "host": "localhost",
-+    "port": 6379,
-+    "db": 0,
-+    "password": None,
-+    "max_connections": 10
-+}
-+
-+SECURITY_CONFIG = {
-+    "enable_csrf": True,
-+    "enable_rate_limiting": True,
-+    "rate_limit_strict": False,
-+    "session_timeout": 3600,
-+    "enable_debug_mode": True
-+}
-+
-+LOGGING_CONFIG = {
-+    "level": "DEBUG",
-+    "format": "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-+    "enable_file_logging": True,
-+    "log_file": "logs/dev_app.log"
-+}
-diff --git a/config/environments/production.py b/config/environments/production.py
-new file mode 100644
-index 0000000000000000000000000000000000000000..88cc776082bba44a3cec6bf43b803f493f6c855e
---- /dev/null
-+++ b/config/environments/production.py
-@@ -0,0 +1,30 @@
-+"""Production environment configuration."""
-+
-+DATABASE_CONFIG = {
-+    "framework_db_path": "${DB_PATH}/framework.db",
-+    "timer_db_path": "${DB_PATH}/task_timer.db",
-+    "connection_pool_size": 20,
-+    "query_timeout": 10,
-+    "enable_backup": True,
-+    "backup_schedule": "0 2 * * *"  # Daily at 2 AM
-+}
-+
-+REDIS_CONFIG = {
-+    "host": "${REDIS_HOST}",
-+    "port": "${REDIS_PORT}",
-+    "db": 0,
-+    "password": "${REDIS_PASSWORD}",
-+    "max_connections": 50,
-+    "connection_pool_timeout": 5,
-+    "ssl": True
-+}
-+
-+SECURITY_CONFIG = {
-+    "enable_csrf": True,
-+    "enable_rate_limiting": True,
-+    "rate_limit_strict": True,
-+    "session_timeout": 900,
-+    "enable_debug_mode": False,
-+    "force_https": True,
-+    "enable_audit_logging": True
-+}
-diff --git a/config/environments/staging.py b/config/environments/staging.py
-new file mode 100644
-index 0000000000000000000000000000000000000000..867a2dd986bea39588dd393489ccd2c2d0bf7a3e
---- /dev/null
-+++ b/config/environments/staging.py
-@@ -0,0 +1,24 @@
-+"""Staging environment configuration."""
-+
-+DATABASE_CONFIG = {
-+    "framework_db_path": "staging_framework.db",
-+    "timer_db_path": "staging_task_timer.db", 
-+    "connection_pool_size": 10,
-+    "query_timeout": 15
-+}
-+
-+REDIS_CONFIG = {
-+    "host": "staging-redis.internal",
-+    "port": 6379,
-+    "db": 1,
-+    "password": "${REDIS_PASSWORD}",
-+    "max_connections": 20
-+}
-+
-+SECURITY_CONFIG = {
-+    "enable_csrf": True,
-+    "enable_rate_limiting": True,
-+    "rate_limit_strict": True,
-+    "session_timeout": 1800,
-+    "enable_debug_mode": False
-+}
-diff --git a/streamlit_extension/config/env_manager.py b/streamlit_extension/config/env_manager.py
-new file mode 100644
-index 0000000000000000000000000000000000000000..c09f1fc4f58691117af4486131525548bb301987
---- /dev/null
-+++ b/streamlit_extension/config/env_manager.py
-@@ -0,0 +1,88 @@
++++ b/streamlit_extension/utils/pagination.py
+@@ -0,0 +1,170 @@
 +"""
-+🌍 Environment Configuration Manager
++📄 Pagination System - Enterprise Large Dataset Management
 +
-+Manages dev/staging/prod configurations with:
-+- Environment variable substitution
-+- Configuration validation
-+- Hot reloading capabilities
-+- Environment detection
-+- Secrets management integration
++Resolves report.md bottleneck: Heavy SQL queries without pagination.
++Features:
++- LIMIT/OFFSET pagination for all database operations
++- Configurable page sizes (10, 25, 50, 100, 250)
++- Thread-safe page tracking
++- Performance metrics
++- Integration with existing DatabaseManager
++- Streamlit UI components for pagination controls
 +"""
 +
 +from __future__ import annotations
 +
-+import importlib
-+import os
-+import re
-+from copy import deepcopy
++import time
++import threading
++from dataclasses import dataclass
++from typing import Callable, Any, Iterable, Dict, List, Optional, Tuple
++
++# Graceful Streamlit import
++try:  # pragma: no cover - import check
++    import streamlit as st
++    STREAMLIT_AVAILABLE = True
++except Exception:  # pragma: no cover - environment without streamlit
++    st = None  # type: ignore
++    STREAMLIT_AVAILABLE = False
 +
 +
-+class EnvironmentManager:
-+    """Manages environment-specific configurations."""
++class PaginationConfig:
++    """Pagination configuration and constants."""
 +
-+    def __init__(self, environment: str | None = None) -> None:
-+        """Initialize with auto-detection or explicit environment."""
-+        self.environment = environment or os.getenv("APP_ENV", "development")
-+        self.config_module = None
-+        self.database_config: dict = {}
-+        self.redis_config: dict = {}
-+        self.security_config: dict = {}
-+        self.load_config()
++    DEFAULT_PAGE_SIZE = 25
++    PAGE_SIZES = [10, 25, 50, 100, 250]
++    MAX_PAGE_SIZE = 1000
 +
-+    def load_config(self) -> None:
-+        """Load configuration for current environment."""
-+        module_name = f"config.environments.{self.environment}"
-+        self.config_module = importlib.import_module(module_name)
-+        self.database_config = deepcopy(getattr(self.config_module, "DATABASE_CONFIG", {}))
-+        self.redis_config = deepcopy(getattr(self.config_module, "REDIS_CONFIG", {}))
-+        self.security_config = deepcopy(getattr(self.config_module, "SECURITY_CONFIG", {}))
 +
-+    def get_database_config(self) -> dict:
-+        """Get database configuration with env var substitution."""
-+        return self.substitute_env_vars(deepcopy(self.database_config))
++@dataclass
++class PaginationResult:
++    """Pagination result with metadata."""
 +
-+    def get_redis_config(self) -> dict:
-+        """Get Redis configuration with env var substitution."""
-+        return self.substitute_env_vars(deepcopy(self.redis_config))
++    data: Iterable[Any]
++    page: int
++    page_size: int
++    total_count: int
 +
-+    def get_security_config(self) -> dict:
-+        """Get security configuration."""
-+        return deepcopy(self.security_config)
-+
-+    def substitute_env_vars(self, config_dict: dict) -> dict:
-+        """Substitute ${VAR} patterns with environment variables."""
-+        pattern = re.compile(r"\$\{([^}]+)\}")
-+        substituted = {}
-+        for key, value in config_dict.items():
-+            if isinstance(value, str):
-+                substituted[key] = pattern.sub(lambda m: os.getenv(m.group(1), ""), value)
-+            elif isinstance(value, dict):
-+                substituted[key] = self.substitute_env_vars(value)
-+            else:
-+                substituted[key] = value
-+        return substituted
-+
-+    def validate_config(self) -> bool:
-+        """Validate configuration completeness and format."""
-+        required = {
-+            "database": ["framework_db_path", "timer_db_path"],
-+            "redis": ["host", "port"],
-+            "security": ["enable_csrf", "enable_rate_limiting"],
-+        }
-+        for name, keys in required.items():
-+            cfg = getattr(self, f"{name}_config", {})
-+            for key in keys:
-+                if key not in cfg:
-+                    raise ValueError(f"Missing {name} config key: {key}")
-+        return True
-+
-+    def reload_config(self) -> None:
-+        """Hot reload configuration from files."""
-+        module_name = f"config.environments.{self.environment}"
-+        if self.config_module and self.config_module.__name__ == module_name:
-+            self.config_module = importlib.reload(self.config_module)
++    def __post_init__(self) -> None:
++        if self.total_count == 0:
++            self.total_pages = 0
++            self.has_next = False
++            self.has_previous = False
++            self.start_index = 0
++            self.end_index = 0
 +        else:
-+            self.config_module = importlib.import_module(module_name)
-+        self.database_config = deepcopy(getattr(self.config_module, "DATABASE_CONFIG", {}))
-+        self.redis_config = deepcopy(getattr(self.config_module, "REDIS_CONFIG", {}))
-+        self.security_config = deepcopy(getattr(self.config_module, "SECURITY_CONFIG", {}))
-diff --git a/tests/test_environment_config.py b/tests/test_environment_config.py
-new file mode 100644
-index 0000000000000000000000000000000000000000..0682f19e1c4b2a515510c3fce42a8c09bf1ad04a
---- /dev/null
-+++ b/tests/test_environment_config.py
-@@ -0,0 +1,71 @@
-+"""Test environment configuration system."""
++            self.total_pages = (self.total_count + self.page_size - 1) // self.page_size
++            self.has_next = self.page < self.total_pages
++            self.has_previous = self.page > 1
++            self.start_index = (self.page - 1) * self.page_size + 1
++            self.end_index = min(self.page * self.page_size, self.total_count)
 +
-+import os
++
++class PaginationManager:
++    """Enterprise pagination manager for large datasets."""
++
++    def __init__(self) -> None:
++        self._lock = threading.Lock()
++        self.last_query_time: float = 0.0
++        self.query_history: List[float] = []
++
++    def paginate_query(
++        self,
++        query_func: Callable[..., Tuple[Iterable[Any], int]],
++        page: int = 1,
++        page_size: int = PaginationConfig.DEFAULT_PAGE_SIZE,
++        **kwargs: Any,
++    ) -> PaginationResult:
++        """Apply pagination to any query function.
++
++        Args:
++            query_func: Function accepting ``limit`` and ``offset`` and returning
++                ``(data, total_count)``.
++            page: 1-based page number.
++            page_size: Number of items per page.
++            **kwargs: Additional keyword arguments passed to ``query_func``.
++
++        Returns:
++            PaginationResult containing paginated data and metadata.
++        """
++
++        if page < 1:
++            raise ValueError("page must be >= 1")
++        if page_size < 1 or page_size > PaginationConfig.MAX_PAGE_SIZE:
++            raise ValueError(
++                f"page_size must be between 1 and {PaginationConfig.MAX_PAGE_SIZE}"
++            )
++
++        offset = (page - 1) * page_size
++
++        start = time.perf_counter()
++        data, total_count = query_func(limit=page_size, offset=offset, **kwargs)
++        end = time.perf_counter()
++        elapsed = (end - start) * 1000.0  # milliseconds
++
++        with self._lock:
++            self.last_query_time = elapsed
++            self.query_history.append(elapsed)
++
++        return PaginationResult(data=data, page=page, page_size=page_size, total_count=total_count)
++
++    def get_page_info(self, total_count: int, page: int, page_size: int) -> Dict[str, int]:
++        """Get pagination metadata."""
++
++        result = PaginationResult([], page, page_size, total_count)
++        return {
++            "total_pages": result.total_pages,
++            "has_next": int(result.has_next),
++            "has_previous": int(result.has_previous),
++            "start_index": result.start_index,
++            "end_index": result.end_index,
++        }
++
++    def generate_page_numbers(
++        self, current_page: int, total_pages: int, window: int = 5
++    ) -> List[int]:
++        """Generate page number list for UI."""
++
++        start_page = max(1, current_page - window)
++        end_page = min(total_pages, current_page + window)
++        return list(range(start_page, end_page + 1))
++
++    def render_streamlit_pagination(
++        self, pagination_result: PaginationResult, key_prefix: str = "pagination"
++    ) -> Optional[Dict[str, Any]]:
++        """Render Streamlit pagination controls."""
++
++        if not STREAMLIT_AVAILABLE:  # pragma: no cover - handled in tests via patch
++            return None
++
++        st.write(
++            f"Showing {pagination_result.start_index}-{pagination_result.end_index} "
++            f"of {pagination_result.total_count}"
++        )
++        cols = st.columns(3)
++        prev = cols[0].button(
++            "Previous", key=f"{key_prefix}_prev", disabled=not pagination_result.has_previous
++        )
++        page_input = cols[1].number_input(
++            "Page",
++            min_value=1,
++            max_value=max(1, pagination_result.total_pages),
++            value=pagination_result.page,
++            key=f"{key_prefix}_page",
++        )
++        next_ = cols[2].button(
++            "Next", key=f"{key_prefix}_next", disabled=not pagination_result.has_next
++        )
++        page_size = st.selectbox(
++            "Page size",
++            PaginationConfig.PAGE_SIZES,
++            index=PaginationConfig.PAGE_SIZES.index(pagination_result.page_size)
++            if pagination_result.page_size in PaginationConfig.PAGE_SIZES
++            else 0,
++            key=f"{key_prefix}_size",
++        )
++        return {
++            "prev": prev,
++            "next": next_,
++            "page": int(page_input),
++            "page_size": int(page_size),
++        }
+diff --git a/tests/test_pagination.py b/tests/test_pagination.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..c1cbbc5ea6164e6cca5844ac2e14b014ed5e1778
+--- /dev/null
++++ b/tests/test_pagination.py
+@@ -0,0 +1,118 @@
++"""Test suite for pagination system with edge cases."""
++
++import time
 +import sys
 +from pathlib import Path
-+from unittest.mock import patch
++from typing import List, Tuple
 +
 +import pytest
 +
-+# Add project root to path for imports
-+sys.path.append(str(Path(__file__).resolve().parents[1]))
++sys.path.append(str(Path(__file__).resolve().parent.parent))
 +
-+from streamlit_extension.config.env_manager import EnvironmentManager
++from streamlit_extension.utils.pagination import (
++    PaginationManager,
++    PaginationResult,
++    PaginationConfig,
++)
 +
 +
-+class TestEnvironmentManager:
-+    def test_environment_detection(self):
-+        """Test automatic environment detection."""
-+        with patch.dict(os.environ, {}, clear=True):
-+            manager = EnvironmentManager()
-+            assert manager.environment == "development"
-+        with patch.dict(os.environ, {"APP_ENV": "staging"}, clear=True):
-+            manager = EnvironmentManager()
-+            assert manager.environment == "staging"
-+        with patch.dict(os.environ, {"APP_ENV": "staging"}, clear=True):
-+            manager = EnvironmentManager(environment="production")
-+            assert manager.environment == "production"
++# Helper query function
++def list_query(data: List[int]) -> callable:
++    def _query(limit: int, offset: int) -> Tuple[List[int], int]:
++        sliced = data[offset : offset + limit]
++        return sliced, len(data)
 +
-+    def test_config_loading(self):
-+        """Test configuration loading for each environment."""
-+        expected = {
-+            "development": "dev_framework.db",
-+            "staging": "staging_framework.db",
-+            "production": "${DB_PATH}/framework.db",
-+        }
-+        for env, path in expected.items():
-+            manager = EnvironmentManager(environment=env)
-+            assert manager.database_config["framework_db_path"] == path
++    return _query
 +
-+    def test_env_var_substitution(self):
-+        """Test environment variable substitution."""
-+        vars = {
-+            "DB_PATH": "/data",
-+            "REDIS_PASSWORD": "secret",
-+            "REDIS_HOST": "prod-redis",
-+            "REDIS_PORT": "6380",
-+        }
-+        with patch.dict(os.environ, vars, clear=True):
-+            manager = EnvironmentManager(environment="production")
-+            db_config = manager.get_database_config()
-+            assert db_config["framework_db_path"] == "/data/framework.db"
-+            redis_config = manager.get_redis_config()
-+            assert redis_config["password"] == "secret"
-+            assert redis_config["host"] == "prod-redis"
-+            assert redis_config["port"] == "6380"
 +
-+    def test_config_validation(self):
-+        """Test configuration validation."""
-+        manager = EnvironmentManager(environment="development")
-+        assert manager.validate_config() is True
-+        manager.database_config.pop("framework_db_path")
-+        with pytest.raises(ValueError):
-+            manager.validate_config()
++class TestPaginationManager:
++    def test_basic_pagination(self):
++        """Test basic pagination functionality."""
++        data = list(range(100))
++        manager = PaginationManager()
++        result = manager.paginate_query(list_query(data), page=2, page_size=10)
 +
-+    def test_hot_reload(self):
-+        """Test configuration hot reloading."""
-+        manager = EnvironmentManager(environment="development")
-+        assert manager.get_database_config()["framework_db_path"] == "dev_framework.db"
-+        manager.environment = "staging"
-+        manager.reload_config()
-+        assert manager.get_database_config()["framework_db_path"] == "staging_framework.db"
++        assert isinstance(result, PaginationResult)
++        assert list(result.data) == list(range(10, 20))
++        assert result.page == 2
++        assert result.page_size == 10
++        assert result.total_count == 100
++        assert result.total_pages == 10
++        assert result.has_next is True
++        assert result.has_previous is True
++        assert result.start_index == 11
++        assert result.end_index == 20
++
++    def test_edge_cases(self):
++        """Test edge cases: empty results, single page, large datasets."""
++        manager = PaginationManager()
++
++        # Empty dataset
++        empty_result = manager.paginate_query(list_query([]), page=1, page_size=10)
++        assert empty_result.total_pages == 0
++        assert empty_result.start_index == 0
++        assert empty_result.end_index == 0
++
++        # Single page dataset
++        single_data = list(range(5))
++        single_result = manager.paginate_query(list_query(single_data), page=1, page_size=10)
++        assert single_result.total_pages == 1
++        assert single_result.has_next is False
++        assert single_result.has_previous is False
++
++        # Large dataset
++        large_data = list(range(1000))
++        large_result = manager.paginate_query(list_query(large_data), page=5, page_size=100)
++        assert list(large_result.data) == list(range(400, 500))
++        assert large_result.total_pages == 10
++
++    def test_performance_large_datasets(self):
++        """Test performance with large datasets."""
++        data = list(range(10000))
++        manager = PaginationManager()
++        start = time.perf_counter()
++        manager.paginate_query(list_query(data), page=1, page_size=50)
++        elapsed = (time.perf_counter() - start) * 1000
++        assert elapsed < 100, f"Pagination took too long: {elapsed}ms"
++
++    def test_streamlit_integration(self, monkeypatch):
++        """Test Streamlit UI component integration."""
++        manager = PaginationManager()
++        result = PaginationResult(data=[], page=1, page_size=10, total_count=100)
++
++        # Create dummy streamlit object
++        class DummyStreamlit:
++            def __init__(self):
++                self.calls = []
++
++            def write(self, *args, **kwargs):
++                self.calls.append("write")
++
++            def columns(self, n):
++                return [self, self, self]
++
++            def button(self, *args, **kwargs):
++                self.calls.append("button")
++                return False
++
++            def number_input(self, *args, **kwargs):
++                self.calls.append("number_input")
++                return 1
++
++            def selectbox(self, *args, **kwargs):
++                self.calls.append("selectbox")
++                return 10
++
++        dummy = DummyStreamlit()
++        monkeypatch.setattr(
++            "streamlit_extension.utils.pagination.st", dummy, raising=False
++        )
++        monkeypatch.setattr(
++            "streamlit_extension.utils.pagination.STREAMLIT_AVAILABLE", True
++        )
++
++        ui_result = manager.render_streamlit_pagination(result)
++        assert ui_result is not None
++        assert set(ui_result.keys()) == {"prev", "next", "page", "page_size"}
++        assert dummy.calls  # ensure methods were called
++
  
 EOF
 )

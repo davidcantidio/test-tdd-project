@@ -51,7 +51,7 @@ Security testing lacks XSS/CSRF scenarios.
 
 Integration tests skip Streamlit UI paths when framework unavailable.
 
-Load/performance testing absent; stress scenarios not simulated.
+Load/performance testing previously absent; basic load, stress and endurance suites now in place.
 
 Architecture Improvement Plan
 Short Term

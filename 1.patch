@@ -1,1438 +1,191 @@
  (cd "$(git rev-parse --show-toplevel)" && git apply --3way <<'EOF' 
-diff --git a/streamlit_extension/pages/analytics.py b/streamlit_extension/pages/analytics.py
-index df2793f8f14e78dcb5a16175614ec6f4d776ddf5..a75c08b26a812c3504e6ced08cc591e17c38ef77 100644
---- a/streamlit_extension/pages/analytics.py
-+++ b/streamlit_extension/pages/analytics.py
-@@ -24,54 +24,60 @@ try:
-     STREAMLIT_AVAILABLE = True
- except ImportError:
-     STREAMLIT_AVAILABLE = False
-     st = None
- 
- try:
-     import plotly.express as px
-     import plotly.graph_objects as go
-     from plotly.subplots import make_subplots
-     PLOTLY_AVAILABLE = True
- except ImportError:
-     PLOTLY_AVAILABLE = False
-     px = go = make_subplots = None
- 
- try:
-     import pandas as pd
-     PANDAS_AVAILABLE = True
- except ImportError:
-     PANDAS_AVAILABLE = False
-     pd = None
- 
- # Local imports
- try:
-     from streamlit_extension.utils.database import DatabaseManager
-     from streamlit_extension.utils.auth import require_authentication
-+    from streamlit_extension.utils.security import (
-+        create_safe_client, sanitize_display, validate_form, check_rate_limit,
-+        security_manager
-+    )
-     from streamlit_extension.config import load_config
-     DATABASE_UTILS_AVAILABLE = True
- except ImportError:
-     DatabaseManager = load_config = None
-+    create_safe_client = sanitize_display = validate_form = None
-+    check_rate_limit = security_manager = None
-     DATABASE_UTILS_AVAILABLE = False
- 
- try:
-     from tdah_tools.analytics_engine import AnalyticsEngine, TDDAHAnalytics
-     ANALYTICS_ENGINE_AVAILABLE = True
- except ImportError:
-     AnalyticsEngine = TDDAHAnalytics = None
-     ANALYTICS_ENGINE_AVAILABLE = False
- 
- # Performance optimization imports
- try:
-     import functools
-     import hashlib
-     PERFORMANCE_UTILS_AVAILABLE = True
- except ImportError:
-     functools = hashlib = None
-     PERFORMANCE_UTILS_AVAILABLE = False
- 
- 
- # Performance optimization functions
- class AnalyticsCache:
-     """Simple in-memory cache for analytics data with TTL support."""
- 
-     def __init__(self):
-         self.cache = {}
-@@ -174,84 +180,108 @@ def cached_analytics_data(ttl=300):
- 
-             return result
-         return wrapper
-     return decorator
- 
- 
- def optimize_database_queries(db_manager: DatabaseManager, days: int, filters: Dict[str, Any] = None) -> Dict[str, Any]:
-     """Optimized database queries with intelligent batching and filtering."""
- 
-     try:
-         # Batch multiple queries for efficiency
-         query_results = {}
- 
-         # Get all data in optimized batches
-         with st.spinner("Optimizing data queries..."):
-             # Query 1: Get timer sessions with pre-filtering
-             session_query_filters = {}
-             if filters:
-                 if filters.get("focus_range") and filters["focus_range"] != (1, 10):
-                     min_focus, max_focus = filters["focus_range"]
-                     session_query_filters["focus_range"] = (min_focus, max_focus)
- 
-                 if filters.get("selected_session_types"):
-                     session_query_filters["session_types"] = filters["selected_session_types"]
- 
-+            # Check rate limit for database read
-+            db_read_allowed, db_read_error = check_rate_limit("db_read") if check_rate_limit else (True, None)
-+            if not db_read_allowed:
-+                st.error(f"🚦 Database {db_read_error}")
-+                return {"error": "Database rate limited"}
+diff --git a/streamlit_extension/utils/circuit_breaker.py b/streamlit_extension/utils/circuit_breaker.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..289cf9a5843c8cd3d999efd5f0e71bbfc0abdcf3
+--- /dev/null
++++ b/streamlit_extension/utils/circuit_breaker.py
+@@ -0,0 +1,64 @@
++"""Circuit breaker utility for database resilience."""
++import time
++import logging
++from typing import Callable, Type, Any
 +
-             query_results["timer_sessions"] = db_manager.get_timer_sessions(days)
- 
-             # Query 2: Get tasks with pre-filtering
-             task_query_filters = {}
-             if filters:
-                 if filters.get("selected_epics"):
-                     task_query_filters["epic_names"] = filters["selected_epics"]
- 
-                 if filters.get("selected_tdd_phases"):
-                     task_query_filters["tdd_phases"] = filters["selected_tdd_phases"]
- 
-+            # Check rate limit for database read
-+            db_read_allowed, db_read_error = check_rate_limit("db_read") if check_rate_limit else (True, None)
-+            if not db_read_allowed:
-+                st.error(f"🚦 Database {db_read_error}")
-+                return {"error": "Database rate limited"}
 +
-             query_results["tasks"] = db_manager.get_tasks()
-             query_results["epics"] = db_manager.get_epics()
-             query_results["user_stats"] = db_manager.get_user_stats()
- 
-         return query_results
- 
-     except Exception as e:
-         st.error(f"Database query optimization failed: {e}")
-         # Fallback to individual queries
-+        db_read_allowed, db_read_error = check_rate_limit("db_read") if check_rate_limit else (True, None)
-+        if not db_read_allowed:
-+            st.error(f"🚦 Database {db_read_error}")
-+            return {"error": "Database rate limited"}
++class CircuitBreakerOpenError(Exception):
++    """Raised when the circuit breaker is open."""
 +
-         return {
-             "timer_sessions": db_manager.get_timer_sessions(days),
-             "tasks": db_manager.get_tasks(),
-             "epics": db_manager.get_epics(),
-             "user_stats": db_manager.get_user_stats()
-         }
- 
- 
- @require_authentication
- def render_analytics_page():
-     """Render the analytics dashboard page."""
-     if not STREAMLIT_AVAILABLE:
-         return {"error": "Streamlit not available"}
- 
-+    # Check rate limit for page load
-+    page_rate_allowed, page_rate_error = check_rate_limit("page_load") if check_rate_limit else (True, None)
-+    if not page_rate_allowed:
-+        st.error(f"🚦 {page_rate_error}")
-+        st.info("Please wait before reloading the page.")
-+        return {"error": "Rate limited"}
 +
-     st.title("📊 Analytics Dashboard")
-     st.markdown("---")
- 
-     # Check if required dependencies are available
-     missing_deps = []
-     if not PLOTLY_AVAILABLE:
-         missing_deps.append("plotly")
-     if not PANDAS_AVAILABLE:
-         missing_deps.append("pandas")
-     if not DATABASE_UTILS_AVAILABLE:
-         missing_deps.append("database utilities")
- 
-     if missing_deps:
-         st.error(f"❌ Missing dependencies: {', '.join(missing_deps)}")
-         st.info("Install with: `pip install plotly pandas`")
-         return
- 
-     # Initialize database manager and analytics engine
-     try:
-         config = load_config()
-         db_manager = DatabaseManager(
-             framework_db_path=str(config.get_database_path()),
-             timer_db_path=str(config.get_timer_database_path())
-         )
- 
-@@ -290,50 +320,56 @@ def render_analytics_page():
-         col1, col2 = st.sidebar.columns(2)
-         with col1:
-             start_date = st.date_input("From", value=datetime.now() - timedelta(days=30))
-         with col2:
-             end_date = st.date_input("To", value=datetime.now())
- 
-         # Calculate days difference
-         days = (end_date - start_date).days + 1
-         st.sidebar.caption(f"Period: {days} days")
-     else:
-         days = time_options[selected_range]
- 
-     # Advanced filters
-     st.sidebar.markdown("## 🔍 Advanced Filters")
- 
-     # Epic filter
-     show_epic_filter = st.sidebar.checkbox("Filter by Epic", value=False)
-     selected_epics = []
-     if show_epic_filter:
-         try:
-             config = load_config()
-             db_manager = DatabaseManager(
-                 framework_db_path=str(config.get_database_path()),
-                 timer_db_path=str(config.get_timer_database_path())
-             )
-+            # Check rate limit for database read
-+            db_read_allowed, db_read_error = check_rate_limit("db_read") if check_rate_limit else (True, None)
-+            if not db_read_allowed:
-+                st.error(f"🚦 Database {db_read_error}")
-+                return {"error": "Database rate limited"}
++class CircuitBreaker:
++    """Simple circuit breaker implementation.
 +
-             all_epics = db_manager.get_epics()
-             epic_names = [epic.get("name", "Unknown") for epic in all_epics]
-             selected_epics = st.sidebar.multiselect("Select Epics", epic_names)
-         except:
-             st.sidebar.warning("Could not load epics")
- 
-     # Focus level filter
-     show_focus_filter = st.sidebar.checkbox("Filter by Focus Level", value=False)
-     focus_range = (1, 10)
-     if show_focus_filter:
-         focus_range = st.sidebar.slider(
-             "Focus Rating Range", 
-             min_value=1, max_value=10, 
-             value=(1, 10), 
-             step=1
-         )
- 
-     # TDD phase filter
-     show_tdd_filter = st.sidebar.checkbox("Filter by TDD Phase", value=False)
-     selected_tdd_phases = []
-     if show_tdd_filter:
-         tdd_phases = ["red", "green", "refactor"]
-         selected_tdd_phases = st.sidebar.multiselect("Select TDD Phases", tdd_phases)
- 
-     # Session type filter
-diff --git a/streamlit_extension/pages/gantt.py b/streamlit_extension/pages/gantt.py
-index 895cf63e1a4add3595f0abc5f1a30c3210a6b3be..465c17e52454af6e7b78f7c509e0de2c1363bf1b 100644
---- a/streamlit_extension/pages/gantt.py
-+++ b/streamlit_extension/pages/gantt.py
-@@ -23,72 +23,87 @@ try:
-     STREAMLIT_AVAILABLE = True
- except ImportError:
-     STREAMLIT_AVAILABLE = False
-     st = None
- 
- try:
-     import plotly.express as px
-     import plotly.graph_objects as go
-     from plotly.subplots import make_subplots
-     import plotly.figure_factory as ff
-     PLOTLY_AVAILABLE = True
- except ImportError:
-     PLOTLY_AVAILABLE = False
-     px = go = make_subplots = ff = None
- 
- try:
-     import pandas as pd
-     PANDAS_AVAILABLE = True
- except ImportError:
-     PANDAS_AVAILABLE = False
-     pd = None
- 
- # Local imports
- try:
-     from streamlit_extension.utils.database import DatabaseManager
-+    from streamlit_extension.utils.auth import require_authentication
-+    from streamlit_extension.utils.security import (
-+        create_safe_client, sanitize_display, validate_form, check_rate_limit,
-+        security_manager
-+    )
-     from streamlit_extension.config import load_config
-     DATABASE_UTILS_AVAILABLE = True
- except ImportError:
-     DatabaseManager = load_config = None
-+    create_safe_client = sanitize_display = validate_form = None
-+    check_rate_limit = security_manager = None
-+    require_authentication = None
-     DATABASE_UTILS_AVAILABLE = False
- 
- try:
-     from gantt_tracker import GanttTracker
-     GANTT_TRACKER_AVAILABLE = True
- except ImportError:
-     GanttTracker = None
-     GANTT_TRACKER_AVAILABLE = False
- 
- 
- def render_gantt_page():
-     """Render the Gantt chart page."""
-     if not STREAMLIT_AVAILABLE:
-         return {"error": "Streamlit not available"}
-     
-+    # Check rate limit for page load
-+    page_rate_allowed, page_rate_error = check_rate_limit("page_load") if check_rate_limit else (True, None)
-+    if not page_rate_allowed:
-+        st.error(f"🚦 {page_rate_error}")
-+        st.info("Please wait before reloading the page.")
-+        return {"error": "Rate limited"}
++    Args:
++        failure_threshold: Number of consecutive failures to open the circuit.
++        recovery_timeout: Seconds to keep the circuit open before allowing
++            another attempt.
++        expected_exception: Exception type that counts as a failure.
++    """
 +
-     st.title("📊 Gantt Chart - Project Timeline")
-     st.markdown("---")
--    
++    def __init__(
++        self,
++        failure_threshold: int = 5,
++        recovery_timeout: float = 60.0,
++        expected_exception: Type[Exception] = Exception,
++    ) -> None:
++        self.failure_threshold = failure_threshold
++        self.recovery_timeout = recovery_timeout
++        self.expected_exception = expected_exception
++        self.fail_counter = 0
++        self.opened_at: float | None = None
++        self.logger = logging.getLogger(__name__)
 +
-     # Check dependencies
-     missing_deps = []
-     if not PLOTLY_AVAILABLE:
-         missing_deps.append("plotly")
-     if not DATABASE_UTILS_AVAILABLE:
-         missing_deps.append("database utilities")
-     
-     if missing_deps:
-         st.error(f"❌ Missing dependencies: {', '.join(missing_deps)}")
-         st.info("Install with: `pip install plotly`")
-         return
-     
-     # Initialize database manager
-     try:
-         config = load_config()
-         db_manager = DatabaseManager(
-             framework_db_path=str(config.get_database_path()),
-             timer_db_path=str(config.get_timer_database_path())
-         )
-     except Exception as e:
-         st.error(f"❌ Database connection error: {e}")
-         return
-     
-     # Sidebar controls
-     _render_sidebar_controls()
-@@ -171,51 +186,61 @@ def _render_sidebar_controls():
-         index=0
-     )
-     
-     # Grouping options
-     st.sidebar.markdown("## 📁 Grouping")
-     
-     st.session_state.gantt_group_by = st.sidebar.selectbox(
-         "Group Tasks By",
-         ["Epic", "Status", "TDD Phase", "None"],
-         index=0
-     )
- 
- 
- def _get_gantt_data(db_manager: DatabaseManager) -> Dict[str, Any]:
-     """Get data for Gantt chart visualization."""
-     
-     # Try to use existing gantt_tracker first
-     if GANTT_TRACKER_AVAILABLE:
-         try:
-             tracker = GanttTracker()
-             return tracker.generate_gantt_data()
-         except Exception as e:
-             st.warning(f"⚠️ Gantt tracker error: {e}. Using database fallback.")
-     
-     # Fallback to database queries
-+    # Check rate limit for database read
-+    db_read_allowed, db_read_error = check_rate_limit("db_read") if check_rate_limit else (True, None)
-+    if not db_read_allowed:
-+        st.error(f"🚦 Database {db_read_error}")
-+        return {"error": "Database rate limited"}
-     epics = db_manager.get_epics()
-+
-+    db_read_allowed, db_read_error = check_rate_limit("db_read") if check_rate_limit else (True, None)
-+    if not db_read_allowed:
-+        st.error(f"🚦 Database {db_read_error}")
-+        return {"error": "Database rate limited"}
-     tasks = db_manager.get_tasks()
-     
-     # Process data for Gantt chart
-     gantt_tasks = []
-     
-     for task in tasks:
-         # Calculate dates
-         start_date = _parse_date(task.get("created_at"))
-         end_date = _parse_date(task.get("completed_at"))
-         
-         # If task is not completed, estimate end date
-         if not end_date:
-             estimate_minutes = task.get("estimate_minutes", 60)
-             if start_date:
-                 end_date = start_date + timedelta(minutes=estimate_minutes)
-             else:
-                 start_date = datetime.now()
-                 end_date = start_date + timedelta(minutes=estimate_minutes)
-         
-         # Calculate progress
-         progress = _calculate_task_progress(task)
-         
-         gantt_tasks.append({
-             "id": task.get("id"),
-             "title": task.get("title", "Untitled Task"),
-diff --git a/streamlit_extension/pages/kanban.py b/streamlit_extension/pages/kanban.py
-index 233a1f88b0d3521dc71e2814a6773ddf8a2b39e3..d230d46d48cb6872ed88d5b461b9c503eddf7030 100644
---- a/streamlit_extension/pages/kanban.py
-+++ b/streamlit_extension/pages/kanban.py
-@@ -6,110 +6,138 @@ Interactive task management with drag-and-drop Kanban board:
- - TDD phase tracking
- - Epic grouping and filtering
- - Real-time updates
- - Task editing and creation
- """
- 
- import sys
- from pathlib import Path
- from typing import Dict, Any, List, Optional
- from datetime import datetime
- 
- # Add parent directory to path
- sys.path.append(str(Path(__file__).parent.parent.parent))
- 
- # Graceful imports
- try:
-     import streamlit as st
-     STREAMLIT_AVAILABLE = True
- except ImportError:
-     STREAMLIT_AVAILABLE = False
-     st = None
- 
- # Local imports
- try:
-     from streamlit_extension.utils.database import DatabaseManager
-+    from streamlit_extension.utils.auth import require_authentication
-+    from streamlit_extension.utils.security import (
-+        create_safe_client, sanitize_display, validate_form, check_rate_limit,
-+        security_manager
-+    )
-     from streamlit_extension.config import load_config
-     DATABASE_UTILS_AVAILABLE = True
- except ImportError:
-     DatabaseManager = load_config = None
-+    create_safe_client = sanitize_display = validate_form = None
-+    check_rate_limit = security_manager = None
-+    require_authentication = None
-     DATABASE_UTILS_AVAILABLE = False
- 
- 
- def render_kanban_page():
-     """Render the Kanban board page."""
-     if not STREAMLIT_AVAILABLE:
-         return {"error": "Streamlit not available"}
--    
--    st.title("📋 Kanban Board")
--    st.markdown("---")
--    
--    # Initialize database manager
-+
-     if not DATABASE_UTILS_AVAILABLE:
-         st.error("❌ Database utilities not available")
-         return
-+
-+    # Check rate limit for page load
-+    page_rate_allowed, page_rate_error = check_rate_limit("page_load") if check_rate_limit else (True, None)
-+    if not page_rate_allowed:
-+        st.error(f"🚦 {page_rate_error}")
-+        st.info("Please wait before reloading the page.")
-+        return {"error": "Rate limited"}
-+
-+    st.title("📋 Kanban Board")
-+    st.markdown("---")
-     
-     try:
-         config = load_config()
-         db_manager = DatabaseManager(
-             framework_db_path=str(config.get_database_path()),
-             timer_db_path=str(config.get_timer_database_path())
-         )
-     except Exception as e:
-         st.error(f"❌ Database connection error: {e}")
-         return
-     
-     # Sidebar filters
-     _render_sidebar_filters(db_manager)
-     
-     # Load data
-     with st.spinner("Loading tasks..."):
-+        # Check rate limit for database read
-+        db_read_allowed, db_read_error = check_rate_limit("db_read") if check_rate_limit else (True, None)
-+        if not db_read_allowed:
-+            st.error(f"🚦 Database {db_read_error}")
-+            return {"error": "Database rate limited"}
-         tasks = db_manager.get_tasks()
-+
-+        db_read_allowed, db_read_error = check_rate_limit("db_read") if check_rate_limit else (True, None)
-+        if not db_read_allowed:
-+            st.error(f"🚦 Database {db_read_error}")
-+            return {"error": "Database rate limited"}
-         epics = db_manager.get_epics()
-     
-     # Apply filters
-     filtered_tasks = _apply_filters(tasks, epics)
-     
-     if not filtered_tasks:
-         st.info("📝 No tasks found for the selected filters.")
-         _render_create_task_form(db_manager, epics)
-         return
-     
-     # Render board
-     _render_kanban_board(filtered_tasks, db_manager, epics)
-     
-     # Task creation form
-     with st.expander("➕ Create New Task", expanded=False):
-         _render_create_task_form(db_manager, epics)
- 
- 
- def _render_sidebar_filters(db_manager: DatabaseManager):
-     """Render sidebar filters for the Kanban board."""
-     
-     st.sidebar.markdown("## 🔍 Filters")
--    
-+
-     # Epic filter
-+    db_read_allowed, db_read_error = check_rate_limit("db_read") if check_rate_limit else (True, None)
-+    if not db_read_allowed:
-+        st.error(f"🚦 Database {db_read_error}")
-+        return {"error": "Database rate limited"}
-     epics = db_manager.get_epics()
-     epic_options = ["All Epics"] + [f"{epic['epic_key']}: {epic['name']}" for epic in epics]
-     selected_epic = st.sidebar.selectbox("Filter by Epic", epic_options)
-     
-     if selected_epic != "All Epics":
-         st.session_state.kanban_epic_filter = selected_epic.split(":")[0]
-     else:
-         st.session_state.kanban_epic_filter = None
-     
-     # TDD Phase filter
-     tdd_phases = ["All Phases", "Red", "Green", "Refactor", "Unknown"]
-     selected_phase = st.sidebar.selectbox("Filter by TDD Phase", tdd_phases)
-     
-     if selected_phase != "All Phases":
-         st.session_state.kanban_phase_filter = selected_phase.lower()
-     else:
-         st.session_state.kanban_phase_filter = None
-     
-     # Priority filter
-     priorities = ["All Priorities", "High", "Medium", "Low"]
-     selected_priority = st.sidebar.selectbox("Filter by Priority", priorities)
-     
-     if selected_priority != "All Priorities":
-         st.session_state.kanban_priority_filter = selected_priority.lower()
-     else:
-@@ -310,229 +338,375 @@ def _render_task_card(task: Dict[str, Any], db_manager: DatabaseManager, epics:
-                     
-                     with col_confirm:
-                         if st.button("✅ Yes", key=f"confirm_yes_{task_id}"):
-                             success = _delete_task(task_id, db_manager)
-                             if success:
-                                 st.success("Task deleted successfully!")
-                                 st.session_state[f"confirm_delete_{task_id}"] = False
-                                 st.rerun()
-                             else:
-                                 st.error("Failed to delete task")
-                     
-                     with col_cancel:
-                         if st.button("❌ No", key=f"confirm_no_{task_id}"):
-                             st.session_state[f"confirm_delete_{task_id}"] = False
-                             st.rerun()
- 
- 
- def _show_quick_add_modal(db_manager: DatabaseManager, epics: List[Dict[str, Any]]):
-     """Show quick add task modal."""
-     
-     st.session_state.show_quick_add = True
-     
-     if st.session_state.get("show_quick_add"):
-         with st.form("quick_add_task"):
-             st.markdown("### ➕ Quick Add Task")
--            
-+
-+            # Generate CSRF token for form protection
-+            csrf_form_id = "quick_add_task_form"
-+            csrf_field = security_manager.get_csrf_form_field(csrf_form_id) if security_manager else None
-+
-             title = st.text_input("Task Title*", placeholder="Enter task title...")
--            
-+
-             col1, col2 = st.columns(2)
-             with col1:
-                 epic_options = ["Select Epic"] + [f"{e['epic_key']}: {e['name']}" for e in epics]
-                 selected_epic = st.selectbox("Epic", epic_options)
--            
-+
-             with col2:
-                 tdd_phase = st.selectbox("TDD Phase", ["", "red", "green", "refactor"])
--            
-+
-             submitted = st.form_submit_button("Add Task")
--            
--            if submitted and title:
--                # Get epic ID
--                epic_id = None
--                if selected_epic != "Select Epic":
--                    epic_key = selected_epic.split(":")[0]
--                    for epic in epics:
--                        if epic.get("epic_key") == epic_key:
--                            epic_id = epic.get("id")
--                            break
--                
--                # Create task (simplified - would need proper database insertion)
--                success = _create_task(title, epic_id, tdd_phase, db_manager)
--                
--                if success:
--                    st.success("✅ Task created successfully!")
--                    st.session_state.show_quick_add = False
--                    st.rerun()
-+
-+            if submitted:
-+                if not title:
-+                    st.error("❌ Task title is required")
-                 else:
--                    st.error("❌ Failed to create task")
-+                    # CSRF Protection
-+                    if csrf_field and security_manager:
-+                        csrf_valid, csrf_error = security_manager.require_csrf_protection(
-+                            csrf_form_id, csrf_field.get("token_value")
-+                        )
-+                        if not csrf_valid:
-+                            st.error(f"🔒 Security Error: {csrf_error}")
-+                            return
-+
-+                    # Check rate limit for form submission
-+                    rate_allowed, rate_error = check_rate_limit("form_submit") if check_rate_limit else (True, None)
-+                    if not rate_allowed:
-+                        st.error(f"🚦 {rate_error}")
-+                        return
-+
-+                    raw_data = {
-+                        "title": title,
-+                        "selected_epic": selected_epic,
-+                        "tdd_phase": tdd_phase,
-+                    }
-+
-+                    # Security validation
-+                    if validate_form:
-+                        security_valid, security_errors = validate_form(raw_data)
-+                        if not security_valid:
-+                            for error in security_errors:
-+                                st.error(f"🔒 Security: {error}")
-+                            return
-+
-+                    # Check rate limit for database write
-+                    db_rate_allowed, db_rate_error = check_rate_limit("db_write") if check_rate_limit else (True, None)
-+                    if not db_rate_allowed:
-+                        st.error(f"🚦 Database {db_rate_error}")
-+                        return
-+
-+                    # Get epic ID
-+                    epic_id = None
-+                    if selected_epic != "Select Epic":
-+                        epic_key = selected_epic.split(":")[0]
-+                        for epic in epics:
-+                            if epic.get("epic_key") == epic_key:
-+                                epic_id = epic.get("id")
-+                                break
-+
-+                    # Create task (simplified - would need proper database insertion)
-+                    success = _create_task(title, epic_id, tdd_phase, db_manager)
-+
-+                    if success:
-+                        st.success("✅ Task created successfully!")
-+                        st.session_state.show_quick_add = False
-+                        st.rerun()
-+                    else:
-+                        st.error("❌ Failed to create task")
- 
- 
- def _render_create_task_form(db_manager: DatabaseManager, epics: List[Dict[str, Any]]):
-     """Render detailed task creation form."""
--    
-+
-     with st.form("create_task"):
-         st.markdown("### ➕ Create New Task")
--        
-+
-+        # Generate CSRF token for form protection
-+        csrf_form_id = "create_task_form"
-+        csrf_field = security_manager.get_csrf_form_field(csrf_form_id) if security_manager else None
-+
-         col1, col2 = st.columns(2)
--        
-+
-         with col1:
-             title = st.text_input("Task Title*", placeholder="Enter a descriptive title...")
-             description = st.text_area("Description", placeholder="Optional task description...")
--            
-+
-             epic_options = ["Select Epic"] + [f"{e['epic_key']}: {e['name']}" for e in epics]
-             selected_epic = st.selectbox("Epic*", epic_options)
--        
-+
-         with col2:
-             tdd_phase = st.selectbox("TDD Phase", ["", "red", "green", "refactor"])
-             priority = st.selectbox("Priority", [1, 2, 3], format_func=lambda x: {1: "High", 2: "Medium", 3: "Low"}[x])
-             estimate = st.number_input("Estimate (minutes)", min_value=0, value=0, step=15)
--        
-+
-         submitted = st.form_submit_button("Create Task", type="primary")
--        
-+
-         if submitted:
-             if not title:
-                 st.error("❌ Task title is required")
-             elif selected_epic == "Select Epic":
-                 st.error("❌ Please select an epic")
-             else:
-+                # CSRF Protection
-+                if csrf_field and security_manager:
-+                    csrf_valid, csrf_error = security_manager.require_csrf_protection(
-+                        csrf_form_id, csrf_field.get("token_value")
-+                    )
-+                    if not csrf_valid:
-+                        st.error(f"🔒 Security Error: {csrf_error}")
-+                        return
-+
-+                # Check rate limit for form submission
-+                rate_allowed, rate_error = check_rate_limit("form_submit") if check_rate_limit else (True, None)
-+                if not rate_allowed:
-+                    st.error(f"🚦 {rate_error}")
-+                    return
-+
-+                raw_data = {
-+                    "title": title,
-+                    "description": description,
-+                    "selected_epic": selected_epic,
-+                    "tdd_phase": tdd_phase,
-+                    "priority": priority,
-+                    "estimate": estimate,
-+                }
-+
-+                # Security validation
-+                if validate_form:
-+                    security_valid, security_errors = validate_form(raw_data)
-+                    if not security_valid:
-+                        for error in security_errors:
-+                            st.error(f"🔒 Security: {error}")
-+                        return
-+
-+                # Check rate limit for database write
-+                db_rate_allowed, db_rate_error = check_rate_limit("db_write") if check_rate_limit else (True, None)
-+                if not db_rate_allowed:
-+                    st.error(f"🚦 Database {db_rate_error}")
-+                    return
-+
-                 # Get epic ID
-                 epic_id = None
-                 epic_key = selected_epic.split(":")[0]
-                 for epic in epics:
-                     if epic.get("epic_key") == epic_key:
-                         epic_id = epic.get("id")
-                         break
--                
-+
-                 # Create task
-                 success = _create_task(
-                     title=title,
-                     epic_id=epic_id,
-                     tdd_phase=tdd_phase,
-                     db_manager=db_manager,
-                     description=description,
-                     priority=priority,
-                     estimate_minutes=estimate
-                 )
--                
-+
-                 if success:
-                     st.success("✅ Task created successfully!")
-                     st.rerun()
-                 else:
-                     st.error("❌ Failed to create task")
- 
- 
- def _show_edit_task_modal(task: Dict[str, Any], db_manager: DatabaseManager, epics: List[Dict[str, Any]]):
-     """Show edit task modal."""
-     
-     task_id = task.get("id")
-     st.session_state[f"editing_task_{task_id}"] = True
-     
-     if st.session_state.get(f"editing_task_{task_id}"):
-         with st.form(f"edit_task_{task_id}"):
-             st.markdown(f"### ✏️ Edit Task: {task.get('title', 'Unknown')}")
--            
-+
-+            # Generate CSRF token for form protection
-+            csrf_form_id = f"edit_task_{task_id}_form"
-+            csrf_field = security_manager.get_csrf_form_field(csrf_form_id) if security_manager else None
-+
-             col1, col2 = st.columns(2)
--            
-+
-             with col1:
-                 title = st.text_input("Title", value=task.get("title", ""))
-                 description = st.text_area("Description", value=task.get("description", ""))
--            
-+
-             with col2:
-                 current_phase = task.get("tdd_phase", "")
-                 phase_index = ["", "red", "green", "refactor"].index(current_phase) if current_phase in ["", "red", "green", "refactor"] else 0
-                 tdd_phase = st.selectbox("TDD Phase", ["", "red", "green", "refactor"], index=phase_index)
--                
-+
-                 current_priority = task.get("priority", 2)
-                 priority = st.selectbox("Priority", [1, 2, 3], index=[1, 2, 3].index(current_priority), format_func=lambda x: {1: "High", 2: "Medium", 3: "Low"}[x])
--                
-+
-                 estimate = st.number_input("Estimate (minutes)", value=task.get("estimate_minutes", 0), min_value=0, step=15)
--            
-+
-             col_save, col_cancel = st.columns(2)
--            
-+
-             with col_save:
-                 submitted = st.form_submit_button("Save Changes", type="primary")
--            
-+
-             with col_cancel:
-                 cancelled = st.form_submit_button("Cancel")
--            
-+
-             if submitted:
-+                # CSRF Protection
-+                if csrf_field and security_manager:
-+                    csrf_valid, csrf_error = security_manager.require_csrf_protection(
-+                        csrf_form_id, csrf_field.get("token_value")
-+                    )
-+                    if not csrf_valid:
-+                        st.error(f"🔒 Security Error: {csrf_error}")
-+                        return
-+
-+                # Check rate limit for form submission
-+                rate_allowed, rate_error = check_rate_limit("form_submit") if check_rate_limit else (True, None)
-+                if not rate_allowed:
-+                    st.error(f"🚦 {rate_error}")
-+                    return
-+
-+                raw_data = {
-+                    "title": title,
-+                    "description": description,
-+                    "tdd_phase": tdd_phase,
-+                    "priority": priority,
-+                    "estimate": estimate,
-+                }
-+
-+                # Security validation
-+                if validate_form:
-+                    security_valid, security_errors = validate_form(raw_data)
-+                    if not security_valid:
-+                        for error in security_errors:
-+                            st.error(f"🔒 Security: {error}")
-+                        return
-+
-+                # Check rate limit for database write
-+                db_rate_allowed, db_rate_error = check_rate_limit("db_write") if check_rate_limit else (True, None)
-+                if not db_rate_allowed:
-+                    st.error(f"🚦 Database {db_rate_error}")
-+                    return
-+
-                 # Update task
-                 success = _update_task(
-                     task_id=task_id,
-                     title=title,
-                     description=description,
-                     tdd_phase=tdd_phase,
-                     priority=priority,
-                     estimate_minutes=estimate,
-                     db_manager=db_manager
-                 )
--                
-+
-                 if success:
-                     st.success("✅ Task updated successfully!")
-                     st.session_state[f"editing_task_{task_id}"] = False
-                     st.rerun()
-                 else:
-                     st.error("❌ Failed to update task")
--            
-+
-             if cancelled:
-                 st.session_state[f"editing_task_{task_id}"] = False
-                 st.rerun()
- 
- 
--def _create_task(title: str, epic_id: Optional[int], tdd_phase: str, db_manager: DatabaseManager, 
-+def _create_task(title: str, epic_id: Optional[int], tdd_phase: str, db_manager: DatabaseManager,
-                 description: str = "", priority: int = 2, estimate_minutes: int = 0) -> bool:
-     """Create a new task in the database."""
--    
-+
-     try:
-+        # Check rate limit for database write
-+        db_rate_allowed, db_rate_error = check_rate_limit("db_write") if check_rate_limit else (True, None)
-+        if not db_rate_allowed:
-+            st.error(f"🚦 Database {db_rate_error}")
++    def is_open(self) -> bool:
++        """Check if the circuit is currently open."""
++        if self.opened_at is None:
 +            return False
-+
-         task_id = db_manager.create_task(
-             title=title,
-             epic_id=epic_id,
-             description=description,
-             tdd_phase=tdd_phase,
-             priority=priority,
-             estimate_minutes=estimate_minutes
-         )
-         return task_id is not None
-     except Exception as e:
-         print(f"Error creating task: {e}")
-         return False
- 
- 
- def _update_task_status(task_id: int, new_status: str, db_manager: DatabaseManager) -> bool:
-     """Update task status."""
--    
-+
-     try:
-+        # Check rate limit for database write
-+        db_rate_allowed, db_rate_error = check_rate_limit("db_write") if check_rate_limit else (True, None)
-+        if not db_rate_allowed:
-+            st.error(f"🚦 Database {db_rate_error}")
++        if (time.time() - self.opened_at) >= self.recovery_timeout:
++            # Allow retries after timeout (half-open)
 +            return False
-         return db_manager.update_task_status(task_id, new_status)
-     except Exception:
-         return False
- 
- 
--def _update_task(task_id: int, title: str, description: str, tdd_phase: str, 
-+def _update_task(task_id: int, title: str, description: str, tdd_phase: str,
-                 priority: int, estimate_minutes: int, db_manager: DatabaseManager) -> bool:
-     """Update task details."""
--    
++        return True
 +
-     try:
-+        # Check rate limit for database write
-+        db_rate_allowed, db_rate_error = check_rate_limit("db_write") if check_rate_limit else (True, None)
-+        if not db_rate_allowed:
-+            st.error(f"🚦 Database {db_rate_error}")
-+            return False
-         return db_manager.update_task(
-             task_id=task_id,
-             title=title,
-             description=description,
-             tdd_phase=tdd_phase,
-             priority=priority,
-             estimate_minutes=estimate_minutes
-         )
-     except Exception as e:
-         print(f"Error updating task {task_id}: {e}")
-         return False
- 
- 
- def _delete_task(task_id: int, db_manager: DatabaseManager) -> bool:
-     """Delete a task."""
--    
++    def _record_failure(self) -> None:
++        self.fail_counter += 1
++        if self.fail_counter >= self.failure_threshold:
++            self.opened_at = time.time()
++            self.logger.warning("Circuit opened after %s failures", self.fail_counter)
 +
-     try:
-+        # Check rate limit for database write
-+        db_rate_allowed, db_rate_error = check_rate_limit("db_write") if check_rate_limit else (True, None)
-+        if not db_rate_allowed:
-+            st.error(f"🚦 Database {db_rate_error}")
-+            return False
-         return db_manager.delete_task(task_id, soft_delete=True)
-     except Exception as e:
-         print(f"Error deleting task {task_id}: {e}")
-         return False
- 
- 
- if __name__ == "__main__":
-     render_kanban_page()
-\ No newline at end of file
-diff --git a/streamlit_extension/pages/settings.py b/streamlit_extension/pages/settings.py
-index 26c6d4200dbfa7ea601fc986920e96b443031ed8..0f060f6d8eebf6c9071fe1e490cc98c3889eb6a0 100644
---- a/streamlit_extension/pages/settings.py
-+++ b/streamlit_extension/pages/settings.py
-@@ -7,67 +7,82 @@ Configuration interface for the TDD Framework:
- - Database configuration
- - Theme and UI preferences
- - Export/import settings
- """
- 
- import sys
- from pathlib import Path
- from typing import Dict, Any, List, Optional
- import json
- 
- # Add parent directory to path
- sys.path.append(str(Path(__file__).parent.parent.parent))
- 
- # Graceful imports
- try:
-     import streamlit as st
-     STREAMLIT_AVAILABLE = True
- except ImportError:
-     STREAMLIT_AVAILABLE = False
-     st = None
- 
- # Local imports
- try:
-     from streamlit_extension.utils.database import DatabaseManager
-     from streamlit_extension.config import load_config, create_streamlit_config_file
-+    from streamlit_extension.utils.auth import require_authentication
-+    from streamlit_extension.utils.security import (
-+        create_safe_client, sanitize_display, validate_form, check_rate_limit,
-+        security_manager
-+    )
-     DATABASE_UTILS_AVAILABLE = True
- except ImportError:
-     DatabaseManager = load_config = create_streamlit_config_file = None
-+    create_safe_client = sanitize_display = validate_form = None
-+    check_rate_limit = security_manager = None
-+    require_authentication = None
-     DATABASE_UTILS_AVAILABLE = False
- 
- 
- def render_settings_page():
-     """Render the settings configuration page."""
-     if not STREAMLIT_AVAILABLE:
-         return {"error": "Streamlit not available"}
--    
--    st.title("⚙️ Settings & Configuration")
--    st.markdown("---")
--    
++    def _reset(self) -> None:
++        self.fail_counter = 0
++        self.opened_at = None
 +
-     if not DATABASE_UTILS_AVAILABLE:
-         st.error("❌ Configuration utilities not available")
-         return
++    def call(self, func: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:
++        """Execute ``func`` while applying circuit breaker logic."""
++        if self.is_open():
++            raise CircuitBreakerOpenError("Circuit is open")
++        try:
++            result = func(*args, **kwargs)
++        except self.expected_exception:
++            self._record_failure()
++            raise
++        else:
++            self._reset()
++            return result
+diff --git a/streamlit_extension/utils/db_resilience.py b/streamlit_extension/utils/db_resilience.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..ed9a6bcc994c5a524b416e3137b970609cfecbe6
+--- /dev/null
++++ b/streamlit_extension/utils/db_resilience.py
+@@ -0,0 +1,53 @@
++"""Database resilience helpers with retry and circuit breaker."""
++from __future__ import annotations
 +
-+    # Check rate limit for page load
-+    page_rate_allowed, page_rate_error = check_rate_limit("page_load") if check_rate_limit else (True, None)
-+    if not page_rate_allowed:
-+        st.error(f"🚦 {page_rate_error}")
-+        st.info("Please wait before reloading the page.")
-+        return {"error": "Rate limited"}
++import time
++import logging
++from contextlib import contextmanager
++from typing import Generator, Optional
 +
-+    st.title("⚙️ Settings & Configuration")
-+    st.markdown("---")
-     
-     # Load current configuration
-     try:
-         config = load_config()
-     except Exception as e:
-         st.error(f"❌ Error loading configuration: {e}")
-         return
-     
-     # Settings tabs
-     tab1, tab2, tab3, tab4, tab5 = st.tabs([
-         "⏱️ Timer & TDAH", 
-         "🐙 GitHub Integration", 
-         "🗄️ Database", 
-         "🎨 Interface", 
-         "💾 Backup & Export"
-     ])
-     
-     with tab1:
-         _render_timer_settings(config)
-     
-     with tab2:
-         _render_github_settings(config)
-     
-     with tab3:
-         _render_database_settings(config)
-@@ -345,50 +360,55 @@ def _render_github_settings(config):
-             
-             if not is_valid_token:
-                 st.error("❌ Cannot save: Invalid GitHub token format. Please provide a valid token.")
-                 st.stop()
-         
-         _save_github_settings(
-             github_token=github_token,
-             github_repo_owner=github_repo_owner,
-             github_repo_name=github_repo_name,
-             api_calls_per_hour=api_calls_per_hour,
-             rate_limit_buffer=rate_limit_buffer
-         )
- 
- 
- def _render_database_settings(config):
-     """Render database configuration settings."""
-     
-     st.markdown("### 🗄️ Database Configuration")
-     
-     # Initialize database manager to check health
-     try:
-         db_manager = DatabaseManager(
-             framework_db_path=str(config.get_database_path()),
-             timer_db_path=str(config.get_timer_database_path())
-         )
-+        # Check rate limit for database read
-+        db_read_allowed, db_read_error = check_rate_limit("db_read") if check_rate_limit else (True, None)
-+        if not db_read_allowed:
-+            st.error(f"🚦 Database {db_read_error}")
-+            return {"error": "Database rate limited"}
-         health = db_manager.check_database_health()
-     except Exception as e:
-         st.error(f"❌ Database manager error: {e}")
-         return
-     
-     col1, col2 = st.columns(2)
-     
-     with col1:
-         st.markdown("#### 📊 Database Status")
-         
-         # Framework database
-         fw_db_status = "✅ Connected" if health.get("framework_db_connected") else "❌ Not connected"
-         fw_db_exists = "✅ Exists" if health.get("framework_db_exists") else "❌ Missing"
-         
-         st.info(f"""
-         **Framework Database:**
-         - Status: {fw_db_status}
-         - File: {fw_db_exists}
-         - Path: `{config.get_database_path()}`
-         """)
-         
-         # Timer database
-         timer_db_status = "✅ Connected" if health.get("timer_db_connected") else "❌ Not connected"
-         timer_db_exists = "✅ Exists" if health.get("timer_db_exists") else "❌ Missing"
-         
-diff --git a/streamlit_extension/pages/timer.py b/streamlit_extension/pages/timer.py
-index ac73664ac50d93f9daecf6ac2ebfdffdc8fb2ed0..ecadc54036691eb1879ca5ef6fc88c37dc8603ae 100644
---- a/streamlit_extension/pages/timer.py
-+++ b/streamlit_extension/pages/timer.py
-@@ -8,67 +8,82 @@ Dedicated timer interface with TDAH support:
- - Session history and analytics
- - Customizable timer settings
- """
- 
- import sys
- from pathlib import Path
- from typing import Dict, Any, List, Optional
- from datetime import datetime, timedelta
- 
- # Add parent directory to path
- sys.path.append(str(Path(__file__).parent.parent.parent))
- 
- # Graceful imports
- try:
-     import streamlit as st
-     STREAMLIT_AVAILABLE = True
- except ImportError:
-     STREAMLIT_AVAILABLE = False
-     st = None
- 
- # Local imports
- try:
-     from streamlit_extension.utils.database import DatabaseManager
-     from streamlit_extension.config import load_config
-     from streamlit_extension.components.timer import TimerComponent
-+    from streamlit_extension.utils.auth import require_authentication
-+    from streamlit_extension.utils.security import (
-+        create_safe_client, sanitize_display, validate_form, check_rate_limit,
-+        security_manager
-+    )
-     DATABASE_UTILS_AVAILABLE = True
- except ImportError:
-     DatabaseManager = load_config = TimerComponent = None
-+    create_safe_client = sanitize_display = validate_form = None
-+    check_rate_limit = security_manager = None
-+    require_authentication = None
-     DATABASE_UTILS_AVAILABLE = False
- 
- 
- def render_timer_page():
-     """Render the dedicated timer page."""
-     if not STREAMLIT_AVAILABLE:
-         return {"error": "Streamlit not available"}
--    
--    st.title("⏱️ Focus Timer - TDAH Edition")
--    st.markdown("---")
--    
++from .circuit_breaker import CircuitBreaker, CircuitBreakerOpenError
 +
-     if not DATABASE_UTILS_AVAILABLE:
-         st.error("❌ Database utilities not available")
-         return
++logger = logging.getLogger(__name__)
 +
-+    # Check rate limit for page load
-+    page_rate_allowed, page_rate_error = check_rate_limit("page_load") if check_rate_limit else (True, None)
-+    if not page_rate_allowed:
-+        st.error(f"🚦 {page_rate_error}")
-+        st.info("Please wait before reloading the page.")
-+        return {"error": "Rate limited"}
 +
-+    st.title("⏱️ Focus Timer - TDAH Edition")
-+    st.markdown("---")
-     
-     # Initialize components
-     try:
-         config = load_config()
-         db_manager = DatabaseManager(
-             framework_db_path=str(config.get_database_path()),
-             timer_db_path=str(config.get_timer_database_path())
-         )
-         
-         # Initialize timer component if not in session state
-         if "timer_component" not in st.session_state:
-             st.session_state.timer_component = TimerComponent()
-         
-         timer_component = st.session_state.timer_component
-         
-     except Exception as e:
-         st.error(f"❌ Initialization error: {e}")
-         return
-     
-     # Sidebar for timer settings
-     _render_timer_sidebar(config)
-     
-     # Main timer interface
-     col1, col2 = st.columns([2, 1])
-     
-@@ -148,53 +163,58 @@ def _render_timer_sidebar(config):
-         "Track Mood", 
-         value=True,
-         help="Record mood before/after sessions"
-     )
-     
-     # Sound settings
-     st.sidebar.markdown("## 🔊 Alerts")
-     
-     st.session_state.timer_sound_alerts = st.sidebar.checkbox(
-         "Sound Alerts", 
-         value=config.enable_sound_alerts,
-         help="Play sound when timer completes"
-     )
-     
-     st.session_state.timer_notifications = st.sidebar.checkbox(
-         "Browser Notifications", 
-         value=config.enable_notifications,
-         help="Show browser notifications"
-     )
- 
- 
- def _render_main_timer(timer_component, db_manager: DatabaseManager, config):
-     """Render the main timer interface."""
-     
-     st.markdown("### 🎯 Current Session")
--    
++@contextmanager
++def resilient_connection(
++    db_manager,
++    db_name: str = "framework",
++    retries: int = 3,
++    delay: float = 0.1,
++    breaker: Optional[CircuitBreaker] = None,
++) -> Generator:
++    """Context manager that provides a resilient database connection.
 +
-     # Task selection with error handling
-     try:
-+        # Check rate limit for database read
-+        db_read_allowed, db_read_error = check_rate_limit("db_read") if check_rate_limit else (True, None)
-+        if not db_read_allowed:
-+            st.error(f"🚦 Database {db_read_error}")
-+            return {"error": "Database rate limited"}
-         tasks = db_manager.get_tasks()
-         active_tasks = [t for t in tasks if t.get("status") in ["todo", "pending", "in_progress"]]
-         
-         if active_tasks:
-             task_options = ["No specific task"] + [f"{t['title']} ({t.get('epic_name', 'No Epic')})" for t in active_tasks]
-             selected_task_option = st.selectbox("Working on:", task_options)
-             
-             if selected_task_option != "No specific task":
-                 # Find selected task
-                 selected_task = None
-                 for task in active_tasks:
-                     task_display = f"{task['title']} ({task.get('epic_name', 'No Epic')})"
-                     if task_display == selected_task_option:
-                         selected_task = task
-                         break
-                 
-                 if selected_task:
-                     st.session_state.current_task = selected_task
-                     st.info(f"🎯 **Task:** {selected_task['title']}")
-                     if selected_task.get('description'):
-                         st.caption(f"Description: {selected_task['description']}")
-                     # Show epic info
-                     if selected_task.get('epic_name'):
-                         st.caption(f"📊 Epic: {selected_task['epic_name']}")
-             else:
-@@ -295,51 +315,56 @@ def _render_session_stats(db_manager: DatabaseManager):
-         if len(today_sessions) > 1:
-             st.markdown("#### 📈 Focus Pattern")
-             session_times = []
-             session_ratings = []
-             
-             for i, session in enumerate(today_sessions):
-                 session_times.append(f"S{i+1}")
-                 session_ratings.append(session.get("focus_rating", 0))
-             
-             # Simple bar chart using st.bar_chart
-             if any(session_ratings):
-                 import pandas as pd
-                 chart_data = pd.DataFrame({
-                     "Focus Rating": session_ratings
-                 }, index=session_times)
-                 st.bar_chart(chart_data)
-         
-     else:
-         st.info("🌅 Start your first session of the day!")
- 
- 
- def _render_session_history(db_manager: DatabaseManager):
-     """Render recent session history."""
-     
-     st.markdown("### 📅 Recent Sessions")
--    
++    Retries transient failures and opens a circuit after repeated errors to
++    prevent resource exhaustion.
 +
-+    # Check rate limit for database read
-+    db_read_allowed, db_read_error = check_rate_limit("db_read") if check_rate_limit else (True, None)
-+    if not db_read_allowed:
-+        st.error(f"🚦 Database {db_read_error}")
-+        return {"error": "Database rate limited"}
-     recent_sessions = db_manager.get_timer_sessions(days=7)
-     
-     if not recent_sessions:
-         st.info("📝 No recent sessions found. Start a timer to see history here.")
-         return
-     
-     # Session history table
-     col1, col2 = st.columns([3, 1])
-     
-     with col1:
-         # Show last 10 sessions
-         for session in recent_sessions[:10]:
-             with st.container():
-                 # Session header
-                 started_at = session.get("started_at", "Unknown")
-                 task_ref = session.get("task_reference", "General focus")
-                 duration = session.get("planned_duration_minutes", 0)
-                 
-                 col_info, col_metrics = st.columns([2, 1])
-                 
-                 with col_info:
-                     date_str = started_at[:16] if len(started_at) >= 16 else started_at
-                     st.markdown(f"**{date_str}** - {task_ref}")
-                     st.caption(f"Duration: {duration} minutes")
-                 
-@@ -362,52 +387,57 @@ def _render_session_history(db_manager: DatabaseManager):
-         total_minutes = sum(s.get("planned_duration_minutes", 0) for s in recent_sessions)
-         hours = total_minutes // 60
-         minutes = total_minutes % 60
-         
-         st.metric("Total Sessions", total_sessions)
-         st.metric("Total Time", f"{hours}h {minutes}m")
-         
-         avg_focus = _calculate_avg_focus_rating(recent_sessions)
-         if avg_focus > 0:
-             st.metric("Avg Focus", f"{avg_focus:.1f}/10")
-         
-         # Best session
-         if recent_sessions:
-             best_session = max(
-                 recent_sessions, 
-                 key=lambda s: s.get("focus_rating", 0)
-             )
-             if best_session.get("focus_rating", 0) > 0:
-                 st.metric("Best Focus", f"{best_session['focus_rating']}/10")
- 
- 
- def _render_tdah_insights(db_manager: DatabaseManager):
-     """Render TDAH-specific insights and recommendations."""
-     
-     st.markdown("### 🧠 TDAH Insights")
--    
++    Args:
++        db_manager: ``DatabaseManager`` instance.
++        db_name: Target database name.
++        retries: Number of retry attempts per call.
++        delay: Delay between retries in seconds.
++        breaker: Optional :class:`CircuitBreaker` instance.
++    """
 +
-     # Get data for analysis
-+    # Check rate limit for database read
-+    db_read_allowed, db_read_error = check_rate_limit("db_read") if check_rate_limit else (True, None)
-+    if not db_read_allowed:
-+        st.error(f"🚦 Database {db_read_error}")
-+        return {"error": "Database rate limited"}
-     recent_sessions = db_manager.get_timer_sessions(days=14)
-     
-     if len(recent_sessions) < 3:
-         st.info("📊 Complete a few more sessions to see personalized TDAH insights.")
-         return
-     
-     # Analyze patterns
-     insights = _analyze_tdah_patterns(recent_sessions)
-     
-     col1, col2 = st.columns(2)
-     
-     with col1:
-         st.markdown("#### 🎯 Focus Patterns")
-         
-         best_time = insights.get("best_focus_time")
-         if best_time:
-             st.success(f"🌟 **Best focus time:** {best_time}")
-         
-         avg_session_length = insights.get("avg_effective_session")
-         if avg_session_length:
-             st.info(f"⏱️ **Optimal session length:** {avg_session_length} minutes")
-         
-         interruption_pattern = insights.get("interruption_pattern")
-         if interruption_pattern:
-             st.warning(f"🚫 **Interruption trend:** {interruption_pattern}")
-@@ -528,51 +558,56 @@ def _skip_timer_session(timer_component, db_manager: DatabaseManager):
- 
- def _get_focus_rating() -> int:
-     """Get focus rating from user (quick modal-like interface)."""
-     # In a real implementation, this would show a modal or use session state
-     # For now, return a default value
-     return st.session_state.get("temp_focus_rating", 7)
- 
- 
- def _get_interruption_count() -> int:
-     """Get interruption count from user."""
-     return st.session_state.get("temp_interruption_count", 0)
- 
- 
- def _get_quick_mood_rating() -> int:
-     """Get quick mood rating."""
-     return st.session_state.get("temp_mood_rating", 5)
- 
- 
- def _get_quick_energy_rating() -> int:
-     """Get quick energy rating."""
-     return st.session_state.get("temp_energy_rating", 5)
- 
- 
- def _get_todays_sessions(db_manager: DatabaseManager) -> List[Dict[str, Any]]:
-     """Get today's timer sessions."""
--    
++    breaker = breaker or CircuitBreaker(failure_threshold=retries)
++    last_exc = None
++    for attempt in range(1, retries + 1):
++        try:
++            conn_cm = breaker.call(db_manager.get_connection, db_name)
++            with conn_cm as conn:
++                yield conn
++                return
++        except CircuitBreakerOpenError:
++            logger.error("Circuit breaker open; aborting connection attempts")
++            raise
++        except Exception as exc:  # pragma: no cover - generic
++            last_exc = exc
++            logger.warning("Connection attempt %s failed: %s", attempt, exc)
++            if attempt == retries:
++                raise
++            time.sleep(delay)
++    if last_exc:
++        raise last_exc
+diff --git a/tests/test_connection_pool_fix.py b/tests/test_connection_pool_fix.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..a05f269badb8112ec7d2f71fe9f91ee6fbefcdfd
+--- /dev/null
++++ b/tests/test_connection_pool_fix.py
+@@ -0,0 +1,52 @@
++import pathlib
++import sys
++import sqlite3
++from contextlib import contextmanager
 +
-+    # Check rate limit for database read
-+    db_read_allowed, db_read_error = check_rate_limit("db_read") if check_rate_limit else (True, None)
-+    if not db_read_allowed:
-+        st.error(f"🚦 Database {db_read_error}")
-+        return []
-     all_sessions = db_manager.get_timer_sessions(days=1)
-     today_str = datetime.now().strftime("%Y-%m-%d")
-     
-     return [
-         s for s in all_sessions 
-         if s.get("started_at", "").startswith(today_str)
-     ]
- 
- 
- def _calculate_avg_focus_rating(sessions: List[Dict[str, Any]]) -> float:
-     """Calculate average focus rating from sessions."""
-     
-     ratings = [s.get("focus_rating") for s in sessions if s.get("focus_rating")]
-     return sum(ratings) / len(ratings) if ratings else 0.0
- 
- 
- def _analyze_tdah_patterns(sessions: List[Dict[str, Any]]) -> Dict[str, Any]:
-     """Analyze TDAH patterns from session data."""
-     
-     insights = {
-         "recommendations": []
-     }
-     
-     # Analyze focus ratings by time of day
-     hourly_focus = {}
++import pytest
++
++sys.path.append(str(pathlib.Path(__file__).resolve().parents[1]))
++from streamlit_extension.utils.db_resilience import resilient_connection
++from streamlit_extension.utils.circuit_breaker import CircuitBreaker, CircuitBreakerOpenError
++
++
++class FlakyDBManager:
++    """DB manager that fails twice before succeeding."""
++
++    def __init__(self):
++        self.attempts = 0
++
++    @contextmanager
++    def get_connection(self, db_name: str = "framework"):
++        self.attempts += 1
++        if self.attempts <= 2:
++            raise sqlite3.OperationalError("temporary failure")
++        conn = sqlite3.connect(":memory:")
++        try:
++            yield conn
++        finally:
++            conn.close()
++
++
++class FailingDBManager:
++    @contextmanager
++    def get_connection(self, db_name: str = "framework"):
++        raise sqlite3.OperationalError("fail")
++
++
++def test_resilient_connection_recovers_from_transient_errors():
++    manager = FlakyDBManager()
++    with resilient_connection(manager) as conn:
++        assert conn.execute("SELECT 1").fetchone()[0] == 1
++
++
++def test_circuit_breaker_opens_after_failures():
++    manager = FailingDBManager()
++    breaker = CircuitBreaker(failure_threshold=2, recovery_timeout=60)
++    for _ in range(2):
++        with pytest.raises(sqlite3.OperationalError):
++            with resilient_connection(manager, retries=1, breaker=breaker):
++                pass
++    with pytest.raises(CircuitBreakerOpenError):
++        with resilient_connection(manager, retries=1, breaker=breaker):
++            pass
  
 EOF
 )
