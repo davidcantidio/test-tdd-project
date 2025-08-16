@@ -30,8 +30,13 @@ from streamlit_extension.utils.performance_tester import (
     create_performance_test_suite
 )
 from streamlit_extension.utils.database import DatabaseManager
-from streamlit_extension.auth import require_auth
 from streamlit_extension.utils.exception_handler import handle_streamlit_exceptions
+
+# Authentication middleware
+try:
+    from streamlit_extension.auth.middleware import init_protected_page
+except ImportError:
+    init_protected_page = None
 
 
 # Page configuration
@@ -58,11 +63,15 @@ def initialize_performance_components():
         st.session_state.monitoring_active = False
 
 
-@require_auth()
 @handle_streamlit_exceptions(show_error=True, attempt_recovery=True)
 def render_performance_dashboard():
     """Render main performance dashboard."""
-    st.title("🚀 Performance Testing Dashboard")
+    # Initialize protected page with authentication
+    current_user = init_protected_page("🚀 Performance Testing Dashboard")
+    if not current_user:
+        st.error("Authentication required")
+        return
+    
     st.markdown("Monitor system performance, run load tests, and analyze bottlenecks")
     
     # Sidebar controls

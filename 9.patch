@@ -1,333 +1,425 @@
- (cd "$(git rev-parse --show-toplevel)" && git apply --3way <<'EOF' 
-diff --git a/tests/security/test_authentication.py b/tests/security/test_authentication.py
+(cd "$(git rev-parse --show-toplevel)" && git apply --3way <<'EOF' 
+diff --git a/streamlit_extension/utils/redis_cache.py b/streamlit_extension/utils/redis_cache.py
 new file mode 100644
-index 0000000000000000000000000000000000000000..217e492a67de750ce9bdd2275fef883a12d94aa8
+index 0000000000000000000000000000000000000000..ad5e643542f5714297cb880b6c5ed53b014c973f
 --- /dev/null
-+++ b/tests/security/test_authentication.py
-@@ -0,0 +1,36 @@
++++ b/streamlit_extension/utils/redis_cache.py
+@@ -0,0 +1,400 @@
++#!/usr/bin/env python3
 +"""
-+🔐 Authentication Security Test Suite
-+
-+Authentication and authorization testing:
-+- Login security
-+- Session management
-+- Token validation
-+- Access control
++Redis Cache Integration
++Secure distributed caching with JSON serialization only.
++SECURITY FIX: Eliminated pickle serialization to prevent code execution.
 +"""
 +
-+class TestAuthentication:
-+    """Test authentication mechanisms."""
++import json
++import hashlib
++import time
++import threading
++import logging
++from typing import Any, Optional, Dict, List, Callable, Union
++from dataclasses import dataclass
++from datetime import datetime
++from functools import wraps
++from enum import Enum
++
++try:
++    import redis
++    REDIS_AVAILABLE = True
++except ImportError:
++    REDIS_AVAILABLE = False
++
++import streamlit as st
++
++logger = logging.getLogger(__name__)
++
++
++class CacheStrategy(Enum):
++    """Cache invalidation strategies."""
++    LRU = "lru"
++    TTL = "ttl"
++    WRITE_THROUGH = "write_through"
++
++
++@dataclass
++class CacheConfig:
++    """Secure cache configuration."""
++    redis_host: str = "localhost"
++    redis_port: int = 6379
++    redis_db: int = 0
++    redis_password: Optional[str] = None
++    connection_timeout: int = 5
++    max_connections: int = 50
++    default_ttl: int = 3600
++    enable_fallback: bool = True
++    fallback_size: int = 1000
++
++
++@dataclass
++class CacheStats:
++    """Cache performance statistics."""
++    hits: int = 0
++    misses: int = 0
++    sets: int = 0
++    errors: int = 0
 +    
-+    def test_login_validation(self):
-+        """Test login validation logic."""
-+        pass
-+        
-+    def test_session_security(self):
-+        """Test session security measures."""
-+        pass
-+        
-+    def test_token_validation(self):
-+        """Test authentication token validation."""
-+        pass
-+        
-+    def test_access_control(self):
-+        """Test page access control."""
-+        pass
-+        
-+    def test_brute_force_protection(self):
-+        """Test brute force attack protection."""
-+        pass
-+        
-+    def test_session_timeout(self):
-+        """Test session timeout handling."""
-+        pass
-diff --git a/tests/security/test_concurrent_operations.py b/tests/security/test_concurrent_operations.py
-new file mode 100644
-index 0000000000000000000000000000000000000000..539f7c9f3549b4c63a45454c5c16cb1789e7b047
---- /dev/null
-+++ b/tests/security/test_concurrent_operations.py
-@@ -0,0 +1,45 @@
-+"""
-+⚡ Concurrent Operations Security Test Suite
++    @property
++    def hit_rate(self) -> float:
++        """Calculate cache hit rate."""
++        total = self.hits + self.misses
++        return (self.hits / total * 100) if total > 0 else 0.0
 +
-+Tests for concurrent form submissions and conflicting updates:
-+- Race condition detection
-+- Data integrity under concurrency
-+- Optimistic locking
-+- Deadlock prevention
-+- Transaction isolation
-+"""
 +
-+class TestConcurrentOperations:
-+    """Test concurrent operation security and integrity."""
++class RedisCacheManager:
++    """Secure Redis cache manager with JSON-only serialization."""
 +    
-+    def test_concurrent_client_creation(self):
-+        """Test concurrent client creation for race conditions."""
-+        pass
++    def __init__(self, config: CacheConfig = None):
++        """Initialize Redis cache manager."""
++        self.config = config or CacheConfig()
++        self.stats = CacheStats()
++        self._lock = threading.RLock()
 +        
-+    def test_concurrent_project_updates(self):
-+        """Test concurrent project updates."""
-+        pass
++        # Redis connection
++        self.redis_client: Optional[redis.Redis] = None
++        self.redis_available = False
 +        
-+    def test_concurrent_epic_progress_updates(self):
-+        """Test concurrent epic progress calculations."""
-+        pass
++        # Secure fallback cache (in-memory)
++        self.fallback_cache: Dict[str, Any] = {}
++        self.fallback_expiry: Dict[str, float] = {}
 +        
-+    def test_concurrent_task_status_changes(self):
-+        """Test concurrent task status changes."""
-+        pass
++        # Initialize
++        if REDIS_AVAILABLE:
++            self._init_redis_connection()
 +        
-+    def test_optimistic_locking(self):
-+        """Test optimistic locking mechanisms."""
-+        pass
-+        
-+    def test_deadlock_prevention(self):
-+        """Test deadlock prevention in concurrent operations."""
-+        pass
-+        
-+    def test_data_consistency_under_load(self):
-+        """Test data consistency under concurrent load."""
-+        pass
-+        
-+    def test_double_submission_prevention(self):
-+        """Test prevention of double form submissions."""
-+        pass
-diff --git a/tests/security/test_csrf_protection.py b/tests/security/test_csrf_protection.py
-new file mode 100644
-index 0000000000000000000000000000000000000000..1cbaa80e83a0c0c188e6f703f5a5991205762137
---- /dev/null
-+++ b/tests/security/test_csrf_protection.py
-@@ -0,0 +1,53 @@
-+"""
-+🔒 CSRF Protection Test Suite
-+
-+Comprehensive CSRF testing:
-+- Token validation
-+- Origin header validation
-+- Referer header checks
-+- Cross-origin request blocking
-+- Token expiration
-+"""
-+
-+class TestCSRFProtection:
-+    """Test CSRF protection mechanisms."""
++        if self.config.enable_fallback:
++            self._start_fallback_cleanup()
 +    
-+    def test_csrf_token_generation(self):
-+        """Test CSRF token generation and format."""
-+        pass
++    def _init_redis_connection(self):
++        """Initialize secure Redis connection."""
++        try:
++            pool = redis.ConnectionPool(
++                host=self.config.redis_host,
++                port=self.config.redis_port,
++                db=self.config.redis_db,
++                password=self.config.redis_password,
++                max_connections=self.config.max_connections,
++                socket_timeout=self.config.connection_timeout,
++                decode_responses=True  # Auto-decode to strings
++            )
++            
++            self.redis_client = redis.Redis(connection_pool=pool)
++            self.redis_client.ping()
++            self.redis_available = True
++            
++            logger.info(f"Redis connected to {self.config.redis_host}:{self.config.redis_port}")
++            
++        except Exception as e:
++            logger.warning(f"Redis connection failed: {e}")
++            if not self.config.enable_fallback:
++                raise
++    
++    def _start_fallback_cleanup(self):
++        """Start background cleanup for fallback cache."""
++        def cleanup_expired():
++            while True:
++                try:
++                    current_time = time.time()
++                    with self._lock:
++                        expired_keys = [
++                            key for key, expiry in self.fallback_expiry.items()
++                            if expiry < current_time
++                        ]
++                        for key in expired_keys:
++                            self.fallback_cache.pop(key, None)
++                            self.fallback_expiry.pop(key, None)
++                    
++                    time.sleep(60)  # Check every minute
++                except Exception as e:
++                    logger.error(f"Fallback cleanup error: {e}")
++                    time.sleep(60)
 +        
-+    def test_csrf_token_validation(self):
-+        """Test CSRF token validation in forms."""
-+        pass
++        cleanup_thread = threading.Thread(target=cleanup_expired, daemon=True)
++        cleanup_thread.start()
++    
++    def _generate_key(self, namespace: str, key: str) -> str:
++        """Generate secure cache key."""
++        # Use SHA-256 for security
++        key_data = f"{namespace}:{key}".encode('utf-8')
++        key_hash = hashlib.sha256(key_data).hexdigest()[:16]
++        return f"tdd_cache:{namespace}:{key_hash}"
++    
++    def _serialize_value(self, value: Any) -> str:
++        """SECURITY FIX: JSON-only serialization to prevent code execution."""
++        try:
++            return json.dumps(value, default=str, ensure_ascii=False)
++        except Exception as e:
++            logger.error(f"Serialization error: {e}")
++            raise ValueError(f"Cannot serialize value: {e}")
++    
++    def _deserialize_value(self, data: str) -> Any:
++        """SECURITY FIX: JSON-only deserialization."""
++        try:
++            return json.loads(data)
++        except Exception as e:
++            logger.error(f"Deserialization error: {e}")
++            raise ValueError(f"Cannot deserialize data: {e}")
++    
++    def get(self, namespace: str, key: str, default: Any = None) -> Any:
++        """Get value from cache."""
++        cache_key = self._generate_key(namespace, key)
 +        
-+    def test_missing_csrf_token_rejection(self):
-+        """Test rejection of requests without CSRF token."""
-+        pass
++        try:
++            # Try Redis first
++            if self.redis_available:
++                try:
++                    data = self.redis_client.get(cache_key)
++                    if data is not None:
++                        value = self._deserialize_value(data)
++                        with self._lock:
++                            self.stats.hits += 1
++                        return value
++                except Exception as e:
++                    logger.error(f"Redis get error: {e}")
++                    with self._lock:
++                        self.stats.errors += 1
++            
++            # Try fallback cache
++            if self.config.enable_fallback:
++                with self._lock:
++                    if cache_key in self.fallback_cache:
++                        # Check expiry
++                        if cache_key in self.fallback_expiry:
++                            if time.time() > self.fallback_expiry[cache_key]:
++                                # Expired
++                                self.fallback_cache.pop(cache_key, None)
++                                self.fallback_expiry.pop(cache_key, None)
++                            else:
++                                # Valid
++                                self.stats.hits += 1
++                                return self.fallback_cache[cache_key]
++            
++            # Cache miss
++            with self._lock:
++                self.stats.misses += 1
++            return default
++            
++        except Exception as e:
++            logger.error(f"Cache get error: {e}")
++            with self._lock:
++                self.stats.errors += 1
++            return default
++    
++    def set(self, namespace: str, key: str, value: Any, ttl: Optional[int] = None) -> bool:
++        """Set value in cache."""
++        cache_key = self._generate_key(namespace, key)
++        ttl = ttl or self.config.default_ttl
 +        
-+    def test_invalid_csrf_token_rejection(self):
-+        """Test rejection of requests with invalid tokens."""
-+        pass
++        try:
++            serialized_value = self._serialize_value(value)
++            
++            # Set in Redis
++            if self.redis_available:
++                try:
++                    self.redis_client.setex(cache_key, ttl, serialized_value)
++                    with self._lock:
++                        self.stats.sets += 1
++                    return True
++                except Exception as e:
++                    logger.error(f"Redis set error: {e}")
++                    with self._lock:
++                        self.stats.errors += 1
++            
++            # Set in fallback cache
++            if self.config.enable_fallback:
++                with self._lock:
++                    # Size limit
++                    if len(self.fallback_cache) >= self.config.fallback_size:
++                        # Remove oldest entries
++                        oldest_keys = sorted(
++                            self.fallback_expiry.keys(),
++                            key=lambda k: self.fallback_expiry[k]
++                        )[:len(self.fallback_cache) // 2]
++                        
++                        for old_key in oldest_keys:
++                            self.fallback_cache.pop(old_key, None)
++                            self.fallback_expiry.pop(old_key, None)
++                    
++                    # Add new entry
++                    self.fallback_cache[cache_key] = value
++                    self.fallback_expiry[cache_key] = time.time() + ttl
++                    self.stats.sets += 1
++                
++                return True
++            
++            return False
++            
++        except Exception as e:
++            logger.error(f"Cache set error: {e}")
++            with self._lock:
++                self.stats.errors += 1
++            return False
++    
++    def delete(self, namespace: str, key: str) -> bool:
++        """Delete value from cache."""
++        cache_key = self._generate_key(namespace, key)
++        deleted = False
 +        
-+    def test_csrf_token_expiration(self):
-+        """Test CSRF token expiration handling."""
-+        pass
++        try:
++            # Delete from Redis
++            if self.redis_available:
++                try:
++                    result = self.redis_client.delete(cache_key)
++                    if result > 0:
++                        deleted = True
++                except Exception as e:
++                    logger.error(f"Redis delete error: {e}")
++            
++            # Delete from fallback
++            if self.config.enable_fallback:
++                with self._lock:
++                    if cache_key in self.fallback_cache:
++                        self.fallback_cache.pop(cache_key, None)
++                        self.fallback_expiry.pop(cache_key, None)
++                        deleted = True
++            
++            return deleted
++            
++        except Exception as e:
++            logger.error(f"Cache delete error: {e}")
++            return False
++    
++    def clear_namespace(self, namespace: str) -> int:
++        """Clear all keys in namespace."""
++        pattern = f"tdd_cache:{namespace}:*"
++        deleted_count = 0
 +        
-+    def test_cross_origin_request_blocking(self):
-+        """Test blocking of cross-origin requests."""
-+        pass
++        try:
++            # Redis pattern deletion
++            if self.redis_available:
++                try:
++                    keys = self.redis_client.keys(pattern)
++                    if keys:
++                        deleted_count += self.redis_client.delete(*keys)
++                except Exception as e:
++                    logger.error(f"Redis pattern delete error: {e}")
++            
++            # Fallback pattern deletion
++            if self.config.enable_fallback:
++                with self._lock:
++                    matching_keys = [k for k in self.fallback_cache.keys() if k.startswith(f"tdd_cache:{namespace}:")]
++                    for key in matching_keys:
++                        self.fallback_cache.pop(key, None)
++                        self.fallback_expiry.pop(key, None)
++                        deleted_count += 1
++            
++            return deleted_count
++            
++        except Exception as e:
++            logger.error(f"Namespace clear error: {e}")
++            return 0
++    
++    def get_stats(self) -> Dict[str, Any]:
++        """Get cache statistics."""
++        with self._lock:
++            stats_dict = {
++                'hits': self.stats.hits,
++                'misses': self.stats.misses,
++                'sets': self.stats.sets,
++                'errors': self.stats.errors,
++                'hit_rate': self.stats.hit_rate,
++                'redis_connected': self.redis_available,
++                'fallback_enabled': self.config.enable_fallback,
++                'fallback_entries': len(self.fallback_cache) if self.config.enable_fallback else 0
++            }
 +        
-+    def test_origin_header_validation(self):
-+        """Test Origin header validation."""
-+        pass
-+        
-+    def test_referer_header_validation(self):
-+        """Test Referer header validation."""
-+        pass
-+        
-+    def test_client_form_csrf_protection(self):
-+        """Test CSRF protection on client forms."""
-+        pass
-+        
-+    def test_project_form_csrf_protection(self):
-+        """Test CSRF protection on project forms."""
-+        pass
-diff --git a/tests/security/test_input_validation.py b/tests/security/test_input_validation.py
-new file mode 100644
-index 0000000000000000000000000000000000000000..1b846012bbcb9d0f0b0dd9245c0faea1fbaf903a
---- /dev/null
-+++ b/tests/security/test_input_validation.py
-@@ -0,0 +1,61 @@
-+"""
-+✅ Input Validation Security Test Suite
++        return stats_dict
 +
-+Comprehensive input validation testing:
-+- SQL injection prevention
-+- Command injection prevention
-+- Path traversal prevention
-+- Size limit enforcement
-+- Format validation
-+"""
 +
-+class TestInputValidation:
-+    """Test input validation security measures."""
-+    
-+    SQL_INJECTION_PAYLOADS = [
-+        "'; DROP TABLE framework_clients; --",
-+        "1' OR '1'='1",
-+        "'; INSERT INTO framework_clients (name) VALUES ('hacked'); --",
-+        "1; UPDATE framework_clients SET name='hacked' WHERE id=1; --"
-+    ]
-+    
-+    COMMAND_INJECTION_PAYLOADS = [
-+        "; rm -rf /",
-+        "| cat /etc/passwd",
-+        "&& curl malicious-site.com",
-+        "`id`"
-+    ]
-+    
-+    PATH_TRAVERSAL_PAYLOADS = [
-+        "../../../etc/passwd",
-+        "..\\..\\..\\windows\\system32\\config\\sam",
-+        "....//....//....//etc/passwd"
-+    ]
-+    
-+    def test_sql_injection_prevention(self):
-+        """Test SQL injection prevention in all inputs."""
-+        pass
++def cached(namespace: str = "default", ttl: Optional[int] = None, key_func: Optional[Callable] = None):
++    """Decorator for caching function results."""
++    def decorator(func: Callable) -> Callable:
++        @wraps(func)
++        def wrapper(*args, **kwargs):
++            # Generate cache key
++            if key_func:
++                cache_key = key_func(*args, **kwargs)
++            else:
++                key_parts = [func.__name__]
++                for arg in args:
++                    key_parts.append(str(hash(str(arg))))
++                for k, v in sorted(kwargs.items()):
++                    key_parts.append(f"{k}:{hash(str(v))}")
++                cache_key = ":".join(key_parts)
++            
++            # Try cache first
++            result = cache_manager.get(namespace, cache_key)
++            if result is not None:
++                return result
++            
++            # Execute function and cache result
++            result = func(*args, **kwargs)
++            cache_manager.set(namespace, cache_key, result, ttl)
++            
++            return result
 +        
-+    def test_command_injection_prevention(self):
-+        """Test command injection prevention."""
-+        pass
++        # Add cache management methods
++        wrapper.cache_clear = lambda: cache_manager.clear_namespace(namespace)
++        wrapper.cache_info = lambda: cache_manager.get_stats()
 +        
-+    def test_path_traversal_prevention(self):
-+        """Test path traversal prevention."""
-+        pass
-+        
-+    def test_size_limit_enforcement(self):
-+        """Test input size limit enforcement."""
-+        pass
-+        
-+    def test_format_validation(self):
-+        """Test input format validation."""
-+        pass
-+        
-+    def test_email_validation(self):
-+        """Test email format validation."""
-+        pass
-+        
-+    def test_numeric_validation(self):
-+        """Test numeric input validation."""
-+        pass
-diff --git a/tests/security/test_rate_limiting.py b/tests/security/test_rate_limiting.py
-new file mode 100644
-index 0000000000000000000000000000000000000000..19e32f53d675a2d13b6408f8e990dad809ef4933
---- /dev/null
-+++ b/tests/security/test_rate_limiting.py
-@@ -0,0 +1,40 @@
-+"""
-+🚦 Rate Limiting Security Test Suite
++        return wrapper
++    return decorator
 +
-+Rate limiting and DoS protection testing:
-+- Request rate limiting
-+- IP-based blocking
-+- Gradual backoff
-+- Rate limit bypass attempts
-+"""
 +
-+class TestRateLimiting:
-+    """Test rate limiting mechanisms."""
-+    
-+    def test_api_rate_limiting(self):
-+        """Test API request rate limiting."""
-+        pass
-+        
-+    def test_form_submission_rate_limiting(self):
-+        """Test form submission rate limiting."""
-+        pass
-+        
-+    def test_search_rate_limiting(self):
-+        """Test search operation rate limiting."""
-+        pass
-+        
-+    def test_database_operation_rate_limiting(self):
-+        """Test database operation rate limiting."""
-+        pass
-+        
-+    def test_rate_limit_bypass_attempts(self):
-+        """Test attempts to bypass rate limiting."""
-+        pass
-+        
-+    def test_ip_based_rate_limiting(self):
-+        """Test IP-based rate limiting."""
-+        pass
-+        
-+    def test_gradual_backoff(self):
-+        """Test gradual backoff implementation."""
-+        pass
-diff --git a/tests/security/test_xss_protection.py b/tests/security/test_xss_protection.py
-new file mode 100644
-index 0000000000000000000000000000000000000000..41d9f6e2018d0ec663fa200db6875747d82eee92
---- /dev/null
-+++ b/tests/security/test_xss_protection.py
-@@ -0,0 +1,58 @@
-+"""
-+🔉 XSS Protection Test Suite
++def cache_invalidate(namespace: str, pattern: str = "*"):
++    """Decorator to invalidate cache after function execution."""
++    def decorator(func: Callable) -> Callable:
++        @wraps(func)
++        def wrapper(*args, **kwargs):
++            result = func(*args, **kwargs)
++            cache_manager.clear_namespace(namespace)
++            return result
++        return wrapper
++    return decorator
 +
-+Comprehensive XSS testing:
-+- Script injection attempts
-+- HTML tag injection
-+- Event handler injection
-+- Unicode and encoding attacks
-+- Context-specific XSS (attributes, JavaScript, CSS)
-+"""
 +
-+class TestXSSProtection:
-+    """Test XSS protection mechanisms."""
++def render_cache_dashboard():
++    """Render cache monitoring dashboard."""
++    st.title("🗄️ Cache Management")
 +    
-+    XSS_PAYLOADS = [
-+        "<script>alert('XSS')</script>",
-+        "<img src=x onerror=alert('XSS')>",
-+        "javascript:alert('XSS')",
-+        "<svg onload=alert('XSS')>",
-+        "&#60;script&#62;alert('XSS')&#60;/script&#62;",
-+        "<iframe src='javascript:alert(\"XSS\")'></iframe>",
-+        "<input type='text' value='' onfocus='alert(\"XSS\")'>",
-+        "';alert('XSS');//",
-+        "\"><script>alert('XSS')</script>",
-+        "<body onload=alert('XSS')>"
-+    ]
++    stats = cache_manager.get_stats()
 +    
-+    def test_client_name_xss_protection(self):
-+        """Test XSS protection in client name field."""
-+        pass
-+        
-+    def test_project_description_xss_protection(self):
-+        """Test XSS protection in project description."""
-+        pass
-+        
-+    def test_epic_name_xss_protection(self):
-+        """Test XSS protection in epic names."""
-+        pass
-+        
-+    def test_task_title_xss_protection(self):
-+        """Test XSS protection in task titles."""
-+        pass
-+        
-+    def test_comment_xss_protection(self):
-+        """Test XSS protection in comments/notes."""
-+        pass
-+        
-+    def test_search_field_xss_protection(self):
-+        """Test XSS protection in search inputs."""
-+        pass
-+        
-+    def test_url_parameter_xss_protection(self):
-+        """Test XSS protection in URL parameters."""
-+        pass
-+        
-+    def test_json_field_xss_protection(self):
-+        """Test XSS protection in JSON fields."""
-+        pass
- 
-EOF
++    col1, col2, col3 = st.columns(3)
++    
++    with col1:
++        st.metric("Hit Rate", f"{stats['hit_rate']:.1f}%")
++    
++    with col2:
++        st.metric("Total Hits", stats['hits'])
++    
++    with col3:
++        st.metric("Total Misses", stats['misses'])
++    
++    # Status
++    if stats['redis_connected']:
++        st.success("✅ Redis connected")
++    else:
++        st.error("❌ Redis disconnected")
++        if stats['fallback_enabled']:
++            st.info(f"📝 Using fallback cache ({stats['fallback_entries']} entries)")
++
++
++# Initialize secure cache manager
++cache_manager = RedisCacheManager()
++
++
++# Export main components
++__all__ = [
++    'RedisCacheManager',
++    'CacheConfig',
++    'cached',
++    'cache_invalidate',
++    'cache_manager'
++]
++
++EOF
 )

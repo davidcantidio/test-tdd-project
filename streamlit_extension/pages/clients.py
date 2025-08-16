@@ -38,14 +38,14 @@ try:
         GeneralStatus, ClientTier, CompanySize, UIConstants, FormFields
     )
     # Import authentication middleware
-    from streamlit_extension.auth.middleware import init_protected_page, require_auth
+    from streamlit_extension.auth.middleware import init_protected_page
     DATABASE_UTILS_AVAILABLE = True
 except ImportError:
     DATABASE_UTILS_AVAILABLE = False
     DatabaseManager = validate_client_data = load_config = None
     create_safe_client = sanitize_display = validate_form = None
     GeneralStatus = ClientTier = CompanySize = UIConstants = FormFields = None
-    init_protected_page = require_auth = None
+    init_protected_page = None
 
 from streamlit_extension.utils.exception_handler import (
     handle_streamlit_exceptions,

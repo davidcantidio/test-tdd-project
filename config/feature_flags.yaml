@@ -1,0 +1,81 @@
+# Feature flag configuration
+
+default:
+  new_analytics_dashboard:
+    description: "New analytics dashboard with advanced visualizations"
+    type: "percentage"
+    enabled: true
+    percentage: 0.0  # Start with 0% rollout
+    metadata:
+      owner: "analytics_team"
+      jira_ticket: "FEAT-123"
+
+  enhanced_security:
+    description: "Enhanced security features including 2FA"
+    type: "boolean"
+    enabled: false
+    metadata:
+      owner: "security_team"
+      compliance: "SOC2"
+
+  premium_features:
+    description: "Premium features for paid users"
+    type: "conditional"
+    enabled: true
+    conditions:
+      subscription_tier: "premium"
+      account_age_days:
+        operator: ">="
+        value: 30
+
+  ui_redesign:
+    description: "A/B test for new UI design"
+    type: "variant"
+    enabled: true
+    variants:
+      control:
+        weight: 50
+        config:
+          theme: "classic"
+      variant_a:
+        weight: 25
+        config:
+          theme: "modern"
+      variant_b:
+        weight: 25
+        config:
+          theme: "minimal"
+
+development:
+  new_analytics_dashboard:
+    percentage: 1.0  # 100% in development
+
+  enhanced_security:
+    enabled: true  # Always on in dev
+
+  experimental_feature:
+    description: "Experimental feature for testing"
+    type: "user_list"
+    enabled: true
+    allowed_users: ["dev_user_1", "dev_user_2"]
+
+staging:
+  new_analytics_dashboard:
+    percentage: 0.5  # 50% in staging
+
+  beta_features:
+    description: "Beta features for testing"
+    type: "role_based"
+    enabled: true
+    allowed_roles: ["admin", "beta_tester"]
+
+production:
+  new_analytics_dashboard:
+    percentage: 0.1  # 10% initial rollout
+
+  maintenance_mode:
+    description: "Maintenance mode flag"
+    type: "time_based"
+    enabled: false
+    start_time: "2024-01-15T00:00:00"
+    end_time: "2024-01-15T02:00:00"

@@ -34,11 +34,14 @@ try:
         security_manager
     )
     from streamlit_extension.config.streamlit_config import reload_config
+    # Import authentication middleware
+    from streamlit_extension.auth.middleware import init_protected_page
     DATABASE_UTILS_AVAILABLE = True
 except ImportError:
     DatabaseManager = load_config = create_streamlit_config_file = reload_config = None
     create_safe_client = sanitize_display = validate_form = None
     check_rate_limit = security_manager = None
+    init_protected_page = None
     DATABASE_UTILS_AVAILABLE = False
 
 from streamlit_extension.utils.exception_handler import (
@@ -48,15 +51,17 @@ from streamlit_extension.utils.exception_handler import (
     get_error_statistics,
 )
 
-from streamlit_extension.auth import require_auth
-
 
 @handle_streamlit_exceptions(show_error=True, attempt_recovery=True)
-@require_auth()
 def render_settings_page():
     """Render the settings configuration page."""
     if not STREAMLIT_AVAILABLE:
         return {"error": "Streamlit not available"}
+    
+    # Initialize protected page with authentication
+    current_user = init_protected_page("⚙️ Settings & Configuration")
+    if not current_user:
+        return {"error": "Authentication required"}
     
     # Check rate limit for page load
     page_rate_allowed, page_rate_error = check_rate_limit("page_load") if check_rate_limit else (True, None)
@@ -65,7 +70,6 @@ def render_settings_page():
         st.info("Please wait before reloading the page.")
         return {"error": "Rate limited"}
     
-    st.title("⚙️ Settings & Configuration")
     st.markdown("---")
     
     if not DATABASE_UTILS_AVAILABLE:

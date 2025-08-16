@@ -52,12 +52,15 @@ try:
     from streamlit_extension.utils.exception_handler import (
         handle_streamlit_exceptions, streamlit_error_boundary, safe_streamlit_operation
     )
-from streamlit_extension.config import load_config
+    from streamlit_extension.config import load_config
+    # Import authentication middleware
+    from streamlit_extension.auth.middleware import init_protected_page
     DATABASE_UTILS_AVAILABLE = True
 except ImportError:
     DatabaseManager = load_config = None
     create_safe_client = sanitize_display = validate_form = None
     check_rate_limit = security_manager = None
+    init_protected_page = None
     DATABASE_UTILS_AVAILABLE = False
 
 try:
@@ -77,8 +80,7 @@ except ImportError:
     PERFORMANCE_UTILS_AVAILABLE = False
 
 
-# Authentication
-from streamlit_extension.auth import require_auth
+# Authentication middleware integration handled in imports above
 
 # Performance optimization functions
 class AnalyticsCache:
@@ -241,12 +243,16 @@ def optimize_database_queries(db_manager: DatabaseManager, days: int, filters: D
         }
 
 
-@require_auth()
 @handle_streamlit_exceptions(show_error=True, attempt_recovery=True)
 def render_analytics_page():
     """Render the analytics dashboard page."""
     if not STREAMLIT_AVAILABLE:
         return {"error": "Streamlit not available"}
+
+    # Initialize protected page with authentication
+    current_user = init_protected_page("📊 Analytics Dashboard")
+    if not current_user:
+        return {"error": "Authentication required"}
 
     # Check rate limit for page load
     page_rate_allowed, page_rate_error = check_rate_limit("page_load") if check_rate_limit else (True, None)

@@ -35,11 +35,14 @@ try:
     from streamlit_extension.config.constants import (
         TaskStatus, TDDPhase, Priority, UIConstants
     )
+    # Import authentication middleware
+    from streamlit_extension.auth.middleware import init_protected_page
     DATABASE_UTILS_AVAILABLE = True
 except ImportError:
     DatabaseManager = load_config = security_manager = None
     validate_form = check_rate_limit = sanitize_display = None
     TaskStatus = TDDPhase = Priority = UIConstants = None
+    init_protected_page = None
     DATABASE_UTILS_AVAILABLE = False
 
 from streamlit_extension.utils.exception_handler import (
@@ -49,15 +52,16 @@ from streamlit_extension.utils.exception_handler import (
     get_error_statistics,
 )
 
-from streamlit_extension.auth import require_auth
-
-
 @handle_streamlit_exceptions(show_error=True, attempt_recovery=True)
-@require_auth()
 def render_kanban_page():
     """Render the Kanban board page."""
     if not STREAMLIT_AVAILABLE:
         return {"error": "Streamlit not available"}
+    
+    # Initialize protected page with authentication
+    current_user = init_protected_page("📋 Kanban Board")
+    if not current_user:
+        return {"error": "Authentication required"}
     
     # Page load rate limiting
     page_rate_allowed, page_rate_error = check_rate_limit("page_load") if check_rate_limit else (True, None)
@@ -66,7 +70,6 @@ def render_kanban_page():
         st.info("Please wait before reloading the page.")
         return {"error": "Rate limited"}
     
-    st.title(UIConstants.KANBAN_PAGE_TITLE if UIConstants else "📋 Kanban Board")
     st.markdown("---")
     
     # Initialize database manager

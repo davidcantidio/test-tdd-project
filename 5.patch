@@ -1,713 +1,538 @@
  (cd "$(git rev-parse --show-toplevel)" && git apply --3way <<'EOF' 
-diff --git a/duration_system/duration_calculator.py b/duration_system/duration_calculator.py
-index 08255db1ae81193de3af73acc949eb46c1af34d6..37cd71f3c72af758266cd71cac74a44b7dd974a8 100644
---- a/duration_system/duration_calculator.py
-+++ b/duration_system/duration_calculator.py
-@@ -1,32 +1,40 @@
--"""
--Duration Calculator Engine for Epic Timeline Management
-+"""Duration calculator for epic timeline management.
-+
-+The module offers utilities to parse human readable duration strings and
-+convert them into concrete date offsets.  Both calendar and business day
-+calculations are supported with simple algorithms that skip weekends when
-+necessary.  These helpers power the duration features used across the test
-+TDD project.
- 
--This module provides automatic duration calculation between dates with support
--for business days, calendar days, and various time units used in real epic data.
-+Example:
-+    >>> calc = DurationCalculator()
-+    >>> calc.calculate_duration_days("2024-01-01", "2024-01-03")
-+    2.0
- 
--Focus: Duration System Implementation - Core calculation logic
-+Todo:
-+    * Add holiday calendar integration for business day calculations.
- """
- 
- from datetime import datetime, date, timedelta
- from typing import Optional, Tuple, Union, Dict, Any
- from enum import Enum
- import re
- import logging
- 
- logger = logging.getLogger(__name__)
- 
- # Average number of days per month in Gregorian calendar
- AVERAGE_DAYS_PER_MONTH = 365.25 / 12  # ≈30.4375 days
- 
- 
- class DurationUnit(Enum):
-     """Supported duration units from real epic data"""
-     DAYS = "dias"
-     WEEKS = "semanas"
-     MONTHS = "meses"
- 
- 
- class DateCalculationMode(Enum):
-     """Date calculation modes"""
-     CALENDAR_DAYS = "calendar"
-     BUSINESS_DAYS = "business"
-diff --git a/scripts/validate_docstrings.py b/scripts/validate_docstrings.py
-index 5eb9e5ba53b15e0523073ee9e270de46bb1b2387..bcae0ccf62712f3f56d8bdd0d9616675d0aa13db 100644
---- a/scripts/validate_docstrings.py
-+++ b/scripts/validate_docstrings.py
-@@ -1,43 +1,50 @@
- """
- Script para validar que todos os métodos públicos têm docstrings.
- """
- 
- from __future__ import annotations
- 
- import importlib.util
- import inspect
- from typing import List, Dict
- 
- 
- class DocstringValidator:
-     def check_missing_docstrings(self, module_path: str) -> List[str]:
--        """Check for missing docstrings in public methods."""
--        spec = importlib.util.spec_from_file_location("_mod", module_path)
--        module = importlib.util.module_from_spec(spec)
--        assert spec.loader is not None
--        spec.loader.exec_module(module)  # type: ignore[assignment]
-+        """Check for missing docstrings in public methods.
-+
-+        Args:
-+            module_path: File path to module or dotted module path.
-+        """
-+        if module_path.endswith(".py"):
-+            spec = importlib.util.spec_from_file_location("_mod", module_path)
-+            module = importlib.util.module_from_spec(spec)
-+            assert spec.loader is not None
-+            spec.loader.exec_module(module)  # type: ignore[assignment]
-+        else:
-+            module = importlib.import_module(module_path)
- 
-         missing: List[str] = []
-         for name, obj in inspect.getmembers(module, inspect.isclass):
-             for meth_name, meth in inspect.getmembers(obj, inspect.isfunction):
-                 if not meth_name.startswith("_") and not inspect.getdoc(meth):
-                     missing.append(f"{name}.{meth_name}")
-         return missing
- 
-     def validate_docstring_format(self, docstring: str) -> bool:
-         """Validate docstring follows Google style guide."""
-         if not docstring:
-             return False
-         return "Args:" in docstring and "Returns:" in docstring
- 
-     def generate_report(self, results: Dict[str, object]) -> str:
-         """Generate validation report."""
-         lines = []
-         for name, status in results.items():
-             lines.append(f"{name}: {status}")
-         return "\n".join(lines)
- 
- 
- if __name__ == "__main__":
-     validator = DocstringValidator()
-     missing = validator.check_missing_docstrings("streamlit_extension/utils/database.py")
-diff --git a/streamlit_extension/auth/auth_manager.py b/streamlit_extension/auth/auth_manager.py
-index bda3e98def80422550e1a41a379eded3933537f9..84e7929a3e28fe630d044c7174e8783e4161d5f7 100644
---- a/streamlit_extension/auth/auth_manager.py
-+++ b/streamlit_extension/auth/auth_manager.py
-@@ -1,140 +1,249 @@
--"""Core authentication management system."""
-+"""User authentication and authorization management.
-+
-+This module implements SHA-256 based password hashing, session lifecycle
-+management and basic role based access control for the Streamlit
-+application.  It provides helpers for user registration, login, logout and
-+password changes while enforcing security features such as account
-+lockouts and session validation.
-+
-+Example:
-+    Basic login flow::
-+
-+        from streamlit_extension.auth.auth_manager import AuthManager
-+
-+        auth = AuthManager("framework.db")
-+        result = auth.register_user("alice", "alice@example.com", "s3cret")
-+        if result.success:
-+            auth.authenticate("alice", "s3cret")
-+
-+Classes:
-+    AuthManager: Core class responsible for authentication operations.
-+    AuthResult: Dataclass describing authentication outcomes.
-+
-+Todo:
-+    * Implement password reset via email
-+    * Add token based authentication for API usage
+diff --git a/config/feature_flags.py b/config/feature_flags.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..22ae02bb63df872a5421fecaea81b96410ca6f23
+--- /dev/null
++++ b/config/feature_flags.py
+@@ -0,0 +1,418 @@
++#!/usr/bin/env python3
 +"""
- 
- from __future__ import annotations
- import hashlib
- import secrets
- from dataclasses import dataclass
- from typing import Optional, Dict, Any
- from datetime import datetime, timedelta
- import sqlite3
- 
--from .user_model import User, UserRole
--from .session_handler import SessionHandler, SessionData
-+try:
-+    from .user_model import User, UserRole
-+    from .session_handler import SessionHandler, SessionData
-+except ImportError:  # pragma: no cover - simplifies standalone usage
-+    class User:  # type: ignore
-+        """Fallback user model."""
++Feature Flags System
++Control feature rollout and A/B testing.
++"""
 +
-+    class UserRole:  # type: ignore
-+        USER = "user"
++import os
++import yaml
++import logging
++import hashlib
++from pathlib import Path
++from typing import Any, Callable, Dict, List, Optional
++from enum import Enum
++from dataclasses import dataclass, field
++from datetime import datetime
++from functools import wraps
 +
-+    class SessionData:  # type: ignore
-+        user: Optional[User] = None
++import streamlit as st
 +
-+    class SessionHandler:  # type: ignore
-+        def create_session(self, user: User) -> str:  # pragma: no cover
-+            return ""
++logger = logging.getLogger(__name__)
 +
-+        def destroy_session(self, session_id: str) -> bool:  # pragma: no cover
++
++class FeatureFlagType(Enum):
++    """Types of feature flags."""
++
++    BOOLEAN = "boolean"  # Simple on/off
++    PERCENTAGE = "percentage"  # Rollout percentage
++    USER_LIST = "user_list"  # Specific users
++    ROLE_BASED = "role_based"  # Based on user roles
++    TIME_BASED = "time_based"  # Time-window activation
++    VARIANT = "variant"  # A/B testing variants
++    CONDITIONAL = "conditional"  # Complex conditions
++
++
++@dataclass
++class FeatureFlag:
++    """Feature flag definition."""
++
++    name: str
++    description: str
++    flag_type: FeatureFlagType
++    enabled: bool = False
++    percentage: float = 0.0
++    allowed_users: List[str] = field(default_factory=list)
++    allowed_roles: List[str] = field(default_factory=list)
++    start_time: Optional[datetime] = None
++    end_time: Optional[datetime] = None
++    variants: Dict[str, Any] = field(default_factory=dict)
++    conditions: Dict[str, Any] = field(default_factory=dict)
++    metadata: Dict[str, Any] = field(default_factory=dict)
++
++    def is_enabled_for_user(
++        self,
++        user_id: str,
++        user_role: str | None = None,
++        user_attributes: Dict | None = None,
++    ) -> bool:
++        """Check if feature is enabled for specific user."""
++        if not self.enabled:
 +            return False
 +
-+        def get_session(self, session_id: str) -> Optional[SessionData]:  # pragma: no cover
++        if self.flag_type == FeatureFlagType.BOOLEAN:
++            return True
++
++        if self.flag_type == FeatureFlagType.PERCENTAGE:
++            # SECURITY FIX: Use SHA-256 instead of MD5
++            hash_value = int(
++                hashlib.sha256(f"{self.name}:{user_id}".encode()).hexdigest(), 16
++            )
++            return (hash_value % 100) < (self.percentage * 100)
++
++        if self.flag_type == FeatureFlagType.USER_LIST:
++            return user_id in self.allowed_users
++
++        if self.flag_type == FeatureFlagType.ROLE_BASED:
++            return user_role in self.allowed_roles if user_role else False
++
++        if self.flag_type == FeatureFlagType.TIME_BASED:
++            now = datetime.now()
++            if self.start_time and now < self.start_time:
++                return False
++            if self.end_time and now > self.end_time:
++                return False
++            return True
++
++        if self.flag_type == FeatureFlagType.CONDITIONAL:
++            return self._evaluate_conditions(user_id, user_role, user_attributes)
++
++        return False
++
++    def get_variant(self, user_id: str) -> Optional[str]:
++        """Get A/B test variant for user."""
++        if self.flag_type != FeatureFlagType.VARIANT:
 +            return None
 +
-+        def is_valid_session(self, session_id: str) -> bool:  # pragma: no cover
++        if not self.variants:
++            return None
++
++        # SECURITY FIX: Use SHA-256 instead of MD5
++        hash_value = int(
++            hashlib.sha256(f"{self.name}:variant:{user_id}".encode()).hexdigest(), 16
++        )
++        bucket = hash_value % 100
++
++        cumulative = 0
++        for variant_name, variant_config in self.variants.items():
++            weight = variant_config.get("weight", 0)
++            cumulative += weight
++            if bucket < cumulative:
++                return variant_name
++
++        return None
++
++    def _evaluate_conditions(
++        self, user_id: str, user_role: str, user_attributes: Dict
++    ) -> bool:
++        """Evaluate complex conditions."""
++        if not user_attributes:
 +            return False
- 
- 
- @dataclass
- class AuthResult:
-     """Result of authentication operations."""
-     success: bool
-     user: Optional[User] = None
-     message: str = ""
-     session_id: Optional[str] = None
- 
- 
- class AuthManager:
--    """Manages user authentication, registration, and session lifecycle."""
--    
-+    """Manage user registration, authentication and session state.
 +
-+    The manager stores credentials in a SQLite database and tracks active
-+    sessions through :class:`SessionHandler`.  Account lockout, password
-+    hashing and minimal role management are provided out of the box.
++        for key, expected_value in self.conditions.items():
++            actual_value = user_attributes.get(key)
 +
-+    Attributes:
-+        db_path: Path to SQLite database storing authentication tables.
-+        session_handler: Handler responsible for session creation and
-+            validation.
-+    """
++            if actual_value is None:
++                return False
 +
-     def __init__(self, db_path: str = "framework.db"):
-+        """Create a new authentication manager.
++            if isinstance(expected_value, dict):
++                operator = expected_value.get("operator", "==")
++                value = expected_value.get("value")
 +
-+        Args:
-+            db_path: Path to the SQLite database. Defaults to ``framework.db``.
++                if operator == ">":
++                    if not (actual_value > value):
++                        return False
++                elif operator == ">=":
++                    if not (actual_value >= value):
++                        return False
++                elif operator == "<":
++                    if not (actual_value < value):
++                        return False
++                elif operator == "<=":
++                    if not (actual_value <= value):
++                        return False
++                elif operator == "in":
++                    if actual_value not in value:
++                        return False
++                elif operator == "not_in":
++                    if actual_value in value:
++                        return False
++                else:
++                    if actual_value != value:
++                        return False
++            else:
++                if actual_value != expected_value:
++                    return False
 +
-+        Example:
-+            >>> auth = AuthManager("framework.db")
-+        """
-         self.db_path = db_path
-         self.session_handler = SessionHandler()
-         self._ensure_auth_tables()
-     
-     def _ensure_auth_tables(self) -> None:
-         """Create authentication tables if they don't exist."""
-         with sqlite3.connect(self.db_path) as conn:
-             conn.execute("""
-                 CREATE TABLE IF NOT EXISTS auth_users (
-                     id INTEGER PRIMARY KEY AUTOINCREMENT,
-                     username TEXT UNIQUE NOT NULL,
-                     email TEXT UNIQUE NOT NULL,
-                     password_hash TEXT NOT NULL,
-                     salt TEXT NOT NULL,
-                     role TEXT NOT NULL DEFAULT 'user',
-                     is_active BOOLEAN DEFAULT 1,
-                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                     last_login TIMESTAMP,
-                     failed_login_attempts INTEGER DEFAULT 0,
-                     locked_until TIMESTAMP NULL
-                 )
-             """)
-             
-             conn.execute("""
-                 CREATE INDEX IF NOT EXISTS idx_auth_users_username ON auth_users(username)
-             """)
-             
-             conn.execute("""
-                 CREATE INDEX IF NOT EXISTS idx_auth_users_email ON auth_users(email)
-             """)
-     
-     def _hash_password(self, password: str, salt: str) -> str:
-         """Hash password with salt using SHA-256."""
-         return hashlib.sha256((password + salt).encode()).hexdigest()
-     
-     def _generate_salt(self) -> str:
-         """Generate cryptographically secure salt."""
-         return secrets.token_hex(32)
-     
--    def register_user(self, username: str, email: str, password: str, 
--                     role: UserRole = UserRole.USER) -> AuthResult:
--        """Register new user with validation."""
-+    def register_user(
-+        self,
-+        username: str,
-+        email: str,
-+        password: str,
-+        role: UserRole = UserRole.USER,
-+    ) -> AuthResult:
-+        """Register a new user in the authentication database.
++        return True
 +
-+        Args:
-+            username: Desired unique username (at least 3 characters).
-+            email: Contact e-mail address.
-+            password: Raw password string (minimum 8 characters).
-+            role: Optional role assigned to the user. Defaults to
-+                :class:`UserRole.USER`.
 +
-+        Returns:
-+            AuthResult: Result object with success flag and optional user.
++class FeatureFlagManager:
++    """Manage feature flags across the application."""
 +
-+        Raises:
-+            ValueError: If provided data fails basic validation.
-+            Exception: If database interaction fails.
++    def __init__(self, config_path: str = "config/feature_flags.yaml", environment: str | None = None):
++        self.config_path = config_path
++        self.environment = environment or os.getenv("ENVIRONMENT", "development")
++        self.flags: Dict[str, FeatureFlag] = {}
++        self.analytics: List[Dict] = []
++        self.load_configuration()
 +
-+        Example:
-+            >>> auth = AuthManager()
-+            >>> result = auth.register_user("alice", "a@example.com", "s3cret")
-+            >>> result.success
-+            True
-+        """
-         # Input validation
-         if len(username) < 3:
-             return AuthResult(False, message="Username must be at least 3 characters")
--        
++    def load_configuration(self) -> None:
++        """Load feature flags from configuration file."""
++        try:
++            with open(self.config_path, "r", encoding="utf-8") as f:
++                # SECURITY FIX: Use safe_load to prevent YAML injection
++                config = yaml.safe_load(f)
 +
-         if len(password) < 8:
-             return AuthResult(False, message="Password must be at least 8 characters")
--        
++            # Validate YAML structure
++            if not isinstance(config, dict):
++                raise ValueError("Invalid YAML structure: root must be a dictionary")
 +
-         if "@" not in email or "." not in email:
-             return AuthResult(False, message="Invalid email format")
--        
++            env_flags = config.get(self.environment, {})
++            default_flags = config.get("default", {})
++            
++            # Validate environment sections
++            if not isinstance(env_flags, dict):
++                logger.warning(f"Invalid environment section: {self.environment}")
++                env_flags = {}
++            if not isinstance(default_flags, dict):
++                logger.warning("Invalid default section")
++                default_flags = {}
++                
++            all_flags = {**default_flags, **env_flags}
 +
-         try:
-             with sqlite3.connect(self.db_path) as conn:
-                 # Check if user exists
-                 existing = conn.execute(
-                     "SELECT id FROM auth_users WHERE username = ? OR email = ?",
-                     (username, email)
-                 ).fetchone()
--                
-+
-                 if existing:
-                     return AuthResult(False, message="Username or email already exists")
--                
-+
-                 # Create user
-                 salt = self._generate_salt()
-                 password_hash = self._hash_password(password, salt)
--                
--                cursor = conn.execute("""
-+
-+                cursor = conn.execute(
-+                    """
-                     INSERT INTO auth_users (username, email, password_hash, salt, role)
-                     VALUES (?, ?, ?, ?, ?)
--                """, (username, email, password_hash, salt, role.value))
--                
-+                    """,
-+                    (username, email, password_hash, salt, role.value),
++            for flag_name, flag_config in all_flags.items():
++                if not isinstance(flag_config, dict):
++                    logger.warning(f"Invalid flag config for {flag_name}")
++                    continue
++                    
++                self.flags[flag_name] = FeatureFlag(
++                    name=flag_name,
++                    description=flag_config.get("description", ""),
++                    flag_type=FeatureFlagType(flag_config.get("type", "boolean")),
++                    enabled=flag_config.get("enabled", False),
++                    percentage=flag_config.get("percentage", 0.0),
++                    allowed_users=flag_config.get("allowed_users", []),
++                    allowed_roles=flag_config.get("allowed_roles", []),
++                    start_time=self._parse_datetime(flag_config.get("start_time")),
++                    end_time=self._parse_datetime(flag_config.get("end_time")),
++                    variants=flag_config.get("variants", {}),
++                    conditions=flag_config.get("conditions", {}),
++                    metadata=flag_config.get("metadata", {}),
 +                )
 +
-                 user = User(
-                     id=cursor.lastrowid,
-                     username=username,
-                     email=email,
-                     role=role,
-                     is_active=True,
--                    created_at=datetime.now()
-+                    created_at=datetime.now(),
-                 )
--                
++            logger.info(
++                "Loaded %d feature flags for %s", len(self.flags), self.environment
++            )
++        except FileNotFoundError:
++            logger.warning("Feature flags config not found: %s", self.config_path)
++            self._load_defaults()
++        except yaml.YAMLError as e:
++            logger.error("YAML parsing error in feature flags: %s", e)
++            self._load_defaults()
++        except Exception as exc:
++            logger.error("Error loading feature flags: %s", exc)
++            self._load_defaults()
 +
-                 return AuthResult(True, user=user, message="User registered successfully")
--                
++    def _parse_datetime(self, dt_string: Optional[str]) -> Optional[datetime]:
++        if not dt_string:
++            return None
++        try:
++            return datetime.fromisoformat(dt_string)
++        except Exception:
++            return None
 +
-         except Exception as e:
-             return AuthResult(False, message=f"Registration failed: {str(e)}")
-     
-     def authenticate(self, username: str, password: str) -> AuthResult:
--        """Authenticate user and create session."""
-+        """Authenticate a user and create a session.
++    def _load_defaults(self) -> None:
++        self.flags = {
++            "new_analytics_dashboard": FeatureFlag(
++                name="new_analytics_dashboard",
++                description="New analytics dashboard with advanced metrics",
++                flag_type=FeatureFlagType.PERCENTAGE,
++                enabled=True,
++                percentage=0.1,
++            ),
++            "enhanced_security": FeatureFlag(
++                name="enhanced_security",
++                description="Enhanced security features",
++                flag_type=FeatureFlagType.BOOLEAN,
++                enabled=True,
++            ),
++            "beta_features": FeatureFlag(
++                name="beta_features",
++                description="Beta features for testing",
++                flag_type=FeatureFlagType.ROLE_BASED,
++                enabled=True,
++                allowed_roles=["admin", "beta_tester"],
++            ),
++        }
 +
-+        Args:
-+            username: Username used for login.
-+            password: Raw password string.
++    def is_enabled(
++        self,
++        flag_name: str,
++        user_id: str | None = None,
++        user_role: str | None = None,
++        user_attributes: Dict | None = None,
++    ) -> bool:
++        if flag_name not in self.flags:
++            logger.warning("Unknown feature flag: %s", flag_name)
++            return False
 +
-+        Returns:
-+            AuthResult: Authentication outcome including created session ID when
-+            successful.
++        flag = self.flags[flag_name]
++        self._track_flag_check(flag_name, user_id)
 +
-+        Example:
-+            >>> auth = AuthManager()
-+            >>> auth.authenticate("alice", "s3cret").success
-+            False
-+        """
-         try:
-             with sqlite3.connect(self.db_path) as conn:
-                 # Get user data
-                 row = conn.execute("""
-                     SELECT id, username, email, password_hash, salt, role, is_active, 
-                            failed_login_attempts, locked_until
-                     FROM auth_users WHERE username = ?
-                 """, (username,)).fetchone()
-                 
-                 if not row:
-                     return AuthResult(False, message="Invalid credentials")
-                 
-                 user_id, username, email, stored_hash, salt, role, is_active, failed_attempts, locked_until = row
-                 
-                 # Check if account is locked
-                 if locked_until and datetime.fromisoformat(locked_until) > datetime.now():
-                     return AuthResult(False, message="Account temporarily locked")
-                 
-                 # Check if account is active
-                 if not is_active:
-                     return AuthResult(False, message="Account is disabled")
-                 
-                 # Verify password
-                 password_hash = self._hash_password(password, salt)
-                 if password_hash != stored_hash:
-@@ -157,97 +266,135 @@ class AuthManager:
-                     UPDATE auth_users 
-                     SET failed_login_attempts = 0, locked_until = NULL, last_login = ?
-                     WHERE id = ?
-                 """, (datetime.now(), user_id))
-                 
-                 # Create user object
-                 user = User(
-                     id=user_id,
-                     username=username,
-                     email=email,
-                     role=UserRole(role),
-                     is_active=is_active,
-                     last_login=datetime.now()
-                 )
-                 
-                 # Create session
-                 session_id = self.session_handler.create_session(user)
-                 
-                 return AuthResult(True, user=user, session_id=session_id, 
-                                 message="Login successful")
-                 
-         except Exception as e:
-             return AuthResult(False, message=f"Authentication failed: {str(e)}")
-     
-     def logout(self, session_id: str) -> bool:
--        """Logout user and destroy session."""
-+        """Terminate a user session.
++        if not user_id:
++            return flag.enabled and flag.flag_type == FeatureFlagType.BOOLEAN
 +
-+        Args:
-+            session_id: Identifier of the session to destroy.
++        return flag.is_enabled_for_user(user_id, user_role, user_attributes)
 +
-+        Returns:
-+            bool: ``True`` if the session was removed, ``False`` otherwise.
-+        """
-         return self.session_handler.destroy_session(session_id)
--    
++    def get_variant(self, flag_name: str, user_id: str) -> Optional[str]:
++        if flag_name not in self.flags:
++            return None
 +
-     def get_current_user(self, session_id: str) -> Optional[User]:
--        """Get current user from session."""
-+        """Retrieve the currently authenticated user.
++        flag = self.flags[flag_name]
++        variant = flag.get_variant(user_id)
++        self._track_variant_assignment(flag_name, user_id, variant)
++        return variant
 +
-+        Args:
-+            session_id: Session identifier obtained during authentication.
++    def _track_flag_check(self, flag_name: str, user_id: Optional[str]) -> None:
++        self.analytics.append(
++            {
++                "timestamp": datetime.now(),
++                "flag_name": flag_name,
++                "user_id": user_id,
++                "event": "flag_checked",
++            }
++        )
 +
-+        Returns:
-+            Optional[User]: ``User`` instance when session is valid, otherwise
-+            ``None``.
-+        """
-         session_data = self.session_handler.get_session(session_id)
-         return session_data.user if session_data else None
--    
++    def _track_variant_assignment(
++        self, flag_name: str, user_id: str, variant: Optional[str]
++    ) -> None:
++        self.analytics.append(
++            {
++                "timestamp": datetime.now(),
++                "flag_name": flag_name,
++                "user_id": user_id,
++                "variant": variant,
++                "event": "variant_assigned",
++            }
++        )
 +
-     def is_authenticated(self, session_id: str) -> bool:
--        """Check if session is valid and user is authenticated."""
-+        """Check whether a session is currently authenticated.
++    def get_all_flags(
++        self,
++        user_id: str | None = None,
++        user_role: str | None = None,
++        user_attributes: Dict | None = None,
++    ) -> Dict[str, bool]:
++        result: Dict[str, bool] = {}
++        for flag_name in self.flags:
++            result[flag_name] = self.is_enabled(
++                flag_name, user_id, user_role, user_attributes
++            )
++        return result
 +
-+        Args:
-+            session_id: Session identifier to verify.
-+
-+        Returns:
-+            bool: ``True`` when the session is valid.
-+        """
-         return self.session_handler.is_valid_session(session_id)
--    
-+
-     def change_password(self, user_id: int, old_password: str, new_password: str) -> AuthResult:
--        """Change user password with validation."""
-+        """Change a user's password after verifying the old one.
-+
-+        Args:
-+            user_id: Identifier of the user changing the password.
-+            old_password: Current password for verification.
-+            new_password: New password to be set (minimum 8 characters).
-+
-+        Returns:
-+            AuthResult: Result object describing success state and message.
-+        """
-         if len(new_password) < 8:
-             return AuthResult(False, message="New password must be at least 8 characters")
--        
-+
-         try:
-             with sqlite3.connect(self.db_path) as conn:
-                 # Verify old password
-                 row = conn.execute(
-                     "SELECT password_hash, salt FROM auth_users WHERE id = ?",
-                     (user_id,)
-                 ).fetchone()
-                 
-                 if not row:
-                     return AuthResult(False, message="User not found")
-                 
-                 stored_hash, salt = row
-                 old_hash = self._hash_password(old_password, salt)
-                 
-                 if old_hash != stored_hash:
-                     return AuthResult(False, message="Current password is incorrect")
-                 
-                 # Set new password
-                 new_salt = self._generate_salt()
-                 new_hash = self._hash_password(new_password, new_salt)
-                 
-                 conn.execute("""
-                     UPDATE auth_users 
-                     SET password_hash = ?, salt = ?
-                     WHERE id = ?
-                 """, (new_hash, new_salt, user_id))
-                 
-                 return AuthResult(True, message="Password changed successfully")
-                 
-         except Exception as e:
-             return AuthResult(False, message=f"Password change failed: {str(e)}")
-     
-     def get_user_by_id(self, user_id: int) -> Optional[User]:
--        """Get user by ID."""
-+        """Retrieve a user record by its database identifier.
-+
-+        Args:
-+            user_id: Primary key of the user.
-+
-+        Returns:
-+            Optional[User]: User instance if found otherwise ``None``.
-+        """
-         try:
-             with sqlite3.connect(self.db_path) as conn:
-                 row = conn.execute("""
-                     SELECT id, username, email, role, is_active, created_at, last_login
-                     FROM auth_users WHERE id = ?
-                 """, (user_id,)).fetchone()
-                 
-                 if row:
-                     return User(
-                         id=row[0],
-                         username=row[1],
-                         email=row[2],
-                         role=UserRole(row[3]),
-                         is_active=bool(row[4]),
-                         created_at=datetime.fromisoformat(row[5]),
-                         last_login=datetime.fromisoformat(row[6]) if row[6] else None
-                     )
-         except Exception:
-             pass
-         
-         return None
-diff --git a/streamlit_extension/utils/security.py b/streamlit_extension/utils/security.py
-index 301a6e889a353c9004f9ec8a37e3987c9868f77c..80a3033a9ac555f9cbe883c54590c137c5f3eab9 100644
---- a/streamlit_extension/utils/security.py
-+++ b/streamlit_extension/utils/security.py
-@@ -1,89 +1,114 @@
--"""
--🔐 Streamlit Security Utilities
-+"""Comprehensive security framework for web application protection.
-+
-+This module implements layered security measures for the Streamlit
-+application including XSS sanitization, CSRF protection, input
-+validation, rate limiting and basic DoS mitigation.  It integrates with
-+the JSON security library and optional logging utilities to provide
-+enterprise grade monitoring and threat detection.
-+
-+Classes:
-+    StreamlitSecurityManager: Central security management for Streamlit
-+        forms and API calls.
-+
-+Functions:
-+    sanitize_form_input: Sanitize user supplied text.
-+    validate_csrf_token: Validate form submission tokens.
-+    check_rate_limit: Apply rate limiting checks on operations.
-+
-+Example:
-+    Protecting form input::
- 
--Provides XSS protection and input sanitization for Streamlit forms.
--Integrates the comprehensive JSON security module with Streamlit UI components.
-+        security = StreamlitSecurityManager()
-+        clean = security.sanitize_form_input(user_value)
- 
--Security Features:
--- XSS protection for form inputs
--- HTML encoding for safe output
--- Input validation and sanitization
--- CSRF protection with secure tokens
--- Integration with existing JSON security framework
-+Note:
-+    Requires optional dependencies ``json_security`` and ``rate_limiter``
-+    for full functionality.
- """
- 
- import sys
- import time
- import hashlib
- import secrets
- from pathlib import Path
- from typing import Any, Dict, List, Optional, Tuple
- 
- # Add duration_system to path for security module
- sys.path.append(str(Path(__file__).parent.parent.parent / "duration_system"))
- 
- try:
-     from log_sanitization import create_secure_logger, sanitize_log_message, sanitize_exception
-     LOG_SANITIZATION_AVAILABLE = True
- except ImportError:
-     LOG_SANITIZATION_AVAILABLE = False
-     create_secure_logger = sanitize_log_message = sanitize_exception = None
- 
- try:
-     from json_security import JSONSecurityValidator, SecurityViolation
-     SECURITY_AVAILABLE = True
- except ImportError:
-     SECURITY_AVAILABLE = False
-     JSONSecurityValidator = None
- 
- try:
-     from rate_limiter import get_rate_limiter, RateLimitConfig, RateLimitExceeded
-     RATE_LIMITING_AVAILABLE = True
- except ImportError:
-     RATE_LIMITING_AVAILABLE = False
-     get_rate_limiter = None
-     RateLimitConfig = None
-     RateLimitExceeded = None
- 
- try:
-     from dos_protection import get_dos_protector, DoSProtector, RequestContext, ResourceError, ThreatDetectedError
-     from circuit_breaker import CircuitBreakerError
-     DOS_PROTECTION_AVAILABLE = True
- except ImportError:
-     DOS_PROTECTION_AVAILABLE = False
-     get_dos_protector = None
-     DoSProtector = None
-     RequestContext = None
-     ResourceError = None
-     ThreatDetectedError = None
-     CircuitBreakerError = None
- 
- 
- class StreamlitSecurityManager:
--    """Manages security for Streamlit forms and data display."""
--    
-+    """Manage security for Streamlit forms and data display.
-+
-+    The manager combines XSS sanitization, JSON payload validation, rate
-+    limiting and DoS protection behind a single interface tailored for
-+    Streamlit applications.
-+
-+    Attributes:
-+        logger: Logging object used for sanitized security logging.
-+        validator: Optional JSONSecurityValidator instance.
-+        rate_limiter: Optional rate limiter instance.
-+        dos_protector: Optional DoS protection instance.
-+    """
-+
-     def __init__(self):
-         """Initialize security manager with safe defaults."""
-         # Initialize secure logging
-         if LOG_SANITIZATION_AVAILABLE:
-             self.logger = create_secure_logger('streamlit_security')
-         else:
-             import logging
-             self.logger = logging.getLogger('streamlit_security')
-         
-         if SECURITY_AVAILABLE:
-             self.validator = JSONSecurityValidator(
-                 max_depth=5,  # Reasonable depth for form data
-                 max_size=50000,  # 50KB max for form inputs
-                 max_string_length=5000,  # 5KB max per field
-                 allow_dangerous_keys=False,
-                 strict_mode=True
-             )
-         else:
-             self.validator = None
-         
-         # Initialize rate limiter
-         if RATE_LIMITING_AVAILABLE:
-             self.rate_limiter = get_rate_limiter()
-             # Configure Streamlit-specific rate limits
-             self._configure_streamlit_rate_limits()
-diff --git a/tests/test_documentation.py b/tests/test_documentation.py
-index 1f798c4eea5d3e22cfdfa7232f89f2fb3680264d..f7ac40bb8d6fa095d1195c35f7abc922cabe48d9 100644
---- a/tests/test_documentation.py
-+++ b/tests/test_documentation.py
-@@ -50,25 +50,43 @@ def test_docstring_format_compliance():
-     module = importlib.util.module_from_spec(spec)
-     assert spec.loader is not None
-     spec.loader.exec_module(module)  # type: ignore[assignment]
-     DatabaseManager = module.DatabaseManager
- 
-     validator = DocstringValidator()
-     assert validator.validate_docstring_format(DatabaseManager.get_connection.__doc__)
- 
- 
- def test_api_examples_work(tmp_path):
-     import importlib.util
- 
-     spec = importlib.util.spec_from_file_location(
-         "_db", "streamlit_extension/utils/database.py"
-     )
-     module = importlib.util.module_from_spec(spec)
-     assert spec.loader is not None
-     spec.loader.exec_module(module)  # type: ignore[assignment]
-     DatabaseManager = module.DatabaseManager
- 
-     db_path = tmp_path / "example.db"
-     db_path.touch()
-     db = DatabaseManager(str(db_path))
-     with db.get_connection():
-         pass
++    def get_analytics(self, flag_name: Optional[str] = None) -> List[Dict]:
++        if flag_name:
++            return [a for a in self.analytics if a["flag_name"] == flag_name]
++        return self.analytics
 +
 +
-+def test_auth_manager_docstrings():
-+    validator = DocstringValidator()
-+    missing = validator.check_missing_docstrings("streamlit_extension.auth.auth_manager")
-+    assert missing == []
++def feature_flag(flag_name: str, default: bool = False) -> Callable:
++    """Decorator to control feature availability."""
++
++    def decorator(func: Callable) -> Callable:
++        @wraps(func)
++        def wrapper(*args, **kwargs):
++            user_id = st.session_state.get("user_id")
++            user_role = st.session_state.get("user_role")
++            user_attributes = st.session_state.get("user_attributes", {})
++
++            if feature_flags.is_enabled(flag_name, user_id, user_role, user_attributes):
++                return func(*args, **kwargs)
++            if default:
++                logger.info(
++                    "Feature %s disabled, using default behavior", flag_name
++                )
++                return None
++            st.warning("This feature is currently not available.")
++            return None
++
++        return wrapper
++
++    return decorator
 +
 +
-+def test_security_manager_docstrings():
-+    validator = DocstringValidator()
-+    missing = validator.check_missing_docstrings("streamlit_extension/utils/security.py")
-+    assert missing == []
++def variant_test(flag_name: str) -> Callable:
++    """Decorator for A/B testing."""
++
++    def decorator(func: Callable) -> Callable:
++        @wraps(func)
++        def wrapper(*args, **kwargs):
++            user_id = st.session_state.get("user_id")
++            variant = feature_flags.get_variant(flag_name, user_id)
++            return func(*args, variant=variant, **kwargs)
++
++        return wrapper
++
++    return decorator
 +
 +
-+def test_duration_calculator_docstrings():
-+    validator = DocstringValidator()
-+    missing = validator.check_missing_docstrings("duration_system.duration_calculator")
-+    assert missing == []
- 
++def render_feature_flags_admin() -> None:
++    """Admin interface for managing feature flags."""
++
++    st.title("🎛️ Feature Flags Management")
++
++    if st.session_state.get("user_role") != "admin":
++        st.error("Admin access required")
++        return
++
++    st.subheader("Current Feature Flags")
++
++    for flag_name, flag in feature_flags.flags.items():
++        with st.expander(f"{flag_name} - {flag.description}"):
++            col1, col2, col3 = st.columns(3)
++
++            with col1:
++                st.write(f"**Type:** {flag.flag_type.value}")
++                st.write(f"**Enabled:** {flag.enabled}")
++
++            with col2:
++                if flag.flag_type == FeatureFlagType.PERCENTAGE:
++                    new_percentage = st.slider(
++                        "Rollout Percentage",
++                        0.0,
++                        1.0,
++                        flag.percentage,
++                        key=f"percentage_{flag_name}",
++                    )
++                    if new_percentage != flag.percentage:
++                        flag.percentage = new_percentage
++                        st.success("Updated")
++
++            with col3:
++                if st.button(f"Toggle {flag_name}", key=f"toggle_{flag_name}"):
++                    flag.enabled = not flag.enabled
++                    st.rerun()
++
++    st.subheader("📊 Feature Flag Analytics")
++    analytics_data = feature_flags.get_analytics()
++
++    if analytics_data:
++        import pandas as pd
++
++        df = pd.DataFrame(analytics_data)
++        st.dataframe(df)
++
++
++feature_flags: FeatureFlagManager
++
++
++def init_feature_flags(
++    config_path: str | None = None, environment: str | None = None
++) -> None:
++    """Initialize feature flags system."""
++    global feature_flags
++    if config_path is None:
++        config_path = os.path.join(Path(__file__).parent, "feature_flags.yaml")
++
++    feature_flags = FeatureFlagManager(config_path, environment)
++    logger.info("Feature flags system initialized")
++
++
++__all__ = [
++    "FeatureFlag",
++    "FeatureFlagType",
++    "FeatureFlagManager",
++    "feature_flags",
++    "feature_flag",
++    "variant_test",
++    "render_feature_flags_admin",
++    "init_feature_flags",
++]
++
++init_feature_flags()
+diff --git a/config/feature_flags.yaml b/config/feature_flags.yaml
+new file mode 100644
+index 0000000000000000000000000000000000000000..5ce892717a025aedf7688271a2c89d8e1b8213ef
+--- /dev/null
++++ b/config/feature_flags.yaml
+@@ -0,0 +1,81 @@
++# Feature flag configuration
++
++default:
++  new_analytics_dashboard:
++    description: "New analytics dashboard with advanced visualizations"
++    type: "percentage"
++    enabled: true
++    percentage: 0.0  # Start with 0% rollout
++    metadata:
++      owner: "analytics_team"
++      jira_ticket: "FEAT-123"
++
++  enhanced_security:
++    description: "Enhanced security features including 2FA"
++    type: "boolean"
++    enabled: false
++    metadata:
++      owner: "security_team"
++      compliance: "SOC2"
++
++  premium_features:
++    description: "Premium features for paid users"
++    type: "conditional"
++    enabled: true
++    conditions:
++      subscription_tier: "premium"
++      account_age_days:
++        operator: ">="
++        value: 30
++
++  ui_redesign:
++    description: "A/B test for new UI design"
++    type: "variant"
++    enabled: true
++    variants:
++      control:
++        weight: 50
++        config:
++          theme: "classic"
++      variant_a:
++        weight: 25
++        config:
++          theme: "modern"
++      variant_b:
++        weight: 25
++        config:
++          theme: "minimal"
++
++development:
++  new_analytics_dashboard:
++    percentage: 1.0  # 100% in development
++
++  enhanced_security:
++    enabled: true  # Always on in dev
++
++  experimental_feature:
++    description: "Experimental feature for testing"
++    type: "user_list"
++    enabled: true
++    allowed_users: ["dev_user_1", "dev_user_2"]
++
++staging:
++  new_analytics_dashboard:
++    percentage: 0.5  # 50% in staging
++
++  beta_features:
++    description: "Beta features for testing"
++    type: "role_based"
++    enabled: true
++    allowed_roles: ["admin", "beta_tester"]
++
++production:
++  new_analytics_dashboard:
++    percentage: 0.1  # 10% initial rollout
++
++  maintenance_mode:
++    description: "Maintenance mode flag"
++    type: "time_based"
++    enabled: false
++    start_time: "2024-01-15T00:00:00"
++    end_time: "2024-01-15T02:00:00"
++ 
 EOF
 )

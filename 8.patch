@@ -1,355 +1,278 @@
- (cd "$(git rev-parse --show-toplevel)" && git apply --3way <<'EOF' 
-diff --git a/migrations/001_add_missing_columns.sql b/migrations/001_add_missing_columns.sql
+(cd "$(git rev-parse --show-toplevel)" && git apply --3way <<'EOF' 
+diff --git a/duration_system/cascade_transactions.py b/duration_system/cascade_transactions.py
 new file mode 100644
-index 0000000000000000000000000000000000000000..ed9736a0f73570d2d67b8915bf704766ab373c8f
+index 0000000000000000000000000000000000000000..49ff52c7a52c269ae73900a4aff6f9846d0f31e5
 --- /dev/null
-+++ b/migrations/001_add_missing_columns.sql
-@@ -0,0 +1,24 @@
-+-- Migration: Add missing columns identified in report.md
-+-- Date: 2025-01-15
-+-- Description: Add points_value, due_date, icon columns to framework_epics table
-+
-+-- Add points_value column for epic scoring
-+ALTER TABLE framework_epics 
-+ADD COLUMN points_value INTEGER DEFAULT 0;
-+
-+-- Add due_date column for deadline tracking
-+ALTER TABLE framework_epics 
-+ADD COLUMN due_date TEXT;
-+
-+-- Add icon column for visual identification
-+ALTER TABLE framework_epics 
-+ADD COLUMN icon TEXT DEFAULT '📋';
-+
-+-- Update existing records with default values
-+UPDATE framework_epics 
-+SET points_value = COALESCE(points_earned, 0)
-+WHERE points_value IS NULL;
-+
-+-- Add constraints
-+CREATE INDEX idx_epics_due_date ON framework_epics(due_date);
-+CREATE INDEX idx_epics_points_value ON framework_epics(points_value);
-diff --git a/migrations/002_create_indexes.sql b/migrations/002_create_indexes.sql
-new file mode 100644
-index 0000000000000000000000000000000000000000..40d5ef62c140f68245a08997083f90e57472df0b
---- /dev/null
-+++ b/migrations/002_create_indexes.sql
-@@ -0,0 +1,19 @@
-+-- Migration: Create performance indexes
-+-- Date: 2025-01-15
-+-- Description: Add indexes for heavy queries identified in report.md
-+
-+-- Client search optimization
-+CREATE INDEX idx_clients_name_search ON framework_clients(name);
-+CREATE INDEX idx_clients_status_active ON framework_clients(status) WHERE status = 'active';
-+
-+-- Project filtering optimization
-+CREATE INDEX idx_projects_client_status ON framework_projects(client_id, status);
-+CREATE INDEX idx_projects_created_date ON framework_projects(created_at);
-+
-+-- Epic progress calculation optimization
-+CREATE INDEX idx_epics_project_status ON framework_epics(project_id, status);
-+CREATE INDEX idx_epics_progress_calc ON framework_epics(project_id, status, points_earned);
-+
-+-- Task query optimization
-+CREATE INDEX idx_tasks_epic_status ON framework_tasks(epic_id, status);
-+CREATE INDEX idx_tasks_tdd_phase ON framework_tasks(tdd_phase, status);
-diff --git a/migrations/003_data_cleanup.sql b/migrations/003_data_cleanup.sql
-new file mode 100644
-index 0000000000000000000000000000000000000000..00281c2f1e8f887e24ddac154e7ef4fff8ed39ad
---- /dev/null
-+++ b/migrations/003_data_cleanup.sql
-@@ -0,0 +1,17 @@
-+-- Migration: Data cleanup and normalization
-+-- Date: 2025-01-15
-+-- Description: Clean up data inconsistencies
-+
-+-- Normalize status values
-+UPDATE framework_clients SET status = 'active' WHERE status IN ('Active', 'ACTIVE');
-+UPDATE framework_projects SET status = 'active' WHERE status IN ('Active', 'ACTIVE');
-+UPDATE framework_epics SET status = 'active' WHERE status IN ('Active', 'ACTIVE');
-+
-+-- Clean up null/empty values
-+UPDATE framework_epics SET icon = '📋' WHERE icon IS NULL OR icon = '';
-+UPDATE framework_tasks SET estimate_minutes = 60 WHERE estimate_minutes IS NULL OR estimate_minutes = 0;
-+
-+-- Ensure referential integrity
-+DELETE FROM framework_projects WHERE client_id NOT IN (SELECT id FROM framework_clients);
-+DELETE FROM framework_epics WHERE project_id NOT IN (SELECT id FROM framework_projects);
-+DELETE FROM framework_tasks WHERE epic_id NOT IN (SELECT id FROM framework_epics);
-diff --git a/streamlit_extension/utils/migrator.py b/streamlit_extension/utils/migrator.py
-new file mode 100644
-index 0000000000000000000000000000000000000000..b7121622c7b1ac5419adcef1bfa5463607c4223f
---- /dev/null
-+++ b/streamlit_extension/utils/migrator.py
-@@ -0,0 +1,172 @@
++++ b/duration_system/cascade_transactions.py
+@@ -0,0 +1,250 @@
++#!/usr/bin/env python3
 +"""
-+🔄 Database Migration System
-+
-+Enterprise-grade migration management:
-+- Version tracking
-+- Rollback capabilities
-+- Dry-run mode
-+- Migration validation
-+- Backup before migration
-+- Progress tracking
++Simplified Cascade Transaction Manager
++Safe cascade delete operations with proper SQL parameter binding.
++SECURITY FIX: All SQL queries use parameter binding to prevent injection.
 +"""
-+from __future__ import annotations
 +
-+import os
-+import shutil
 +import sqlite3
++import logging
++from typing import List, Dict, Any, Optional
 +from dataclasses import dataclass
 +from datetime import datetime
-+from typing import List, Optional
++from contextlib import contextmanager
++import uuid
++
++logger = logging.getLogger(__name__)
 +
 +
 +@dataclass
-+class Migration:
-+    """Individual migration representation."""
++class CascadeOperation:
++    """Represents a cascade delete operation."""
++    operation_id: str
++    parent_table: str
++    parent_id: int
++    dry_run: bool = False
++    started_at: Optional[datetime] = None
++    completed_at: Optional[datetime] = None
++    affected_tables: List[str] = None
++    total_records_affected: int = 0
++    error_message: Optional[str] = None
 +
-+    version: int
-+    name: str
-+    sql_file: str
-+    description: str = ""
-+    executed_at: Optional[str] = None
-+    rollback_sql: Optional[str] = None
++    def __post_init__(self):
++        if self.affected_tables is None:
++            self.affected_tables = []
 +
 +
-+class MigrationManager:
-+    """Manages database migrations with version control."""
++class CascadeTransactionManager:
++    """Simplified cascade transaction manager with security focus."""
 +
-+    def __init__(self, db_path: str, migrations_dir: str = "migrations"):
-+        """Initialize migration manager."""
-+        self.db_path = db_path
-+        self.migrations_dir = migrations_dir
-+        os.makedirs(self.migrations_dir, exist_ok=True)
-+        self.create_migration_table()
++    def __init__(self, database_path: str):
++        """Initialize cascade transaction manager."""
++        self.database_path = database_path
++        
++        # Define safe table relationships (whitelist approach)
++        self.safe_relationships = {
++            'framework_clients': [
++                {'table': 'framework_projects', 'foreign_key': 'client_id'},
++                {'table': 'framework_epics', 'foreign_key': 'client_id'},
++                {'table': 'framework_tasks', 'foreign_key': 'client_id'}
++            ],
++            'framework_projects': [
++                {'table': 'framework_epics', 'foreign_key': 'project_id'},
++                {'table': 'framework_tasks', 'foreign_key': 'project_id'}
++            ],
++            'framework_epics': [
++                {'table': 'framework_tasks', 'foreign_key': 'epic_id'}
++            ]
++        }
 +
-+    # database helpers
-+    def _connect(self):
-+        return sqlite3.connect(self.db_path)
++    def get_cascade_impact(self, table: str, record_id: int) -> Dict[str, Any]:
++        """Analyze cascade delete impact using safe SQL."""
++        if table not in self.safe_relationships:
++            return {'error': 'Table not supported for cascade operations'}
++        
++        impact = {
++            'tables_affected': [],
++            'estimated_records': 0,
++            'warnings': []
++        }
 +
-+    def create_migration_table(self):
-+        """Create migrations tracking table."""
-+        with self._connect() as conn:
-+            conn.execute(
-+                """
-+                CREATE TABLE IF NOT EXISTS migrations (
-+                    version INTEGER PRIMARY KEY,
-+                    name TEXT NOT NULL,
-+                    description TEXT,
-+                    executed_at TEXT NOT NULL
-+                )
-+                """
-+            )
-+            conn.commit()
++        try:
++            with sqlite3.connect(self.database_path) as conn:
++                # SECURITY FIX: Use parameter binding for all queries
++                relationships = self.safe_relationships[table]
++                
++                for relationship in relationships:
++                    child_table = relationship['table']
++                    foreign_key = relationship['foreign_key']
++                    
++                    # Use parameter binding to prevent SQL injection
++                    query = f"SELECT COUNT(*) FROM {child_table} WHERE {foreign_key} = ?"
++                    cursor = conn.execute(query, (record_id,))
++                    count = cursor.fetchone()[0]
++                    
++                    if count > 0:
++                        impact['tables_affected'].append(child_table)
++                        impact['estimated_records'] += count
++                
++                # Add warnings based on impact
++                if impact['estimated_records'] > 100:
++                    impact['warnings'].append("Large number of records to delete")
++                
++                if len(impact['tables_affected']) > 3:
++                    impact['warnings'].append("Many tables affected")
 +
-+    # information helpers
-+    def get_current_version(self) -> int:
-+        """Get current database schema version."""
-+        with self._connect() as conn:
-+            cur = conn.execute("SELECT MAX(version) FROM migrations")
-+            row = cur.fetchone()
-+            return row[0] if row and row[0] is not None else 0
++        except Exception as e:
++            logger.error(f"Error analyzing cascade impact: {e}")
++            impact['error'] = str(e)
 +
-+    def _discover_migration_files(self) -> List[str]:
-+        files = []
-+        for name in os.listdir(self.migrations_dir):
-+            if name.endswith(".sql") and name[:3].isdigit():
-+                files.append(name)
-+        return sorted(files)
++        return impact
 +
-+    def get_pending_migrations(self) -> List[Migration]:
-+        """Get list of pending migrations."""
-+        current_version = self.get_current_version()
-+        migrations: List[Migration] = []
-+        for fname in self._discover_migration_files():
-+            version = int(fname.split("_", 1)[0])
-+            if version > current_version:
-+                migrations.append(
-+                    Migration(version=version, name=fname, sql_file=os.path.join(self.migrations_dir, fname))
-+                )
-+        return migrations
++    @contextmanager
++    def cascade_transaction(self, operation: CascadeOperation):
++        """Context manager for cascade operations."""
++        operation.started_at = datetime.now()
++        connection = None
++        
++        try:
++            connection = sqlite3.connect(self.database_path, timeout=30)
++            connection.execute("PRAGMA foreign_keys = ON")
++            connection.execute("BEGIN IMMEDIATE")
++            
++            logger.info(f"Started cascade operation {operation.operation_id}")
++            yield connection
++            
++            connection.commit()
++            operation.completed_at = datetime.now()
++            logger.info(f"Cascade operation {operation.operation_id} completed")
++            
++        except Exception as e:
++            logger.error(f"Error in cascade operation {operation.operation_id}: {e}")
++            operation.error_message = str(e)
++            if connection:
++                try:
++                    connection.rollback()
++                except:
++                    pass
++            raise
++        finally:
++            if connection:
++                try:
++                    connection.close()
++                except:
++                    pass
 +
-+    def get_applied_migrations(self) -> List[Migration]:
-+        """Get list of applied migrations."""
-+        with self._connect() as conn:
-+            cur = conn.execute("SELECT version, name, description, executed_at FROM migrations ORDER BY version")
-+            rows = cur.fetchall()
-+        result = []
-+        for row in rows:
-+            result.append(
-+                Migration(version=row[0], name=row[1], sql_file="", description=row[2] or "", executed_at=row[3])
-+            )
-+        return result
-+
-+    def validate_migration(self, migration: Migration) -> bool:
-+        """Validate migration before execution."""
-+        return os.path.isfile(migration.sql_file)
-+
-+    def backup_database(self) -> str:
-+        """Create database backup before migration."""
-+        current_version = self.get_current_version()
-+        timestamp = datetime.utcnow().strftime("%Y%m%d%H%M%S")
-+        backup_path = f"{self.db_path}.backup.v{current_version}.{timestamp}"
-+        shutil.copy2(self.db_path, backup_path)
-+        return backup_path
-+
-+    def _run_sql_file(self, conn: sqlite3.Connection, sql_path: str) -> None:
-+        with open(sql_path, "r", encoding="utf-8") as f:
-+            conn.executescript(f.read())
-+
-+    def execute_migration(self, migration: Migration, dry_run: bool = False) -> None:
-+        """Execute single migration with validation."""
-+        if not self.validate_migration(migration):
-+            raise FileNotFoundError(migration.sql_file)
++    def cascade_delete(self, table: str, record_id: int, dry_run: bool = False) -> CascadeOperation:
++        """Perform cascade delete with proper SQL security."""
++        if table not in self.safe_relationships:
++            raise ValueError(f"Table {table} not supported for cascade operations")
++        
++        operation = CascadeOperation(
++            operation_id=str(uuid.uuid4())[:8],
++            parent_table=table,
++            parent_id=record_id,
++            dry_run=dry_run
++        )
 +
 +        if dry_run:
-+            # in dry run, just attempt to parse SQL
-+            with open(migration.sql_file, "r", encoding="utf-8") as f:
-+                f.read()
-+            return
++            # Just analyze impact without deleting
++            impact = self.get_cascade_impact(table, record_id)
++            operation.affected_tables = impact.get('tables_affected', [])
++            operation.total_records_affected = impact.get('estimated_records', 0)
++            operation.completed_at = datetime.now()
++            return operation
 +
-+        # backup before executing
-+        self.backup_database()
++        # Perform actual deletion
++        try:
++            with self.cascade_transaction(operation) as conn:
++                self._perform_cascade_delete(conn, operation)
++        except Exception as e:
++            operation.error_message = str(e)
++            raise
 +
-+        with self._connect() as conn:
-+            self._run_sql_file(conn, migration.sql_file)
-+            conn.execute(
-+                "INSERT INTO migrations(version, name, description, executed_at) VALUES (?, ?, ?, ?)",
-+                (
-+                    migration.version,
-+                    migration.name,
-+                    migration.description,
-+                    datetime.utcnow().isoformat(),
-+                ),
-+            )
-+            conn.commit()
++        return operation
 +
-+    def execute_pending_migrations(self, dry_run: bool = False) -> List[Migration]:
-+        """Execute all pending migrations."""
-+        executed = []
-+        for migration in self.get_pending_migrations():
-+            self.execute_migration(migration, dry_run=dry_run)
-+            if not dry_run:
-+                executed.append(migration)
-+        return executed
++    def _perform_cascade_delete(self, conn: sqlite3.Connection, operation: CascadeOperation):
++        """Perform the actual cascade delete with safe SQL."""
++        deleted_count = 0
++        table = operation.parent_table
++        record_id = operation.parent_id
++        
++        # Delete in reverse dependency order (children first)
++        relationships = self.safe_relationships.get(table, [])
++        
++        # Reverse order for proper cascade
++        for relationship in reversed(relationships):
++            child_table = relationship['table']
++            foreign_key = relationship['foreign_key']
++            
++            # SECURITY FIX: Use parameter binding
++            delete_query = f"DELETE FROM {child_table} WHERE {foreign_key} = ?"
++            cursor = conn.execute(delete_query, (record_id,))
++            
++            if cursor.rowcount > 0:
++                deleted_count += cursor.rowcount
++                operation.affected_tables.append(child_table)
++                logger.debug(f"Deleted {cursor.rowcount} records from {child_table}")
 +
-+    def rollback_migration(self, target_version: int) -> None:
-+        """Rollback to specific version."""
-+        backup_candidates = [
-+            f
-+            for f in os.listdir(os.path.dirname(self.db_path))
-+            if f.startswith(os.path.basename(self.db_path) + f".backup.v{target_version}")
-+        ]
-+        if not backup_candidates:
-+            raise FileNotFoundError("Backup for target version not found")
-+        backup_path = os.path.join(os.path.dirname(self.db_path), sorted(backup_candidates)[-1])
-+        shutil.copy2(backup_path, self.db_path)
++        # Finally delete the parent record
++        # SECURITY FIX: Use parameter binding
++        parent_delete_query = f"DELETE FROM {table} WHERE id = ?"
++        cursor = conn.execute(parent_delete_query, (record_id,))
++        
++        if cursor.rowcount > 0:
++            deleted_count += cursor.rowcount
++            operation.affected_tables.append(table)
 +
-+    def generate_migration_report(self) -> dict:
-+        """Generate migration status report."""
++        operation.total_records_affected = deleted_count
++
++
++def safe_cascade_delete(table: str, record_id: int, database_path: str = "framework.db") -> Dict[str, Any]:
++    """Safe cascade delete with comprehensive error handling."""
++    try:
++        manager = CascadeTransactionManager(database_path)
++        operation = manager.cascade_delete(table, record_id)
++        
 +        return {
-+            "current_version": self.get_current_version(),
-+            "applied": [m.version for m in self.get_applied_migrations()],
-+            "pending": [m.version for m in self.get_pending_migrations()],
++            'success': True,
++            'operation_id': operation.operation_id,
++            'affected_tables': operation.affected_tables,
++            'records_deleted': operation.total_records_affected,
++            'duration_ms': (
++                (operation.completed_at - operation.started_at).total_seconds() * 1000
++                if operation.completed_at and operation.started_at else 0
++            )
 +        }
-diff --git a/tests/test_migrations.py b/tests/test_migrations.py
-new file mode 100644
-index 0000000000000000000000000000000000000000..72691eac4df3f28dc22a8e7963223cf288a4c21a
---- /dev/null
-+++ b/tests/test_migrations.py
-@@ -0,0 +1,89 @@
-+"""Test database migration system."""
-+import os
-+import sqlite3
-+import tempfile
-+import shutil
-+import sys
-+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-+
-+from streamlit_extension.utils.migrator import MigrationManager
++        
++    except Exception as e:
++        logger.error(f"Cascade delete failed: {e}")
++        return {
++            'success': False,
++            'error': str(e)
++        }
 +
 +
-+def _create_initial_schema(conn: sqlite3.Connection) -> None:
-+    cur = conn.cursor()
-+    cur.execute("CREATE TABLE framework_clients (id INTEGER PRIMARY KEY, name TEXT, status TEXT);")
-+    cur.execute(
-+        "CREATE TABLE framework_projects (id INTEGER PRIMARY KEY, client_id INTEGER, status TEXT, created_at TEXT);"
-+    )
-+    cur.execute(
-+        "CREATE TABLE framework_epics (id INTEGER PRIMARY KEY, project_id INTEGER, status TEXT, points_earned INTEGER);"
-+    )
-+    cur.execute(
-+        "CREATE TABLE framework_tasks (id INTEGER PRIMARY KEY, epic_id INTEGER, status TEXT, tdd_phase TEXT, estimate_minutes INTEGER);"
-+    )
-+    conn.commit()
++def analyze_cascade_impact(table: str, record_id: int, database_path: str = "framework.db") -> Dict[str, Any]:
++    """Analyze cascade delete impact safely."""
++    try:
++        manager = CascadeTransactionManager(database_path)
++        return manager.get_cascade_impact(table, record_id)
++    except Exception as e:
++        logger.error(f"Impact analysis failed: {e}")
++        return {'error': str(e)}
 +
 +
-+class TestMigrationManager:
-+    def setup_method(self):
-+        self.tmpdir = tempfile.mkdtemp()
-+        self.db_path = os.path.join(self.tmpdir, "test.db")
-+        conn = sqlite3.connect(self.db_path)
-+        _create_initial_schema(conn)
-+        conn.close()
-+        # migrations directory relative to repo root
-+        self.migrations_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "migrations"))
++def render_cascade_dashboard():
++    """Simple Streamlit dashboard for cascade operations."""
++    import streamlit as st
 +
-+    def teardown_method(self):
-+        shutil.rmtree(self.tmpdir)
++    st.title("🗑️ Safe Cascade Delete")
 +
-+    def test_migration_discovery(self):
-+        """Test migration file discovery."""
-+        manager = MigrationManager(self.db_path, migrations_dir=self.migrations_dir)
-+        pending = manager.get_pending_migrations()
-+        assert pending, "No migrations discovered"
-+        assert pending[0].version == 1
++    # Risk analysis
++    st.subheader("🔍 Impact Analysis")
++    
++    table = st.selectbox("Table", ["framework_clients", "framework_projects", "framework_epics"])
++    record_id = st.number_input("Record ID", min_value=1, value=1)
 +
-+    def test_version_tracking(self):
-+        """Test migration version tracking."""
-+        manager = MigrationManager(self.db_path, migrations_dir=self.migrations_dir)
-+        manager.execute_pending_migrations()
-+        assert manager.get_current_version() >= 3
++    if st.button("Analyze Impact"):
++        impact = analyze_cascade_impact(table, record_id)
++        
++        if 'error' in impact:
++            st.error(f"Error: {impact['error']}")
++        else:
++            st.write(f"**Estimated Records:** {impact['estimated_records']}")
++            st.write(f"**Tables Affected:** {len(impact['tables_affected'])}")
++            
++            if impact['warnings']:
++                for warning in impact['warnings']:
++                    st.warning(f"⚠️ {warning}")
 +
-+    def test_migration_execution(self):
-+        """Test migration execution with rollback."""
-+        manager = MigrationManager(self.db_path, migrations_dir=self.migrations_dir)
-+        manager.execute_pending_migrations()
-+        conn = sqlite3.connect(self.db_path)
-+        cur = conn.cursor()
-+        cur.execute("PRAGMA table_info(framework_epics)")
-+        columns = {row[1] for row in cur.fetchall()}
-+        conn.close()
-+        assert {"points_value", "due_date", "icon"}.issubset(columns)
-+        manager.rollback_migration(0)
-+        conn = sqlite3.connect(self.db_path)
-+        cur = conn.cursor()
-+        cur.execute("PRAGMA table_info(framework_epics)")
-+        columns = {row[1] for row in cur.fetchall()}
-+        conn.close()
-+        assert "points_value" not in columns
 +
-+    def test_dry_run_mode(self):
-+        """Test dry-run migration execution."""
-+        manager = MigrationManager(self.db_path, migrations_dir=self.migrations_dir)
-+        manager.execute_pending_migrations(dry_run=True)
-+        assert manager.get_current_version() == 0
++# Export main components
++__all__ = [
++    'CascadeTransactionManager',
++    'CascadeOperation',
++    'safe_cascade_delete',
++    'analyze_cascade_impact'
++]
 +
-+    def test_backup_creation(self):
-+        """Test database backup before migration."""
-+        manager = MigrationManager(self.db_path, migrations_dir=self.migrations_dir)
-+        manager.execute_pending_migrations()
-+        backups = [f for f in os.listdir(self.tmpdir) if f.startswith("test.db.backup")] 
-+        assert backups, "Backup not created"
-+
-+    def test_rollback_functionality(self):
-+        """Test migration rollback."""
-+        manager = MigrationManager(self.db_path, migrations_dir=self.migrations_dir)
-+        manager.execute_pending_migrations()
-+        manager.rollback_migration(0)
-+        assert manager.get_current_version() == 0
- 
-EOF
++EOF
 )
