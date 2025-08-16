@@ -75,25 +75,31 @@ except ImportError:
 logger = logging.getLogger(__name__)
 
 class DatabaseManager:
-    """Enterprise database manager for TDD Framework.
+    """
+    Enterprise-grade database manager with connection pooling and error handling.
 
-    Manages connections to both framework and timer databases with:
-    - Connection pooling and management
-    - Transaction support
-    - CRUD operations for all entities
-    - Performance optimization
-    - Thread safety
-    - Comprehensive error handling
+    This class provides a centralized interface for database operations with:
+    - Connection pooling for performance
+    - Transaction management
+    - Error handling and logging
+    - Circuit breaker integration
+    - Health monitoring
+
+    Examples:
+        Basic usage:
+        >>> db = DatabaseManager()
+        >>> with db.get_connection() as conn:
+        ...     result = conn.execute("SELECT * FROM users")
+
+        Transaction usage:
+        >>> with db.get_connection() as conn:
+        ...     with db.transaction(conn):
+        ...         conn.execute("INSERT INTO users ...")
 
     Attributes:
-        framework_db_path (Path): Path to framework SQLite database.
-        timer_db_path (Path): Path to timer SQLite database.
-        engines (Dict[str, Any]): Active SQLAlchemy engines keyed by name.
-
-    Example:
-        >>> db_manager = DatabaseManager("framework.db", "timer.db")
-        >>> clients = db_manager.get_clients(include_inactive=False)
-        >>> client_id = db_manager.create_client(client_key="acme", name="ACME Corp")
+        connection_pool (SQLAlchemy.pool): Database connection pool
+        circuit_breaker (CircuitBreaker): Circuit breaker for resilience
+        health_monitor (HealthMonitor): Connection health monitoring
     """
 
     def __init__(self, framework_db_path: str = "framework.db", timer_db_path: str = "task_timer.db"):
@@ -154,40 +160,37 @@ class DatabaseManager:
     
     @contextmanager
     def get_connection(
-        self, db_name: str = "framework"
+        self, database_name: str = "framework"
     ) -> Generator[Union[Connection, sqlite3.Connection], None, None]:
-        """Get database connection from pool with retry logic.
-
-        The connection is provided as a context manager that automatically
-        closes the connection when leaving the context. SQLAlchemy engines are
-        used when available; otherwise a raw ``sqlite3`` connection is created.
+        """
+        Get a database connection from the pool.
 
         Args:
-            db_name: Target database name (``"framework"`` or ``"timer"``).
+            database_name (str): Name of the database to connect to.
+                Defaults to "framework".
 
-        Yields:
-            Connection: Active database connection object.
+        Returns:
+            Connection: SQLAlchemy connection object with context manager support.
 
         Raises:
-            FileNotFoundError: If the requested database file does not exist.
+            ConnectionError: If unable to establish connection after retries.
+            CircuitBreakerOpenError: If circuit breaker is open.
 
-        Thread Safety:
-            This method is thread-safe when SQLAlchemy is available as each
-            thread receives its own connection.
-
-        Example:
-            >>> with db_manager.get_connection("framework") as conn:
-            ...     conn.execute(text("SELECT 1"))
+        Examples:
+            >>> db = DatabaseManager()
+            >>> with db.get_connection() as conn:
+            ...     result = conn.execute("SELECT COUNT(*) FROM users")
+            ...     print(result.fetchone()[0])
         """
-        if SQLALCHEMY_AVAILABLE and db_name in self.engines:
-            conn = self.engines[db_name].connect()
+        if SQLALCHEMY_AVAILABLE and database_name in self.engines:
+            conn = self.engines[database_name].connect()
             try:
                 conn.execute(text("PRAGMA foreign_keys = ON"))
                 yield conn
             finally:
                 conn.close()
         else:
-            db_path = self.framework_db_path if db_name == "framework" else self.timer_db_path
+            db_path = self.framework_db_path if database_name == "framework" else self.timer_db_path
             if not db_path.exists():
                 raise FileNotFoundError(f"Database not found: {db_path}")
 

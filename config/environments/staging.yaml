@@ -1,0 +1,15 @@
+debug: false
+database:
+  url: "postgresql://staging.db.example.com/app"
+  pool_size: 10
+  echo: false
+logging:
+  level: INFO
+  format: json
+  console: true
+cache:
+  type: redis
+  enabled: true
+security:
+  csrf_protection: true
+  rate_limiting: medium

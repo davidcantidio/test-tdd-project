@@ -1,0 +1,19 @@
+debug: false
+database:
+  url: "${DATABASE_URL}"
+  pool_size: 20
+  echo: false
+  ssl_mode: require
+logging:
+  level: INFO
+  format: json
+  file: "/var/log/app.log"
+cache:
+  type: redis
+  enabled: true
+security:
+  csrf_protection: true
+  rate_limiting: strict
+  session_timeout: 3600
+health_checks:
+  enabled: true

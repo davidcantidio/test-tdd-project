@@ -1,0 +1,14 @@
+debug: true
+database:
+  url: "sqlite:///framework_dev.db"
+  pool_size: 5
+  echo: true
+logging:
+  level: DEBUG
+  format: detailed
+  console: true
+cache:
+  enabled: false
+security:
+  csrf_protection: false
+  rate_limiting: false

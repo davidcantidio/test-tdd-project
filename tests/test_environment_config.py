@@ -1,71 +1,137 @@
-"""Test environment configuration system."""
+"""Tests for environment configuration, secrets and feature flags."""
 
 import os
 import sys
 from pathlib import Path
+
+sys.path.append(str(Path(__file__).resolve().parents[1]))
 from unittest.mock import patch
 
 import pytest
 
-# Add project root to path for imports
-sys.path.append(str(Path(__file__).resolve().parents[1]))
+from streamlit_extension.config.environment import EnvironmentManager, Environment
+from streamlit_extension.config.secrets_manager import (
+    SecretsManager,
+    SecretType,
+    VaultIntegration,
+)
+from streamlit_extension.config.feature_flags import FeatureFlagManager, FeatureFlag
 
-from streamlit_extension.config.env_manager import EnvironmentManager
+
+# ---------------------------------------------------------------------------
+# Environment configuration tests
+# ---------------------------------------------------------------------------
+
+def test_load_development_config():
+    manager = EnvironmentManager(Environment.DEVELOPMENT)
+    config = manager.load_environment_config()
+    assert config["debug"] is True
+    assert config["database"]["url"] == "sqlite:///framework_dev.db"
 
 
-class TestEnvironmentManager:
-    def test_environment_detection(self):
-        """Test automatic environment detection."""
-        with patch.dict(os.environ, {}, clear=True):
-            manager = EnvironmentManager()
-            assert manager.environment == "development"
-        with patch.dict(os.environ, {"APP_ENV": "staging"}, clear=True):
-            manager = EnvironmentManager()
-            assert manager.environment == "staging"
-        with patch.dict(os.environ, {"APP_ENV": "staging"}, clear=True):
-            manager = EnvironmentManager(environment="production")
-            assert manager.environment == "production"
+def test_load_production_config():
+    with patch.dict(os.environ, {"DATABASE_URL": "postgres://prod/db"}):
+        manager = EnvironmentManager(Environment.PRODUCTION)
+        config = manager.load_environment_config()
+        assert config["database"]["url"] == "postgres://prod/db"
+        assert config["security"]["csrf_protection"] is True
 
-    def test_config_loading(self):
-        """Test configuration loading for each environment."""
-        expected = {
-            "development": "dev_framework.db",
-            "staging": "staging_framework.db",
-            "production": "${DB_PATH}/framework.db",
-        }
-        for env, path in expected.items():
-            manager = EnvironmentManager(environment=env)
-            assert manager.database_config["framework_db_path"] == path
 
-    def test_env_var_substitution(self):
-        """Test environment variable substitution."""
-        vars = {
-            "DB_PATH": "/data",
-            "REDIS_PASSWORD": "secret",
-            "REDIS_HOST": "prod-redis",
-            "REDIS_PORT": "6380",
-        }
-        with patch.dict(os.environ, vars, clear=True):
-            manager = EnvironmentManager(environment="production")
-            db_config = manager.get_database_config()
-            assert db_config["framework_db_path"] == "/data/framework.db"
-            redis_config = manager.get_redis_config()
-            assert redis_config["password"] == "secret"
-            assert redis_config["host"] == "prod-redis"
-            assert redis_config["port"] == "6380"
+def test_environment_detection():
+    with patch.dict(os.environ, {"APP_ENV": "testing"}, clear=True):
+        manager = EnvironmentManager()
+        assert manager.environment == Environment.TESTING
 
-    def test_config_validation(self):
-        """Test configuration validation."""
-        manager = EnvironmentManager(environment="development")
-        assert manager.validate_config() is True
-        manager.database_config.pop("framework_db_path")
-        with pytest.raises(ValueError):
-            manager.validate_config()
 
-    def test_hot_reload(self):
-        """Test configuration hot reloading."""
-        manager = EnvironmentManager(environment="development")
-        assert manager.get_database_config()["framework_db_path"] == "dev_framework.db"
-        manager.environment = "staging"
-        manager.reload_config()
-        assert manager.get_database_config()["framework_db_path"] == "staging_framework.db"
+def test_config_validation():
+    manager = EnvironmentManager(Environment.DEVELOPMENT)
+    config = manager.load_environment_config()
+    assert manager.validate_config(config) is True
+    del config["database"]["url"]
+    with pytest.raises(ValueError):
+        manager.validate_config(config)
+
+
+def test_merge_configs():
+    manager = EnvironmentManager(Environment.DEVELOPMENT)
+    base = {"a": 1, "b": {"c": 2}}
+    override = {"b": {"d": 3}, "e": 4}
+    merged = manager.merge_configs(base, override)
+    assert merged == {"a": 1, "b": {"c": 2, "d": 3}, "e": 4}
+
+
+# ---------------------------------------------------------------------------
+# Secrets management tests
+# ---------------------------------------------------------------------------
+
+def test_load_secrets_from_env():
+    env = {secret.value: f"value_{i}" for i, secret in enumerate(SecretType)}
+    with patch.dict(os.environ, env, clear=True):
+        manager = SecretsManager()
+        loaded = manager.load_from_env_vars()
+        assert len(loaded) == len(SecretType)
+
+
+def test_secrets_validation():
+    manager = SecretsManager()
+    manager._secrets = {SecretType.DATABASE_URL: "url"}
+    with pytest.raises(ValueError):
+        manager.validate_secrets()
+    manager.load_from_vault()
+    assert manager.validate_secrets() is True
+
+
+def test_secrets_caching():
+    vault = VaultIntegration()
+    manager = SecretsManager(vault)
+    manager.load_from_vault()
+    assert vault.get_cached(SecretType.DATABASE_URL) == "vault-db-url"
+
+
+def test_secrets_rotation():
+    manager = SecretsManager()
+    manager.load_from_vault()
+    rotated = manager.rotate_secrets()
+    for secret in SecretType:
+        assert manager.get_secret(secret) == rotated[secret]
+
+
+def test_get_secret():
+    manager = SecretsManager()
+    with patch.dict(os.environ, {SecretType.API_KEYS.value: "key"}):
+        manager.load_from_env_vars()
+    assert manager.get_secret(SecretType.API_KEYS) == "key"
+
+
+# ---------------------------------------------------------------------------
+# Feature flag tests
+# ---------------------------------------------------------------------------
+
+def test_feature_flag_enabled():
+    with patch.dict(os.environ, {"FF_NEW_CLIENT_FORM": "1"}):
+        manager = FeatureFlagManager()
+        assert manager.is_enabled(FeatureFlag.NEW_CLIENT_FORM)
+
+
+def test_feature_flag_disabled():
+    manager = FeatureFlagManager()
+    assert manager.is_enabled(FeatureFlag.BETA_FEATURES) is False
+
+
+def test_feature_flag_override():
+    manager = FeatureFlagManager()
+    manager.override_flag(FeatureFlag.BETA_FEATURES, True)
+    assert manager.is_enabled(FeatureFlag.BETA_FEATURES)
+
+
+def test_feature_flag_refresh():
+    manager = FeatureFlagManager()
+    with patch.dict(os.environ, {"FF_ADVANCED_ANALYTICS": "true"}):
+        manager.refresh_flags()
+    assert manager.is_enabled(FeatureFlag.ADVANCED_ANALYTICS)
+
+
+def test_feature_flag_get_value():
+    manager = FeatureFlagManager()
+    assert manager.get_flag_value(FeatureFlag.MAINTENANCE_MODE) is False
+

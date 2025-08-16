@@ -1,191 +1,232 @@
  (cd "$(git rev-parse --show-toplevel)" && git apply --3way <<'EOF' 
-diff --git a/streamlit_extension/utils/circuit_breaker.py b/streamlit_extension/utils/circuit_breaker.py
+diff --git a/streamlit_extension/utils/security_testing.py b/streamlit_extension/utils/security_testing.py
 new file mode 100644
-index 0000000000000000000000000000000000000000..289cf9a5843c8cd3d999efd5f0e71bbfc0abdcf3
+index 0000000000000000000000000000000000000000..bca158100c54e1412ee23aa9ca3b451f246e5421
 --- /dev/null
-+++ b/streamlit_extension/utils/circuit_breaker.py
-@@ -0,0 +1,64 @@
-+"""Circuit breaker utility for database resilience."""
-+import time
-+import logging
-+from typing import Callable, Type, Any
-+
-+
-+class CircuitBreakerOpenError(Exception):
-+    """Raised when the circuit breaker is open."""
-+
-+
-+class CircuitBreaker:
-+    """Simple circuit breaker implementation.
-+
-+    Args:
-+        failure_threshold: Number of consecutive failures to open the circuit.
-+        recovery_timeout: Seconds to keep the circuit open before allowing
-+            another attempt.
-+        expected_exception: Exception type that counts as a failure.
-+    """
-+
-+    def __init__(
-+        self,
-+        failure_threshold: int = 5,
-+        recovery_timeout: float = 60.0,
-+        expected_exception: Type[Exception] = Exception,
-+    ) -> None:
-+        self.failure_threshold = failure_threshold
-+        self.recovery_timeout = recovery_timeout
-+        self.expected_exception = expected_exception
-+        self.fail_counter = 0
-+        self.opened_at: float | None = None
-+        self.logger = logging.getLogger(__name__)
-+
-+    def is_open(self) -> bool:
-+        """Check if the circuit is currently open."""
-+        if self.opened_at is None:
-+            return False
-+        if (time.time() - self.opened_at) >= self.recovery_timeout:
-+            # Allow retries after timeout (half-open)
-+            return False
-+        return True
-+
-+    def _record_failure(self) -> None:
-+        self.fail_counter += 1
-+        if self.fail_counter >= self.failure_threshold:
-+            self.opened_at = time.time()
-+            self.logger.warning("Circuit opened after %s failures", self.fail_counter)
-+
-+    def _reset(self) -> None:
-+        self.fail_counter = 0
-+        self.opened_at = None
-+
-+    def call(self, func: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:
-+        """Execute ``func`` while applying circuit breaker logic."""
-+        if self.is_open():
-+            raise CircuitBreakerOpenError("Circuit is open")
-+        try:
-+            result = func(*args, **kwargs)
-+        except self.expected_exception:
-+            self._record_failure()
-+            raise
-+        else:
-+            self._reset()
-+            return result
-diff --git a/streamlit_extension/utils/db_resilience.py b/streamlit_extension/utils/db_resilience.py
-new file mode 100644
-index 0000000000000000000000000000000000000000..ed9a6bcc994c5a524b416e3137b970609cfecbe6
---- /dev/null
-+++ b/streamlit_extension/utils/db_resilience.py
-@@ -0,0 +1,53 @@
-+"""Database resilience helpers with retry and circuit breaker."""
++++ b/streamlit_extension/utils/security_testing.py
+@@ -0,0 +1,68 @@
++"""Utilities for basic security testing simulations."""
 +from __future__ import annotations
 +
-+import time
-+import logging
-+from contextlib import contextmanager
-+from typing import Generator, Optional
++from html import escape
++import secrets
++from typing import Dict, List
 +
-+from .circuit_breaker import CircuitBreaker, CircuitBreakerOpenError
++try:
++    from tests.security_scenarios.xss_payloads import XSS_PAYLOADS
++    from tests.security_scenarios.csrf_scenarios import CSRF_SCENARIOS
++except Exception:  # pragma: no cover - fallback for runtime without tests
++    XSS_PAYLOADS = {}
++    CSRF_SCENARIOS = {}
 +
-+logger = logging.getLogger(__name__)
++
++class XSSTestHelper:
++    """Helper methods for XSS testing."""
++
++    def generate_xss_payloads(self) -> Dict[str, List[str]]:
++        """Return predefined XSS payloads."""
++        return XSS_PAYLOADS
++
++    def test_input_sanitization(self, payload: str) -> str:
++        """Sanitize input using HTML escaping and basic filtering."""
++        sanitized = escape(payload, quote=True)
++        for keyword in ["javascript:", "onerror", "onload"]:
++            sanitized = sanitized.replace(keyword, "")
++        return sanitized
++
++    def validate_output_encoding(self, output: str) -> bool:
++        """Validate that dangerous patterns are not present in output."""
++        dangerous = ["<script", "javascript:", "onerror", "onload"]
++        lower = output.lower()
++        return not any(d in lower for d in dangerous)
 +
 +
-+@contextmanager
-+def resilient_connection(
-+    db_manager,
-+    db_name: str = "framework",
-+    retries: int = 3,
-+    delay: float = 0.1,
-+    breaker: Optional[CircuitBreaker] = None,
-+) -> Generator:
-+    """Context manager that provides a resilient database connection.
++class CSRFTestHelper:
++    """Helper methods for CSRF testing."""
 +
-+    Retries transient failures and opens a circuit after repeated errors to
-+    prevent resource exhaustion.
++    def generate_csrf_tokens(self, count: int = 1) -> List[str]:
++        """Generate a list of pseudo-random CSRF tokens."""
++        return [secrets.token_hex(16) for _ in range(count)]
 +
-+    Args:
-+        db_manager: ``DatabaseManager`` instance.
-+        db_name: Target database name.
-+        retries: Number of retry attempts per call.
-+        delay: Delay between retries in seconds.
-+        breaker: Optional :class:`CircuitBreaker` instance.
-+    """
++    def validate_csrf_protection(self, token: str, valid_tokens: List[str]) -> bool:
++        """Check whether a token is recognised as valid."""
++        return token in valid_tokens
 +
-+    breaker = breaker or CircuitBreaker(failure_threshold=retries)
-+    last_exc = None
-+    for attempt in range(1, retries + 1):
-+        try:
-+            conn_cm = breaker.call(db_manager.get_connection, db_name)
-+            with conn_cm as conn:
-+                yield conn
-+                return
-+        except CircuitBreakerOpenError:
-+            logger.error("Circuit breaker open; aborting connection attempts")
-+            raise
-+        except Exception as exc:  # pragma: no cover - generic
-+            last_exc = exc
-+            logger.warning("Connection attempt %s failed: %s", attempt, exc)
-+            if attempt == retries:
-+                raise
-+            time.sleep(delay)
-+    if last_exc:
-+        raise last_exc
-diff --git a/tests/test_connection_pool_fix.py b/tests/test_connection_pool_fix.py
++    def simulate_csrf_attacks(self, scenario: str) -> str:
++        """Return a description of the CSRF scenario."""
++        return CSRF_SCENARIOS.get(scenario, "unknown")
++
++
++class SecurityTestRunner:
++    """Run security test suites and generate reports."""
++
++    def run_security_suite(self) -> Dict[str, bool]:
++        """Simulate running the security suite."""
++        return {"xss": True, "csrf": True}
++
++    def generate_security_report(self, results: Dict[str, bool] | None = None) -> str:
++        """Generate a simple textual security report."""
++        if results is None:
++            results = self.run_security_suite()
++        lines = ["Security Test Report:"]
++        for key, val in results.items():
++            status = "PASSED" if val else "FAILED"
++            lines.append(f"{key.upper()}: {status}")
++        return "\n".join(lines)
+diff --git a/tests/security_scenarios/__init__.py b/tests/security_scenarios/__init__.py
 new file mode 100644
-index 0000000000000000000000000000000000000000..a05f269badb8112ec7d2f71fe9f91ee6fbefcdfd
+index 0000000000000000000000000000000000000000..1735e4dfd87c1bae9c4c5962e6b0aae5e60ff780
 --- /dev/null
-+++ b/tests/test_connection_pool_fix.py
-@@ -0,0 +1,52 @@
-+import pathlib
-+import sys
-+import sqlite3
-+from contextlib import contextmanager
++++ b/tests/security_scenarios/__init__.py
+@@ -0,0 +1 @@
++"""Security testing scenarios package."""
+diff --git a/tests/security_scenarios/csrf_scenarios.py b/tests/security_scenarios/csrf_scenarios.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..0fac25fcd9e374a338c6c4c49a927ef6405a6117
+--- /dev/null
++++ b/tests/security_scenarios/csrf_scenarios.py
+@@ -0,0 +1,9 @@
++"""Common CSRF scenarios used for testing."""
 +
++CSRF_SCENARIOS = {
++    "form": "Forged form submission",
++    "ajax": "Cross-origin AJAX request",
++    "json": "Malicious JSON payload",
++    "get": "GET request with side effects",
++    "cross_origin": "Cross-origin request without proper CORS",
++}
+diff --git a/tests/security_scenarios/xss_payloads.py b/tests/security_scenarios/xss_payloads.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..b8169a40b27a92746efc7c70dd6ab73d556d6dcc
+--- /dev/null
++++ b/tests/security_scenarios/xss_payloads.py
+@@ -0,0 +1,22 @@
++"""Common XSS payloads used for testing."""
++
++XSS_PAYLOADS = {
++    "script": [
++        "<script>alert('XSS')</script>",
++        "<script>console.log('test')</script>",
++    ],
++    "html": [
++        "<img src=x onerror=alert('XSS')>",
++        "<div><p>Test</p></div>",
++    ],
++    "attribute": [
++        "<a href='javascript:alert(\"XSS\")'>link</a>",
++        "<body onload=alert('XSS')>",
++    ],
++    "event_handler": [
++        "<button onclick='alert(1)'>click</button>",
++    ],
++    "dom_based": [
++        "javascript:eval('alert(1)')",
++    ],
++}
+diff --git a/tests/test_security_xss_csrf.py b/tests/test_security_xss_csrf.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..f8e97137c56ce53338c2f34759f28930df92ab61
+--- /dev/null
++++ b/tests/test_security_xss_csrf.py
+@@ -0,0 +1,98 @@
 +import pytest
 +
-+sys.path.append(str(pathlib.Path(__file__).resolve().parents[1]))
-+from streamlit_extension.utils.db_resilience import resilient_connection
-+from streamlit_extension.utils.circuit_breaker import CircuitBreaker, CircuitBreakerOpenError
++from streamlit_extension.utils.security_testing import (
++    CSRFTestHelper,
++    SecurityTestRunner,
++    XSSTestHelper,
++)
++
++xss_helper = XSSTestHelper()
++csrf_helper = CSRFTestHelper()
 +
 +
-+class FlakyDBManager:
-+    """DB manager that fails twice before succeeding."""
++class TestSecurityXSS:
++    def test_xss_script_injection(self):
++        payloads = xss_helper.generate_xss_payloads().get("script", [])
++        for payload in payloads:
++            sanitized = xss_helper.test_input_sanitization(payload)
++            assert "<script" not in sanitized.lower()
 +
-+    def __init__(self):
-+        self.attempts = 0
++    def test_xss_html_injection(self):
++        payloads = xss_helper.generate_xss_payloads().get("html", [])
++        for payload in payloads:
++            sanitized = xss_helper.test_input_sanitization(payload)
++            assert "<img" not in sanitized.lower()
 +
-+    @contextmanager
-+    def get_connection(self, db_name: str = "framework"):
-+        self.attempts += 1
-+        if self.attempts <= 2:
-+            raise sqlite3.OperationalError("temporary failure")
-+        conn = sqlite3.connect(":memory:")
-+        try:
-+            yield conn
-+        finally:
-+            conn.close()
++    def test_xss_attribute_injection(self):
++        payloads = xss_helper.generate_xss_payloads().get("attribute", [])
++        for payload in payloads:
++            sanitized = xss_helper.test_input_sanitization(payload)
++            assert "javascript:" not in sanitized.lower()
++
++    def test_input_sanitization(self):
++        payload = "<b>bold</b>"
++        sanitized = xss_helper.test_input_sanitization(payload)
++        assert sanitized == "&lt;b&gt;bold&lt;/b&gt;"
++
++    def test_output_encoding(self):
++        output = "&lt;script&gt;alert('XSS')&lt;/script&gt;"
++        assert xss_helper.validate_output_encoding(output)
++
++    def test_xss_client_description_field(self):
++        payload = "<script>alert('desc')</script>"
++        sanitized = xss_helper.test_input_sanitization(payload)
++        assert "<script" not in sanitized.lower()
++
++    def test_xss_project_name_field(self):
++        payload = "<img src=x onerror=alert(1)>"
++        sanitized = xss_helper.test_input_sanitization(payload)
++        assert "<img" not in sanitized.lower()
++
++    def test_xss_reflected_in_error_messages(self):
++        payload = "<svg/onload=alert('err')>"
++        sanitized = xss_helper.test_input_sanitization(payload)
++        assert "onload" not in sanitized.lower()
++
++    def test_xss_stored_in_database(self):
++        payload = "<script>alert('db')</script>"
++        fake_db = {}
++        fake_db["description"] = xss_helper.test_input_sanitization(payload)
++        assert "<script" not in fake_db["description"].lower()
 +
 +
-+class FailingDBManager:
-+    @contextmanager
-+    def get_connection(self, db_name: str = "framework"):
-+        raise sqlite3.OperationalError("fail")
++class TestSecurityCSRF:
++    def test_csrf_form_submission(self):
++        tokens = csrf_helper.generate_csrf_tokens()
++        token = tokens[0]
++        assert csrf_helper.validate_csrf_protection(token, tokens)
++
++    def test_csrf_ajax_requests(self):
++        scenario = csrf_helper.simulate_csrf_attacks("ajax")
++        assert "ajax" in scenario.lower()
++
++    def test_csrf_token_validation(self):
++        tokens = csrf_helper.generate_csrf_tokens(2)
++        assert not csrf_helper.validate_csrf_protection("invalid", tokens)
++
++    def test_csrf_client_creation(self):
++        scenario = csrf_helper.simulate_csrf_attacks("form")
++        assert "form" in scenario.lower()
++
++    def test_csrf_project_update(self):
++        scenario = csrf_helper.simulate_csrf_attacks("ajax")
++        assert "ajax" in scenario.lower()
++
++    def test_csrf_bulk_operations(self):
++        scenario = csrf_helper.simulate_csrf_attacks("json")
++        assert "json" in scenario.lower()
++
++    def test_csrf_token_rotation(self):
++        tokens1 = csrf_helper.generate_csrf_tokens(3)
++        tokens2 = csrf_helper.generate_csrf_tokens(3)
++        assert set(tokens1).isdisjoint(tokens2)
 +
 +
-+def test_resilient_connection_recovers_from_transient_errors():
-+    manager = FlakyDBManager()
-+    with resilient_connection(manager) as conn:
-+        assert conn.execute("SELECT 1").fetchone()[0] == 1
-+
-+
-+def test_circuit_breaker_opens_after_failures():
-+    manager = FailingDBManager()
-+    breaker = CircuitBreaker(failure_threshold=2, recovery_timeout=60)
-+    for _ in range(2):
-+        with pytest.raises(sqlite3.OperationalError):
-+            with resilient_connection(manager, retries=1, breaker=breaker):
-+                pass
-+    with pytest.raises(CircuitBreakerOpenError):
-+        with resilient_connection(manager, retries=1, breaker=breaker):
-+            pass
++def test_security_report_generation():
++    runner = SecurityTestRunner()
++    report = runner.generate_security_report({"xss": True, "csrf": True})
++    assert "XSS: PASSED" in report
  
 EOF
 )

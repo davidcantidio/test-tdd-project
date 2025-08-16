@@ -1,0 +1,50 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "required": ["debug", "database", "logging", "security"],
+  "properties": {
+    "debug": {"type": "boolean"},
+    "database": {
+      "type": "object",
+      "required": ["url", "pool_size", "echo"],
+      "properties": {
+        "url": {"type": "string"},
+        "pool_size": {"type": "integer"},
+        "echo": {"type": "boolean"},
+        "ssl_mode": {"type": ["string", "null"]}
+      }
+    },
+    "logging": {
+      "type": "object",
+      "required": ["level", "format"],
+      "properties": {
+        "level": {"type": "string"},
+        "format": {"type": "string"},
+        "console": {"type": ["boolean", "null"]},
+        "file": {"type": ["string", "null"]}
+      }
+    },
+    "security": {
+      "type": "object",
+      "required": ["csrf_protection", "rate_limiting"],
+      "properties": {
+        "csrf_protection": {"type": "boolean"},
+        "rate_limiting": {"type": ["string", "boolean"]},
+        "session_timeout": {"type": ["integer", "null"]}
+      }
+    },
+    "cache": {
+      "type": "object",
+      "properties": {
+        "enabled": {"type": "boolean"},
+        "type": {"type": "string"}
+      }
+    },
+    "health_checks": {
+      "type": "object",
+      "properties": {
+        "enabled": {"type": "boolean"}
+      }
+    }
+  }
+}

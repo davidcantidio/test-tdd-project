@@ -1,191 +1,596 @@
  (cd "$(git rev-parse --show-toplevel)" && git apply --3way <<'EOF' 
-diff --git a/streamlit_extension/utils/circuit_breaker.py b/streamlit_extension/utils/circuit_breaker.py
+diff --git a/config/environments/development.yaml b/config/environments/development.yaml
 new file mode 100644
-index 0000000000000000000000000000000000000000..289cf9a5843c8cd3d999efd5f0e71bbfc0abdcf3
+index 0000000000000000000000000000000000000000..4e4498747c1b6f05efabdb6b70134242138d8397
 --- /dev/null
-+++ b/streamlit_extension/utils/circuit_breaker.py
-@@ -0,0 +1,64 @@
-+"""Circuit breaker utility for database resilience."""
-+import time
-+import logging
-+from typing import Callable, Type, Any
-+
-+
-+class CircuitBreakerOpenError(Exception):
-+    """Raised when the circuit breaker is open."""
-+
-+
-+class CircuitBreaker:
-+    """Simple circuit breaker implementation.
-+
-+    Args:
-+        failure_threshold: Number of consecutive failures to open the circuit.
-+        recovery_timeout: Seconds to keep the circuit open before allowing
-+            another attempt.
-+        expected_exception: Exception type that counts as a failure.
-+    """
-+
-+    def __init__(
-+        self,
-+        failure_threshold: int = 5,
-+        recovery_timeout: float = 60.0,
-+        expected_exception: Type[Exception] = Exception,
-+    ) -> None:
-+        self.failure_threshold = failure_threshold
-+        self.recovery_timeout = recovery_timeout
-+        self.expected_exception = expected_exception
-+        self.fail_counter = 0
-+        self.opened_at: float | None = None
-+        self.logger = logging.getLogger(__name__)
-+
-+    def is_open(self) -> bool:
-+        """Check if the circuit is currently open."""
-+        if self.opened_at is None:
-+            return False
-+        if (time.time() - self.opened_at) >= self.recovery_timeout:
-+            # Allow retries after timeout (half-open)
-+            return False
-+        return True
-+
-+    def _record_failure(self) -> None:
-+        self.fail_counter += 1
-+        if self.fail_counter >= self.failure_threshold:
-+            self.opened_at = time.time()
-+            self.logger.warning("Circuit opened after %s failures", self.fail_counter)
-+
-+    def _reset(self) -> None:
-+        self.fail_counter = 0
-+        self.opened_at = None
-+
-+    def call(self, func: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:
-+        """Execute ``func`` while applying circuit breaker logic."""
-+        if self.is_open():
-+            raise CircuitBreakerOpenError("Circuit is open")
-+        try:
-+            result = func(*args, **kwargs)
-+        except self.expected_exception:
-+            self._record_failure()
-+            raise
-+        else:
-+            self._reset()
-+            return result
-diff --git a/streamlit_extension/utils/db_resilience.py b/streamlit_extension/utils/db_resilience.py
++++ b/config/environments/development.yaml
+@@ -0,0 +1,14 @@
++debug: true
++database:
++  url: "sqlite:///framework_dev.db"
++  pool_size: 5
++  echo: true
++logging:
++  level: DEBUG
++  format: detailed
++  console: true
++cache:
++  enabled: false
++security:
++  csrf_protection: false
++  rate_limiting: false
+diff --git a/config/environments/production.yaml b/config/environments/production.yaml
 new file mode 100644
-index 0000000000000000000000000000000000000000..ed9a6bcc994c5a524b416e3137b970609cfecbe6
+index 0000000000000000000000000000000000000000..81a6d458f3e321906013d4ca6dee411a7af2b4c9
 --- /dev/null
-+++ b/streamlit_extension/utils/db_resilience.py
-@@ -0,0 +1,53 @@
-+"""Database resilience helpers with retry and circuit breaker."""
++++ b/config/environments/production.yaml
+@@ -0,0 +1,19 @@
++debug: false
++database:
++  url: "${DATABASE_URL}"
++  pool_size: 20
++  echo: false
++  ssl_mode: require
++logging:
++  level: INFO
++  format: json
++  file: "/var/log/app.log"
++cache:
++  type: redis
++  enabled: true
++security:
++  csrf_protection: true
++  rate_limiting: strict
++  session_timeout: 3600
++health_checks:
++  enabled: true
+diff --git a/config/environments/staging.yaml b/config/environments/staging.yaml
+new file mode 100644
+index 0000000000000000000000000000000000000000..50d1d2fa70415b72219834e01cbbce6fb81200fb
+--- /dev/null
++++ b/config/environments/staging.yaml
+@@ -0,0 +1,15 @@
++debug: false
++database:
++  url: "postgresql://staging.db.example.com/app"
++  pool_size: 10
++  echo: false
++logging:
++  level: INFO
++  format: json
++  console: true
++cache:
++  type: redis
++  enabled: true
++security:
++  csrf_protection: true
++  rate_limiting: medium
+diff --git a/config/environments/testing.yaml b/config/environments/testing.yaml
+new file mode 100644
+index 0000000000000000000000000000000000000000..53a9f8f0d130158923a0fabbf1fedf30375dab12
+--- /dev/null
++++ b/config/environments/testing.yaml
+@@ -0,0 +1,14 @@
++debug: true
++database:
++  url: "sqlite:///test.db"
++  pool_size: 5
++  echo: false
++logging:
++  level: DEBUG
++  format: detailed
++  console: true
++cache:
++  enabled: false
++security:
++  csrf_protection: false
++  rate_limiting: false
+diff --git a/config/schemas/config_schema.json b/config/schemas/config_schema.json
+new file mode 100644
+index 0000000000000000000000000000000000000000..2205bd752fb16aea1adcbd0cdeb1293dfcf9fa64
+--- /dev/null
++++ b/config/schemas/config_schema.json
+@@ -0,0 +1,50 @@
++{
++  "$schema": "http://json-schema.org/draft-07/schema#",
++  "type": "object",
++  "required": ["debug", "database", "logging", "security"],
++  "properties": {
++    "debug": {"type": "boolean"},
++    "database": {
++      "type": "object",
++      "required": ["url", "pool_size", "echo"],
++      "properties": {
++        "url": {"type": "string"},
++        "pool_size": {"type": "integer"},
++        "echo": {"type": "boolean"},
++        "ssl_mode": {"type": ["string", "null"]}
++      }
++    },
++    "logging": {
++      "type": "object",
++      "required": ["level", "format"],
++      "properties": {
++        "level": {"type": "string"},
++        "format": {"type": "string"},
++        "console": {"type": ["boolean", "null"]},
++        "file": {"type": ["string", "null"]}
++      }
++    },
++    "security": {
++      "type": "object",
++      "required": ["csrf_protection", "rate_limiting"],
++      "properties": {
++        "csrf_protection": {"type": "boolean"},
++        "rate_limiting": {"type": ["string", "boolean"]},
++        "session_timeout": {"type": ["integer", "null"]}
++      }
++    },
++    "cache": {
++      "type": "object",
++      "properties": {
++        "enabled": {"type": "boolean"},
++        "type": {"type": "string"}
++      }
++    },
++    "health_checks": {
++      "type": "object",
++      "properties": {
++        "enabled": {"type": "boolean"}
++      }
++    }
++  }
++}
+diff --git a/config/secrets/.env.template b/config/secrets/.env.template
+new file mode 100644
+index 0000000000000000000000000000000000000000..54c6d7dcc0ed2319b27134a2e5906244ed8f8dfe
+--- /dev/null
++++ b/config/secrets/.env.template
+@@ -0,0 +1,5 @@
++# Environment variable secrets template
++DATABASE_URL=postgresql://user:pass@localhost:5432/db
++API_KEYS={"service":"key"}
++ENCRYPTION_KEYS=changeme
++OAUTH_SECRETS={"client_id":"id","client_secret":"secret"}
+diff --git a/streamlit_extension/config/environment.py b/streamlit_extension/config/environment.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..7adcf79043d4ac4ea70e8cd7a809584dde02b027
+--- /dev/null
++++ b/streamlit_extension/config/environment.py
+@@ -0,0 +1,98 @@
 +from __future__ import annotations
 +
-+import time
-+import logging
-+from contextlib import contextmanager
-+from typing import Generator, Optional
++"""Environment configuration system with validation and merging."""
 +
-+from .circuit_breaker import CircuitBreaker, CircuitBreakerOpenError
++import os
++import json
++from enum import Enum
++from pathlib import Path
++from typing import Any, Dict
 +
-+logger = logging.getLogger(__name__)
++import yaml
++from jsonschema import validate, ValidationError
 +
 +
-+@contextmanager
-+def resilient_connection(
-+    db_manager,
-+    db_name: str = "framework",
-+    retries: int = 3,
-+    delay: float = 0.1,
-+    breaker: Optional[CircuitBreaker] = None,
-+) -> Generator:
-+    """Context manager that provides a resilient database connection.
++class Environment(str, Enum):
++    """Supported deployment environments."""
 +
-+    Retries transient failures and opens a circuit after repeated errors to
-+    prevent resource exhaustion.
++    DEVELOPMENT = "development"
++    STAGING = "staging"
++    PRODUCTION = "production"
++    TESTING = "testing"
 +
-+    Args:
-+        db_manager: ``DatabaseManager`` instance.
-+        db_name: Target database name.
-+        retries: Number of retry attempts per call.
-+        delay: Delay between retries in seconds.
-+        breaker: Optional :class:`CircuitBreaker` instance.
-+    """
 +
-+    breaker = breaker or CircuitBreaker(failure_threshold=retries)
-+    last_exc = None
-+    for attempt in range(1, retries + 1):
++class ConfigLoader:
++    """Loads and validates YAML configuration files."""
++
++    def __init__(self, base_path: Path | None = None) -> None:
++        self.base_path = base_path or Path("config/environments")
++
++    def load_yaml_config(self, environment: Environment) -> Dict[str, Any]:
++        """Load YAML configuration for the given environment."""
++        file_path = self.base_path / f"{environment.value}.yaml"
++        with file_path.open("r", encoding="utf-8") as fh:
++            data: Dict[str, Any] = yaml.safe_load(fh) or {}
++        return self.apply_environment_overrides(data)
++
++    def validate_schema(self, config: Dict[str, Any], schema_path: Path | None = None) -> bool:
++        """Validate configuration against JSON schema."""
++        schema_path = schema_path or Path("config/schemas/config_schema.json")
++        with schema_path.open("r", encoding="utf-8") as fh:
++            schema = json.load(fh)
++        validate(instance=config, schema=schema)
++        return True
++
++    def apply_environment_overrides(self, config: Dict[str, Any]) -> Dict[str, Any]:
++        """Apply environment variable overrides in ${VAR} format."""
++
++        def resolve(value: Any) -> Any:
++            if isinstance(value, str) and value.startswith("${") and value.endswith("}"):
++                var = value[2:-1]
++                return os.getenv(var, "")
++            if isinstance(value, dict):
++                return {k: resolve(v) for k, v in value.items()}
++            if isinstance(value, list):
++                return [resolve(v) for v in value]
++            return value
++
++        return resolve(config)
++
++
++class EnvironmentManager:
++    """High level manager for environment configurations."""
++
++    def __init__(self, environment: Environment | None = None) -> None:
++        self.environment = environment or self.get_current_environment()
++        self.loader = ConfigLoader()
++
++    def get_current_environment(self) -> Environment:
++        """Detect current environment from APP_ENV variable."""
++        env = os.getenv("APP_ENV", Environment.DEVELOPMENT.value).lower()
 +        try:
-+            conn_cm = breaker.call(db_manager.get_connection, db_name)
-+            with conn_cm as conn:
-+                yield conn
-+                return
-+        except CircuitBreakerOpenError:
-+            logger.error("Circuit breaker open; aborting connection attempts")
-+            raise
-+        except Exception as exc:  # pragma: no cover - generic
-+            last_exc = exc
-+            logger.warning("Connection attempt %s failed: %s", attempt, exc)
-+            if attempt == retries:
-+                raise
-+            time.sleep(delay)
-+    if last_exc:
-+        raise last_exc
-diff --git a/tests/test_connection_pool_fix.py b/tests/test_connection_pool_fix.py
++            return Environment(env)
++        except ValueError:
++            return Environment.DEVELOPMENT
++
++    def load_environment_config(self) -> Dict[str, Any]:
++        """Load and validate configuration for current environment."""
++        config = self.loader.load_yaml_config(self.environment)
++        self.validate_config(config)
++        return config
++
++    def validate_config(self, config: Dict[str, Any]) -> bool:
++        """Validate configuration structure."""
++        try:
++            return self.loader.validate_schema(config)
++        except ValidationError as exc:
++            raise ValueError(str(exc)) from exc
++
++    def merge_configs(self, base: Dict[str, Any], override: Dict[str, Any]) -> Dict[str, Any]:
++        """Recursively merge two configuration dictionaries."""
++        merged = dict(base)
++        for key, value in override.items():
++            if key in merged and isinstance(merged[key], dict) and isinstance(value, dict):
++                merged[key] = self.merge_configs(merged[key], value)
++            else:
++                merged[key] = value
++        return merged
++
+diff --git a/streamlit_extension/config/feature_flags.py b/streamlit_extension/config/feature_flags.py
 new file mode 100644
-index 0000000000000000000000000000000000000000..a05f269badb8112ec7d2f71fe9f91ee6fbefcdfd
+index 0000000000000000000000000000000000000000..afd690ec9bae3698aa7af44579bf25eeed4737a0
 --- /dev/null
-+++ b/tests/test_connection_pool_fix.py
-@@ -0,0 +1,52 @@
-+import pathlib
-+import sys
-+import sqlite3
-+from contextlib import contextmanager
++++ b/streamlit_extension/config/feature_flags.py
+@@ -0,0 +1,40 @@
++from __future__ import annotations
 +
-+import pytest
++"""Simple feature flag management."""
 +
-+sys.path.append(str(pathlib.Path(__file__).resolve().parents[1]))
-+from streamlit_extension.utils.db_resilience import resilient_connection
-+from streamlit_extension.utils.circuit_breaker import CircuitBreaker, CircuitBreakerOpenError
++import os
++from enum import Enum
++from typing import Any, Dict
 +
 +
-+class FlakyDBManager:
-+    """DB manager that fails twice before succeeding."""
-+
-+    def __init__(self):
-+        self.attempts = 0
-+
-+    @contextmanager
-+    def get_connection(self, db_name: str = "framework"):
-+        self.attempts += 1
-+        if self.attempts <= 2:
-+            raise sqlite3.OperationalError("temporary failure")
-+        conn = sqlite3.connect(":memory:")
-+        try:
-+            yield conn
-+        finally:
-+            conn.close()
++class FeatureFlag(str, Enum):
++    NEW_CLIENT_FORM = "NEW_CLIENT_FORM"
++    ADVANCED_ANALYTICS = "ADVANCED_ANALYTICS"
++    BETA_FEATURES = "BETA_FEATURES"
++    MAINTENANCE_MODE = "MAINTENANCE_MODE"
 +
 +
-+class FailingDBManager:
-+    @contextmanager
-+    def get_connection(self, db_name: str = "framework"):
-+        raise sqlite3.OperationalError("fail")
++class FeatureFlagManager:
++    """Manage feature flags with environment overrides."""
++
++    def __init__(self) -> None:
++        self.flags: Dict[FeatureFlag, bool] = {flag: False for flag in FeatureFlag}
++        self.refresh_flags()
++
++    def is_enabled(self, flag: FeatureFlag) -> bool:
++        return bool(self.flags.get(flag, False))
++
++    def get_flag_value(self, flag: FeatureFlag) -> Any:
++        return self.flags.get(flag)
++
++    def refresh_flags(self) -> Dict[FeatureFlag, bool]:
++        for flag in FeatureFlag:
++            env_var = f"FF_{flag.value}"
++            if env_var in os.environ:
++                value = os.environ[env_var]
++                self.flags[flag] = value.lower() in {"1", "true", "yes", "on"}
++        return self.flags
++
++    def override_flag(self, flag: FeatureFlag, value: bool) -> None:
++        self.flags[flag] = value
++
+diff --git a/streamlit_extension/config/secrets_manager.py b/streamlit_extension/config/secrets_manager.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..96d7ac9cd7d8db0e1806dd15fb72af9e5666bf80
+--- /dev/null
++++ b/streamlit_extension/config/secrets_manager.py
+@@ -0,0 +1,79 @@
++from __future__ import annotations
++
++"""Secrets management with environment variables and vault support."""
++
++import os
++from enum import Enum
++from typing import Any, Dict, Optional
 +
 +
-+def test_resilient_connection_recovers_from_transient_errors():
-+    manager = FlakyDBManager()
-+    with resilient_connection(manager) as conn:
-+        assert conn.execute("SELECT 1").fetchone()[0] == 1
++class SecretType(str, Enum):
++    """Types of secrets supported."""
++
++    DATABASE_URL = "DATABASE_URL"
++    API_KEYS = "API_KEYS"
++    ENCRYPTION_KEYS = "ENCRYPTION_KEYS"
++    OAUTH_SECRETS = "OAUTH_SECRETS"
 +
 +
-+def test_circuit_breaker_opens_after_failures():
-+    manager = FailingDBManager()
-+    breaker = CircuitBreaker(failure_threshold=2, recovery_timeout=60)
-+    for _ in range(2):
-+        with pytest.raises(sqlite3.OperationalError):
-+            with resilient_connection(manager, retries=1, breaker=breaker):
-+                pass
-+    with pytest.raises(CircuitBreakerOpenError):
-+        with resilient_connection(manager, retries=1, breaker=breaker):
-+            pass
++class VaultIntegration:
++    """Simple in-memory vault integration simulation."""
++
++    def __init__(self) -> None:
++        self._cache: Dict[SecretType, Any] = {}
++
++    def connect_to_vault(self) -> bool:
++        return True
++
++    def retrieve_secrets(self) -> Dict[SecretType, Any]:
++        secrets = {
++            SecretType.DATABASE_URL: "vault-db-url",
++            SecretType.API_KEYS: {"service": "vault-key"},
++            SecretType.ENCRYPTION_KEYS: "vault-encryption-key",
++            SecretType.OAUTH_SECRETS: {"client_id": "vault-client"},
++        }
++        self.cache_secrets(secrets)
++        return secrets
++
++    def cache_secrets(self, secrets: Dict[SecretType, Any]) -> None:
++        self._cache.update(secrets)
++
++    def get_cached(self, secret_type: SecretType) -> Any:
++        return self._cache.get(secret_type)
++
++
++class SecretsManager:
++    """Manage application secrets from env vars or vault."""
++
++    def __init__(self, vault: VaultIntegration | None = None) -> None:
++        self.vault = vault or VaultIntegration()
++        self._secrets: Dict[SecretType, Any] = {}
++
++    def load_from_env_vars(self) -> Dict[SecretType, Any]:
++        for secret in SecretType:
++            if secret.value in os.environ:
++                self._secrets[secret] = os.environ[secret.value]
++        return self._secrets
++
++    def load_from_vault(self) -> Dict[SecretType, Any]:
++        if self.vault.connect_to_vault():
++            secrets = self.vault.retrieve_secrets()
++            self._secrets.update(secrets)
++            return secrets
++        return {}
++
++    def get_secret(self, secret_type: SecretType) -> Optional[Any]:
++        return self._secrets.get(secret_type)
++
++    def rotate_secrets(self) -> Dict[SecretType, Any]:
++        rotated = {secret: f"rotated-{secret.value.lower()}" for secret in SecretType}
++        self._secrets.update(rotated)
++        self.vault.cache_secrets(rotated)
++        return rotated
++
++    def validate_secrets(self) -> bool:
++        missing = [s.value for s in SecretType if s not in self._secrets]
++        if missing:
++            raise ValueError(f"Missing secrets: {', '.join(missing)}")
++        return True
++
+diff --git a/tests/test_environment_config.py b/tests/test_environment_config.py
+index 0682f19e1c4b2a515510c3fce42a8c09bf1ad04a..5b8b3f83c6d25fbfd62ade36616b48d3c06e7cdf 100644
+--- a/tests/test_environment_config.py
++++ b/tests/test_environment_config.py
+@@ -1,71 +1,137 @@
+-"""Test environment configuration system."""
++"""Tests for environment configuration, secrets and feature flags."""
+ 
+ import os
+ import sys
+ from pathlib import Path
++
++sys.path.append(str(Path(__file__).resolve().parents[1]))
+ from unittest.mock import patch
+ 
+ import pytest
+ 
+-# Add project root to path for imports
+-sys.path.append(str(Path(__file__).resolve().parents[1]))
++from streamlit_extension.config.environment import EnvironmentManager, Environment
++from streamlit_extension.config.secrets_manager import (
++    SecretsManager,
++    SecretType,
++    VaultIntegration,
++)
++from streamlit_extension.config.feature_flags import FeatureFlagManager, FeatureFlag
++
++
++# ---------------------------------------------------------------------------
++# Environment configuration tests
++# ---------------------------------------------------------------------------
++
++def test_load_development_config():
++    manager = EnvironmentManager(Environment.DEVELOPMENT)
++    config = manager.load_environment_config()
++    assert config["debug"] is True
++    assert config["database"]["url"] == "sqlite:///framework_dev.db"
++
++
++def test_load_production_config():
++    with patch.dict(os.environ, {"DATABASE_URL": "postgres://prod/db"}):
++        manager = EnvironmentManager(Environment.PRODUCTION)
++        config = manager.load_environment_config()
++        assert config["database"]["url"] == "postgres://prod/db"
++        assert config["security"]["csrf_protection"] is True
++
++
++def test_environment_detection():
++    with patch.dict(os.environ, {"APP_ENV": "testing"}, clear=True):
++        manager = EnvironmentManager()
++        assert manager.environment == Environment.TESTING
++
++
++def test_config_validation():
++    manager = EnvironmentManager(Environment.DEVELOPMENT)
++    config = manager.load_environment_config()
++    assert manager.validate_config(config) is True
++    del config["database"]["url"]
++    with pytest.raises(ValueError):
++        manager.validate_config(config)
++
++
++def test_merge_configs():
++    manager = EnvironmentManager(Environment.DEVELOPMENT)
++    base = {"a": 1, "b": {"c": 2}}
++    override = {"b": {"d": 3}, "e": 4}
++    merged = manager.merge_configs(base, override)
++    assert merged == {"a": 1, "b": {"c": 2, "d": 3}, "e": 4}
++
++
++# ---------------------------------------------------------------------------
++# Secrets management tests
++# ---------------------------------------------------------------------------
++
++def test_load_secrets_from_env():
++    env = {secret.value: f"value_{i}" for i, secret in enumerate(SecretType)}
++    with patch.dict(os.environ, env, clear=True):
++        manager = SecretsManager()
++        loaded = manager.load_from_env_vars()
++        assert len(loaded) == len(SecretType)
++
++
++def test_secrets_validation():
++    manager = SecretsManager()
++    manager._secrets = {SecretType.DATABASE_URL: "url"}
++    with pytest.raises(ValueError):
++        manager.validate_secrets()
++    manager.load_from_vault()
++    assert manager.validate_secrets() is True
++
++
++def test_secrets_caching():
++    vault = VaultIntegration()
++    manager = SecretsManager(vault)
++    manager.load_from_vault()
++    assert vault.get_cached(SecretType.DATABASE_URL) == "vault-db-url"
++
++
++def test_secrets_rotation():
++    manager = SecretsManager()
++    manager.load_from_vault()
++    rotated = manager.rotate_secrets()
++    for secret in SecretType:
++        assert manager.get_secret(secret) == rotated[secret]
++
++
++def test_get_secret():
++    manager = SecretsManager()
++    with patch.dict(os.environ, {SecretType.API_KEYS.value: "key"}):
++        manager.load_from_env_vars()
++    assert manager.get_secret(SecretType.API_KEYS) == "key"
++
++
++# ---------------------------------------------------------------------------
++# Feature flag tests
++# ---------------------------------------------------------------------------
++
++def test_feature_flag_enabled():
++    with patch.dict(os.environ, {"FF_NEW_CLIENT_FORM": "1"}):
++        manager = FeatureFlagManager()
++        assert manager.is_enabled(FeatureFlag.NEW_CLIENT_FORM)
++
++
++def test_feature_flag_disabled():
++    manager = FeatureFlagManager()
++    assert manager.is_enabled(FeatureFlag.BETA_FEATURES) is False
++
++
++def test_feature_flag_override():
++    manager = FeatureFlagManager()
++    manager.override_flag(FeatureFlag.BETA_FEATURES, True)
++    assert manager.is_enabled(FeatureFlag.BETA_FEATURES)
++
++
++def test_feature_flag_refresh():
++    manager = FeatureFlagManager()
++    with patch.dict(os.environ, {"FF_ADVANCED_ANALYTICS": "true"}):
++        manager.refresh_flags()
++    assert manager.is_enabled(FeatureFlag.ADVANCED_ANALYTICS)
++
++
++def test_feature_flag_get_value():
++    manager = FeatureFlagManager()
++    assert manager.get_flag_value(FeatureFlag.MAINTENANCE_MODE) is False
+ 
+-from streamlit_extension.config.env_manager import EnvironmentManager
+-
+-
+-class TestEnvironmentManager:
+-    def test_environment_detection(self):
+-        """Test automatic environment detection."""
+-        with patch.dict(os.environ, {}, clear=True):
+-            manager = EnvironmentManager()
+-            assert manager.environment == "development"
+-        with patch.dict(os.environ, {"APP_ENV": "staging"}, clear=True):
+-            manager = EnvironmentManager()
+-            assert manager.environment == "staging"
+-        with patch.dict(os.environ, {"APP_ENV": "staging"}, clear=True):
+-            manager = EnvironmentManager(environment="production")
+-            assert manager.environment == "production"
+-
+-    def test_config_loading(self):
+-        """Test configuration loading for each environment."""
+-        expected = {
+-            "development": "dev_framework.db",
+-            "staging": "staging_framework.db",
+-            "production": "${DB_PATH}/framework.db",
+-        }
+-        for env, path in expected.items():
+-            manager = EnvironmentManager(environment=env)
+-            assert manager.database_config["framework_db_path"] == path
+-
+-    def test_env_var_substitution(self):
+-        """Test environment variable substitution."""
+-        vars = {
+-            "DB_PATH": "/data",
+-            "REDIS_PASSWORD": "secret",
+-            "REDIS_HOST": "prod-redis",
+-            "REDIS_PORT": "6380",
+-        }
+-        with patch.dict(os.environ, vars, clear=True):
+-            manager = EnvironmentManager(environment="production")
+-            db_config = manager.get_database_config()
+-            assert db_config["framework_db_path"] == "/data/framework.db"
+-            redis_config = manager.get_redis_config()
+-            assert redis_config["password"] == "secret"
+-            assert redis_config["host"] == "prod-redis"
+-            assert redis_config["port"] == "6380"
+-
+-    def test_config_validation(self):
+-        """Test configuration validation."""
+-        manager = EnvironmentManager(environment="development")
+-        assert manager.validate_config() is True
+-        manager.database_config.pop("framework_db_path")
+-        with pytest.raises(ValueError):
+-            manager.validate_config()
+-
+-    def test_hot_reload(self):
+-        """Test configuration hot reloading."""
+-        manager = EnvironmentManager(environment="development")
+-        assert manager.get_database_config()["framework_db_path"] == "dev_framework.db"
+-        manager.environment = "staging"
+-        manager.reload_config()
+-        assert manager.get_database_config()["framework_db_path"] == "staging_framework.db"
  
 EOF
 )
