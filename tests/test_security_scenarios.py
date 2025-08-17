@@ -10,7 +10,7 @@ import sqlite3
 import tempfile
 import os
 from unittest.mock import Mock, patch
-from streamlit_extension.utils.security import SecurityManager, sanitize_input
+from streamlit_extension.utils.security import StreamlitSecurityManager, sanitize_input
 from streamlit_extension.utils.database import DatabaseManager
 
 
@@ -72,7 +72,7 @@ class TestCSRFPrevention:
 
     def setup_method(self):
         """Setup for CSRF tests."""
-        self.security_manager = SecurityManager()
+        self.security_manager = StreamlitSecurityManager()
 
     def test_csrf_token_generation(self):
         """Test that CSRF tokens are generated properly."""
@@ -178,3 +178,6 @@ class TestSQLInjectionPrevention:
         
         # Verify table still exists
         with sqlite3.connect(self.temp_db.name) as conn:
+            cursor = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='test_users'")
+            table_exists = cursor.fetchone() is not None
+            assert table_exists, "Table was dropped - SQL injection successful!"

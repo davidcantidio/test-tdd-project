@@ -93,11 +93,29 @@ try:
     EXCEPTION_HANDLER_AVAILABLE = True
 except ImportError as e:
     EXCEPTION_HANDLER_AVAILABLE = False
-    st.error(f"❌ Import Error: {e}")
-    st.error("Make sure to run from the project root directory")
-    st.stop()
+    # Create a no-op decorator for testing environments
+    def handle_streamlit_exceptions(show_error=True, attempt_recovery=True):
+        def decorator(func):
+            return func
+        return decorator
+    # Create no-op functions for other missing imports
+    def streamlit_error_boundary(operation_name):
+        class NoOpContext:
+            def __enter__(self): return self
+            def __exit__(self, *args): pass
+        return NoOpContext()
+    def safe_streamlit_operation(func, *args, **kwargs):
+        try:
+            return func(*args, **kwargs)
+        except Exception:
+            return kwargs.get('default_return')
+    if STREAMLIT_AVAILABLE:
+        st.error(f"❌ Import Error: {e}")
+        st.error("Make sure to run from the project root directory")
+        st.stop()
 
 
+# Use decorator conditionally - available in both success and failure cases now
 @handle_streamlit_exceptions(show_error=True, attempt_recovery=True)
 def initialize_session_state():
     """Initialize Streamlit session state variables."""
