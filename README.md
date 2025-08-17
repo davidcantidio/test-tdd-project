@@ -25,7 +25,8 @@
 
 ### 🔧 **Technical Stack**
 - **Frontend**: Streamlit with multi-page navigation
-- **Backend**: SQLite + SQLAlchemy with enterprise transaction handling
+- **Backend**: Modular SQLite architecture with enterprise transaction handling
+- **Database**: 6-module database layer with dual API support (legacy + modular)
 - **Security**: SHA-256 authentication, CSRF/XSS protection, rate limiting
 - **Testing**: 525+ tests with 96%+ coverage
 - **Code Quality**: 98%+ type hints, DRY architecture, centralized constants

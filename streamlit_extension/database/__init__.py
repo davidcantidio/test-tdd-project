@@ -1,27 +1,20 @@
 """
-🗄️ Database Package for Streamlit Extension
-
-Provides database models and utilities for the TDD Framework Streamlit extension.
-Integrates with existing framework.db and task_timer.db while maintaining compatibility.
+Pacote de DB, fase 1: finas camadas que delegam ao DatabaseManager existente.
+Na fase 2, vamos mover os métodos para cá e emagrecer o arquivo gigante.
 """
+from .connection import get_connection, release_connection, transaction, execute
+from .health import check_health, get_query_stats, optimize, create_backup, restore_backup
+from .queries import (
+    list_epics, list_all_epics, list_tasks, list_all_tasks,
+    list_timer_sessions, get_user_stats, get_achievements,
+)
+from .schema import create_schema_if_needed
+from .seed import seed_initial_data
 
-try:
-    from .models import (
-        FrameworkEpic, FrameworkTask, TimerSession,
-        UserAchievement, UserStreak, EpicProgress, TimerStats,
-        create_database_engine, create_session, initialize_database
-    )
-    MODELS_AVAILABLE = True
-except ImportError:
-    MODELS_AVAILABLE = False
-    FrameworkEpic = FrameworkTask = TimerSession = None
-    UserAchievement = UserStreak = EpicProgress = TimerStats = None
-    create_database_engine = create_session = initialize_database = None
-
-__version__ = "1.0.0"
 __all__ = [
-    "FrameworkEpic", "FrameworkTask", "TimerSession",
-    "UserAchievement", "UserStreak", "EpicProgress", "TimerStats",
-    "create_database_engine", "create_session", "initialize_database",
-    "MODELS_AVAILABLE"
+    "get_connection", "release_connection", "transaction", "execute",
+    "check_health", "get_query_stats", "optimize", "create_backup", "restore_backup",
+    "list_epics", "list_all_epics", "list_tasks", "list_all_tasks",
+    "list_timer_sessions", "get_user_stats", "get_achievements",
+    "create_schema_if_needed", "seed_initial_data",
 ]
