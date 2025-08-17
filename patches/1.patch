@@ -1,0 +1,442 @@
+ (cd "$(git rev-parse --show-toplevel)" && git apply --3way <<'EOF' 
+diff --git a/streamlit_extension/pages/kanban.py b/streamlit_extension/pages/kanban.py
+index cc2e17ed59c4c12cd746bb09b850f076567e9590..4d2a9dc83e4a1710f0ca483c67ee043aeccb0895 100644
+--- a/streamlit_extension/pages/kanban.py
++++ b/streamlit_extension/pages/kanban.py
+@@ -3,77 +3,99 @@ Kanban Board Page
+ 
+ Interactive task management with drag-and-drop Kanban board:
+ - Visual task organization by status
+ - TDD phase tracking
+ - Epic grouping and filtering
+ - Real-time updates
+ - Task editing and creation
+ """
+ 
+ import sys
+ from pathlib import Path
+ from typing import Dict, Any, List, Optional
+ from datetime import datetime
+ 
+ # Add parent directory to path
+ sys.path.append(str(Path(__file__).parent.parent.parent))
+ 
+ # Graceful imports
+ try:
+     import streamlit as st
+     STREAMLIT_AVAILABLE = True
+ except ImportError:
+     STREAMLIT_AVAILABLE = False
+     st = None
+ 
++if STREAMLIT_AVAILABLE and hasattr(st, "cache_data"):
++    cache_data = st.cache_data
++else:
++    def cache_data(*args, **kwargs):
++        def decorator(func):
++            return func
++        return decorator
++
+ # Local imports
+ try:
+     from streamlit_extension.utils.database import DatabaseManager
+     from streamlit_extension.utils.security import (
+         security_manager, validate_form, check_rate_limit, sanitize_display
+     )
+     from streamlit_extension.config import load_config
+     from streamlit_extension.config.constants import (
+         TaskStatus, TDDPhases, Priority, UIConstants, ErrorMessages
+     )
+     # Import authentication middleware
+     from streamlit_extension.auth.middleware import init_protected_page
+     DATABASE_UTILS_AVAILABLE = True
+ except ImportError:
+     DatabaseManager = load_config = security_manager = None
+     validate_form = check_rate_limit = sanitize_display = None
+     TaskStatus = TDDPhases = Priority = UIConstants = ErrorMessages = None
+     init_protected_page = None
+     DATABASE_UTILS_AVAILABLE = False
+ 
+ from streamlit_extension.utils.exception_handler import (
+     handle_streamlit_exceptions,
+     streamlit_error_boundary,
+     safe_streamlit_operation,
+     get_error_statistics,
+ )
+ 
++
++@cache_data(ttl=60)
++def _get_tasks_cached(db_manager: DatabaseManager) -> List[Dict[str, Any]]:
++    """Get tasks from the database with caching."""
++
++    return db_manager.get_tasks()
++
++
++@cache_data(ttl=60)
++def _get_epics_cached(db_manager: DatabaseManager) -> List[Dict[str, Any]]:
++    """Get epics from the database with caching."""
++
++    return db_manager.get_epics()
++
+ @handle_streamlit_exceptions(show_error=True, attempt_recovery=True)
+ def render_kanban_page():
+     """Render the Kanban board page."""
+     if not STREAMLIT_AVAILABLE:
+         return {"error": "Streamlit not available"}
+     
+     # Initialize protected page with authentication
+     current_user = init_protected_page(UIConstants.KANBAN_PAGE_TITLE)
+     if not current_user:
+         return {"error": "Authentication required"}
+     
+     # Page load rate limiting
+     page_rate_allowed, page_rate_error = check_rate_limit("page_load") if check_rate_limit else (True, None)
+     if not page_rate_allowed:
+         st.error(f"🚦 {page_rate_error}")
+         st.info("Please wait before reloading the page.")
+         return {"error": "Rate limited"}
+     
+     st.markdown("---")
+     
+     # Initialize database manager
+     if not DATABASE_UTILS_AVAILABLE:
+         st.error(
+             ErrorMessages.LOADING_ERROR.format(
+                 entity="database utilities", error="not available"
+@@ -101,89 +123,91 @@ def render_kanban_page():
+             default_return=None,
+             operation_name="database_manager_init",
+         )
+         if db_manager is None:
+             st.error(
+                 ErrorMessages.LOADING_ERROR.format(
+                     entity="database connection", error="failed"
+                 )
+             )
+             return
+     
+     # Sidebar filters
+     _render_sidebar_filters(db_manager)
+     
+     # Database read rate limiting
+     db_read_allowed, db_read_error = check_rate_limit("db_read") if check_rate_limit else (True, None)
+     if not db_read_allowed:
+         st.error(f"🚦 Database {db_read_error}")
+         st.info("Please wait before refreshing the data.")
+         return {"error": "Rate limited"}
+     
+     # Load data
+     with streamlit_error_boundary("task_loading"):
+         with st.spinner("Loading tasks..."):
+             tasks = safe_streamlit_operation(
+-                db_manager.get_tasks,
++                _get_tasks_cached,
++                db_manager,
+                 default_return=[],
+                 operation_name="get_tasks",
+             )
+             epics = safe_streamlit_operation(
+-                db_manager.get_epics,
++                _get_epics_cached,
++                db_manager,
+                 default_return=[],
+                 operation_name="get_epics",
+             )
+     
+     # Apply filters
+     filtered_tasks = _apply_filters(tasks, epics)
+     
+     if not filtered_tasks:
+         st.info(ErrorMessages.NO_ITEMS_FOUND.format(entity="tasks"))
+         _render_create_task_form(db_manager, epics)
+         return
+     
+     # Render board
+     with streamlit_error_boundary("ui_rendering"):
+         _render_kanban_board(filtered_tasks, db_manager, epics)
+     
+     # Task creation form
+     with st.expander("➕ Create New Task", expanded=False):
+         with streamlit_error_boundary("form_rendering"):
+             _render_create_task_form(db_manager, epics)
+ 
+     if st.session_state.get("show_debug_info", False):
+         with st.expander("🔧 Error Statistics", expanded=False):
+             st.json(get_error_statistics())
+ 
+ 
+ def _render_sidebar_filters(db_manager: DatabaseManager):
+     """Render sidebar filters for the Kanban board."""
+     
+     st.sidebar.markdown("## 🔍 Filters")
+     
+     # Epic filter
+-    epics = db_manager.get_epics()
++    epics = _get_epics_cached(db_manager)
+     epic_options = ["All Epics"] + [f"{epic['epic_key']}: {epic['name']}" for epic in epics]
+     selected_epic = st.sidebar.selectbox("Filter by Epic", epic_options)
+     
+     if selected_epic != "All Epics":
+         st.session_state.kanban_epic_filter = selected_epic.split(":")[0]
+     else:
+         st.session_state.kanban_epic_filter = None
+     
+     # TDD Phase filter
+     tdd_phases = ["All Phases", "Red", "Green", "Refactor", "Unknown"]
+     selected_phase = st.sidebar.selectbox("Filter by TDD Phase", tdd_phases)
+     
+     if selected_phase != "All Phases":
+         st.session_state.kanban_phase_filter = selected_phase.lower()
+     else:
+         st.session_state.kanban_phase_filter = None
+     
+     # Priority filter
+     priorities = ["All Priorities", "High", "Medium", "Low"]
+     selected_priority = st.sidebar.selectbox("Filter by Priority", priorities)
+     
+     if selected_priority != "All Priorities":
+         st.session_state.kanban_priority_filter = selected_priority.lower()
+     else:
+         st.session_state.kanban_priority_filter = None
+diff --git a/streamlit_extension/pages/timer.py b/streamlit_extension/pages/timer.py
+index 1299d04a0c0cf339bfffc015ec11b27865a9707f..1e2db0c7c88b9cc40e34fa7ac25b1bf8de243857 100644
+--- a/streamlit_extension/pages/timer.py
++++ b/streamlit_extension/pages/timer.py
+@@ -3,50 +3,58 @@
+ 
+ Dedicated timer interface with TDAH support:
+ - Focus session management
+ - Pomodoro technique integration
+ - TDAH-specific metrics tracking
+ - Session history and analytics
+ - Customizable timer settings
+ """
+ 
+ import sys
+ from pathlib import Path
+ from typing import Dict, Any, List, Optional
+ from datetime import datetime, timedelta
+ 
+ # Add parent directory to path
+ sys.path.append(str(Path(__file__).parent.parent.parent))
+ 
+ # Graceful imports
+ try:
+     import streamlit as st
+     STREAMLIT_AVAILABLE = True
+ except ImportError:
+     STREAMLIT_AVAILABLE = False
+     st = None
+ 
++if STREAMLIT_AVAILABLE and hasattr(st, "cache_data"):
++    cache_data = st.cache_data
++else:
++    def cache_data(*args, **kwargs):
++        def decorator(func):
++            return func
++        return decorator
++
+ # Local imports
+ try:
+     from streamlit_extension.utils.database import DatabaseManager
+     from streamlit_extension.config import load_config
+     from streamlit_extension.components.timer import TimerComponent
+     from streamlit_extension.utils.security import (
+         create_safe_client, sanitize_display, validate_form, check_rate_limit,
+         security_manager
+     )
+     from streamlit_extension.utils.exception_handler import (
+         handle_streamlit_exceptions, streamlit_error_boundary, safe_streamlit_operation
+     )
+     from streamlit_extension.config.constants import ErrorMessages, UIConstants, TaskStatus
+     # Import authentication middleware
+     from streamlit_extension.auth.middleware import init_protected_page
+     DATABASE_UTILS_AVAILABLE = True
+ except ImportError:
+     DatabaseManager = load_config = TimerComponent = None
+     create_safe_client = sanitize_display = validate_form = None
+     check_rate_limit = security_manager = None
+     init_protected_page = ErrorMessages = UIConstants = TaskStatus = None
+     DATABASE_UTILS_AVAILABLE = False
+ 
+ 
+ @handle_streamlit_exceptions(show_error=True, attempt_recovery=True)
+@@ -338,51 +346,51 @@ def _render_session_stats(db_manager: DatabaseManager):
+             st.markdown("#### 📈 Focus Pattern")
+             session_times = []
+             session_ratings = []
+             
+             for i, session in enumerate(today_sessions):
+                 session_times.append(f"S{i+1}")
+                 session_ratings.append(session.get("focus_rating", 0))
+             
+             # Simple bar chart using st.bar_chart
+             if any(session_ratings):
+                 import pandas as pd
+                 chart_data = pd.DataFrame({
+                     "Focus Rating": session_ratings
+                 }, index=session_times)
+                 st.bar_chart(chart_data)
+         
+     else:
+         st.info("🌅 Start your first session of the day!")
+ 
+ 
+ def _render_session_history(db_manager: DatabaseManager):
+     """Render recent session history."""
+     
+     st.markdown("### 📅 Recent Sessions")
+     
+-    recent_sessions = db_manager.get_timer_sessions(days=7)
++    recent_sessions = _fetch_timer_sessions(db_manager, 7)
+     
+     if not recent_sessions:
+         st.info(ErrorMessages.NO_ITEMS_FOUND.format(entity="recent sessions"))
+         return
+     
+     # Session history table
+     col1, col2 = st.columns([3, 1])
+     
+     with col1:
+         # Show last 10 sessions
+         for session in recent_sessions[:10]:
+             with st.container():
+                 # Session header
+                 started_at = session.get("started_at", "Unknown")
+                 task_ref = session.get("task_reference", "General focus")
+                 duration = session.get("planned_duration_minutes", 0)
+                 
+                 col_info, col_metrics = st.columns([2, 1])
+                 
+                 with col_info:
+                     date_str = started_at[:16] if len(started_at) >= 16 else started_at
+                     st.markdown(f"**{date_str}** - {task_ref}")
+                     st.caption(f"Duration: {duration} minutes")
+                 
+                 with col_metrics:
+@@ -406,51 +414,51 @@ def _render_session_history(db_manager: DatabaseManager):
+         minutes = total_minutes % 60
+         
+         st.metric("Total Sessions", total_sessions)
+         st.metric("Total Time", f"{hours}h {minutes}m")
+         
+         avg_focus = _calculate_avg_focus_rating(recent_sessions)
+         if avg_focus > 0:
+             st.metric("Avg Focus", f"{avg_focus:.1f}/10")
+         
+         # Best session
+         if recent_sessions:
+             best_session = max(
+                 recent_sessions, 
+                 key=lambda s: s.get("focus_rating", 0)
+             )
+             if best_session.get("focus_rating", 0) > 0:
+                 st.metric("Best Focus", f"{best_session['focus_rating']}/10")
+ 
+ 
+ def _render_tdah_insights(db_manager: DatabaseManager):
+     """Render TDAH-specific insights and recommendations."""
+     
+     st.markdown("### 🧠 TDAH Insights")
+     
+     # Get data for analysis
+-    recent_sessions = db_manager.get_timer_sessions(days=14)
++    recent_sessions = _fetch_timer_sessions(db_manager, 14)
+     
+     if len(recent_sessions) < 3:
+         st.info("📊 Complete a few more sessions to see personalized TDAH insights.")
+         return
+     
+     # Analyze patterns
+     insights = _analyze_tdah_patterns(recent_sessions)
+     
+     col1, col2 = st.columns(2)
+     
+     with col1:
+         st.markdown("#### 🎯 Focus Patterns")
+         
+         best_time = insights.get("best_focus_time")
+         if best_time:
+             st.success(f"🌟 **Best focus time:** {best_time}")
+         
+         avg_session_length = insights.get("avg_effective_session")
+         if avg_session_length:
+             st.info(f"⏱️ **Optimal session length:** {avg_session_length} minutes")
+         
+         interruption_pattern = insights.get("interruption_pattern")
+         if interruption_pattern:
+             st.warning(f"🚫 **Interruption trend:** {interruption_pattern}")
+     
+@@ -568,58 +576,65 @@ def _skip_timer_session(timer_component, db_manager: DatabaseManager):
+ 
+ # Helper functions for TDAH metrics
+ 
+ def _get_focus_rating() -> int:
+     """Get focus rating from user (quick modal-like interface)."""
+     # In a real implementation, this would show a modal or use session state
+     # For now, return a default value
+     return st.session_state.get("temp_focus_rating", 7)
+ 
+ 
+ def _get_interruption_count() -> int:
+     """Get interruption count from user."""
+     return st.session_state.get("temp_interruption_count", 0)
+ 
+ 
+ def _get_quick_mood_rating() -> int:
+     """Get quick mood rating."""
+     return st.session_state.get("temp_mood_rating", 5)
+ 
+ 
+ def _get_quick_energy_rating() -> int:
+     """Get quick energy rating."""
+     return st.session_state.get("temp_energy_rating", 5)
+ 
+ 
++@cache_data(ttl=60)
++def _fetch_timer_sessions(db_manager: DatabaseManager, days: int) -> List[Dict[str, Any]]:
++    """Fetch timer sessions from the database with caching."""
++
++    return db_manager.get_timer_sessions(days=days)
++
++
+ def _get_todays_sessions(db_manager: DatabaseManager) -> List[Dict[str, Any]]:
+     """Get today's timer sessions."""
+-    
+-    all_sessions = db_manager.get_timer_sessions(days=1)
++
++    all_sessions = _fetch_timer_sessions(db_manager, 1)
+     today_str = datetime.now().strftime("%Y-%m-%d")
+-    
++
+     return [
+-        s for s in all_sessions 
++        s for s in all_sessions
+         if s.get("started_at", "").startswith(today_str)
+     ]
+ 
+ 
+ def _calculate_avg_focus_rating(sessions: List[Dict[str, Any]]) -> float:
+     """Calculate average focus rating from sessions."""
+     
+     ratings = [s.get("focus_rating") for s in sessions if s.get("focus_rating")]
+     return sum(ratings) / len(ratings) if ratings else 0.0
+ 
+ 
+ def _analyze_tdah_patterns(sessions: List[Dict[str, Any]]) -> Dict[str, Any]:
+     """Analyze TDAH patterns from session data."""
+     
+     insights = {
+         "recommendations": []
+     }
+     
+     # Analyze focus ratings by time of day
+     hourly_focus = {}
+     for session in sessions:
+         hour = _extract_hour_from_timestamp(session.get("started_at"))
+         focus_rating = session.get("focus_rating")
+         
+         if hour is not None and focus_rating:
+ 
+EOF
+)

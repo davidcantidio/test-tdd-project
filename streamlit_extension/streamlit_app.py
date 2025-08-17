@@ -78,6 +78,12 @@ try:
     from streamlit_extension.auth.login_page import render_login_page
     from streamlit_extension.config import load_config, load_config
     
+    # Import service layer and application setup
+    from streamlit_extension.utils.app_setup import (
+        setup_application, get_session_services, check_services_health,
+        get_client_service, get_project_service, get_analytics_service
+    )
+    
     # Import global exception handler
     from streamlit_extension.utils.exception_handler import (
         install_global_exception_handler, handle_streamlit_exceptions, 
@@ -106,13 +112,17 @@ def initialize_session_state():
         with streamlit_error_boundary("configuration_loading"):
             st.session_state.config = load_config()
     
+    # Initialize application services (database + service layer)
+    if "services_ready" not in st.session_state:
+        with streamlit_error_boundary("application_setup"):
+            setup_application()
+            st.session_state.services_ready = True
+    
+    # Legacy database manager support (for backward compatibility)
     if "db_manager" not in st.session_state:
-        with streamlit_error_boundary("database_initialization"):
-            config = st.session_state.config
-            st.session_state.db_manager = DatabaseManager(
-                framework_db_path=str(config.get_database_path()),
-                timer_db_path=str(config.get_timer_database_path())
-            )
+        db_manager, _ = get_session_services()
+        if db_manager:
+            st.session_state.db_manager = db_manager
     
     # Timer component
     if "timer_component" not in st.session_state:
@@ -150,9 +160,62 @@ def render_enhanced_header():
     # Welcome header with dynamic greeting
     WelcomeHeader.render(username=username)
     
-    # Daily statistics bar
-    db_manager = st.session_state.db_manager
-    daily_stats = db_manager.get_daily_summary()
+    # Service layer integration demonstration
+    with st.expander("🔧 Service Layer Status", expanded=False):
+        col1, col2 = st.columns([1, 1])
+        
+        with col1:
+            st.markdown("### 📊 Service Health")
+            health = check_services_health()
+            if health["overall"]["healthy"]:
+                st.success("✅ All services operational")
+            else:
+                st.warning("⚠️ Some services degraded")
+            
+            # Show service details
+            st.markdown("**Active Services:**")
+            _, container = get_session_services()
+            if container:
+                status = container.get_service_status()
+                st.write(f"• Services registered: {status['service_count']}")
+                st.write(f"• Services created: {status['created_count']}")
+                st.write(f"• Lazy loading: {status['lazy_loading']}")
+        
+        with col2:
+            st.markdown("### 🚀 Quick Service Test")
+            if st.button("Test Analytics Service", key="test_analytics"):
+                analytics_service = get_analytics_service()
+                if analytics_service:
+                    result = analytics_service.get_dashboard_summary()
+                    if result.success:
+                        st.success("✅ Analytics service working")
+                        st.write(f"Projects: {result.data['overview']['total_projects']}")
+                    else:
+                        st.error(f"❌ Analytics service error: {result.errors}")
+                else:
+                    st.error("❌ Analytics service not available")
+    
+    # Daily statistics bar (legacy support + service layer)
+    try:
+        # Try service layer first
+        analytics_service = get_analytics_service()
+        if analytics_service:
+            result = analytics_service.get_dashboard_summary()
+            if result.success:
+                daily_stats = result.data.get('daily_summary', {})
+            else:
+                # Fallback to direct database access
+                db_manager = st.session_state.db_manager
+                daily_stats = db_manager.get_daily_summary()
+        else:
+            # Fallback to direct database access
+            db_manager = st.session_state.db_manager
+            daily_stats = db_manager.get_daily_summary()
+    except Exception as e:
+        # Emergency fallback
+        daily_stats = {"tasks_completed": 0, "time_tracked": 0, "focus_sessions": 0}
+        st.warning(f"⚠️ Statistics loading issue: {e}")
+    
     DailyStats.render(daily_stats)
     
     # Separator
@@ -740,6 +803,15 @@ def main():
             default_return={},
             operation_name="render_sidebar"
         )
+    
+    # Health endpoint integration via query parameters
+    query_params = st.query_params
+    if "health" in query_params:
+        # Provide JSON health endpoint for monitoring tools
+        from streamlit_extension.endpoints.health_monitoring import health_check_endpoint
+        health_data = health_check_endpoint()
+        st.json(health_data)
+        return
     
     # Page navigation logic
     current_page = st.session_state.get("current_page", "Dashboard")

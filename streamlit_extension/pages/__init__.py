@@ -37,6 +37,7 @@ render_timer_page, TIMER_AVAILABLE = _import_page("timer", "render_timer_page")
 render_settings_page, SETTINGS_AVAILABLE = _import_page("settings", "render_settings_page")
 render_clients_page, CLIENTS_AVAILABLE = _import_page("clients", "render_clients_page")
 render_projects_page, PROJECTS_AVAILABLE = _import_page("projects", "render_projects_page")
+render_health_dashboard, HEALTH_AVAILABLE = _import_page("health", "render_health_dashboard")
 
 
 # Page registry for navigation
@@ -96,6 +97,13 @@ PAGE_REGISTRY = {
         "description": "Project management and tracking",
         "render_func": render_projects_page,
         "available": PROJECTS_AVAILABLE
+    },
+    "health": {
+        "title": "🏥 Health",
+        "icon": "🏥",
+        "description": "System health monitoring and diagnostics",
+        "render_func": render_health_dashboard,
+        "available": HEALTH_AVAILABLE
     }
 }
 
@@ -134,6 +142,7 @@ __all__ = [
     "render_settings_page",
     "render_clients_page",
     "render_projects_page",
+    "render_health_dashboard",
     "PAGE_REGISTRY",
     "get_available_pages",
     "render_page",
@@ -143,5 +152,6 @@ __all__ = [
     "TIMER_AVAILABLE",
     "SETTINGS_AVAILABLE",
     "CLIENTS_AVAILABLE",
-    "PROJECTS_AVAILABLE"
+    "PROJECTS_AVAILABLE",
+    "HEALTH_AVAILABLE"
 ]

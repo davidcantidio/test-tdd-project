@@ -451,9 +451,45 @@ class HealthMonitor:
 health_monitor = HealthMonitor()
 
 # Convenience functions for different probe types
+def _serialize_health_check(obj):
+    """Custom JSON serializer for health check objects"""
+    if isinstance(obj, HealthStatus):
+        return obj.value
+    elif isinstance(obj, datetime):
+        return obj.isoformat() + "Z"
+    elif hasattr(obj, '__dict__'):
+        # Convert dataclasses and other objects to dict
+        result = {}
+        for key, value in obj.__dict__.items():
+            if isinstance(value, HealthStatus):
+                result[key] = value.value
+            elif isinstance(value, datetime):
+                result[key] = value.isoformat() + "Z"
+            else:
+                result[key] = value
+        return result
+    return obj
+
 def health_check_endpoint() -> Dict[str, Any]:
-    """Main health check endpoint"""
-    return health_monitor.run_all_checks()
+    """Main health check endpoint with JSON serialization"""
+    raw_data = health_monitor.run_all_checks()
+    
+    # Ensure all data is JSON serializable
+    def make_serializable(obj):
+        if isinstance(obj, HealthStatus):
+            return obj.value
+        elif isinstance(obj, datetime):
+            return obj.isoformat() + "Z"
+        elif isinstance(obj, dict):
+            return {k: make_serializable(v) for k, v in obj.items()}
+        elif isinstance(obj, list):
+            return [make_serializable(item) for item in obj]
+        elif hasattr(obj, '__dict__'):
+            return make_serializable(obj.__dict__)
+        else:
+            return obj
+    
+    return make_serializable(raw_data)
 
 def readiness_probe() -> Dict[str, Any]:
     """Kubernetes readiness probe"""

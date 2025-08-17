@@ -419,4 +419,18 @@ def cached_get_clients():
 
 ---
 
+## 🔗 **See Also - Related Documentation**
+
+**For Development & Operations:**
+- **⚙️ Configuration**: [../config/CLAUDE.md](../config/CLAUDE.md) - Multi-environment setup, feature flags, secrets management
+- **🧪 Testing**: [../tests/CLAUDE.md](../tests/CLAUDE.md) - Testing framework, security tests, integration testing
+- **📊 Monitoring**: [../monitoring/CLAUDE.md](../monitoring/CLAUDE.md) - Structured logging, health checks, observability
+- **🔧 Scripts**: [../scripts/CLAUDE.md](../scripts/CLAUDE.md) - Maintenance tools, analysis utilities, deployment scripts
+
+**For Architecture & Design:**  
+- **⏱️ Core Utilities**: [../duration_system/CLAUDE.md](../duration_system/CLAUDE.md) - Duration engine, security stack, data protection
+- **🔄 Data Migration**: [../migration/CLAUDE.md](../migration/CLAUDE.md) - Bidirectional sync, schema evolution, ETL processes
+
+---
+
 *This module implements enterprise-grade Streamlit applications with comprehensive security, performance, and maintainability features.*

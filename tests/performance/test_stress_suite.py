@@ -254,7 +254,7 @@ class DatabaseStressTester:
                     try:
                         # Mix of operations that require connections
                         operations = [
-                            lambda: local_db.get_health_check(),
+                            lambda: local_db.check_database_health(),
                             lambda: local_db.get_epics(),
                             lambda: local_db.get_clients()
                         ]
@@ -444,7 +444,7 @@ class EnduranceTestRunner:
                             
                     elif cycle_type == 3:
                         # Light maintenance (simulate off-hours)
-                        db_manager.get_health_check()
+                        db_manager.check_database_health()
                         operations_completed += 1
                         
                     operation_cycle += 1

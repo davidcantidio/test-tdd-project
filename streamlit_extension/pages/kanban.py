@@ -119,19 +119,29 @@ def render_kanban_page():
         st.info("Please wait before refreshing the data.")
         return {"error": "Rate limited"}
     
-    # Load data
+    # Load data with memoization for performance
+    @st.cache_data(ttl=180)  # Cache for 3 minutes
+    def get_tasks_cached():
+        """Get tasks with caching for Kanban performance."""
+        return safe_streamlit_operation(
+            db_manager.get_tasks,
+            default_return=[],
+            operation_name="get_tasks",
+        )
+    
+    @st.cache_data(ttl=300)  # Cache for 5 minutes (epics change less frequently)
+    def get_epics_cached():
+        """Get epics with caching for Kanban performance."""
+        return safe_streamlit_operation(
+            db_manager.get_epics,
+            default_return=[],
+            operation_name="get_epics",
+        )
+    
     with streamlit_error_boundary("task_loading"):
         with st.spinner("Loading tasks..."):
-            tasks = safe_streamlit_operation(
-                db_manager.get_tasks,
-                default_return=[],
-                operation_name="get_tasks",
-            )
-            epics = safe_streamlit_operation(
-                db_manager.get_epics,
-                default_return=[],
-                operation_name="get_epics",
-            )
+            tasks = get_tasks_cached()
+            epics = get_epics_cached()
     
     # Apply filters
     filtered_tasks = _apply_filters(tasks, epics)
@@ -160,8 +170,13 @@ def _render_sidebar_filters(db_manager: DatabaseManager):
     
     st.sidebar.markdown("## 🔍 Filters")
     
+    @st.cache_data(ttl=300)  # Cache for 5 minutes
+    def get_epics_for_filter():
+        """Get epics for filter dropdown with caching."""
+        return db_manager.get_epics()
+    
     # Epic filter
-    epics = db_manager.get_epics()
+    epics = get_epics_for_filter()
     epic_options = ["All Epics"] + [f"{epic['epic_key']}: {epic['name']}" for epic in epics]
     selected_epic = st.sidebar.selectbox("Filter by Epic", epic_options)
     

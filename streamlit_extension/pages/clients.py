@@ -153,6 +153,11 @@ def render_edit_client_modal(client: Dict[str, Any], db_manager: DatabaseManager
             csrf_form_id = f"edit_client_form_{client['id']}"
             csrf_field = security_manager.get_csrf_form_field(csrf_form_id) if security_manager else None
             
+            # Add hidden CSRF token field
+            if csrf_field:
+                csrf_token = st.text_input("csrf_token", value=csrf_field.get("token_value", ""), 
+                                         type="password", label_visibility="hidden", key=f"csrf_edit_{client['id']}")
+            
             col1, col2 = st.columns(2)
             
             with col1:
@@ -198,8 +203,9 @@ def render_edit_client_modal(client: Dict[str, Any], db_manager: DatabaseManager
                 if st.form_submit_button(UIConstants.UPDATE_BUTTON + " Client", use_container_width=True):
                     # CSRF Protection
                     if csrf_field and security_manager:
+                        csrf_token_value = st.session_state.get(f"csrf_edit_{client['id']}", "")
                         csrf_valid, csrf_error = security_manager.require_csrf_protection(
-                            csrf_form_id, csrf_field.get("token_value")
+                            csrf_form_id, csrf_token_value
                         )
                         if not csrf_valid:
                             st.error(f"🔒 Security Error: {csrf_error}")
@@ -304,24 +310,47 @@ def render_delete_client_modal(client: Dict[str, Any], db_manager: DatabaseManag
         col1, col2 = st.columns(2)
         
         with col1:
-            if st.button(UIConstants.DELETE_BUTTON + " Client", use_container_width=True):
-                # Check rate limit for database write
-                db_rate_allowed, db_rate_error = check_rate_limit("db_write") if check_rate_limit else (True, None)
-                if not db_rate_allowed:
-                    st.error(f"🚦 Database {db_rate_error}")
-                    return
+            # CSRF-protected delete form
+            with st.form(f"delete_client_form_{client['id']}"):
+                # Generate CSRF token for delete action
+                delete_csrf_form_id = f"delete_client_form_{client['id']}"
+                delete_csrf_field = security_manager.get_csrf_form_field(delete_csrf_form_id) if security_manager else None
                 
-                success = db_manager.delete_client(client['id'], soft_delete=True)
-                if success:
-                    st.success(ErrorMessages.CLIENT_DELETE_SUCCESS)
-                    st.session_state[f"delete_client_{client['id']}"] = False
-                    st.rerun()
-                else:
-                    st.error(
-                        ErrorMessages.CLIENT_DELETE_ERROR.format(
-                            error="Failed to delete client"
+                # Hidden CSRF token field
+                if delete_csrf_field:
+                    delete_csrf_token = st.text_input("delete_csrf_token", 
+                                                    value=delete_csrf_field.get("token_value", ""), 
+                                                    type="password", label_visibility="hidden", 
+                                                    key=f"csrf_delete_{client['id']}")
+                
+                if st.form_submit_button(UIConstants.DELETE_BUTTON + " Client", use_container_width=True):
+                    # CSRF Protection for delete
+                    if delete_csrf_field and security_manager:
+                        delete_csrf_token_value = st.session_state.get(f"csrf_delete_{client['id']}", "")
+                        csrf_valid, csrf_error = security_manager.require_csrf_protection(
+                            delete_csrf_form_id, delete_csrf_token_value
                         )
-                    )
+                        if not csrf_valid:
+                            st.error(f"🔒 Security Error: {csrf_error}")
+                            return
+                    
+                    # Check rate limit for database write
+                    db_rate_allowed, db_rate_error = check_rate_limit("db_write") if check_rate_limit else (True, None)
+                    if not db_rate_allowed:
+                        st.error(f"🚦 Database {db_rate_error}")
+                        return
+                    
+                    success = db_manager.delete_client(client['id'], soft_delete=True)
+                    if success:
+                        st.success(ErrorMessages.CLIENT_DELETE_SUCCESS)
+                        st.session_state[f"delete_client_{client['id']}"] = False
+                        st.rerun()
+                    else:
+                        st.error(
+                            ErrorMessages.CLIENT_DELETE_ERROR.format(
+                                error="Failed to delete client"
+                            )
+                        )
         
         with col2:
             if st.button(UIConstants.CANCEL_BUTTON, use_container_width=True):
@@ -341,6 +370,11 @@ def render_create_client_form(db_manager: DatabaseManager):
             # Generate CSRF token for form protection
             csrf_form_id = "create_client_form"
             csrf_field = security_manager.get_csrf_form_field(csrf_form_id) if security_manager else None
+            
+            # Add hidden CSRF token field
+            if csrf_field:
+                csrf_token = st.text_input("csrf_token", value=csrf_field.get("token_value", ""), 
+                                         type="password", label_visibility="hidden", key="csrf_create_client")
             
             col1, col2 = st.columns(2)
             
@@ -371,8 +405,9 @@ def render_create_client_form(db_manager: DatabaseManager):
             if st.form_submit_button(UIConstants.CREATE_BUTTON + " Client", use_container_width=True):
                 # CSRF Protection
                 if csrf_field and security_manager:
+                    csrf_token_value = st.session_state.get("csrf_create_client", "")
                     csrf_valid, csrf_error = security_manager.require_csrf_protection(
-                        csrf_form_id, csrf_field.get("token_value")
+                        csrf_form_id, csrf_token_value
                     )
                     if not csrf_valid:
                         st.error(f"🔒 Security Error: {csrf_error}")
@@ -463,6 +498,29 @@ def render_create_client_form(db_manager: DatabaseManager):
 @handle_streamlit_exceptions(show_error=True, attempt_recovery=True)
 def render_clients_page():
     """Render the main clients management page."""
+    # Initialize page and validate dependencies
+    init_result = _initialize_clients_page()
+    if "error" in init_result:
+        return init_result
+    
+    # Setup database connection
+    db_manager = _setup_database_connection()
+    if db_manager is None:
+        return {"error": "database_setup_failed"}
+    
+    # Render filters and get filter values
+    filter_values = _render_client_filters()
+    
+    # Render create client form
+    render_create_client_form(db_manager)
+    st.markdown("---")
+    
+    # Load and display clients
+    return _load_and_display_clients(db_manager, filter_values)
+
+
+def _initialize_clients_page():
+    """Initialize page, check dependencies and authentication."""
     if not STREAMLIT_AVAILABLE:
         return {"error": "Streamlit not available"}
     
@@ -489,7 +547,11 @@ def render_clients_page():
     st.markdown("Manage your clients, contacts, and business relationships")
     st.markdown("---")
     
-    # Initialize database manager
+    return {"status": "initialized"}
+
+
+def _setup_database_connection():
+    """Setup and return database manager instance."""
     with streamlit_error_boundary("database_initialization"):
         config = safe_streamlit_operation(
             load_config,
@@ -502,7 +564,7 @@ def render_clients_page():
                     entity="configuration", error="loading failed"
                 )
             )
-            return {"error": "config_load_failed"}
+            return None
 
         db_manager = safe_streamlit_operation(
             DatabaseManager,
@@ -516,9 +578,13 @@ def render_clients_page():
                     entity="database connection", error="failed"
                 )
             )
-            return {"error": "db_connection_failed"}
-    
-    # Filters and search
+            return None
+        
+        return db_manager
+
+
+def _render_client_filters():
+    """Render filter controls and return filter values."""
     col1, col2, col3 = st.columns([2, 1, 1])
     
     with col1:
@@ -545,12 +611,15 @@ def render_clients_page():
             index=0
         )
     
-    # Create new client form
-    render_create_client_form(db_manager)
-    
-    st.markdown("---")
-    
-    # Get clients with filters
+    return {
+        "search_name": search_name,
+        "status_filter": status_filter,
+        "tier_filter": tier_filter
+    }
+
+
+def _load_and_display_clients(db_manager, filter_values):
+    """Load clients from database, apply filters and display results."""
     with streamlit_error_boundary("client_loading"):
         # Check rate limit for database read
         db_read_allowed, db_read_error = check_rate_limit("db_read") if check_rate_limit else (True, None)
@@ -558,6 +627,7 @@ def render_clients_page():
             st.error(f"🚦 Database {db_read_error}")
             return {"error": "Database rate limited"}
 
+        # Load all clients
         clients_result = safe_streamlit_operation(
             db_manager.get_clients,
             include_inactive=True,
@@ -571,32 +641,50 @@ def render_clients_page():
             return {"status": "no_clients"}
 
         # Apply filters
-        filtered_clients = all_clients
+        filtered_clients = _apply_client_filters(all_clients, filter_values)
+        
+        # Display results
+        return _display_client_results(clients_result, all_clients, filtered_clients)
 
-        if search_name:
-            filtered_clients = [c for c in filtered_clients if search_name.lower() in c.get('name', '').lower()]
 
-        if status_filter != "all":
-            filtered_clients = [c for c in filtered_clients if c.get('status') == status_filter]
+def _apply_client_filters(clients, filter_values):
+    """Apply search and filter criteria to client list."""
+    filtered_clients = clients
+    
+    # Apply name search filter
+    if filter_values["search_name"]:
+        search_term = filter_values["search_name"].lower()
+        filtered_clients = [c for c in filtered_clients if search_term in c.get('name', '').lower()]
+    
+    # Apply status filter
+    if filter_values["status_filter"] != "all":
+        filtered_clients = [c for c in filtered_clients if c.get('status') == filter_values["status_filter"]]
+    
+    # Apply tier filter
+    if filter_values["tier_filter"] != "all":
+        filtered_clients = [c for c in filtered_clients if c.get('client_tier') == filter_values["tier_filter"]]
+    
+    return filtered_clients
 
-        if tier_filter != "all":
-            filtered_clients = [c for c in filtered_clients if c.get('client_tier') == tier_filter]
 
-        # Display results count
-        total_count = clients_result.get("total", len(all_clients)) if isinstance(clients_result, dict) else len(all_clients)
-        st.markdown(f"**Found {len(filtered_clients)} client(s) (of {total_count} total)**")
+def _display_client_results(clients_result, all_clients, filtered_clients):
+    """Display client results with count and debug info."""
+    # Display results count
+    total_count = clients_result.get("total", len(all_clients)) if isinstance(clients_result, dict) else len(all_clients)
+    st.markdown(f"**Found {len(filtered_clients)} client(s) (of {total_count} total)**")
 
-        if not filtered_clients:
-            st.warning(ErrorMessages.NO_MATCHES_FILTER.format(entity="clients"))
-            return {"status": "no_matches"}
+    if not filtered_clients:
+        st.warning(ErrorMessages.NO_MATCHES_FILTER.format(entity="clients"))
+        return {"status": "no_matches"}
 
-        # Display clients
-        for client in filtered_clients:
-            render_client_card(client, db_manager)
+    # Display client cards
+    for client in filtered_clients:
+        render_client_card(client, db_manager)
 
-        if st.session_state.get("show_debug_info", False):
-            with st.expander("🔧 Error Statistics", expanded=False):
-                st.json(get_error_statistics())
+    # Optional debug information
+    if st.session_state.get("show_debug_info", False):
+        with st.expander("🔧 Error Statistics", expanded=False):
+            st.json(get_error_statistics())
 
     return {"status": "success", "clients_count": len(filtered_clients)}
 

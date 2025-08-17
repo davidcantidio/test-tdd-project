@@ -491,4 +491,18 @@ def calculate_epic_progress(epic_id):
 
 ---
 
+## 🔗 **See Also - Related Documentation**
+
+**For Testing & Validation:**
+- **🧪 Testing Framework**: [../tests/CLAUDE.md](../tests/CLAUDE.md) - Security testing, performance validation, comprehensive test coverage
+- **🔧 Analysis Scripts**: [../scripts/CLAUDE.md](../scripts/CLAUDE.md) - Security audits, performance benchmarks, maintenance tools
+
+**For Integration & Operations:**
+- **📱 Streamlit Application**: [../streamlit_extension/CLAUDE.md](../streamlit_extension/CLAUDE.md) - Application architecture, service integration
+- **🔄 Data Migration**: [../migration/CLAUDE.md](../migration/CLAUDE.md) - Bidirectional sync, schema evolution, data transformation
+- **📊 Monitoring**: [../monitoring/CLAUDE.md](../monitoring/CLAUDE.md) - Structured logging, performance tracking, health monitoring
+- **⚙️ Configuration**: [../config/CLAUDE.md](../config/CLAUDE.md) - Environment setup, security configuration, deployment
+
+---
+
 *This module provides enterprise-grade duration handling and security utilities with comprehensive protection against common vulnerabilities and performance optimizations.*

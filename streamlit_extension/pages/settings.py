@@ -51,6 +51,61 @@ from streamlit_extension.utils.exception_handler import (
     get_error_statistics,
 )
 
+# DRY Form Components - Reusable form elements
+class DRYFormComponents:
+    """Reusable form components to eliminate duplication."""
+    
+    @staticmethod
+    def render_text_input(label: str, value: str = "", placeholder: str = "", 
+                         required: bool = False, key: str = None, max_length: int = None):
+        """Render standardized text input with validation."""
+        if required:
+            label = f"{label}*"
+        
+        kwargs = {
+            "label": label,
+            "value": value,
+            "placeholder": placeholder,
+            "key": key
+        }
+        if max_length:
+            kwargs["max_chars"] = max_length
+            
+        return st.text_input(**{k: v for k, v in kwargs.items() if v is not None})
+    
+    @staticmethod
+    def render_number_input(label: str, value: float = 0.0, min_value: float = None,
+                           max_value: float = None, step: float = 1.0, help_text: str = None):
+        """Render standardized number input with validation."""
+        kwargs = {
+            "label": label,
+            "value": value,
+            "step": step,
+            "help": help_text
+        }
+        if min_value is not None:
+            kwargs["min_value"] = min_value
+        if max_value is not None:
+            kwargs["max_value"] = max_value
+            
+        return st.number_input(**kwargs)
+    
+    @staticmethod
+    def render_selectbox(label: str, options: list, index: int = 0, help_text: str = None):
+        """Render standardized selectbox."""
+        return st.selectbox(label, options=options, index=index, help=help_text)
+    
+    @staticmethod
+    def render_form_buttons(submit_text: str = "Save", cancel_text: str = "Cancel",
+                           submit_key: str = None, cancel_key: str = None):
+        """Render standardized form buttons."""
+        col1, col2 = st.columns(2)
+        with col1:
+            submit = st.form_submit_button(submit_text, use_container_width=True, key=submit_key)
+        with col2:
+            cancel = st.form_submit_button(cancel_text, use_container_width=True, key=cancel_key)
+        return submit, cancel
+
 
 @handle_streamlit_exceptions(show_error=True, attempt_recovery=True)
 def render_settings_page():
@@ -126,25 +181,26 @@ def _render_timer_settings(config):
     with col1:
         st.markdown("#### 🎯 Focus Sessions")
         
-        focus_duration = st.number_input(
+        # Using DRY components for consistent form fields
+        focus_duration = DRYFormComponents.render_number_input(
             "Focus Session Duration (minutes)",
+            value=config.focus_session_duration,
             min_value=5,
             max_value=120,
-            value=config.focus_session_duration,
             step=5,
-            help="Standard Pomodoro is 25 minutes"
+            help_text="Standard Pomodoro is 25 minutes"
         )
         
-        short_break = st.number_input(
+        short_break = DRYFormComponents.render_number_input(
             "Short Break Duration (minutes)",
+            value=config.short_break_duration,
             min_value=1,
             max_value=30,
-            value=config.short_break_duration,
             step=1,
-            help="Break between focus sessions"
+            help_text="Break between focus sessions"
         )
         
-        long_break = st.number_input(
+        long_break = DRYFormComponents.render_number_input(
             "Long Break Duration (minutes)",
             min_value=5,
             max_value=60,

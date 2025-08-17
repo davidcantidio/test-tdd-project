@@ -72,8 +72,13 @@ def render_project_card(project: Dict[str, Any], db_manager: DatabaseManager, cl
         
         with col1:
             client_name = clients_map.get(project.get('client_id'), 'Unknown Client')
-            st.markdown(f"### {status_emoji} {project['name']}")
-            st.caption(f"**Client:** {client_name} | **Key:** {project.get('project_key', 'N/A')}")
+            # Apply XSS sanitization to user-controlled data
+            safe_project_name = sanitize_display(project['name']) if sanitize_display else project['name']
+            safe_client_name = sanitize_display(client_name) if sanitize_display else client_name
+            safe_project_key = sanitize_display(project.get('project_key', 'N/A')) if sanitize_display else project.get('project_key', 'N/A')
+            
+            st.markdown(f"### {status_emoji} {safe_project_name}")
+            st.caption(f"**Client:** {safe_client_name} | **Key:** {safe_project_key}")
         
         with col2:
             if st.button(UIConstants.EDIT_BUTTON, key=f"edit_project_{project['id']}", use_container_width=True):
@@ -93,11 +98,13 @@ def render_project_card(project: Dict[str, Any], db_manager: DatabaseManager, cl
                 safe_description = sanitize_display(project['description']) if sanitize_display else project['description']
                 st.markdown(f"**Description:** {safe_description}")
             
-            # Project info
+            # Project info (with XSS sanitization)
             if project.get('project_type'):
-                st.markdown(f"**Type:** {project['project_type'].title()}")
+                safe_project_type = sanitize_display(project['project_type']) if sanitize_display else project['project_type']
+                st.markdown(f"**Type:** {safe_project_type.title()}")
             if project.get('methodology'):
-                st.markdown(f"**Methodology:** {project['methodology'].title()}")
+                safe_methodology = sanitize_display(project['methodology']) if sanitize_display else project['methodology']
+                st.markdown(f"**Methodology:** {safe_methodology.title()}")
         
         with col2:
             # Timeline
@@ -334,10 +341,14 @@ def render_delete_project_modal(project: Dict[str, Any], db_manager: DatabaseMan
     if not STREAMLIT_AVAILABLE:
         return
     
-    with st.modal(f"Delete Project: {project['name']}", width="medium"):
+    # Apply XSS sanitization to modal content
+    safe_project_name = sanitize_display(project['name']) if sanitize_display else project['name']
+    
+    with st.modal(f"Delete Project: {safe_project_name}", width="medium"):
         st.markdown("### ⚠️ Confirm Deletion")
         client_name = clients_map.get(project.get('client_id'), 'Unknown Client')
-        st.warning(f"Are you sure you want to delete project **{project['name']}** from client **{client_name}**?")
+        safe_client_name = sanitize_display(client_name) if sanitize_display else client_name
+        st.warning(f"Are you sure you want to delete project **{safe_project_name}** from client **{safe_client_name}**?")
         
         # Show related epics warning
         try:
@@ -673,11 +684,13 @@ def render_projects_page():
         st.info(ErrorMessages.NO_ITEMS_FOUND.format(entity="projects"))
         return {"status": "no_projects"}
     
-    # Apply filters
+    # Apply filters (with XSS sanitization for search input)
     filtered_projects = all_projects
     
     if search_name:
-        filtered_projects = [p for p in filtered_projects if search_name.lower() in p.get('name', '').lower()]
+        # Sanitize search input to prevent any potential XSS in filtering
+        safe_search_name = sanitize_display(search_name.strip()) if sanitize_display else search_name.strip()
+        filtered_projects = [p for p in filtered_projects if safe_search_name.lower() in p.get('name', '').lower()]
     
     if status_filter != "all":
         filtered_projects = [p for p in filtered_projects if p.get('status') == status_filter]

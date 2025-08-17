@@ -200,10 +200,12 @@ def _render_main_timer(timer_component, db_manager: DatabaseManager, config):
     
     st.markdown("### 🎯 Current Session")
     
-    # Task selection with error handling
-    try:
+    # Task selection with error handling and memoization
+    @st.cache_data(ttl=300)  # Cache for 5 minutes to improve performance
+    def get_active_tasks():
+        """Get active tasks with caching for performance."""
         tasks = db_manager.get_tasks()
-        active_tasks = [
+        return [
             t
             for t in tasks
             if t.get("status")
@@ -213,6 +215,9 @@ def _render_main_timer(timer_component, db_manager: DatabaseManager, config):
                 TaskStatus.IN_PROGRESS.value,
             ]
         ]
+    
+    try:
+        active_tasks = get_active_tasks()
         
         if active_tasks:
             task_options = ["No specific task"] + [f"{t['title']} ({t.get('epic_name', 'No Epic')})" for t in active_tasks]
@@ -360,7 +365,12 @@ def _render_session_history(db_manager: DatabaseManager):
     
     st.markdown("### 📅 Recent Sessions")
     
-    recent_sessions = db_manager.get_timer_sessions(days=7)
+    @st.cache_data(ttl=180)  # Cache for 3 minutes
+    def get_recent_sessions():
+        """Get recent sessions with caching for performance."""
+        return db_manager.get_timer_sessions(days=7)
+    
+    recent_sessions = get_recent_sessions()
     
     if not recent_sessions:
         st.info(ErrorMessages.NO_ITEMS_FOUND.format(entity="recent sessions"))
@@ -427,8 +437,13 @@ def _render_tdah_insights(db_manager: DatabaseManager):
     
     st.markdown("### 🧠 TDAH Insights")
     
+    @st.cache_data(ttl=600)  # Cache for 10 minutes (insights don't change frequently)
+    def get_sessions_for_analysis():
+        """Get sessions for TDAH analysis with caching."""
+        return db_manager.get_timer_sessions(days=14)
+    
     # Get data for analysis
-    recent_sessions = db_manager.get_timer_sessions(days=14)
+    recent_sessions = get_sessions_for_analysis()
     
     if len(recent_sessions) < 3:
         st.info("📊 Complete a few more sessions to see personalized TDAH insights.")
@@ -590,8 +605,9 @@ def _get_quick_energy_rating() -> int:
     return st.session_state.get("temp_energy_rating", 5)
 
 
+@st.cache_data(ttl=120)  # Cache for 2 minutes (today's data changes frequently)
 def _get_todays_sessions(db_manager: DatabaseManager) -> List[Dict[str, Any]]:
-    """Get today's timer sessions."""
+    """Get today's timer sessions with caching."""
     
     all_sessions = db_manager.get_timer_sessions(days=1)
     today_str = datetime.now().strftime("%Y-%m-%d")

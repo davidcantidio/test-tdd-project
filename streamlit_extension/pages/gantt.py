@@ -74,6 +74,66 @@ from streamlit_extension.utils.exception_handler import (
     get_error_statistics,
 )
 
+# DRY Chart Components - Reusable visualization components
+class DRYChartComponents:
+    """Reusable chart and filter components for Gantt views."""
+    
+    @staticmethod
+    def render_view_selector(label: str = "View Mode", options: list = None, 
+                           default_index: int = 0, session_key: str = None):
+        """Render standardized view mode selector."""
+        if options is None:
+            options = ["Epic View", "Task View", "Combined View"]
+        
+        view_mode = st.sidebar.selectbox(label, options, index=default_index)
+        if session_key:
+            st.session_state[session_key] = view_mode
+        return view_mode
+    
+    @staticmethod  
+    def render_time_range_selector(label: str = "Time Range", 
+                                 session_key: str = None):
+        """Render standardized time range selector with custom date support."""
+        time_options = ["Last 30 days", "Last 90 days", "All time", "Custom range"]
+        time_range = st.sidebar.selectbox(label, time_options, index=1)
+        
+        if session_key:
+            st.session_state[f"{session_key}_range"] = time_range
+        
+        # Handle custom range
+        if time_range == "Custom range":
+            col1, col2 = st.sidebar.columns(2)
+            with col1:
+                start_date = st.date_input("Start Date", 
+                                         value=datetime.now() - timedelta(days=90))
+            with col2:
+                end_date = st.date_input("End Date", 
+                                       value=datetime.now() + timedelta(days=30))
+            
+            if session_key:
+                st.session_state[f"{session_key}_custom_start"] = start_date
+                st.session_state[f"{session_key}_custom_end"] = end_date
+            
+            return time_range, start_date, end_date
+        
+        return time_range, None, None
+    
+    @staticmethod
+    def render_chart_settings_section(title: str = "📊 Chart Settings"):
+        """Render standardized chart settings section header."""
+        st.sidebar.markdown(f"## {title}")
+    
+    @staticmethod
+    def render_filter_options(filters: dict, session_prefix: str = "gantt"):
+        """Render standardized filter options for charts."""
+        for filter_name, filter_config in filters.items():
+            options = filter_config.get("options", [])
+            default_index = filter_config.get("default", 0)
+            label = filter_config.get("label", filter_name.title())
+            
+            value = st.sidebar.selectbox(label, options, index=default_index)
+            st.session_state[f"{session_prefix}_{filter_name}"] = value
+
 @handle_streamlit_exceptions(show_error=True, attempt_recovery=True)
 def render_gantt_page():
     """Render the Gantt chart page."""
@@ -168,35 +228,30 @@ def render_gantt_page():
 
 
 def _render_sidebar_controls():
-    """Render sidebar controls for Gantt chart customization."""
+    """Render sidebar controls for Gantt chart customization using DRY components."""
     
-    st.sidebar.markdown("## 📊 Chart Settings")
+    # Using DRY chart components
+    DRYChartComponents.render_chart_settings_section("📊 Chart Settings")
     
-    # View mode
-    view_mode = st.sidebar.selectbox(
+    # View mode with DRY component
+    view_mode = DRYChartComponents.render_view_selector(
         "View Mode",
         ["Epic View", "Task View", "Combined View"],
-        index=2  # Default to Combined
+        default_index=2,  # Default to Combined
+        session_key="gantt_view_mode"
     )
-    st.session_state.gantt_view_mode = view_mode
     
-    # Time range
-    time_range = st.sidebar.selectbox(
+    # Time range with DRY component
+    time_result = DRYChartComponents.render_time_range_selector(
         "Time Range",
-        ["Last 30 days", "Last 90 days", "All time", "Custom range"],
-        index=1  # Default to 90 days
+        session_key="gantt"
     )
-    st.session_state.gantt_time_range = time_range
     
-    if time_range == "Custom range":
-        col1, col2 = st.sidebar.columns(2)
-        with col1:
-            start_date = st.date_input("Start Date", value=datetime.now() - timedelta(days=90))
-        with col2:
-            end_date = st.date_input("End Date", value=datetime.now() + timedelta(days=30))
-        
-        st.session_state.gantt_custom_start = start_date
-        st.session_state.gantt_custom_end = end_date
+    if len(time_result) == 3:
+        time_range, start_date, end_date = time_result
+        # Custom dates are automatically stored in session state by DRY component
+    else:
+        time_range = time_result
     
     # Display options
     st.sidebar.markdown("## 🎨 Display Options")

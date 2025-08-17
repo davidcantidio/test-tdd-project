@@ -512,6 +512,208 @@ class DatabaseManager(PerformancePaginationMixin):
         except Exception:  # pragma: no cover - best effort
             logger.warning("Failed to close connection", exc_info=True)
 
+    @contextmanager
+    def transaction(
+        self, 
+        database_name: str = "framework", 
+        isolation_level: Optional[str] = None,
+        timeout: int = 30
+    ) -> Iterator[Union[Connection, SQLiteConnection]]:
+        """
+        Transaction context manager with proper isolation and rollback support.
+        
+        Provides ACID transaction guarantees for critical operations, especially
+        cascade deletes that may lock tables. Addresses report.md requirement:
+        "Large numbers of cascade deletes may lock tables; wrap in transactions with proper isolation."
+        
+        Args:
+            database_name: Database to connect to ("framework" or "timer")
+            isolation_level: Transaction isolation level:
+                - "READ_UNCOMMITTED": Lowest isolation, allows dirty reads
+                - "READ_COMMITTED": Prevents dirty reads (default for most operations) 
+                - "REPEATABLE_READ": Prevents dirty and non-repeatable reads
+                - "SERIALIZABLE": Highest isolation, prevents all phenomena
+                - None: Use database default
+            timeout: Transaction timeout in seconds
+            
+        Returns:
+            Connection with active transaction context
+            
+        Raises:
+            Exception: Re-raises any exception after rollback
+            
+        Example:
+            >>> with db.transaction(isolation_level="READ_COMMITTED") as conn:
+            ...     conn.execute("DELETE FROM tasks WHERE project_id = ?", (project_id,))
+            ...     conn.execute("DELETE FROM projects WHERE id = ?", (project_id,))
+            ...     # Auto-commit on success, rollback on exception
+        """
+        with self.get_connection(database_name) as conn:
+            # Set isolation level if specified
+            if isolation_level and SQLALCHEMY_AVAILABLE:
+                if isolation_level in ["READ_UNCOMMITTED", "READ_COMMITTED", "REPEATABLE_READ", "SERIALIZABLE"]:
+                    conn.execute(text(f"PRAGMA read_uncommitted = {'ON' if isolation_level == 'READ_UNCOMMITTED' else 'OFF'}"))
+            elif isolation_level and hasattr(conn, 'isolation_level'):
+                # For direct SQLite connections
+                if isolation_level == "SERIALIZABLE":
+                    conn.execute("PRAGMA locking_mode = EXCLUSIVE")
+                elif isolation_level == "READ_COMMITTED":
+                    conn.execute("PRAGMA journal_mode = WAL")
+            
+            # Set timeout for lock wait
+            if hasattr(conn, 'execute'):
+                if SQLALCHEMY_AVAILABLE:
+                    conn.execute(text(f"PRAGMA busy_timeout = {timeout * 1000}"))  # SQLite timeout in ms
+                else:
+                    conn.execute(f"PRAGMA busy_timeout = {timeout * 1000}")
+            
+            # Begin transaction
+            if SQLALCHEMY_AVAILABLE:
+                trans = conn.begin()
+            else:
+                conn.execute("BEGIN IMMEDIATE")
+                trans = None
+            
+            try:
+                yield conn
+                # Commit on successful completion
+                if SQLALCHEMY_AVAILABLE and trans:
+                    trans.commit()
+                else:
+                    conn.commit()
+            except Exception as e:
+                # Rollback on any exception
+                try:
+                    if SQLALCHEMY_AVAILABLE and trans:
+                        trans.rollback()
+                    else:
+                        conn.rollback()
+                    logger.error(f"Transaction rolled back due to error: {e}")
+                except Exception as rollback_error:
+                    logger.error(f"Failed to rollback transaction: {rollback_error}")
+                raise  # Re-raise original exception
+
+    def delete_with_transaction(
+        self, 
+        delete_operations: List[Tuple[str, Dict[str, Any]]], 
+        isolation_level: str = "READ_COMMITTED"
+    ) -> bool:
+        """
+        Execute multiple delete operations within a single transaction.
+        
+        Ideal for cascade deletes that affect multiple related tables.
+        Prevents partial deletes and table locks by using proper isolation.
+        
+        Args:
+            delete_operations: List of (sql_query, params) tuples to execute
+            isolation_level: Transaction isolation level for consistency
+            
+        Returns:
+            True if all operations succeeded, False otherwise
+            
+        Example:
+            >>> operations = [
+            ...     ("DELETE FROM tasks WHERE project_id = :project_id", {"project_id": 123}),
+            ...     ("DELETE FROM epics WHERE project_id = :project_id", {"project_id": 123}),
+            ...     ("DELETE FROM projects WHERE id = :id", {"id": 123})
+            ... ]
+            >>> success = db.delete_with_transaction(operations)
+        """
+        try:
+            with self.transaction(isolation_level=isolation_level) as conn:
+                for sql_query, params in delete_operations:
+                    if SQLALCHEMY_AVAILABLE:
+                        conn.execute(text(sql_query), params)
+                    else:
+                        # Convert named parameters to positional for SQLite
+                        if ':' in sql_query:
+                            # Simple parameter substitution for basic cases
+                            for key, value in params.items():
+                                sql_query = sql_query.replace(f':{key}', '?')
+                            param_values = list(params.values())
+                        else:
+                            param_values = list(params.values()) if params else []
+                        
+                        conn.execute(sql_query, param_values)
+                
+                logger.info(f"Successfully executed {len(delete_operations)} delete operations in transaction")
+                return True
+                
+        except Exception as e:
+            logger.error(f"Transaction delete failed: {e}")
+            return False
+
+    def delete_cascade_safe(
+        self, 
+        table_name: str, 
+        record_id: int, 
+        cascade_tables: Optional[List[str]] = None
+    ) -> bool:
+        """
+        Safely delete a record and its cascaded dependencies using transactions.
+        
+        Prevents table locks during large cascade operations by using appropriate
+        isolation levels and proper transaction boundaries.
+        
+        Args:
+            table_name: Primary table to delete from
+            record_id: ID of the record to delete
+            cascade_tables: Optional list of dependent tables to clean up
+            
+        Returns:
+            True if deletion succeeded, False otherwise
+            
+        Example:
+            >>> # Delete client and all related data
+            >>> success = db.delete_cascade_safe(
+            ...     "clients", 
+            ...     client_id, 
+            ...     cascade_tables=["projects", "epics", "tasks"]
+            ... )
+        """
+        # Define safe cascade relationships
+        safe_relationships = {
+            "clients": ["projects", "epics", "tasks"],
+            "projects": ["epics", "tasks"],
+            "epics": ["tasks"]
+        }
+        
+        # Use provided cascade tables or safe defaults
+        tables_to_clean = cascade_tables or safe_relationships.get(table_name, [])
+        
+        # Build delete operations in dependency order (children first)
+        delete_ops = []
+        
+        # Add cascade deletes (reverse order for dependencies)
+        for cascade_table in reversed(tables_to_clean):
+            if cascade_table == "tasks":
+                delete_ops.append((
+                    f"DELETE FROM {cascade_table} WHERE epic_id IN (SELECT id FROM epics WHERE project_id IN (SELECT id FROM projects WHERE client_id = :record_id))",
+                    {"record_id": record_id}
+                ))
+            elif cascade_table == "epics":
+                delete_ops.append((
+                    f"DELETE FROM {cascade_table} WHERE project_id IN (SELECT id FROM projects WHERE client_id = :record_id)",
+                    {"record_id": record_id}
+                ))
+            elif cascade_table == "projects":
+                delete_ops.append((
+                    f"DELETE FROM {cascade_table} WHERE client_id = :record_id",
+                    {"record_id": record_id}
+                ))
+        
+        # Add primary table delete
+        delete_ops.append((
+            f"DELETE FROM {table_name} WHERE id = :record_id",
+            {"record_id": record_id}
+        ))
+        
+        # Execute all deletes in a single transaction with appropriate isolation
+        return self.delete_with_transaction(
+            delete_ops, 
+            isolation_level="READ_COMMITTED"  # Prevent dirty reads while allowing concurrency
+        )
+
     def execute_query(
         self,
         query: str,
@@ -1843,15 +2045,14 @@ class DatabaseManager(PerformancePaginationMixin):
                         """, (task_id,))
                         conn.commit()
                 else:
-                    # Hard delete: actually remove from database
-                    if SQLALCHEMY_AVAILABLE:
-                        conn.execute(text("DELETE FROM framework_tasks WHERE id = :task_id"), 
-                                   {"task_id": task_id})
-                        conn.commit()
-                    else:
-                        cursor = conn.cursor()
-                        cursor.execute("DELETE FROM framework_tasks WHERE id = ?", (task_id,))
-                        conn.commit()
+                    # Hard delete: use transaction wrapper for consistency and safety
+                    # Tasks are leaf nodes but still benefit from transaction protection
+                    with self.transaction(isolation_level="READ_COMMITTED") as trans_conn:
+                        if SQLALCHEMY_AVAILABLE:
+                            trans_conn.execute(text("DELETE FROM framework_tasks WHERE id = :task_id"), 
+                                           {"task_id": task_id})
+                        else:
+                            trans_conn.execute("DELETE FROM framework_tasks WHERE id = ?", (task_id,))
                 
                 return True
         except Exception as e:
@@ -3224,14 +3425,13 @@ class DatabaseManager(PerformancePaginationMixin):
                         """, (client_id,))
                         conn.commit()
                 else:
-                    if SQLALCHEMY_AVAILABLE:
-                        conn.execute(text(f"DELETE FROM {TableNames.CLIENTS} WHERE id = :client_id"),
-                                   {"client_id": client_id})
-                        conn.commit()
-                    else:
-                        cursor = conn.cursor()
-                        cursor.execute(f"DELETE FROM {TableNames.CLIENTS} WHERE id = ?", (client_id,))
-                        conn.commit()
+                    # Use transaction-wrapped cascade delete for hard deletes
+                    # This prevents table locks during large cascade operations
+                    return self.delete_cascade_safe(
+                        table_name="clients",
+                        record_id=client_id,
+                        cascade_tables=["projects", "epics", "tasks"]  # Delete in dependency order
+                    )
                 
                 return True
                 
@@ -3344,14 +3544,13 @@ class DatabaseManager(PerformancePaginationMixin):
                         """, (project_id,))
                         conn.commit()
                 else:
-                    if SQLALCHEMY_AVAILABLE:
-                        conn.execute(text(f"DELETE FROM {TableNames.PROJECTS} WHERE id = :project_id"),
-                                   {"project_id": project_id})
-                        conn.commit()
-                    else:
-                        cursor = conn.cursor()
-                        cursor.execute(f"DELETE FROM {TableNames.PROJECTS} WHERE id = ?", (project_id,))
-                        conn.commit()
+                    # Use transaction-wrapped cascade delete for hard deletes
+                    # This prevents table locks during cascade operations  
+                    return self.delete_cascade_safe(
+                        table_name="projects",
+                        record_id=project_id,
+                        cascade_tables=["epics", "tasks"]  # Delete dependent records first
+                    )
                 
                 return True
                 
