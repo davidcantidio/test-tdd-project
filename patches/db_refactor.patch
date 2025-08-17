@@ -1,377 +1,1040 @@
  (cd "$(git rev-parse --show-toplevel)" && git apply --3way <<'EOF' 
-diff --git a/streamlit_extension/database/__init__.py b/streamlit_extension/database/__init__.py
-index 93004bcde01344b433e2bb89362ee5583c9542ae..07203cf972e52671141734775d8ae84f58974685 100644
---- a/streamlit_extension/database/__init__.py
-+++ b/streamlit_extension/database/__init__.py
-@@ -1,20 +1,56 @@
-+"""Camada de acesso a dados para a extensão Streamlit.
+diff --git a/streamlit_extension/middleware/rate_limiting/__init__.py b/streamlit_extension/middleware/rate_limiting/__init__.py
+index c9398d039e65d5d5ca463993f2ee496041141a53..9405eb99a57489711617f2de7ecd1143a4ab6cd0 100644
+--- a/streamlit_extension/middleware/rate_limiting/__init__.py
++++ b/streamlit_extension/middleware/rate_limiting/__init__.py
+@@ -1,6 +1,7 @@
+ """Rate limiting middleware and utilities."""
+ 
+-from .core import RateLimiter
++from .core import RateLimiter, RateLimitResult
+ from .middleware import RateLimitingMiddleware
+ 
+-__all__ = ["RateLimiter", "RateLimitingMiddleware"]
+\ No newline at end of file
++__all__ = ["RateLimiter", "RateLimitingMiddleware", "RateLimitResult"]
 +
-+Fase 1: apenas delegação ao `DatabaseManager` existente.
-+Fase 2: migrar lógicas pesadas dos managers para módulos locais menores.
- """
--Pacote de DB, fase 1: finas camadas que delegam ao DatabaseManager existente.
--Na fase 2, vamos mover os métodos para cá e emagrecer o arquivo gigante.
--"""
--from .connection import get_connection, release_connection, transaction, execute
--from .health import check_health, get_query_stats, optimize, create_backup, restore_backup
+diff --git a/streamlit_extension/middleware/rate_limiting/algorithms.py b/streamlit_extension/middleware/rate_limiting/algorithms.py
+index 200e7bc2fa1b0351b87312cf5f954293db6dfbdd..b843101bfb37f605642f5c2c2293c07b61986226 100644
+--- a/streamlit_extension/middleware/rate_limiting/algorithms.py
++++ b/streamlit_extension/middleware/rate_limiting/algorithms.py
+@@ -1,76 +1,146 @@
+ """Collection of rate limiting algorithm implementations."""
+ 
+ from __future__ import annotations
+ 
+ import time
+ from collections import deque
+-from typing import Deque
++from typing import Deque, Any
+ 
+ 
+ class TokenBucketRateLimiter:
+     """Simple token bucket implementation."""
+ 
+-    def __init__(self, capacity: int, refill_rate: float, refill_period: float = 1.0) -> None:
++    def __init__(
++        self,
++        capacity: int,
++        refill_rate: float,
++        refill_period: float = 1.0,
++        storage: Any | None = None,
++        key: str | None = None,
++    ) -> None:
+         self.capacity = capacity
+         self.refill_rate = refill_rate
+         self.refill_period = refill_period
++        self._storage = storage
++        self._key = key
+         self.tokens = float(capacity)
+         self.last_refill = time.time()
++        if self._storage and self._key:
++            self._storage.update_bucket_state(self._key, tokens=self.tokens, last_refill=self.last_refill)
+ 
+     def _refill_tokens(self) -> None:
+         now = time.time()
+-        elapsed = now - self.last_refill
+-        tokens_to_add = (elapsed / self.refill_period) * self.refill_rate
+-        if tokens_to_add > 0:
+-            self.tokens = min(self.capacity, self.tokens + tokens_to_add)
+-            self.last_refill = now
++        if self._storage and self._key:
++            state = self._storage.get_bucket_state(self._key)
++            last_refill = state.get("last_refill", now)
++            tokens = float(state.get("tokens", self.capacity))
++            elapsed = now - last_refill
++            tokens_to_add = (elapsed / self.refill_period) * self.refill_rate
++            if tokens_to_add > 0:
++                tokens = min(self.capacity, tokens + tokens_to_add)
++                self._storage.update_bucket_state(self._key, tokens=tokens, last_refill=now)
++        else:
++            elapsed = now - self.last_refill
++            tokens_to_add = (elapsed / self.refill_period) * self.refill_rate
++            if tokens_to_add > 0:
++                self.tokens = min(self.capacity, self.tokens + tokens_to_add)
++                self.last_refill = now
+ 
+     def is_allowed(self, tokens_requested: int = 1) -> bool:
+         """Return True if the requested number of tokens is available."""
+         self._refill_tokens()
+-        if self.tokens >= tokens_requested:
+-            self.tokens -= tokens_requested
+-            return True
+-        return False
++        if self._storage and self._key:
++            state = self._storage.get_bucket_state(self._key)
++            tokens = float(state.get("tokens", self.capacity))
++            if tokens >= tokens_requested:
++                tokens -= tokens_requested
++                self._storage.update_bucket_state(
++                    self._key, tokens=tokens, last_refill=state.get("last_refill", time.time())
++                )
++                return True
++            return False
++        else:
++            if self.tokens >= tokens_requested:
++                self.tokens -= tokens_requested
++                return True
++            return False
+ 
+ 
+ class SlidingWindowRateLimiter:
+     """Sliding window implementation tracking individual request timestamps."""
+ 
+-    def __init__(self, window_size: int, max_requests: int) -> None:
++    def __init__(
++        self,
++        window_size: int,
++        max_requests: int,
++        storage: Any | None = None,
++        key: str | None = None,
++    ) -> None:
+         self.window_size = window_size
+         self.max_requests = max_requests
+         self.requests: Deque[float] = deque()
++        self._storage = storage
++        self._key = key
+ 
+     def is_allowed(self, timestamp: float | None = None) -> bool:
+         if timestamp is None:
+             timestamp = time.time()
+         cutoff = timestamp - self.window_size
++        if self._storage and self._key:
++            self._storage.prune(self._key, cutoff)
++            count = self._storage.increment(self._key, timestamp)
++            return count <= self.max_requests
+         while self.requests and self.requests[0] <= cutoff:
+             self.requests.popleft()
+         if len(self.requests) < self.max_requests:
+             self.requests.append(timestamp)
+             return True
+         return False
+ 
+ 
+ class FixedWindowRateLimiter:
+     """Fixed window counter implementation."""
+ 
+-    def __init__(self, window_size: int, max_requests: int) -> None:
++    def __init__(
++        self,
++        window_size: int,
++        max_requests: int,
++        storage: Any | None = None,
++        key: str | None = None,
++    ) -> None:
+         self.window_size = window_size
+         self.max_requests = max_requests
+-        self.window_start = int(time.time())
++        self.window_start = int(time.time()) // self.window_size
+         self.counter = 0
++        self._storage = storage
++        self._key = key
+ 
+     def is_allowed(self, timestamp: float | None = None) -> bool:
+         if timestamp is None:
+             timestamp = time.time()
+         current_window = int(timestamp) // self.window_size
++        if self._storage and self._key:
++            state = self._storage.get_counter_state(self._key)
++            window_start = state.get("window_start")
++            counter = int(state.get("counter", 0))
++            if window_start is None or window_start != current_window:
++                window_start = current_window
++                counter = 0
++            if counter < self.max_requests:
++                counter += 1
++                self._storage.update_counter_state(
++                    self._key, window_start=window_start, counter=counter
++                )
++                return True
++            self._storage.update_counter_state(
++                self._key, window_start=window_start, counter=counter
++            )
++            return False
+         if current_window != self.window_start:
+             self.window_start = current_window
+             self.counter = 0
+         if self.counter < self.max_requests:
+             self.counter += 1
+             return True
+-        return False
+\ No newline at end of file
++        return False
 +
-+__version__ = "0.1.0"
-+
-+from .connection import (
-+    get_connection,
-+    release_connection,
-+    transaction,
-+    execute,
-+    set_database_manager as set_dbm,
-+)
-+from .health import (
-+    check_health,
-+    get_query_stats,
-+    optimize,
-+    create_backup,
-+    restore_backup,
-+)
- from .queries import (
--    list_epics, list_all_epics, list_tasks, list_all_tasks,
--    list_timer_sessions, get_user_stats, get_achievements,
-+    list_epics,
-+    list_all_epics,
-+    list_tasks,
-+    list_all_tasks,
-+    list_timer_sessions,
-+    get_user_stats,
-+    get_achievements,
+diff --git a/streamlit_extension/middleware/rate_limiting/core.py b/streamlit_extension/middleware/rate_limiting/core.py
+index b7f5c85103f6234790592399bc764ef26068754e..f6b680bfb8db1c2197e88386a5cd0d496af0c4bc 100644
+--- a/streamlit_extension/middleware/rate_limiting/core.py
++++ b/streamlit_extension/middleware/rate_limiting/core.py
+@@ -1,119 +1,268 @@
+ """Core rate limiting engine supporting multiple strategies."""
+ 
+ from __future__ import annotations
+ 
+ import time
+ from dataclasses import dataclass
+-from typing import Dict, Optional
++from typing import Dict, Optional, Tuple, cast
+ 
+ from .algorithms import (
+     FixedWindowRateLimiter,
+     SlidingWindowRateLimiter,
+     TokenBucketRateLimiter,
  )
- from .schema import create_schema_if_needed
- from .seed import seed_initial_data
+ from .policies import ENDPOINT_LIMITS, USER_TIER_LIMITS
+ from .storage import MemoryRateLimitStorage
  
- __all__ = [
--    "get_connection", "release_connection", "transaction", "execute",
--    "check_health", "get_query_stats", "optimize", "create_backup", "restore_backup",
--    "list_epics", "list_all_epics", "list_tasks", "list_all_tasks",
--    "list_timer_sessions", "get_user_stats", "get_achievements",
--    "create_schema_if_needed", "seed_initial_data",
--]
-\ No newline at end of file
-+    "get_connection",
-+    "release_connection",
-+    "transaction",
-+    "execute",
-+    "set_dbm",
-+    "check_health",
-+    "get_query_stats",
-+    "optimize",
-+    "create_backup",
-+    "restore_backup",
-+    "list_epics",
-+    "list_all_epics",
-+    "list_tasks",
-+    "list_all_tasks",
-+    "list_timer_sessions",
-+    "get_user_stats",
-+    "get_achievements",
-+    "create_schema_if_needed",
-+    "seed_initial_data",
-+]
+ 
+ @dataclass
+ class RateLimitResult:
+     allowed: bool
+     reason: Optional[str] = None
+ 
+ 
+ class RateLimiter:
+     """High level rate limiter handling IP, user and endpoint limits."""
+ 
+-    def __init__(self) -> None:
+-        self.storage = MemoryRateLimitStorage()
+-        self.limiters: Dict[str, object] = {}
++    def __init__(self, ttl_seconds: int = 900, storage: object | None = None) -> None:
++        self.storage = storage or MemoryRateLimitStorage()
++        # key -> (last_seen_ts, limiter_instance)
++        self.limiters: Dict[str, Tuple[float, object]] = {}
++        self.ttl_seconds = ttl_seconds
 +
-diff --git a/streamlit_extension/database/connection.py b/streamlit_extension/database/connection.py
-index 54fa5d723a3822964c272863e4393a0065f1599c..a4327f6c72a49a26c7f6ba793b6a89ad4cda6647 100644
---- a/streamlit_extension/database/connection.py
-+++ b/streamlit_extension/database/connection.py
-@@ -1,34 +1,52 @@
++    def _get(self, key: str) -> Optional[object]:
++        item = self.limiters.get(key)
++        if not item:
++            return None
++        last_seen, limiter = item
++        now = time.time()
++        if now - last_seen > self.ttl_seconds:
++            self.limiters.pop(key, None)
++            return None
++        self.limiters[key] = (now, limiter)
++        return limiter
++
++    def _set(self, key: str, limiter: object) -> object:
++        self.limiters[key] = (time.time(), limiter)
++        return limiter
+ 
+     # ------------------------------------------------------------------
+     # Helper parsing utilities
+     # ------------------------------------------------------------------
+     @staticmethod
+     def _parse_rate(rate: str) -> tuple[int, int]:
+         """Return (count, period_in_seconds) from a rate string."""
+         count_part, _, rest = rate.partition(" per ")
+         count = int(count_part.strip())
+         amount_str, unit = rest.strip().split()
+         amount = int(amount_str)
+         unit = unit.lower()
+         if unit.startswith("second"):
+             period = amount
+         elif unit.startswith("minute"):
+             period = amount * 60
+         elif unit.startswith("hour"):
+             period = amount * 3600
+         else:
+             period = amount * 86400
+         return count, period
+ 
+     @staticmethod
+     def _match_endpoint(endpoint: str) -> Optional[Dict[str, str]]:
+         if endpoint in ENDPOINT_LIMITS:
+             return ENDPOINT_LIMITS[endpoint]
+         for pattern, config in ENDPOINT_LIMITS.items():
+             if pattern.endswith("*") and endpoint.startswith(pattern[:-1]):
+                 return config
+         return None
+ 
+     # ------------------------------------------------------------------
+     # Rate limit checks
+     # ------------------------------------------------------------------
+     def check_user_rate_limit(self, user_id: str, tier: str) -> bool:
+         limits = USER_TIER_LIMITS.get(tier, USER_TIER_LIMITS["free"])
+         rpm = limits.get("requests_per_minute", -1)
+         if rpm < 0:
+             return True
+         key = f"user:{user_id}"
+-        limiter = self.limiters.get(key)
++        limiter = self._get(key)
+         if limiter is None:
+-            limiter = TokenBucketRateLimiter(capacity=rpm, refill_rate=rpm / 60)
+-            self.limiters[key] = limiter
+-        return limiter.is_allowed()
++            limiter = TokenBucketRateLimiter(
++                capacity=rpm,
++                refill_rate=rpm / 60,
++                storage=self.storage,
++                key=key,
++            )
++            self._set(key, limiter)
++        return cast(TokenBucketRateLimiter, limiter).is_allowed()
+ 
+     def check_ip_rate_limit(self, ip: str) -> bool:
+         key = f"ip:{ip}"
+-        limiter = self.limiters.get(key)
++        limiter = self._get(key)
+         if limiter is None:
+-            limiter = SlidingWindowRateLimiter(window_size=60, max_requests=100)
+-            self.limiters[key] = limiter
+-        return limiter.is_allowed()
++            limiter = SlidingWindowRateLimiter(
++                window_size=60,
++                max_requests=100,
++                storage=self.storage,
++                key=key,
++            )
++            self._set(key, limiter)
++        return cast(SlidingWindowRateLimiter, limiter).is_allowed()
+ 
+     def check_endpoint_rate_limit(self, endpoint: str) -> bool:
+         config = self._match_endpoint(endpoint)
+         if not config:
+             return True
+         count, period = self._parse_rate(config["rate_limit"])
+         alg = config.get("algorithm", "sliding_window")
+         key = f"endpoint:{endpoint}"
+-        limiter = self.limiters.get(key)
++        limiter = self._get(key)
+         if limiter is None:
+             if alg == "token_bucket":
+                 refill_rate = count / period
+                 burst = config.get("burst_capacity", count)
+-                limiter = TokenBucketRateLimiter(capacity=burst, refill_rate=refill_rate, refill_period=1)
++                limiter = TokenBucketRateLimiter(
++                    capacity=burst,
++                    refill_rate=refill_rate,
++                    refill_period=1,
++                    storage=self.storage,
++                    key=key,
++                )
+             elif alg == "fixed_window":
+-                limiter = FixedWindowRateLimiter(window_size=period, max_requests=count)
++                limiter = FixedWindowRateLimiter(
++                    window_size=period,
++                    max_requests=count,
++                    storage=self.storage,
++                    key=key,
++                )
+             else:
+-                limiter = SlidingWindowRateLimiter(window_size=period, max_requests=count)
+-            self.limiters[key] = limiter
+-        return limiter.is_allowed()
++                limiter = SlidingWindowRateLimiter(
++                    window_size=period,
++                    max_requests=count,
++                    storage=self.storage,
++                    key=key,
++                )
++            self._set(key, limiter)
++        if alg == "token_bucket":
++            return cast(TokenBucketRateLimiter, limiter).is_allowed()
++        elif alg == "fixed_window":
++            return cast(FixedWindowRateLimiter, limiter).is_allowed()
++        else:
++            return cast(SlidingWindowRateLimiter, limiter).is_allowed()
+ 
+     # ------------------------------------------------------------------
+     def is_allowed(
+         self,
+         ip: Optional[str] = None,
+         user_id: Optional[str] = None,
+         tier: str = "free",
+         endpoint: str = "/",
+     ) -> RateLimitResult:
+         """Return a RateLimitResult for the given request details."""
+         if ip and not self.check_ip_rate_limit(ip):
+             return RateLimitResult(False, "ip")
+         if user_id and not self.check_user_rate_limit(user_id, tier):
+             return RateLimitResult(False, "user")
+         if endpoint and not self.check_endpoint_rate_limit(endpoint):
+             return RateLimitResult(False, "endpoint")
+-        return RateLimitResult(True)
+\ No newline at end of file
++        return RateLimitResult(True)
++
++    # ------------------------------------------------------------------
++    # Headers snapshot util
++    # ------------------------------------------------------------------
++    def _snapshot_token_bucket(self, key: str, capacity: int, refill_rate: float, refill_period: float) -> tuple[int, int, int]:
++        state = self.storage.get_bucket_state(key)
++        tokens = float(state.get("tokens", capacity))
++        remaining = int(tokens) if tokens >= 0 else 0
++        if tokens >= 1:
++            reset = 0
++        else:
++            need = max(0.0, 1.0 - tokens)
++            seconds = int((need / refill_rate) * refill_period) if refill_rate > 0 else 0
++            reset = max(0, seconds)
++        return capacity, remaining, reset
++
++    def _snapshot_sliding_window(self, key: str, window_size: int, max_requests: int) -> tuple[int, int, int]:
++        now = time.time()
++        cutoff = now - window_size
++        try:
++            count = self.storage.get_window_count(key, cutoff)
++        except AttributeError:
++            self.storage.prune(key, cutoff)
++            count = 0
++        remaining = max(0, max_requests - int(count))
++        reset = int(window_size - (now - cutoff))
++        return max_requests, remaining, max(0, reset)
++
++    def _snapshot_fixed_window(self, key: str, window_size: int, max_requests: int) -> tuple[int, int, int]:
++        now = time.time()
++        current_window = int(now) // window_size
++        st = self.storage.get_counter_state(key)
++        window_start = st.get("window_start")
++        counter = int(st.get("counter", 0))
++        if window_start is None or window_start != current_window:
++            remaining = max_requests
++            reset = window_size - (int(now) % window_size)
++        else:
++            remaining = max(0, max_requests - counter)
++            reset = window_size - (int(now) % window_size)
++        return max_requests, remaining, max(0, int(reset))
++
++    def _pick_strictest(self, choices: Dict[str, tuple[int, int, int]], prefer: Optional[str]) -> tuple[str, tuple[int, int, int]]:
++        if prefer and prefer in choices:
++            return prefer, choices[prefer]
++        best_key = None
++        best_val = None
++        for k, v in choices.items():
++            if best_val is None:
++                best_key, best_val = k, v
++                continue
++            if v[1] < best_val[1] or (v[1] == best_val[1] and v[2] < best_val[2]):
++                best_key, best_val = k, v
++        return (best_key or "endpoint"), (best_val or (0, 0, 0))
++
++    def build_rate_limit_headers(
++        self,
++        *,
++        ip: Optional[str],
++        user_id: Optional[str],
++        tier: str,
++        endpoint: str,
++        prefer: Optional[str] = None,
++    ) -> Dict[str, str]:
++        choices: Dict[str, tuple[int, int, int]] = {}
++
++        cfg = self._match_endpoint(endpoint)
++        if cfg:
++            count, period = self._parse_rate(cfg["rate_limit"])
++            alg = cfg.get("algorithm", "sliding_window")
++            key = f"endpoint:{endpoint}"
++            if alg == "token_bucket":
++                refill_rate = count / period
++                burst = cfg.get("burst_capacity", count)
++                choices["endpoint"] = self._snapshot_token_bucket(key, burst, refill_rate, 1.0)
++            elif alg == "fixed_window":
++                choices["endpoint"] = self._snapshot_fixed_window(key, period, count)
++            else:
++                choices["endpoint"] = self._snapshot_sliding_window(key, period, count)
++
++        if user_id:
++            limits = USER_TIER_LIMITS.get(tier, USER_TIER_LIMITS["free"])
++            rpm = limits.get("requests_per_minute", -1)
++            if rpm >= 0:
++                key = f"user:{user_id}"
++                choices["user"] = self._snapshot_token_bucket(key, rpm, rpm / 60.0, 1.0)
++
++        if ip:
++            key = f"ip:{ip}"
++            choices["ip"] = self._snapshot_sliding_window(key, 60, 100)
++
++        if not choices:
++            return {}
++        _k, (limit, remaining, reset) = self._pick_strictest(choices, prefer)
++        return {
++            "X-RateLimit-Limit": str(limit),
++            "X-RateLimit-Remaining": str(remaining),
++            "X-RateLimit-Reset": str(reset),
++        }
++
+diff --git a/streamlit_extension/middleware/rate_limiting/middleware.py b/streamlit_extension/middleware/rate_limiting/middleware.py
+index 05e6295fefec42f20700a13b2dcfb37f0dd9b015..3231d300ba7004421c67932bb2fd160f069e4704 100644
+--- a/streamlit_extension/middleware/rate_limiting/middleware.py
++++ b/streamlit_extension/middleware/rate_limiting/middleware.py
+@@ -1,47 +1,83 @@
+ """Simple middleware integrating rate limiting and DoS protection."""
+ 
  from __future__ import annotations
-+
- from contextlib import contextmanager
--from typing import Any, Iterable, Optional, Tuple
-+from typing import Any, Iterable, Iterator, Optional
  
--# Ajuste este import conforme a localização do seu arquivo gigante:
--# DatabaseManager está em streamlit_extension/utils/database.py
-+# Ajuste o import conforme a localização real do DatabaseManager
- from streamlit_extension.utils.database import DatabaseManager  # type: ignore
+-from dataclasses import dataclass
++from dataclasses import dataclass, field
++import logging
+ from typing import Any, Dict, Optional
  
-+_DBM_INSTANCE: DatabaseManager | None = None  # type: ignore
-+
-+
-+def set_database_manager(dbm: DatabaseManager) -> None:
-+    """Permite injetar um ``DatabaseManager`` (ex.: testes)."""
-+
-+    global _DBM_INSTANCE
-+    _DBM_INSTANCE = dbm  # type: ignore
-+
-+
- def _db() -> DatabaseManager:
--    # Estratégia simples: uma instância "global-ish".
--    # Se você já tem um factory/singleton, troque aqui.
--    # type: ignore para evitar mypy chato neste passo.
-     global _DBM_INSTANCE  # type: ignore
-     try:
-         return _DBM_INSTANCE  # type: ignore
-     except NameError:
-         _DBM_INSTANCE = DatabaseManager()  # type: ignore
-         return _DBM_INSTANCE
+ from .core import RateLimiter
+ from streamlit_extension.utils.dos_protection import DoSProtectionSystem
  
-+
- def get_connection():
-+    """Obtém uma conexão do manager atual."""
-+
-     return _db().get_connection()
  
-+
- def release_connection(conn) -> None:
-+    """Libera uma conexão obtida via ``get_connection()``."""
-+
-     return _db().release_connection(conn)
+ @dataclass
+ class MiddlewareResponse:
+     allowed: bool
+     status_code: int = 200
+     message: str = ""
++    headers: Dict[str, str] = field(default_factory=dict)
  
-+
- @contextmanager
--def transaction():
--    # Usa a transação do manager atual
-+def transaction() -> Iterator[Any]:
-+    """Delegação de transação para o manager atual."""
-+
-     with _db().transaction() as tx:
-         yield tx
  
--def execute(sql: str, params: Optional[Iterable[Any]] = None):
--    """Execute genérico, delegando ao manager."""
--    return _db().execute_query(sql, params or ())
+ class RateLimitingMiddleware:
+     """Process requests enforcing DoS protection and rate limits."""
+ 
+     def __init__(self, config: Optional[Dict[str, Any]] = None) -> None:
+-        self.rate_limiter = RateLimiter()
++        self.config = config or {}
++        self.logger = logging.getLogger(__name__)
++        self.rate_limiter = RateLimiter(
++            ttl_seconds=self.config.get("ttl_seconds", 900),
++            storage=self.config.get("rate_limit_storage"),
++        )
+         self.dos = DoSProtectionSystem()
+ 
+     def extract_request_info(self, request: Dict[str, Any]) -> Dict[str, Any]:
+         """Extract minimal request information."""
+         return {
+             "ip": request.get("ip"),
+             "user_id": request.get("user_id"),
+             "tier": request.get("tier", "free"),
+             "endpoint": request.get("endpoint", "/"),
+         }
+ 
++    def _build_headers(self, info: Dict[str, Any], reason_hint: Optional[str]) -> Dict[str, str]:
++        try:
++            return self.rate_limiter.build_rate_limit_headers(
++                ip=info["ip"],
++                user_id=info["user_id"],
++                tier=info["tier"],
++                endpoint=info["endpoint"],
++                prefer=reason_hint,
++            )
++        except Exception:
++            return {}
++
+     def process_request(self, request: Dict[str, Any]) -> MiddlewareResponse:
+         info = self.extract_request_info(request)
+         if not self.dos.record_request(info["ip"]):
+-            return MiddlewareResponse(False, 429, "DoS attack detected")
++            self.logger.warning(
++                "dos_block",
++                extra={"ip": info["ip"], "endpoint": info["endpoint"], "user_id": info["user_id"], "tier": info["tier"]},
++            )
++            return MiddlewareResponse(False, 429, "DoS attack detected", headers={})
+         result = self.rate_limiter.is_allowed(
+             ip=info["ip"],
+             user_id=info["user_id"],
+             tier=info["tier"],
+             endpoint=info["endpoint"],
+         )
+         if not result.allowed:
+-            return MiddlewareResponse(False, 429, f"Rate limit exceeded ({result.reason})")
+-        return MiddlewareResponse(True)
 \ No newline at end of file
++            self.logger.info(
++                "rate_limit_block",
++                extra={
++                    "ip": info["ip"],
++                    "endpoint": info["endpoint"],
++                    "user_id": info["user_id"],
++                    "tier": info["tier"],
++                    "reason": result.reason,
++                },
++            )
++            headers = self._build_headers(info, result.reason)
++            return MiddlewareResponse(False, 429, f"Rate limit exceeded ({result.reason})", headers=headers)
++        headers = self._build_headers(info, None)
++        return MiddlewareResponse(True, headers=headers)
 +
-+def execute(sql: str, params: Optional[Iterable[Any]] = None) -> Any:
-+    """Execução genérica de SQL, delegada ao manager."""
+diff --git a/streamlit_extension/middleware/rate_limiting/policies.py b/streamlit_extension/middleware/rate_limiting/policies.py
+index 63430680d08afb5cfef15f8ad0dbeadcd3005a81..1f0c85081bb4b69f2b14b222bface617c60cb9bf 100644
+--- a/streamlit_extension/middleware/rate_limiting/policies.py
++++ b/streamlit_extension/middleware/rate_limiting/policies.py
+@@ -1,23 +1,35 @@
+ """Rate limiting policy definitions."""
+ 
+-USER_TIER_LIMITS = {
+-    "free": {
+-        "requests_per_minute": 60,
+-    },
+-    "premium": {
+-        "requests_per_minute": 300,
+-    },
+-    "enterprise": {
+-        "requests_per_minute": 1000,
+-    },
+-    "admin": {
+-        "requests_per_minute": -1,
+-    },
++from typing import TypedDict, Literal
 +
-+    return _db().execute_query(sql, params or ())
++UNLIMITED = -1
 +
-diff --git a/streamlit_extension/database/health.py b/streamlit_extension/database/health.py
-index d2e89e28c20d06d0bab93ddc3168d60e9296e163..1c31154013ac185e50104396461ef998798a1bc0 100644
---- a/streamlit_extension/database/health.py
-+++ b/streamlit_extension/database/health.py
-@@ -1,27 +1,54 @@
++
++class TierLimits(TypedDict, total=False):
++    requests_per_minute: int
++
++
++Algorithm = Literal["token_bucket", "fixed_window", "sliding_window"]
++
++
++class EndpointPolicy(TypedDict, total=False):
++    rate_limit: str
++    algorithm: Algorithm
++    burst_capacity: int
++
++
++USER_TIER_LIMITS: dict[str, TierLimits] = {
++    "free": {"requests_per_minute": 60},
++    "premium": {"requests_per_minute": 300},
++    "enterprise": {"requests_per_minute": 1000},
++    "admin": {"requests_per_minute": UNLIMITED},
+ }
+ 
+-ENDPOINT_LIMITS = {
++
++ENDPOINT_LIMITS: dict[str, EndpointPolicy] = {
+     "/api/auth/login": {"rate_limit": "5 per 5 minutes", "algorithm": "sliding_window"},
+     "/api/client/create": {"rate_limit": "10 per minute", "algorithm": "token_bucket", "burst_capacity": 3},
+     "/api/search": {"rate_limit": "100 per minute", "algorithm": "sliding_window"},
+     "/api/bulk/*": {"rate_limit": "1 per 10 seconds", "algorithm": "fixed_window"},
+-}
+\ No newline at end of file
++}
++
+diff --git a/streamlit_extension/middleware/rate_limiting/storage.py b/streamlit_extension/middleware/rate_limiting/storage.py
+index c338c992001b8363c00e05709e1664e5d0a16323..394254f91afcba2c4e8cac308a3fd829c3a9a16b 100644
+--- a/streamlit_extension/middleware/rate_limiting/storage.py
++++ b/streamlit_extension/middleware/rate_limiting/storage.py
+@@ -1,36 +1,216 @@
+ """Storage backends for rate limiting state."""
+ 
  from __future__ import annotations
-+
-+from pathlib import Path
- from typing import Any, Dict
-+
- from streamlit_extension.utils.database import DatabaseManager  # type: ignore
  
-+_DBM_INSTANCE: DatabaseManager | None = None  # type: ignore
+ import threading
+ import time
+-from typing import Any, Dict
++from typing import Any, Dict, Optional
++from collections import deque
++import sqlite3
 +
-+
- def _db() -> DatabaseManager:
-     global _DBM_INSTANCE  # type: ignore
-     try:
-         return _DBM_INSTANCE  # type: ignore
-     except NameError:
-         _DBM_INSTANCE = DatabaseManager()  # type: ignore
-         return _DBM_INSTANCE
++try:  # pragma: no cover - optional dependency
++    import redis  # type: ignore
++except Exception:  # pragma: no cover
++    redis = None  # type: ignore
  
-+
- def check_health() -> Dict[str, Any]:
--    """Wrapper para o health-check do manager."""
-+    """Health-check do banco via manager."""
-+
-     return _db().check_database_health()
  
-+
- def get_query_stats() -> Dict[str, Any]:
-+    """Estatísticas de queries conforme implementado no manager."""
-+
-     return _db().get_query_statistics()
+ class MemoryRateLimitStorage:
+     """In-memory storage suitable for tests and single process usage."""
  
-+
- def optimize() -> Dict[str, Any]:
-+    """Executa rotinas de otimização do banco (VACUUM/ANALYZE/etc.)."""
-+
-     return _db().optimize_database()
+     def __init__(self) -> None:
++        # key -> {"tokens": float, "last_refill": float, "timestamps": deque, "window_start": int|None, "counter": int}
+         self.data: Dict[str, Dict[str, Any]] = {}
+         self.lock = threading.RLock()
  
-+
- def create_backup(path: str) -> str:
--    return _db().create_backup(path)
-+    """Cria backup no caminho informado. Garante diretório existente."""
-+
-+    p = Path(path)
-+    if p.parent and not p.parent.exists():
-+        p.parent.mkdir(parents=True, exist_ok=True)
-+    return _db().create_backup(str(p))
-+
+     def get_bucket_state(self, key: str) -> Dict[str, Any]:
+         with self.lock:
+             return self.data.get(key, {"tokens": 0.0, "last_refill": time.time()})
  
- def restore_backup(path: str) -> str:
--    return _db().restore_backup(path)
+-    def update_bucket_state(self, key: str, tokens: float, last_refill: float) -> None:
++    def update_bucket_state(self, key: str, *, tokens: float, last_refill: float) -> None:
+         with self.lock:
+-            self.data[key] = {"tokens": tokens, "last_refill": last_refill}
++            state = self.data.setdefault(key, {})
++            state["tokens"] = tokens
++            state["last_refill"] = last_refill
+ 
+     def increment(self, key: str, timestamp: float) -> int:
+         """Increment sliding window counter and return current count."""
+         with self.lock:
+-            window = self.data.setdefault(key, {"timestamps": []})["timestamps"]
++            window = self.data.setdefault(key, {"timestamps": deque()})["timestamps"]
+             window.append(timestamp)
+             return len(window)
+ 
+     def prune(self, key: str, cutoff: float) -> None:
+         with self.lock:
+-            window = self.data.setdefault(key, {"timestamps": []})["timestamps"]
++            window = self.data.setdefault(key, {"timestamps": deque()})["timestamps"]
+             while window and window[0] <= cutoff:
+-                window.pop(0)
 \ No newline at end of file
-+    """Restaura backup a partir de um arquivo existente."""
++                window.popleft()
 +
-+    p = Path(path)
-+    if not p.exists():
-+        raise FileNotFoundError(f"Backup não encontrado: {p}")
-+    return _db().restore_backup(str(p))
++    def get_window_count(self, key: str, cutoff: float) -> int:
++        """Count items in window after pruning without incrementing."""
++        with self.lock:
++            window = self.data.setdefault(key, {"timestamps": deque()})["timestamps"]
++            while window and window[0] <= cutoff:
++                window.popleft()
++            return len(window)
 +
-diff --git a/streamlit_extension/database/queries.py b/streamlit_extension/database/queries.py
-index 3a44bd4abe2ef05bbad60a9a0829a15f7df79c3c..e948b402a20ea2e2106b91686e6dd415f19b3982 100644
---- a/streamlit_extension/database/queries.py
-+++ b/streamlit_extension/database/queries.py
-@@ -1,34 +1,59 @@
- from __future__ import annotations
++    def get_counter_state(self, key: str) -> Dict[str, Any]:
++        """Return {'window_start': int|None, 'counter': int} for fixed window."""
++        with self.lock:
++            st = self.data.setdefault(key, {})
++            if "window_start" not in st:
++                st["window_start"] = None
++            if "counter" not in st:
++                st["counter"] = 0
++            return {"window_start": st["window_start"], "counter": st["counter"]}
 +
- from typing import Any, Dict, List
-+
- from streamlit_extension.utils.database import DatabaseManager  # type: ignore
- 
-+_DBM_INSTANCE: DatabaseManager | None = None  # type: ignore
-+
-+
- def _db() -> DatabaseManager:
-     global _DBM_INSTANCE  # type: ignore
-     try:
-         return _DBM_INSTANCE  # type: ignore
-     except NameError:
-         _DBM_INSTANCE = DatabaseManager()  # type: ignore
-         return _DBM_INSTANCE
- 
--# Exemplos de queries "de alto nível" (ajuste conforme os métodos que você tem)
- 
- def list_epics() -> List[Dict[str, Any]]:
-+    """Lista epics ativos conforme regra do ``DatabaseManager``."""
-+
-     return _db().get_epics()
- 
-+
- def list_all_epics() -> List[Dict[str, Any]]:
-+    """Lista epics, incluindo arquivados/deletados (se suportado)."""
-+
-     return _db().get_all_epics()
- 
-+
- def list_tasks(epic_id: int) -> List[Dict[str, Any]]:
-+    """Lista tasks de um epic específico."""
-+
-     return _db().get_tasks(epic_id)
- 
-+
- def list_all_tasks() -> List[Dict[str, Any]]:
-+    """Lista todas as tasks; pode ser custoso."""
-+
-     return _db().get_all_tasks()
- 
-+
- def list_timer_sessions() -> List[Dict[str, Any]]:
-+    """Retorna sessões de timer agregadas pelo manager."""
-+
-     return _db().get_timer_sessions()
- 
-+
- def get_user_stats(user_id: int) -> Dict[str, Any]:
-+    """Métricas agregadas por usuário."""
-+
-     return _db().get_user_stats(user_id)
- 
-+
- def get_achievements(user_id: int) -> List[Dict[str, Any]]:
--    return _db().get_achievements(user_id)
-\ No newline at end of file
-+    """Conquistas/gamificação do usuário."""
-+
-+    return _db().get_achievements(user_id)
-+
-diff --git a/streamlit_extension/database/schema.py b/streamlit_extension/database/schema.py
-index 22d3c44fc8ed15167970dcc9a9081d3ed7df1593..548c4d92c63a77d84a3217a35532228a01b2faa8 100644
---- a/streamlit_extension/database/schema.py
-+++ b/streamlit_extension/database/schema.py
-@@ -1,21 +1,33 @@
- from __future__ import annotations
--from typing import Optional
-+
- from streamlit_extension.utils.database import DatabaseManager  # type: ignore
- 
-+_DBM_INSTANCE: DatabaseManager | None = None  # type: ignore
++    def update_counter_state(self, key: str, *, window_start: Optional[int], counter: int) -> None:
++        with self.lock:
++            st = self.data.setdefault(key, {})
++            st["window_start"] = window_start
++            st["counter"] = counter
 +
 +
-+def set_database_manager(dbm: DatabaseManager) -> None:
-+    """Permite injetar um ``DatabaseManager`` (ex.: testes)."""
++class RedisRateLimitStorage:
++    """Redis-backed storage for rate limiting."""
 +
-+    global _DBM_INSTANCE
-+    _DBM_INSTANCE = dbm  # type: ignore
++    def __init__(self, client: "redis.Redis") -> None:  # type: ignore[name-defined]
++        if redis is None:
++            raise RuntimeError("redis-py não está instalado. `pip install redis`")
++        self.r = client
 +
++    def get_bucket_state(self, key: str) -> Dict[str, Any]:
++        h = self.r.hgetall(f"rl:bucket:{key}")
++        if not h:
++            return {"tokens": 0.0, "last_refill": time.time()}
++        tokens = float(h.get(b"tokens", b"0") or 0)
++        last_refill = float(h.get(b"last_refill", b"0") or 0) or time.time()
++        return {"tokens": tokens, "last_refill": last_refill}
 +
- def _db() -> DatabaseManager:
-     global _DBM_INSTANCE  # type: ignore
-     try:
-         return _DBM_INSTANCE  # type: ignore
-     except NameError:
-         _DBM_INSTANCE = DatabaseManager()  # type: ignore
-         return _DBM_INSTANCE
- 
++    def update_bucket_state(self, key: str, *, tokens: float, last_refill: float) -> None:
++        self.r.hset(f"rl:bucket:{key}", mapping={"tokens": tokens, "last_refill": last_refill})
 +
- def create_schema_if_needed(verbose: bool = False) -> None:
-     """
--    Fase 1: só delega. Na fase 2, movemos a criação/DDL pra cá de fato.
-+    Ponto central de DDL.
-+    Fase 1: delega para o manager (se existir).
-     """
--    # Se o DatabaseManager tiver um método específico para bootstrap/migrations,
--    # chame-o aqui. Caso não tenha, mantenha essa função como ponto central
--    # para DDLs novas.
--    if hasattr(_db(), "create_schema_if_needed"):
--        _db().create_schema_if_needed(verbose=verbose)  # type: ignore
-\ No newline at end of file
++    def increment(self, key: str, timestamp: float) -> int:
++        zkey = f"rl:win:{key}"
++        self.r.zadd(zkey, {timestamp: timestamp})
++        return int(self.r.zcard(zkey))
 +
-+    db = _db()
-+    if hasattr(db, "create_schema_if_needed"):
-+        db.create_schema_if_needed(verbose=verbose)  # type: ignore[attr-defined]
++    def prune(self, key: str, cutoff: float) -> None:
++        zkey = f"rl:win:{key}"
++        self.r.zremrangebyscore(zkey, "-inf", cutoff)
 +
-diff --git a/streamlit_extension/database/seed.py b/streamlit_extension/database/seed.py
-index 91457dfab9d538f586d9d8ef10a2c58fbb8a5c76..1e1df6cbb11f9ec9f61a73cf193565244165ed2d 100644
---- a/streamlit_extension/database/seed.py
-+++ b/streamlit_extension/database/seed.py
-@@ -1,20 +1,40 @@
- from __future__ import annotations
--from typing import Optional
++    def get_window_count(self, key: str, cutoff: float) -> int:
++        zkey = f"rl:win:{key}"
++        self.prune(key, cutoff)
++        return int(self.r.zcard(zkey))
 +
-+from typing import Optional, Protocol, runtime_checkable
++    def get_counter_state(self, key: str) -> Dict[str, Any]:
++        h = self.r.hgetall(f"rl:fixed:{key}")
++        if not h:
++            return {"window_start": None, "counter": 0}
++        ws = h.get(b"window_start")
++        window_start = int(ws) if ws is not None else None
++        counter = int(h.get(b"counter", b"0") or 0)
++        return {"window_start": window_start, "counter": counter}
 +
- from streamlit_extension.utils.database import DatabaseManager  # type: ignore
- 
-+_DBM_INSTANCE: DatabaseManager | None = None  # type: ignore
-+
-+
-+@runtime_checkable
-+class _DBProto(Protocol):
-+    def seed_initial_data(self, kind: Optional[str] = None) -> int: ...
++    def update_counter_state(self, key: str, *, window_start: Optional[int], counter: int) -> None:
++        self.r.hset(
++            f"rl:fixed:{key}",
++            mapping={"window_start": window_start if window_start is not None else -1, "counter": counter},
++        )
 +
 +
-+def set_database_manager(dbm: DatabaseManager) -> None:
-+    """Helper para injetar um ``DatabaseManager`` (ex.: testes/mocks)."""
++class SQLiteRateLimitStorage:
++    """SQLite-backed storage for rate limiting."""
 +
-+    global _DBM_INSTANCE
-+    _DBM_INSTANCE = dbm  # type: ignore
++    def __init__(self, path: str = "rate_limit.db") -> None:
++        self.path = path
++        self._lock = threading.RLock()
++        self._conn = sqlite3.connect(self.path, check_same_thread=False, isolation_level=None)
++        self._conn.execute("PRAGMA journal_mode=WAL")
++        self._ensure_schema()
++
++    def _ensure_schema(self) -> None:
++        with self._conn:
++            self._conn.execute(
++                """
++                CREATE TABLE IF NOT EXISTS rl_buckets(
++                    key TEXT PRIMARY KEY,
++                    tokens REAL NOT NULL,
++                    last_refill REAL NOT NULL
++                )
++                """
++            )
++            self._conn.execute(
++                """
++                CREATE TABLE IF NOT EXISTS rl_windows(
++                    key TEXT NOT NULL,
++                    ts REAL NOT NULL
++                )
++                """
++            )
++            self._conn.execute(
++                "CREATE INDEX IF NOT EXISTS ix_rl_windows_key_ts ON rl_windows(key, ts)"
++            )
++            self._conn.execute(
++                """
++                CREATE TABLE IF NOT EXISTS rl_fixed(
++                    key TEXT PRIMARY KEY,
++                    window_start INTEGER,
++                    counter INTEGER NOT NULL
++                )
++                """
++            )
++
++    def get_bucket_state(self, key: str) -> Dict[str, Any]:
++        with self._lock, self._conn:
++            cur = self._conn.execute("SELECT tokens, last_refill FROM rl_buckets WHERE key=?", (key,))
++            row = cur.fetchone()
++            if not row:
++                return {"tokens": 0.0, "last_refill": time.time()}
++            return {"tokens": float(row[0]), "last_refill": float(row[1])}
++
++    def update_bucket_state(self, key: str, *, tokens: float, last_refill: float) -> None:
++        with self._lock, self._conn:
++            self._conn.execute(
++                """
++                INSERT INTO rl_buckets(key, tokens, last_refill) VALUES(?,?,?)
++                ON CONFLICT(key) DO UPDATE SET tokens=excluded.tokens, last_refill=excluded.last_refill
++                """,
++                (key, tokens, last_refill),
++            )
++
++    def increment(self, key: str, timestamp: float) -> int:
++        with self._lock, self._conn:
++            self._conn.execute("INSERT INTO rl_windows(key, ts) VALUES(?,?)", (key, float(timestamp)))
++            cur = self._conn.execute("SELECT COUNT(*) FROM rl_windows WHERE key=?", (key,))
++            return int(cur.fetchone()[0])
++
++    def prune(self, key: str, cutoff: float) -> None:
++        with self._lock, self._conn:
++            self._conn.execute("DELETE FROM rl_windows WHERE key=? AND ts<=?", (key, float(cutoff)))
++
++    def get_window_count(self, key: str, cutoff: float) -> int:
++        with self._lock, self._conn:
++            self._conn.execute("DELETE FROM rl_windows WHERE key=? AND ts<=?", (key, float(cutoff)))
++            cur = self._conn.execute("SELECT COUNT(*) FROM rl_windows WHERE key=?", (key,))
++            return int(cur.fetchone()[0])
++
++    def get_counter_state(self, key: str) -> Dict[str, Any]:
++        with self._lock, self._conn:
++            cur = self._conn.execute("SELECT window_start, counter FROM rl_fixed WHERE key=?", (key,))
++            row = cur.fetchone()
++            if not row:
++                return {"window_start": None, "counter": 0}
++            ws = int(row[0]) if row[0] is not None else None
++            return {"window_start": ws, "counter": int(row[1] or 0)}
++
++    def update_counter_state(self, key: str, *, window_start: Optional[int], counter: int) -> None:
++        with self._lock, self._conn:
++            self._conn.execute(
++                """
++                INSERT INTO rl_fixed(key, window_start, counter) VALUES(?,?,?)
++                ON CONFLICT(key) DO UPDATE SET window_start=excluded.window_start, counter=excluded.counter
++                """,
++                (key, window_start, counter),
++            )
++
+diff --git a/tests/test_rate_limit_headers.py b/tests/test_rate_limit_headers.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..30b41dafd8d2d6fad1b05c956ef3cb8468bb7352
+--- /dev/null
++++ b/tests/test_rate_limit_headers.py
+@@ -0,0 +1,81 @@
++import time
++import re
++import pytest
++
++from streamlit_extension.middleware.rate_limiting.middleware import RateLimitingMiddleware
++from streamlit_extension.middleware.rate_limiting.core import RateLimiter
 +
 +
- def _db() -> DatabaseManager:
-     global _DBM_INSTANCE  # type: ignore
-     try:
-         return _DBM_INSTANCE  # type: ignore
-     except NameError:
-         _DBM_INSTANCE = DatabaseManager()  # type: ignore
-         return _DBM_INSTANCE
- 
++def _is_int_str(s: str) -> bool:
++    return bool(re.fullmatch(r"\d+", str(s)))
 +
- def seed_initial_data(kind: Optional[str] = None) -> int:
--    """
--    Insere dados de seed. Fase 1: delega; fase 2: implementar aqui.
--    Retorna número de registros afetados (aprox).
--    """
--    if hasattr(_db(), "seed_initial_data"):
--        return int(_db().seed_initial_data(kind=kind) or 0)  # type: ignore
--    return 0
-\ No newline at end of file
-+    """Insere dados de seed; retorna nº aproximado de registros afetados."""
 +
-+    db = _db()
-+    if hasattr(db, "seed_initial_data"):
-+        val = db.seed_initial_data(kind=kind)  # type: ignore[attr-defined]
-+        return int(val or 0)
-+    # fallback previsível
-+    return 0
++def test_headers_present_and_consistent_memory_backend():
++    mw = RateLimitingMiddleware()
++    req = {"ip": "10.0.0.1", "user_id": "user-1", "tier": "free", "endpoint": "/api/auth/login"}
++
++    for i in range(5):
++        res = mw.process_request(req)
++        assert res.allowed is True, f"Requisição {i+1} deveria ser permitida"
++
++    res = mw.process_request(req)
++    assert res.allowed is False
++    assert res.status_code == 429
++    assert "X-RateLimit-Limit" in res.headers
++    assert "X-RateLimit-Remaining" in res.headers
++    assert "X-RateLimit-Reset" in res.headers
++    assert _is_int_str(res.headers["X-RateLimit-Limit"])
++    assert _is_int_str(res.headers["X-RateLimit-Remaining"])
++    assert _is_int_str(res.headers["X-RateLimit-Reset"])
++    assert int(res.headers["X-RateLimit-Remaining"]) == 0
++
++
++def test_headers_for_user_bucket_free_tier_snapshot():
++    rl = RateLimiter()
++    assert rl.check_user_rate_limit(user_id="u-free", tier="free") is True
++    headers = rl.build_rate_limit_headers(ip=None, user_id="u-free", tier="free", endpoint="/not-listed", prefer="user")
++    for k in ("X-RateLimit-Limit", "X-RateLimit-Remaining", "X-RateLimit-Reset"):
++        assert k in headers
++        assert _is_int_str(headers[k])
++    limit = int(headers["X-RateLimit-Limit"])
++    remaining = int(headers["X-RateLimit-Remaining"])
++    assert limit >= 1
++    assert 0 <= remaining <= limit
++
++
++def test_headers_endpoint_fixed_window_with_block_and_reset_approximation(tmp_path):
++    from streamlit_extension.middleware.rate_limiting.storage import SQLiteRateLimitStorage
++
++    dbfile = tmp_path / "rate_limit_test.db"
++    storage = SQLiteRateLimitStorage(path=str(dbfile))
++    mw = RateLimitingMiddleware(config={"rate_limit_storage": storage})
++
++    req = {"ip": "10.0.0.2", "user_id": "user-2", "tier": "free", "endpoint": "/api/bulk/export"}
++    res1 = mw.process_request(req)
++    assert res1.allowed is True
++    assert "X-RateLimit-Limit" in res1.headers
++    assert "X-RateLimit-Remaining" in res1.headers
++    assert "X-RateLimit-Reset" in res1.headers
++
++    res2 = mw.process_request(req)
++    assert res2.allowed is False
++    assert res2.status_code == 429
++    assert "X-RateLimit-Reset" in res2.headers
++    reset = int(res2.headers["X-RateLimit-Reset"])
++    assert 0 <= reset <= 10
++
++
++@pytest.mark.skipif(True, reason="Teste informativo de latência para reset; habilite localmente se quiser validar precisão.")
++def test_reset_countdown_behaviour_window_login_precise():
++    mw = RateLimitingMiddleware()
++    req = {"ip": "10.0.0.3", "user_id": "user-3", "tier": "free", "endpoint": "/api/auth/login"}
++    for _ in range(5):
++        assert mw.process_request(req).allowed
++    res_block = mw.process_request(req)
++    assert not res_block.allowed
++    reset1 = int(res_block.headers["X-RateLimit-Reset"])
++    time.sleep(2)
++    res_block2 = mw.process_request(req)
++    reset2 = int(res_block2.headers["X-RateLimit-Reset"])
++    assert reset2 <= max(0, reset1 - 1)
++
+diff --git a/tests/test_rate_limit_storage_backends.py b/tests/test_rate_limit_storage_backends.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..350bd405fca22b7a26522f76eb0e151775bdf16b
+--- /dev/null
++++ b/tests/test_rate_limit_storage_backends.py
+@@ -0,0 +1,91 @@
++import pytest
++
++from streamlit_extension.middleware.rate_limiting.core import RateLimiter
++from streamlit_extension.middleware.rate_limiting.middleware import RateLimitingMiddleware
++from streamlit_extension.middleware.rate_limiting.storage import (
++    MemoryRateLimitStorage,
++    SQLiteRateLimitStorage,
++)
++
++
++def test_memory_storage_basic_flow():
++    storage = MemoryRateLimitStorage()
++    rl = RateLimiter(storage=storage)
++    ip = "192.168.0.10"
++    for i in range(100):
++        assert rl.check_ip_rate_limit(ip)
++    assert rl.check_ip_rate_limit(ip) is False
++
++
++def test_sqlite_storage_basic_flow(tmp_path):
++    dbfile = tmp_path / "rate_limit.db"
++    storage = SQLiteRateLimitStorage(path=str(dbfile))
++    rl = RateLimiter(storage=storage)
++    assert rl.check_endpoint_rate_limit("/api/bulk/run") is True
++    assert rl.check_endpoint_rate_limit("/api/bulk/run") is False
++
++
++def test_sqlite_storage_through_middleware_headers(tmp_path):
++    dbfile = tmp_path / "rate_limit2.db"
++    storage = SQLiteRateLimitStorage(path=str(dbfile))
++    mw = RateLimitingMiddleware(config={"rate_limit_storage": storage})
++    req = {"ip": "172.16.0.2", "user_id": "sqlite-u1", "tier": "free", "endpoint": "/api/search"}
++    res = mw.process_request(req)
++    assert res.allowed is True
++    assert "X-RateLimit-Limit" in res.headers
++    assert "X-RateLimit-Remaining" in res.headers
++    assert "X-RateLimit-Reset" in res.headers
++
++
++@pytest.mark.skipif(
++    pytest.importorskip("redis", reason="Redis client não instalado") is None,
++    reason="Redis client ausente",
++)
++def test_redis_storage_available_if_installed():
++    import redis  # type: ignore
++    from streamlit_extension.middleware.rate_limiting.storage import RedisRateLimitStorage
++
++    class FakeRedis:
++        def __init__(self) -> None:
++            self.hashes = {}
++            self.zsets = {}
++
++        def hgetall(self, key):
++            return self.hashes.get(key, {})
++
++        def hset(self, key, mapping=None, **kwargs):
++            m = mapping or kwargs
++            h = self.hashes.setdefault(key, {})
++            for k, v in m.items():
++                h[str(k).encode()] = str(v).encode()
++
++        def zadd(self, key, mapping):
++            z = self.zsets.setdefault(key, set())
++            for score, member in mapping.items():
++                z.add(float(member))
++
++        def zcard(self, key):
++            return len(self.zsets.get(key, set()))
++
++        def zremrangebyscore(self, key, min_score, max_score):
++            z = self.zsets.setdefault(key, set())
++            if max_score == "+inf":
++                max_val = float("inf")
++            else:
++                max_val = float(max_score)
++            if min_score == "-inf":
++                min_val = float("-inf")
++            else:
++                min_val = float(min_score)
++            self.zsets[key] = {ts for ts in z if not (min_val <= ts <= max_val)}
++
++    fake = FakeRedis()
++    storage = RedisRateLimitStorage(fake)
++    mw = RateLimitingMiddleware(config={"rate_limit_storage": storage})
++    req = {"ip": "10.5.5.5", "user_id": "ru1", "tier": "free", "endpoint": "/api/search"}
++    res = mw.process_request(req)
++    assert res.allowed is True
++    assert "X-RateLimit-Limit" in res.headers
++    assert "X-RateLimit-Remaining" in res.headers
++    assert "X-RateLimit-Reset" in res.headers
 +
  
 EOF

@@ -11,7 +11,8 @@
 
 Enterprise-grade Streamlit application featuring:
 - **Authentication System**: Complete user management with session handling
-- **Security Stack**: CSRF protection, XSS sanitization, rate limiting
+- **Advanced Security Stack**: CSRF protection, XSS sanitization, enterprise rate limiting
+- **Rate Limiting System**: Multi-backend support (Memory/SQLite/Redis), HTTP headers, DoS protection
 - **Service Layer**: Clean architecture with 6 business services
 - **Multi-page Interface**: Client/Project/Epic/Task management
 - **Component System**: Reusable UI components and form patterns
@@ -127,6 +128,184 @@ if not rate_allowed:
 
 # Database operations
 db_rate_allowed, db_rate_error = check_rate_limit("db_write")
+```
+
+---
+
+## 🚦 **Advanced Rate Limiting System (`middleware/rate_limiting/`)**
+
+### **Enterprise Rate Limiting Features (Updated 2025-08-17)**
+
+The rate limiting system has been significantly enhanced with enterprise-grade features:
+
+#### **Multi-Storage Backend Support**
+```python
+from streamlit_extension.middleware.rate_limiting.storage import (
+    MemoryRateLimitStorage,
+    SQLiteRateLimitStorage,
+    RedisRateLimitStorage
+)
+from streamlit_extension.middleware.rate_limiting.middleware import RateLimitingMiddleware
+
+# Memory storage (development/testing)
+memory_storage = MemoryRateLimitStorage()
+
+# SQLite storage (single instance production)
+sqlite_storage = SQLiteRateLimitStorage(path="rate_limit.db")
+
+# Redis storage (distributed/high-scale production)
+import redis
+redis_client = redis.Redis(host='localhost', port=6379, db=0)
+redis_storage = RedisRateLimitStorage(redis_client)
+
+# Configure middleware with storage backend
+middleware = RateLimitingMiddleware(config={
+    "rate_limit_storage": sqlite_storage,
+    "ttl_seconds": 900  # Cache TTL for rate limiters
+})
+```
+
+#### **HTTP Headers Integration**
+```python
+# Rate limiting middleware automatically adds HTTP headers
+response = middleware.process_request({
+    "ip": "192.168.1.100",
+    "user_id": "user123",
+    "tier": "premium",
+    "endpoint": "/api/data/export"
+})
+
+# Response includes standard rate limit headers
+print(response.headers)
+# {
+#   "X-RateLimit-Limit": "100",
+#   "X-RateLimit-Remaining": "95", 
+#   "X-RateLimit-Reset": "45"
+# }
+```
+
+#### **Advanced Algorithm Configuration**
+```python
+# Configure different algorithms per endpoint
+ENDPOINT_LIMITS = {
+    "/api/auth/login": {
+        "rate_limit": "5 per 5 minutes",
+        "algorithm": "sliding_window"  # Precise tracking
+    },
+    "/api/bulk/upload": {
+        "rate_limit": "10 per minute",
+        "algorithm": "token_bucket",   # Burst handling
+        "burst_capacity": 3
+    },
+    "/api/reports": {
+        "rate_limit": "100 per hour",
+        "algorithm": "fixed_window"    # Simple counting
+    }
+}
+```
+
+#### **Structured Logging & Monitoring**
+```python
+# Automatic logging for rate limit events
+# INFO: rate_limit_block - User exceeded endpoint rate limit
+# WARNING: dos_block - DoS attack pattern detected
+
+# Log context includes:
+# - ip: Client IP address
+# - user_id: Authenticated user ID
+# - tier: User subscription tier  
+# - endpoint: Target API endpoint
+# - reason: Specific limit type (ip/user/endpoint)
+```
+
+#### **User Tier Management**
+```python
+USER_TIER_LIMITS = {
+    "free": {"requests_per_minute": 60},
+    "premium": {"requests_per_minute": 300},
+    "enterprise": {"requests_per_minute": 1000},
+    "admin": {"requests_per_minute": -1}  # Unlimited
+}
+```
+
+#### **Performance Optimizations**
+- **TTL-based Limiter Cache**: Automatic cleanup of idle rate limiters
+- **Memory-efficient Storage**: Optimized data structures for all backends
+- **Connection Pooling**: SQLite WAL mode for concurrent access
+- **Lazy Loading**: Rate limiters created only when needed
+
+#### **DoS Protection Integration**
+```python
+# Independent DoS protection (no circular imports)
+from streamlit_extension.utils.dos_protection import DoSProtectionSystem
+
+dos = DoSProtectionSystem(threshold=100, window=60)
+is_attack = dos.detect_attack(client_ip)
+```
+
+### **Migration Guide**
+
+#### **From Basic to Advanced Rate Limiting**
+```python
+# Old basic usage
+from streamlit_extension.middleware.rate_limiting.core import RateLimiter
+limiter = RateLimiter()
+
+# New advanced usage with storage backend
+from streamlit_extension.middleware.rate_limiting.core import RateLimiter
+from streamlit_extension.middleware.rate_limiting.storage import SQLiteRateLimitStorage
+
+storage = SQLiteRateLimitStorage("production_rate_limits.db")
+limiter = RateLimiter(storage=storage, ttl_seconds=1800)
+
+# Headers support
+headers = limiter.build_rate_limit_headers(
+    ip="client_ip",
+    user_id="user_id", 
+    tier="premium",
+    endpoint="/api/endpoint"
+)
+```
+
+#### **Testing Different Backends**
+```python
+# Test with temporary SQLite database
+import tempfile
+with tempfile.NamedTemporaryFile(suffix='.db') as tmp:
+    storage = SQLiteRateLimitStorage(tmp.name)
+    # Run tests...
+
+# Mock Redis for testing
+class MockRedis:
+    def __init__(self):
+        self.data = {}
+    # Implement Redis interface...
+
+mock_redis = MockRedis()
+storage = RedisRateLimitStorage(mock_redis)
+```
+
+### **Production Deployment**
+
+#### **High-Availability Setup**
+```python
+# Redis cluster for distributed rate limiting
+import redis.sentinel
+
+sentinels = [('server1', 26379), ('server2', 26379)]
+sentinel = redis.sentinel.Sentinel(sentinels)
+redis_master = sentinel.master_for('mymaster')
+storage = RedisRateLimitStorage(redis_master)
+```
+
+#### **Monitoring & Alerting**
+```python
+# Integration with monitoring systems
+import logging
+logging.getLogger('streamlit_extension.middleware.rate_limiting').setLevel(logging.INFO)
+
+# Custom metrics collection
+rate_limit_violations = Counter('rate_limit_violations_total')
 ```
 
 ---

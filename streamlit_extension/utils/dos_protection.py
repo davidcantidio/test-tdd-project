@@ -4,8 +4,27 @@ from __future__ import annotations
 
 import time
 from typing import Dict
+from collections import deque
 
-from streamlit_extension.middleware.rate_limiting.algorithms import SlidingWindowRateLimiter
+
+class SimpleSlidingWindow:
+    """Simple sliding window rate limiter for DoS protection."""
+    
+    def __init__(self, window_size: int, max_requests: int) -> None:
+        self.window_size = window_size
+        self.max_requests = max_requests
+        self.requests = deque()
+    
+    def is_allowed(self, timestamp: float | None = None) -> bool:
+        if timestamp is None:
+            timestamp = time.time()
+        cutoff = timestamp - self.window_size
+        while self.requests and self.requests[0] <= cutoff:
+            self.requests.popleft()
+        if len(self.requests) < self.max_requests:
+            self.requests.append(timestamp)
+            return True
+        return False
 
 
 class DoSProtectionSystem:
@@ -14,7 +33,7 @@ class DoSProtectionSystem:
     def __init__(self, threshold: int = 100, window: int = 60) -> None:
         self.threshold = threshold
         self.window = window
-        self.limiters: Dict[str, SlidingWindowRateLimiter] = {}
+        self.limiters: Dict[str, SimpleSlidingWindow] = {}
 
     def record_request(self, ip: str | None, timestamp: float | None = None) -> bool:
         """Record a request and return True if under threshold."""
@@ -22,7 +41,7 @@ class DoSProtectionSystem:
             return True
         limiter = self.limiters.get(ip)
         if limiter is None:
-            limiter = SlidingWindowRateLimiter(self.window, self.threshold)
+            limiter = SimpleSlidingWindow(self.window, self.threshold)
             self.limiters[ip] = limiter
         return limiter.is_allowed(timestamp)
 
