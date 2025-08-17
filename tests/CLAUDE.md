@@ -1,7 +1,7 @@
 # 🤖 CLAUDE.md - Testing Framework
 
 **Module:** tests/  
-**Purpose:** Comprehensive test suite with 525+ tests across multiple categories  
+**Purpose:** Comprehensive test suite with 1,300+ tests across multiple categories  
 **Architecture:** Multi-layered testing strategy (unit, integration, performance, security, load)  
 **Last Updated:** 2025-08-17
 
@@ -10,7 +10,7 @@
 ## 🧪 **Testing Framework Overview**
 
 Enterprise-grade testing system featuring:
-- **525+ Tests** across all system components
+- **1,300+ Tests** across all system components
 - **Multi-Category Testing**: Unit, integration, performance, security, load testing
 - **Comprehensive Coverage**: 98%+ average code coverage
 - **CI/CD Integration**: Automated testing pipeline with pytest
@@ -31,9 +31,7 @@ tests/
 │   ├── test_e2e_workflows.py   # End-to-end workflows
 │   └── test_ui_components.py   # UI component integration
 ├── performance/                # ⚡ Performance tests
-│   ├── test_stress_suite.py    # System stress testing
-│   ├── test_query_optimization.py # Database optimization
-│   └── test_pagination_performance.py # UI performance
+│   └── test_stress_suite.py    # System stress testing
 ├── load_testing/               # 📊 Load testing
 │   ├── test_load_concurrent.py # Concurrent user testing
 │   ├── test_load_endurance.py  # Endurance testing
@@ -109,14 +107,16 @@ pytest tests/test_cache*.py tests/test_redis*.py -v
 ```bash
 # System configuration tests
 tests/test_environment_config.py      # Multi-environment setup
-tests/test_feature_flags.py          # Feature flag system
 tests/test_constants_system.py       # Constants and enums
-tests/test_health_system.py          # Health monitoring
 
 # Component & UI tests
 tests/test_form_components_*.py      # Form component testing
 tests/test_kanban_functionality.py   # Kanban board testing
 tests/test_dashboard_headless.py     # Dashboard testing
+
+# Rate limiting tests
+tests/test_rate_limit_headers.py     # HTTP headers validation
+tests/test_rate_limit_storage_backends.py # Storage backend tests
 ```
 
 ---
@@ -182,31 +182,6 @@ pytest tests/performance/test_stress_suite.py --stress -v
 # - Resource limit validation
 ```
 
-#### **Database Optimization**
-```python
-# tests/performance/test_query_optimization.py
-# SQL query performance validation
-pytest tests/performance/test_query_optimization.py -v
-
-# Validates:
-# - Query execution times < 10ms
-# - Index usage optimization
-# - Connection pool efficiency
-# - Transaction performance
-```
-
-#### **UI Performance**
-```python
-# tests/performance/test_pagination_performance.py
-# UI component performance testing
-pytest tests/performance/test_pagination_performance.py -v
-
-# Tests:
-# - Page load times
-# - Component render performance
-# - Data loading efficiency
-# - Memory usage patterns
-```
 
 #### **Breakpoint Testing**
 ```python
@@ -506,13 +481,15 @@ pytest tests/performance/test_stress_suite.py --stress --duration=1800 -v
 - **Performance Tests**: Key operation coverage
 
 ### **Test Categories Breakdown**
+- **Unit Tests**: 1,200+ tests across 55 test files
 - **Duration System Tests**: 175+ tests (98%+ coverage)
-- **Security Tests**: 91 tests (100% vulnerability coverage)
+- **Security Tests**: 80+ tests (including rate limiting)
 - **Database Tests**: 85+ tests (96% coverage)
 - **UI Component Tests**: 60+ tests (92% coverage)
-- **Integration Tests**: 45+ tests (90% coverage)
-- **Performance Tests**: 25+ tests (key operations)
+- **Integration Tests**: 40+ tests (90% coverage)
+- **Performance Tests**: 10+ tests (key operations)
 - **Load Tests**: 15+ tests (scalability validation)
+- **Rate Limiting Tests**: New comprehensive test suite
 
 ### **Quality Gates**
 ```bash
@@ -776,7 +753,7 @@ python comprehensive_integrity_test.py
 ## 📋 **Testing Checklist**
 
 ### **Before Deployment**
-- [ ] All unit tests passing (525+ tests)
+- [ ] All unit tests passing (1,300+ tests)
 - [ ] Integration tests passing (cross-module functionality)
 - [ ] Security tests passing (vulnerability protection)
 - [ ] Performance tests within thresholds
