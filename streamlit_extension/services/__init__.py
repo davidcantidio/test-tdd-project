@@ -24,6 +24,7 @@ from .service_container import (
     ServiceContainer,
     initialize_service_container,
     get_service_container,
+    shutdown_service_container,
     get_client_service,
     get_project_service,
     get_epic_service,
@@ -42,7 +43,7 @@ __all__ = [
     'AnalyticsService', 'TimerService',
     
     # Service container
-    'ServiceContainer', 'initialize_service_container', 'get_service_container',
+    'ServiceContainer', 'initialize_service_container', 'get_service_container', 'shutdown_service_container',
     
     # Service accessors
     'get_client_service', 'get_project_service', 'get_epic_service', 

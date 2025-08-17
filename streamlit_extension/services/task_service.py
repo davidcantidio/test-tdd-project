@@ -16,6 +16,7 @@ from .base import (
 )
 from ..utils.database import DatabaseManager
 from ..config.constants import ValidationRules, TaskStatus, TDDPhase
+from .task_execution_planner import TaskExecutionPlanner, ExecutionPlan
 
 
 class TaskRepository(BaseRepository):
@@ -390,7 +391,19 @@ class TaskService(BaseService):
     
     def __init__(self, db_manager: DatabaseManager):
         self.repository = TaskRepository(db_manager)
+        self.db_manager = db_manager
+        # Initialize TaskExecutionPlanner for task ordering and prioritization
+        self._execution_planner = None
         super().__init__(self.repository)
+    
+    @property
+    def execution_planner(self) -> TaskExecutionPlanner:
+        """Lazy-loaded TaskExecutionPlanner instance."""
+        if self._execution_planner is None:
+            # Get database connection for TaskExecutionPlanner
+            with self.db_manager.get_connection() as conn:
+                self._execution_planner = TaskExecutionPlanner(conn)
+        return self._execution_planner
     
     def validate_business_rules(self, data: Dict[str, Any]) -> List[ServiceError]:
         """Validate task-specific business rules."""
@@ -1127,3 +1140,416 @@ class TaskService(BaseService):
             return delta.days
         except (ValueError, TypeError):
             return None
+    
+    # =============================================================================
+    # 🎯 TASK EXECUTION PLANNING - Integration with TaskExecutionPlanner
+    # =============================================================================
+    
+    def plan_epic_execution(
+        self,
+        epic_id: int,
+        scoring_preset: str = "balanced",
+        custom_weights: Optional[Dict[str, float]] = None
+    ) -> ServiceResult[ExecutionPlan]:
+        """
+        Planeja execução das tarefas de um épico usando ordenação topológica e priorização.
+        
+        Args:
+            epic_id: ID do épico para planejar
+            scoring_preset: Preset de scoring ("balanced", "critical_path", "tdd_workflow", "business_value")
+            custom_weights: Pesos customizados para override do preset
+            
+        Returns:
+            ServiceResult contendo ExecutionPlan ou erros
+            
+        Example:
+            result = task_service.plan_epic_execution(epic_id=1, scoring_preset="tdd_workflow")
+            if result.success:
+                plan = result.data
+                print(f"Execution order: {plan.execution_order}")
+                print(f"Critical path: {plan.critical_path}")
+        """
+        try:
+            self._log_operation_start("plan_epic_execution", {"epic_id": epic_id, "preset": scoring_preset})
+            
+            # Validate epic exists
+            if not self.repository.epic_exists(epic_id):
+                return ServiceResult.not_found("epic", epic_id)
+            
+            # Use TaskExecutionPlanner to create execution plan
+            with self.db_manager.get_connection() as conn:
+                planner = TaskExecutionPlanner(conn)
+                plan_result = planner.plan_execution(epic_id, scoring_preset, custom_weights)
+            
+            if not plan_result.success:
+                return plan_result
+            
+            # Add TaskService-specific enrichments to the plan
+            enriched_plan = self._enrich_execution_plan(plan_result.data)
+            
+            self._log_operation_success("plan_epic_execution", 
+                                      {"tasks_planned": len(enriched_plan.execution_order)})
+            
+            return ServiceResult.ok(enriched_plan)
+            
+        except Exception as e:
+            self._log_operation_error("plan_epic_execution", e)
+            return ServiceResult.validation_error(f"Erro no planejamento de execução: {str(e)}")
+    
+    def get_execution_summary(self, epic_id: int) -> ServiceResult[Dict[str, Any]]:
+        """
+        Obtém sumário executivo de um plano de execução.
+        
+        Args:
+            epic_id: ID do épico
+            
+        Returns:
+            ServiceResult contendo sumário executivo
+        """
+        try:
+            self._log_operation_start("get_execution_summary", {"epic_id": epic_id})
+            
+            # Create execution plan
+            plan_result = self.plan_epic_execution(epic_id)
+            if not plan_result.success:
+                return plan_result
+            
+            plan = plan_result.data
+            
+            # Use TaskExecutionPlanner's summary method
+            with self.db_manager.get_connection() as conn:
+                planner = TaskExecutionPlanner(conn)
+                summary = planner.get_execution_summary(plan)
+            
+            # Add TaskService-specific metrics
+            enhanced_summary = self._enhance_execution_summary(summary, epic_id)
+            
+            return ServiceResult.ok(enhanced_summary)
+            
+        except Exception as e:
+            self._log_operation_error("get_execution_summary", e)
+            return ServiceResult.validation_error(f"Erro ao obter sumário: {str(e)}")
+    
+    def validate_epic_dependencies(self, epic_id: int) -> ServiceResult[Dict[str, Any]]:
+        """
+        Valida estrutura de dependências de um épico (DAG validation).
+        
+        Args:
+            epic_id: ID do épico para validar
+            
+        Returns:
+            ServiceResult contendo resultado da validação
+        """
+        try:
+            self._log_operation_start("validate_epic_dependencies", {"epic_id": epic_id})
+            
+            if not self.repository.epic_exists(epic_id):
+                return ServiceResult.not_found("epic", epic_id)
+            
+            # Use TaskExecutionPlanner internal validation
+            with self.db_manager.get_connection() as conn:
+                planner = TaskExecutionPlanner(conn)
+                context_result = planner._load_planning_context(epic_id)
+                
+                if not context_result.success:
+                    return context_result
+                
+                validation_result = planner._validate_dag_structure(context_result.data)
+            
+            # Enhance validation result with TaskService context
+            enhanced_validation = {
+                "epic_id": epic_id,
+                "is_valid_dag": validation_result["is_valid"],
+                "error_message": validation_result["error"],
+                "graph_metrics": validation_result.get("graph_metrics", {}),
+                "validation_timestamp": datetime.now().isoformat(),
+                "recommendations": self._generate_dependency_recommendations(validation_result)
+            }
+            
+            return ServiceResult.ok(enhanced_validation)
+            
+        except Exception as e:
+            self._log_operation_error("validate_epic_dependencies", e)
+            return ServiceResult.validation_error(f"Erro na validação de dependências: {str(e)}")
+    
+    def get_task_scoring_analysis(
+        self,
+        epic_id: int,
+        scoring_preset: str = "balanced"
+    ) -> ServiceResult[Dict[str, Any]]:
+        """
+        Obtém análise detalhada de scoring das tarefas de um épico.
+        
+        Args:
+            epic_id: ID do épico
+            scoring_preset: Preset de scoring para análise
+            
+        Returns:
+            ServiceResult contendo análise de scoring
+        """
+        try:
+            self._log_operation_start("get_task_scoring_analysis", 
+                                    {"epic_id": epic_id, "preset": scoring_preset})
+            
+            # Create execution plan to get task scores
+            plan_result = self.plan_epic_execution(epic_id, scoring_preset)
+            if not plan_result.success:
+                return plan_result
+            
+            plan = plan_result.data
+            task_scores = plan.task_scores
+            
+            # Analyze scoring distribution
+            scores = list(task_scores.values())
+            score_analysis = {
+                "epic_id": epic_id,
+                "scoring_preset": scoring_preset,
+                "total_tasks": len(scores),
+                "score_statistics": {
+                    "min_score": min(scores) if scores else 0,
+                    "max_score": max(scores) if scores else 0,
+                    "avg_score": sum(scores) / len(scores) if scores else 0,
+                    "score_range": max(scores) - min(scores) if scores else 0
+                },
+                "task_scores": task_scores,
+                "high_priority_tasks": [
+                    task_key for task_key, score in task_scores.items() 
+                    if scores and score >= (max(scores) * 0.8)
+                ],
+                "low_priority_tasks": [
+                    task_key for task_key, score in task_scores.items()
+                    if scores and score <= (max(scores) * 0.3)
+                ],
+                "critical_path_tasks": plan.critical_path,
+                "analysis_timestamp": datetime.now().isoformat()
+            }
+            
+            return ServiceResult.ok(score_analysis)
+            
+        except Exception as e:
+            self._log_operation_error("get_task_scoring_analysis", e)
+            return ServiceResult.validation_error(f"Erro na análise de scoring: {str(e)}")
+    
+    def optimize_task_sequence(
+        self,
+        epic_id: int,
+        optimization_goal: str = "time"
+    ) -> ServiceResult[Dict[str, Any]]:
+        """
+        Otimiza sequência de execução de tarefas para um objetivo específico.
+        
+        Args:
+            epic_id: ID do épico
+            optimization_goal: Objetivo da otimização ("time", "value", "risk", "tdd")
+            
+        Returns:
+            ServiceResult contendo sequência otimizada
+        """
+        try:
+            self._log_operation_start("optimize_task_sequence", 
+                                    {"epic_id": epic_id, "goal": optimization_goal})
+            
+            # Map optimization goals to scoring presets
+            preset_mapping = {
+                "time": "critical_path",
+                "value": "business_value", 
+                "risk": "balanced",
+                "tdd": "tdd_workflow"
+            }
+            
+            scoring_preset = preset_mapping.get(optimization_goal, "balanced")
+            
+            # Get execution plan with appropriate preset
+            plan_result = self.plan_epic_execution(epic_id, scoring_preset)
+            if not plan_result.success:
+                return plan_result
+            
+            plan = plan_result.data
+            
+            # Analyze optimization results
+            optimization_analysis = {
+                "epic_id": epic_id,
+                "optimization_goal": optimization_goal,
+                "scoring_preset_used": scoring_preset,
+                "optimized_sequence": plan.execution_order,
+                "critical_path": plan.critical_path,
+                "estimated_total_time": plan.execution_metrics.get("total_estimated_hours", 0),
+                "optimization_metrics": {
+                    "sequence_efficiency": self._calculate_sequence_efficiency(plan),
+                    "dependency_optimization": self._analyze_dependency_optimization(plan),
+                    "resource_utilization": self._estimate_resource_utilization(plan)
+                },
+                "recommendations": self._generate_optimization_recommendations(plan, optimization_goal),
+                "analysis_timestamp": datetime.now().isoformat()
+            }
+            
+            return ServiceResult.ok(optimization_analysis)
+            
+        except Exception as e:
+            self._log_operation_error("optimize_task_sequence", e)
+            return ServiceResult.validation_error(f"Erro na otimização de sequência: {str(e)}")
+    
+    # =============================================================================
+    # 🔧 PRIVATE HELPER METHODS for execution planning
+    # =============================================================================
+    
+    def _enrich_execution_plan(self, plan: ExecutionPlan) -> ExecutionPlan:
+        """Enriquece plano de execução com dados específicos do TaskService."""
+        try:
+            # Add additional metadata from TaskService context
+            # This could include deadline information, resource assignments, etc.
+            return plan
+        except Exception as e:
+            self.logger.warning(f"Erro ao enriquecer plano de execução: {e}")
+            return plan
+    
+    def _enhance_execution_summary(self, summary: Dict[str, Any], epic_id: int) -> Dict[str, Any]:
+        """Enriquece sumário executivo com métricas do TaskService."""
+        try:
+            # Get epic tasks for additional context
+            tasks_result = self.get_tasks_by_epic(epic_id)
+            if tasks_result.success:
+                tasks = tasks_result.data
+                
+                # Add TaskService-specific metrics
+                summary["task_service_metrics"] = {
+                    "total_tasks_in_db": len(tasks),
+                    "tasks_by_status": self._group_tasks_by_status(tasks),
+                    "tasks_by_tdd_phase": self._group_tasks_by_tdd_phase(tasks),
+                    "average_story_points": self._calculate_average_story_points(tasks),
+                    "total_estimated_hours": sum(
+                        (task.get("estimate_minutes", 0) or 0) / 60 
+                        for task in tasks
+                    )
+                }
+            
+            return summary
+        except Exception as e:
+            self.logger.warning(f"Erro ao enriquecer sumário: {e}")
+            return summary
+    
+    def _generate_dependency_recommendations(self, validation_result: Dict[str, Any]) -> List[str]:
+        """Gera recomendações baseadas na validação de dependências."""
+        recommendations = []
+        
+        try:
+            if not validation_result["is_valid"]:
+                if "ciclo" in validation_result["error"].lower():
+                    recommendations.append("Quebrar ciclos de dependência identificados")
+                    recommendations.append("Revisar dependências para criar fluxo unidirecional")
+                
+                if "órfã" in validation_result["error"].lower():
+                    recommendations.append("Corrigir referências de dependências órfãs")
+                    recommendations.append("Verificar se todas as tarefas referenciadas existem")
+            
+            graph_metrics = validation_result.get("graph_metrics", {})
+            if graph_metrics:
+                density = graph_metrics.get("density", 0)
+                if density > 0.5:
+                    recommendations.append("Considerar simplificar dependências (densidade alta)")
+                elif density < 0.1:
+                    recommendations.append("Considerar adicionar dependências para melhor estruturação")
+        
+        except Exception as e:
+            self.logger.warning(f"Erro ao gerar recomendações: {e}")
+        
+        return recommendations
+    
+    def _calculate_sequence_efficiency(self, plan: ExecutionPlan) -> float:
+        """Calcula eficiência da sequência de execução."""
+        try:
+            # Simple metric: ratio of critical path to total tasks
+            if plan.execution_metrics.get("total_tasks", 0) == 0:
+                return 0.0
+            
+            critical_path_length = len(plan.critical_path)
+            total_tasks = plan.execution_metrics["total_tasks"]
+            
+            return round(critical_path_length / total_tasks, 3)
+        except Exception:
+            return 0.0
+    
+    def _analyze_dependency_optimization(self, plan: ExecutionPlan) -> Dict[str, Any]:
+        """Analisa otimização de dependências."""
+        try:
+            metrics = plan.execution_metrics
+            return {
+                "dependency_ratio": metrics.get("avg_dependencies_per_task", 0),
+                "parallel_opportunities": max(0, metrics.get("total_tasks", 0) - len(plan.critical_path)),
+                "bottleneck_tasks": plan.critical_path[-3:] if len(plan.critical_path) > 3 else plan.critical_path
+            }
+        except Exception:
+            return {}
+    
+    def _estimate_resource_utilization(self, plan: ExecutionPlan) -> Dict[str, Any]:
+        """Estima utilização de recursos."""
+        try:
+            metrics = plan.execution_metrics
+            total_hours = metrics.get("total_estimated_hours", 0)
+            total_tasks = metrics.get("total_tasks", 0)
+            
+            return {
+                "avg_task_duration_hours": round(total_hours / max(total_tasks, 1), 2),
+                "total_effort_hours": total_hours,
+                "estimated_parallel_hours": round(total_hours * 0.7, 2),  # Assume 70% parallelization
+                "resource_intensity": "high" if total_hours > 40 else "medium" if total_hours > 20 else "low"
+            }
+        except Exception:
+            return {}
+    
+    def _generate_optimization_recommendations(self, plan: ExecutionPlan, goal: str) -> List[str]:
+        """Gera recomendações de otimização baseadas no objetivo."""
+        recommendations = []
+        
+        try:
+            metrics = plan.execution_metrics
+            total_hours = metrics.get("total_estimated_hours", 0)
+            
+            if goal == "time":
+                if len(plan.critical_path) > 5:
+                    recommendations.append("Considerar paralelização de tarefas não-críticas")
+                if total_hours > 40:
+                    recommendations.append("Avaliar quebra de tarefas grandes para reduzir tempo total")
+            
+            elif goal == "value":
+                recommendations.append("Priorizar tarefas de alto valor de negócio primeiro")
+                recommendations.append("Considerar entrega incremental de valor")
+            
+            elif goal == "tdd":
+                tdd_dist = metrics.get("tdd_distribution", {})
+                if tdd_dist.get("1", 0) < tdd_dist.get("3", 0):  # Mais REFACTOR que RED
+                    recommendations.append("Balancear ciclos TDD - garantir tarefas RED suficientes")
+            
+            elif goal == "risk":
+                if metrics.get("avg_dependencies_per_task", 0) > 2:
+                    recommendations.append("Reduzir dependências para diminuir riscos")
+                
+        except Exception as e:
+            self.logger.warning(f"Erro ao gerar recomendações de otimização: {e}")
+        
+        return recommendations
+    
+    def _group_tasks_by_status(self, tasks: List[Dict[str, Any]]) -> Dict[str, int]:
+        """Agrupa tarefas por status."""
+        status_groups = {}
+        for task in tasks:
+            status = task.get("status", "unknown")
+            status_groups[status] = status_groups.get(status, 0) + 1
+        return status_groups
+    
+    def _group_tasks_by_tdd_phase(self, tasks: List[Dict[str, Any]]) -> Dict[str, int]:
+        """Agrupa tarefas por fase TDD."""
+        tdd_groups = {}
+        for task in tasks:
+            tdd_phase = task.get("tdd_phase", "unknown")
+            tdd_groups[tdd_phase] = tdd_groups.get(tdd_phase, 0) + 1
+        return tdd_groups
+    
+    def _calculate_average_story_points(self, tasks: List[Dict[str, Any]]) -> float:
+        """Calcula média de story points."""
+        try:
+            story_points = [task.get("story_points", 0) or 0 for task in tasks]
+            valid_points = [sp for sp in story_points if sp > 0]
+            return round(sum(valid_points) / len(valid_points), 2) if valid_points else 0.0
+        except Exception:
+            return 0.0

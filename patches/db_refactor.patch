@@ -1,0 +1,378 @@
+ (cd "$(git rev-parse --show-toplevel)" && git apply --3way <<'EOF' 
+diff --git a/streamlit_extension/database/__init__.py b/streamlit_extension/database/__init__.py
+index 93004bcde01344b433e2bb89362ee5583c9542ae..07203cf972e52671141734775d8ae84f58974685 100644
+--- a/streamlit_extension/database/__init__.py
++++ b/streamlit_extension/database/__init__.py
+@@ -1,20 +1,56 @@
++"""Camada de acesso a dados para a extensão Streamlit.
++
++Fase 1: apenas delegação ao `DatabaseManager` existente.
++Fase 2: migrar lógicas pesadas dos managers para módulos locais menores.
+ """
+-Pacote de DB, fase 1: finas camadas que delegam ao DatabaseManager existente.
+-Na fase 2, vamos mover os métodos para cá e emagrecer o arquivo gigante.
+-"""
+-from .connection import get_connection, release_connection, transaction, execute
+-from .health import check_health, get_query_stats, optimize, create_backup, restore_backup
++
++__version__ = "0.1.0"
++
++from .connection import (
++    get_connection,
++    release_connection,
++    transaction,
++    execute,
++    set_database_manager as set_dbm,
++)
++from .health import (
++    check_health,
++    get_query_stats,
++    optimize,
++    create_backup,
++    restore_backup,
++)
+ from .queries import (
+-    list_epics, list_all_epics, list_tasks, list_all_tasks,
+-    list_timer_sessions, get_user_stats, get_achievements,
++    list_epics,
++    list_all_epics,
++    list_tasks,
++    list_all_tasks,
++    list_timer_sessions,
++    get_user_stats,
++    get_achievements,
+ )
+ from .schema import create_schema_if_needed
+ from .seed import seed_initial_data
+ 
+ __all__ = [
+-    "get_connection", "release_connection", "transaction", "execute",
+-    "check_health", "get_query_stats", "optimize", "create_backup", "restore_backup",
+-    "list_epics", "list_all_epics", "list_tasks", "list_all_tasks",
+-    "list_timer_sessions", "get_user_stats", "get_achievements",
+-    "create_schema_if_needed", "seed_initial_data",
+-]
+\ No newline at end of file
++    "get_connection",
++    "release_connection",
++    "transaction",
++    "execute",
++    "set_dbm",
++    "check_health",
++    "get_query_stats",
++    "optimize",
++    "create_backup",
++    "restore_backup",
++    "list_epics",
++    "list_all_epics",
++    "list_tasks",
++    "list_all_tasks",
++    "list_timer_sessions",
++    "get_user_stats",
++    "get_achievements",
++    "create_schema_if_needed",
++    "seed_initial_data",
++]
++
+diff --git a/streamlit_extension/database/connection.py b/streamlit_extension/database/connection.py
+index 54fa5d723a3822964c272863e4393a0065f1599c..a4327f6c72a49a26c7f6ba793b6a89ad4cda6647 100644
+--- a/streamlit_extension/database/connection.py
++++ b/streamlit_extension/database/connection.py
+@@ -1,34 +1,52 @@
+ from __future__ import annotations
++
+ from contextlib import contextmanager
+-from typing import Any, Iterable, Optional, Tuple
++from typing import Any, Iterable, Iterator, Optional
+ 
+-# Ajuste este import conforme a localização do seu arquivo gigante:
+-# DatabaseManager está em streamlit_extension/utils/database.py
++# Ajuste o import conforme a localização real do DatabaseManager
+ from streamlit_extension.utils.database import DatabaseManager  # type: ignore
+ 
++_DBM_INSTANCE: DatabaseManager | None = None  # type: ignore
++
++
++def set_database_manager(dbm: DatabaseManager) -> None:
++    """Permite injetar um ``DatabaseManager`` (ex.: testes)."""
++
++    global _DBM_INSTANCE
++    _DBM_INSTANCE = dbm  # type: ignore
++
++
+ def _db() -> DatabaseManager:
+-    # Estratégia simples: uma instância "global-ish".
+-    # Se você já tem um factory/singleton, troque aqui.
+-    # type: ignore para evitar mypy chato neste passo.
+     global _DBM_INSTANCE  # type: ignore
+     try:
+         return _DBM_INSTANCE  # type: ignore
+     except NameError:
+         _DBM_INSTANCE = DatabaseManager()  # type: ignore
+         return _DBM_INSTANCE
+ 
++
+ def get_connection():
++    """Obtém uma conexão do manager atual."""
++
+     return _db().get_connection()
+ 
++
+ def release_connection(conn) -> None:
++    """Libera uma conexão obtida via ``get_connection()``."""
++
+     return _db().release_connection(conn)
+ 
++
+ @contextmanager
+-def transaction():
+-    # Usa a transação do manager atual
++def transaction() -> Iterator[Any]:
++    """Delegação de transação para o manager atual."""
++
+     with _db().transaction() as tx:
+         yield tx
+ 
+-def execute(sql: str, params: Optional[Iterable[Any]] = None):
+-    """Execute genérico, delegando ao manager."""
+-    return _db().execute_query(sql, params or ())
+\ No newline at end of file
++
++def execute(sql: str, params: Optional[Iterable[Any]] = None) -> Any:
++    """Execução genérica de SQL, delegada ao manager."""
++
++    return _db().execute_query(sql, params or ())
++
+diff --git a/streamlit_extension/database/health.py b/streamlit_extension/database/health.py
+index d2e89e28c20d06d0bab93ddc3168d60e9296e163..1c31154013ac185e50104396461ef998798a1bc0 100644
+--- a/streamlit_extension/database/health.py
++++ b/streamlit_extension/database/health.py
+@@ -1,27 +1,54 @@
+ from __future__ import annotations
++
++from pathlib import Path
+ from typing import Any, Dict
++
+ from streamlit_extension.utils.database import DatabaseManager  # type: ignore
+ 
++_DBM_INSTANCE: DatabaseManager | None = None  # type: ignore
++
++
+ def _db() -> DatabaseManager:
+     global _DBM_INSTANCE  # type: ignore
+     try:
+         return _DBM_INSTANCE  # type: ignore
+     except NameError:
+         _DBM_INSTANCE = DatabaseManager()  # type: ignore
+         return _DBM_INSTANCE
+ 
++
+ def check_health() -> Dict[str, Any]:
+-    """Wrapper para o health-check do manager."""
++    """Health-check do banco via manager."""
++
+     return _db().check_database_health()
+ 
++
+ def get_query_stats() -> Dict[str, Any]:
++    """Estatísticas de queries conforme implementado no manager."""
++
+     return _db().get_query_statistics()
+ 
++
+ def optimize() -> Dict[str, Any]:
++    """Executa rotinas de otimização do banco (VACUUM/ANALYZE/etc.)."""
++
+     return _db().optimize_database()
+ 
++
+ def create_backup(path: str) -> str:
+-    return _db().create_backup(path)
++    """Cria backup no caminho informado. Garante diretório existente."""
++
++    p = Path(path)
++    if p.parent and not p.parent.exists():
++        p.parent.mkdir(parents=True, exist_ok=True)
++    return _db().create_backup(str(p))
++
+ 
+ def restore_backup(path: str) -> str:
+-    return _db().restore_backup(path)
+\ No newline at end of file
++    """Restaura backup a partir de um arquivo existente."""
++
++    p = Path(path)
++    if not p.exists():
++        raise FileNotFoundError(f"Backup não encontrado: {p}")
++    return _db().restore_backup(str(p))
++
+diff --git a/streamlit_extension/database/queries.py b/streamlit_extension/database/queries.py
+index 3a44bd4abe2ef05bbad60a9a0829a15f7df79c3c..e948b402a20ea2e2106b91686e6dd415f19b3982 100644
+--- a/streamlit_extension/database/queries.py
++++ b/streamlit_extension/database/queries.py
+@@ -1,34 +1,59 @@
+ from __future__ import annotations
++
+ from typing import Any, Dict, List
++
+ from streamlit_extension.utils.database import DatabaseManager  # type: ignore
+ 
++_DBM_INSTANCE: DatabaseManager | None = None  # type: ignore
++
++
+ def _db() -> DatabaseManager:
+     global _DBM_INSTANCE  # type: ignore
+     try:
+         return _DBM_INSTANCE  # type: ignore
+     except NameError:
+         _DBM_INSTANCE = DatabaseManager()  # type: ignore
+         return _DBM_INSTANCE
+ 
+-# Exemplos de queries "de alto nível" (ajuste conforme os métodos que você tem)
+ 
+ def list_epics() -> List[Dict[str, Any]]:
++    """Lista epics ativos conforme regra do ``DatabaseManager``."""
++
+     return _db().get_epics()
+ 
++
+ def list_all_epics() -> List[Dict[str, Any]]:
++    """Lista epics, incluindo arquivados/deletados (se suportado)."""
++
+     return _db().get_all_epics()
+ 
++
+ def list_tasks(epic_id: int) -> List[Dict[str, Any]]:
++    """Lista tasks de um epic específico."""
++
+     return _db().get_tasks(epic_id)
+ 
++
+ def list_all_tasks() -> List[Dict[str, Any]]:
++    """Lista todas as tasks; pode ser custoso."""
++
+     return _db().get_all_tasks()
+ 
++
+ def list_timer_sessions() -> List[Dict[str, Any]]:
++    """Retorna sessões de timer agregadas pelo manager."""
++
+     return _db().get_timer_sessions()
+ 
++
+ def get_user_stats(user_id: int) -> Dict[str, Any]:
++    """Métricas agregadas por usuário."""
++
+     return _db().get_user_stats(user_id)
+ 
++
+ def get_achievements(user_id: int) -> List[Dict[str, Any]]:
+-    return _db().get_achievements(user_id)
+\ No newline at end of file
++    """Conquistas/gamificação do usuário."""
++
++    return _db().get_achievements(user_id)
++
+diff --git a/streamlit_extension/database/schema.py b/streamlit_extension/database/schema.py
+index 22d3c44fc8ed15167970dcc9a9081d3ed7df1593..548c4d92c63a77d84a3217a35532228a01b2faa8 100644
+--- a/streamlit_extension/database/schema.py
++++ b/streamlit_extension/database/schema.py
+@@ -1,21 +1,33 @@
+ from __future__ import annotations
+-from typing import Optional
++
+ from streamlit_extension.utils.database import DatabaseManager  # type: ignore
+ 
++_DBM_INSTANCE: DatabaseManager | None = None  # type: ignore
++
++
++def set_database_manager(dbm: DatabaseManager) -> None:
++    """Permite injetar um ``DatabaseManager`` (ex.: testes)."""
++
++    global _DBM_INSTANCE
++    _DBM_INSTANCE = dbm  # type: ignore
++
++
+ def _db() -> DatabaseManager:
+     global _DBM_INSTANCE  # type: ignore
+     try:
+         return _DBM_INSTANCE  # type: ignore
+     except NameError:
+         _DBM_INSTANCE = DatabaseManager()  # type: ignore
+         return _DBM_INSTANCE
+ 
++
+ def create_schema_if_needed(verbose: bool = False) -> None:
+     """
+-    Fase 1: só delega. Na fase 2, movemos a criação/DDL pra cá de fato.
++    Ponto central de DDL.
++    Fase 1: delega para o manager (se existir).
+     """
+-    # Se o DatabaseManager tiver um método específico para bootstrap/migrations,
+-    # chame-o aqui. Caso não tenha, mantenha essa função como ponto central
+-    # para DDLs novas.
+-    if hasattr(_db(), "create_schema_if_needed"):
+-        _db().create_schema_if_needed(verbose=verbose)  # type: ignore
+\ No newline at end of file
++
++    db = _db()
++    if hasattr(db, "create_schema_if_needed"):
++        db.create_schema_if_needed(verbose=verbose)  # type: ignore[attr-defined]
++
+diff --git a/streamlit_extension/database/seed.py b/streamlit_extension/database/seed.py
+index 91457dfab9d538f586d9d8ef10a2c58fbb8a5c76..1e1df6cbb11f9ec9f61a73cf193565244165ed2d 100644
+--- a/streamlit_extension/database/seed.py
++++ b/streamlit_extension/database/seed.py
+@@ -1,20 +1,40 @@
+ from __future__ import annotations
+-from typing import Optional
++
++from typing import Optional, Protocol, runtime_checkable
++
+ from streamlit_extension.utils.database import DatabaseManager  # type: ignore
+ 
++_DBM_INSTANCE: DatabaseManager | None = None  # type: ignore
++
++
++@runtime_checkable
++class _DBProto(Protocol):
++    def seed_initial_data(self, kind: Optional[str] = None) -> int: ...
++
++
++def set_database_manager(dbm: DatabaseManager) -> None:
++    """Helper para injetar um ``DatabaseManager`` (ex.: testes/mocks)."""
++
++    global _DBM_INSTANCE
++    _DBM_INSTANCE = dbm  # type: ignore
++
++
+ def _db() -> DatabaseManager:
+     global _DBM_INSTANCE  # type: ignore
+     try:
+         return _DBM_INSTANCE  # type: ignore
+     except NameError:
+         _DBM_INSTANCE = DatabaseManager()  # type: ignore
+         return _DBM_INSTANCE
+ 
++
+ def seed_initial_data(kind: Optional[str] = None) -> int:
+-    """
+-    Insere dados de seed. Fase 1: delega; fase 2: implementar aqui.
+-    Retorna número de registros afetados (aprox).
+-    """
+-    if hasattr(_db(), "seed_initial_data"):
+-        return int(_db().seed_initial_data(kind=kind) or 0)  # type: ignore
+-    return 0
+\ No newline at end of file
++    """Insere dados de seed; retorna nº aproximado de registros afetados."""
++
++    db = _db()
++    if hasattr(db, "seed_initial_data"):
++        val = db.seed_initial_data(kind=kind)  # type: ignore[attr-defined]
++        return int(val or 0)
++    # fallback previsível
++    return 0
++
+ 
+EOF
+)

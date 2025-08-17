@@ -3559,3 +3559,40 @@ class DatabaseManager(PerformancePaginationMixin):
             if STREAMLIT_AVAILABLE and st:
                 st.error(f"❌ Error deleting project: {e}")
             return False
+
+
+# =============================================================================
+# 🔧 CONTEXT MANAGERS - Utility context managers for database operations
+# =============================================================================
+
+@contextmanager
+def dict_rows(connection: SQLiteConnection) -> Iterator[None]:
+    """
+    Context manager to temporarily set SQLite connection to return dict-like rows.
+    
+    This utility allows repository code to work with SQLite rows as dictionaries,
+    making it easier to extract values safely and convert to dataclass objects.
+    
+    Args:
+        connection: SQLite connection object
+        
+    Yields:
+        None (modifies connection row_factory temporarily)
+        
+    Example:
+        >>> with db_manager.get_connection() as conn:
+        ...     with dict_rows(conn):
+        ...         rows = conn.execute("SELECT * FROM tasks").fetchall()
+        ...         for row in rows:
+        ...             task_key = row.get('task_key', 'unknown')  # Safe access
+    """
+    # Store original row factory
+    original_row_factory = connection.row_factory
+    
+    try:
+        # Set row factory to return sqlite3.Row objects (dict-like)
+        connection.row_factory = sqlite3.Row
+        yield
+    finally:
+        # Restore original row factory
+        connection.row_factory = original_row_factory

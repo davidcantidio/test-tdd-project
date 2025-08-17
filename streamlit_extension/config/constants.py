@@ -176,6 +176,37 @@ class ProjectStatus(Enum):
         return [status.value for status in cls]
 
 
+class ClientStatus(Enum):
+    """Client status options."""
+    ACTIVE = "active"
+    INACTIVE = "inactive"
+    PROSPECT = "prospect"
+    SUSPENDED = "suspended"
+    ARCHIVED = "archived"
+    
+    @classmethod
+    def get_all_values(cls) -> List[str]:
+        """Get all status values as a list."""
+        return [status.value for status in cls]
+    
+    @classmethod
+    def get_display_name(cls, status_value: str) -> str:
+        """Get display-friendly name for status value."""
+        display_names = {
+            cls.ACTIVE.value: "Ativo",
+            cls.INACTIVE.value: "Inativo", 
+            cls.PROSPECT.value: "Prospecto",
+            cls.SUSPENDED.value: "Suspenso",
+            cls.ARCHIVED.value: "Arquivado"
+        }
+        return display_names.get(status_value, status_value.title())
+    
+    @classmethod
+    def get_default(cls) -> str:
+        """Get default client status."""
+        return cls.ACTIVE.value
+
+
 class GeneralStatus(Enum):
     """General entity status options (clients, etc.)."""
     ACTIVE = "active"
@@ -483,7 +514,7 @@ class ValidationRules:
 # Export all enums and constants for easy import
 __all__ = [
     'StatusValues', 'TDDPhases', 'ClientTiers', 'CompanySizes', 'ErrorMessages',
-    'TaskStatus', 'EpicStatus', 'ProjectStatus', 'GeneralStatus', 'TDDPhase',
+    'TaskStatus', 'EpicStatus', 'ProjectStatus', 'ClientStatus', 'GeneralStatus', 'TDDPhase',
     'ClientTier', 'CompanySize', 'Priority', 'TableNames', 'FieldNames',
     'UIConstants', 'FormFields', 'CacheConfig', 'FilterOptions', 'ValidationRules'
 ]

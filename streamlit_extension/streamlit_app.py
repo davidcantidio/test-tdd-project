@@ -12,6 +12,7 @@ Advanced dashboard with:
 """
 
 import sys
+import time
 from pathlib import Path
 from typing import Dict, Any
 from datetime import datetime
@@ -822,14 +823,49 @@ def main():
             operation_name="render_sidebar"
         )
     
-    # Health endpoint integration via query parameters
+    # API endpoints integration via query parameters
     query_params = st.query_params
+    
+    # Health endpoint (existing)
     if "health" in query_params:
         # Provide JSON health endpoint for monitoring tools
         from streamlit_extension.endpoints.health_monitoring import health_check_endpoint
         health_data = health_check_endpoint()
         st.json(health_data)
         return
+    
+    # TaskExecutionPlanner API endpoints (new)
+    api_endpoint = query_params.get("api")
+    if api_endpoint:
+        with streamlit_error_boundary("api_request_handling"):
+            from streamlit_extension.endpoints.execution_api import handle_api_request
+            from streamlit_extension.endpoints.api_middleware import log_api_request
+            
+            # Record start time for API monitoring
+            start_time = time.time()
+            
+            # Handle the API request
+            api_response = safe_streamlit_operation(
+                handle_api_request,
+                api_endpoint, dict(query_params),
+                default_return={"error": "API handler error", "code": "HANDLER_ERROR"},
+                operation_name=f"api_request_{api_endpoint}"
+            )
+            
+            # Log API request for monitoring
+            processing_time = time.time() - start_time
+            user = get_current_user()
+            user_id = user.username if user else "anonymous"
+            
+            safe_streamlit_operation(
+                log_api_request,
+                dict(query_params), user_id, "session", processing_time,
+                operation_name="api_request_logging"
+            )
+            
+            # Return JSON response
+            st.json(api_response)
+            return
     
     # Page navigation logic
     current_page = st.session_state.get("current_page", "Dashboard")

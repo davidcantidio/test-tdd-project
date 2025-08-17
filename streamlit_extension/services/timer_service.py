@@ -544,8 +544,11 @@ class TimerService(BaseService):
                 'status': SessionStatus.COMPLETED.value,
                 'end_time': end_time,
                 'duration_minutes': duration_minutes,
-                **completion_data or {}
             }
+            
+            # Add completion data if provided
+            if completion_data:
+                update_data.update(completion_data)
             
             # Validate completion data
             validation_errors = self.validate_business_rules(update_data)
