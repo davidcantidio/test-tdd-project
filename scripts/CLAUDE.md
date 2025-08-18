@@ -406,6 +406,33 @@ python scripts/testing/test_health_check.py --k8s-probes
 
 ### **Validation Tools**
 
+#### **API Equivalence Validation** (`api_equivalence_validation.py`) **⭐ NEW**
+**Purpose**: Test functional equivalence between legacy DatabaseManager and modular database API
+
+```bash
+# Full validation suite  
+python scripts/testing/api_equivalence_validation.py
+
+# Quick validation (essential tests only)
+python scripts/testing/api_equivalence_validation.py --quick
+
+# Performance comparison only
+python scripts/testing/api_equivalence_validation.py --performance-only
+
+# Detailed report generation
+python scripts/testing/api_equivalence_validation.py --detailed-report
+
+# Save report to file
+python scripts/testing/api_equivalence_validation.py --save-report validation_report.json
+```
+
+**Features:**
+- **Functional Equivalence**: Verifies both APIs produce identical results
+- **Performance Comparison**: Measures speed differences between APIs
+- **Breaking Changes Detection**: Identifies API incompatibilities  
+- **Data Integrity**: Validates data consistency across APIs
+- **Comprehensive Reporting**: Detailed analysis with recommendations
+
 #### **Sync Results Validation** (`validate_sync_results.py`)
 ```bash
 # Validate bidirectional sync accuracy
@@ -828,10 +855,11 @@ python scripts/testing/monitoring_demo.py
 - **Data analysis**: JSON structure, database schema, consistency
 - **Architecture analysis**: Gap analysis, improvement recommendations
 
-### **Testing Scripts** (25+ scripts)
+### **Testing Scripts** (26+ scripts)
 - **Integration testing**: Cross-module functionality validation
 - **Performance testing**: Load testing, stress testing, benchmarks
 - **Certification testing**: Production readiness validation
+- **API Equivalence testing**: Legacy vs Modular API validation (NEW)
 - **Component testing**: Individual component validation
 - **Demo scripts**: Feature demonstration and showcasing
 
@@ -925,6 +953,107 @@ if __name__ == "__main__":
 - Integration points with other scripts
 - Example usage patterns
 - Error handling and troubleshooting
+
+---
+
+## 📋 **COMMIT PROCESS FOR SCRIPTS**
+
+### 🎯 **MANDATORY PRE-COMMIT CHECKLIST**
+
+#### **1. Script File Analysis (OBRIGATÓRIO)**
+Antes de comitar mudanças em scripts, SEMPRE execute:
+
+```bash
+# Lista arquivos modificados
+git status --porcelain
+
+# Para scripts modificados, teste funcionalidade:
+python scripts/[category]/[modified_script].py --help
+python scripts/[category]/[modified_script].py --dry-run  # se disponível
+```
+
+#### **2. Script-Specific Validation**
+Para cada script modificado:
+
+- **✅ Sintaxe validada**: `python -m py_compile script.py`
+- **✅ Help funcional**: `--help` retorna informação útil
+- **✅ Dry-run testado**: `--dry-run` funciona sem efeitos colaterais
+- **✅ Logging configurado**: Output claro e informativo
+- **✅ Error handling**: Trata exceções adequadamente
+
+#### **3. Integration Testing**
+```bash
+# Teste integração com sistema
+python scripts/testing/api_equivalence_validation.py --quick
+python scripts/maintenance/database_maintenance.py health
+python scripts/testing/comprehensive_integrity_test.py --quick
+```
+
+#### **4. Script Commit Template**
+```bash
+git commit -m "$(cat <<'EOF'
+scripts: <descrição da mudança no script>
+
+<detalhes da funcionalidade alterada/adicionada>
+
+📊 **SCRIPTS ALTERADOS:**
+- MODIFICADOS: scripts/[categoria]/[arquivo].py
+- CRIADOS: scripts/[categoria]/[novo_arquivo].py
+- REMOVIDOS: scripts/[categoria]/[arquivo_obsoleto].py
+
+🎯 **FUNCIONALIDADE:**
+- <nova funcionalidade ou correção>
+- <impacto nos workflows existentes>
+- <compatibilidade backward>
+
+✅ **VALIDAÇÃO:**
+- Sintaxe: OK
+- Help: OK  
+- Dry-run: OK
+- Integration: OK
+
+🤖 Generated with Claude Code
+
+Co-Authored-By: Claude <noreply@anthropic.com>
+EOF
+)"
+```
+
+#### **5. Script Documentation Update**
+Sempre que adicionar/modificar scripts significativamente:
+
+- **Atualizar CLAUDE.md**: Documentar nova funcionalidade
+- **Atualizar contadores**: Ajustar "26+ scripts" se necessário
+- **Atualizar examples**: Incluir novos exemplos de uso
+- **Atualizar categories**: Se criar nova categoria
+
+#### **6. Post-Commit Verification**
+```bash
+# Verificar script commitado funciona
+git checkout HEAD~1 -- scripts/[script].py  # versão anterior
+python scripts/[script].py --help  # teste versão anterior
+git checkout HEAD -- scripts/[script].py   # versão atual  
+python scripts/[script].py --help  # teste versão atual
+
+# Confirmar melhoria/correção
+```
+
+### 🔍 **Script-Specific Guidelines**
+
+#### **Testing Scripts**: Extra validation required
+- **Todos os testes passam** antes do commit
+- **Performance não degradou** em scripts críticos
+- **Relatórios gerados** corretamente
+
+#### **Migration Scripts**: Critical safety checks
+- **Dry-run obrigatório** antes de qualquer commit
+- **Rollback testado** se aplicável
+- **Backup validado** antes de operações destrutivas
+
+#### **Maintenance Scripts**: Production safety
+- **Sem efeitos colaterais** em dry-run
+- **Health checks** passam após execução
+- **Monitoring** não afetado por mudanças
 
 ---
 

@@ -612,6 +612,111 @@ Tech Leader, que garante organização, independência dos patches e qualidade f
 
 ---
 
+## 📋 **COMMIT PROCESS & FILE TRACKING**
+
+### 🎯 **MANDATORY PRE-COMMIT CHECKLIST**
+
+#### **1. Lista de Arquivos Modificados (OBRIGATÓRIO)**
+Antes de QUALQUER commit, SEMPRE gere uma lista completa dos arquivos modificados:
+
+```bash
+# SEMPRE execute antes de commit:
+git status --porcelain
+
+# Output de exemplo:
+# M  README.md
+# M  TROUBLESHOOTING.md  
+# D  "critica_algoritmo_prioridades copy.md"
+# ??  docs/streamlit_current_roadmap.md
+```
+
+#### **2. Categorização das Mudanças**
+Classifique as mudanças por tipo:
+
+**📝 Modificados (M)**: Arquivos existentes alterados
+**➕ Adicionados (??)**: Novos arquivos criados  
+**❌ Deletados (D)**: Arquivos removidos
+**📄 Renomeados (R)**: Arquivos movidos/renomeados
+
+#### **3. Validação de Impacto**
+Para cada arquivo modificado, verifique:
+
+- **Teste necessário?** - Mudanças de código requerem testes
+- **Documentação atualizada?** - APIs/funcionalidades documentadas
+- **Breaking changes?** - Mudanças que afetam compatibilidade
+- **Performance impacto?** - Mudanças que afetam performance
+
+#### **4. Commit Message Template**
+```bash
+git commit -m "$(cat <<'EOF'
+<type>: <descrição curta>
+
+<descrição detalhada das mudanças>
+
+📊 **ARQUIVOS ALTERADOS:**
+- MODIFICADOS: <lista de arquivos M>
+- CRIADOS: <lista de arquivos ??>  
+- REMOVIDOS: <lista de arquivos D>
+
+🎯 **IMPACTO:**
+- <impacto funcional>
+- <impacto técnico>  
+- <impacto na documentação>
+
+🤖 Generated with Claude Code
+
+Co-Authored-By: Claude <noreply@anthropic.com>
+EOF
+)"
+```
+
+#### **5. Verificação Pós-Commit**
+```bash
+# Sempre verificar após commit:
+git log --oneline -1  # Verificar último commit
+git diff HEAD~1      # Ver diferenças do commit anterior
+```
+
+### 📊 **TRACKING & ACCOUNTABILITY**
+
+#### **Rastreabilidade Completa**
+- **Todos os commits** devem incluir lista de arquivos
+- **Todas as mudanças** devem ter justificativa clara
+- **Todos os impactos** devem ser documentados
+
+#### **Exemplo de Commit Ideal**
+```bash
+docs: comprehensive documentation review and cleanup
+
+Major documentation overhaul addressing accuracy and broken links.
+
+📊 **ARQUIVOS ALTERADOS:**
+- MODIFICADOS: README.md, TROUBLESHOOTING.md, docs/development/SETUP_GUIDE.md
+- CRIADOS: docs/streamlit_current_roadmap.md, DOCUMENTATION_UPDATE_REPORT.md  
+- REMOVIDOS: critica_algoritmo_prioridades copy.md, streamlit_app.py.backup
+
+🎯 **IMPACTO:**
+- Funcional: Links quebrados corrigidos, setup funcionando
+- Técnico: Métricas precisas, dependências corretas
+- Documentação: 100% navegável e confiável
+```
+
+### 🔍 **INTEGRATION POINTS**
+
+#### **Em Módulos CLAUDE.md**
+Cada módulo deve incluir esta prática:
+- `streamlit_extension/CLAUDE.md` - Para mudanças de UI/componentes
+- `duration_system/CLAUDE.md` - Para mudanças de cálculos/utilitários  
+- `tests/CLAUDE.md` - Para mudanças em testes
+- `scripts/CLAUDE.md` - Para mudanças em scripts/automação
+
+#### **Para Desenvolvimento Futuro**
+- **Pre-commit hooks**: Considerar automatização da lista
+- **CI/CD Integration**: Validação automática dos commits
+- **Documentation sync**: Manter CLAUDE.md atualizado automaticamente
+
+---
+
 *Last updated: 2025-08-16 by Claude*  
 *Status: **ENTERPRISE PRODUCTION READY** ✅*  
 *Security: **Grade A+** • Tests: **525+ passing** • Coverage: **98%+** • Performance: **< 1ms queries***  
