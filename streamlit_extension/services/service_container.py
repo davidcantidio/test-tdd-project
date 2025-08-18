@@ -1,12 +1,15 @@
 """
 🏗️ Service Container
 
-Dependency injection container for managing service instances.
-Provides centralized service creation and lifecycle management.
+Dependency Injection (DI) container para gerenciar instâncias de serviços.
+Suporta API legada (DatabaseManager) e nova API modular via adapter.
 """
 
-from typing import Dict, Any, Optional, Type, TypeVar
+from __future__ import annotations
+
+from typing import Dict, Any, Optional, Type, TypeVar, Iterable
 import logging
+import threading
 from contextlib import contextmanager
 from datetime import datetime
 
@@ -17,476 +20,436 @@ from .epic_service import EpicService
 from .task_service import TaskService
 from .analytics_service import AnalyticsService
 from .timer_service import TimerService
-from ..utils.database import DatabaseManager
 
-# Type variable for service types
-T = TypeVar('T', bound=BaseService)
+# Legado
+from ..utils.database import DatabaseManager  # type: ignore
+
+# Modular
+from ..database import connection as db_connection, queries as db_queries
+
+T = TypeVar("T", bound=BaseService)
+logger = logging.getLogger(__name__)
 
 
+# =============================================================================
+# Adapter para API Modular
+# =============================================================================
+class ModularDatabaseAdapter:
+    """
+    Fornece uma interface semelhante ao DatabaseManager, usando a API modular.
+    Evita heurísticas frágeis de formatos de retorno: queries retornam list[dict]/dict.
+    """
+
+    def __init__(self) -> None:
+        self._logger = logging.getLogger(f"{__name__}.ModularDatabaseAdapter")
+        self._logger.debug("ModularDatabaseAdapter initialized")
+
+    # --- Conexão & Execução ---------------------------------------------------
+    def get_connection(self):
+        """Obtém conexão via API modular (quando exposta pelo projeto)."""
+        return db_connection.get_connection()
+
+    def get_connection_context(self):
+        """Context manager de conexão direta SQLite da API modular."""
+        return db_connection.get_connection_context()
+
+    def transaction(self):
+        """Context manager de transação da API modular."""
+        return db_connection.transaction()
+
+    def execute_query(self, sql: str, params: Optional[Iterable[Any]] = None) -> Any:
+        """Executa SQL bruto via API modular."""
+        return db_connection.execute(sql, params or ())
+
+    # --- Operações de domínio (delegadas para queries) ------------------------
+    def get_epics(self) -> list[dict]:
+        try:
+            res = db_queries.list_epics()
+            return list(res)  # já é list[dict]
+        except Exception as e:
+            self._logger.error("get_epics failed: %s", e, exc_info=True)
+            return []
+
+    def get_all_epics(self) -> list[dict]:
+        try:
+            res = db_queries.list_all_epics()
+            return list(res)
+        except Exception as e:
+            self._logger.error("get_all_epics failed: %s", e, exc_info=True)
+            return []
+
+    def get_tasks(self, epic_id: int) -> list[dict]:
+        try:
+            res = db_queries.list_tasks(epic_id)
+            return list(res)
+        except Exception as e:
+            self._logger.error("get_tasks(%s) failed: %s", epic_id, e, exc_info=True)
+            return []
+
+    def get_all_tasks(self) -> list[dict]:
+        try:
+            res = db_queries.list_all_tasks()
+            return list(res)
+        except Exception as e:
+            self._logger.error("get_all_tasks failed: %s", e, exc_info=True)
+            return []
+
+    def get_timer_sessions(self, **kwargs: Any) -> list[dict]:
+        try:
+            return db_queries.list_timer_sessions()
+        except Exception as e:
+            self._logger.error("get_timer_sessions failed: %s", e, exc_info=True)
+            return []
+
+    def get_user_stats(self, user_id: int = 1, **kwargs: Any) -> dict:
+        try:
+            return db_queries.get_user_stats(user_id)
+        except Exception as e:
+            self._logger.error("get_user_stats(%s) failed: %s", user_id, e, exc_info=True)
+            return {}
+
+    def get_achievements(self, user_id: int = 1, **kwargs: Any) -> list[dict]:
+        try:
+            return db_queries.get_achievements(user_id)
+        except Exception as e:
+            self._logger.error("get_achievements(%s) failed: %s", user_id, e, exc_info=True)
+            return []
+
+    def check_database_health(self) -> dict:
+        from ..database.health import check_health  # type: ignore
+        try:
+            return check_health()
+        except Exception as e:
+            self._logger.error("check_database_health failed: %s", e, exc_info=True)
+            return {"status": "error", "error": str(e)}
+
+    def __getattr__(self, name: str):
+        self._logger.warning("ModularDatabaseAdapter: método '%s' não implementado", name)
+        raise AttributeError(f"ModularDatabaseAdapter has no method '{name}'")
+
+
+# =============================================================================
+# Tipos de erro
+# =============================================================================
 class ServiceError(Exception):
-    """Exception raised by service container operations."""
-    pass
+    """Erro de operações do container de serviços."""
 
 
+# =============================================================================
+# Service Container
+# =============================================================================
 class ServiceContainer:
     """
-    Dependency injection container for managing service instances.
-    
-    Provides singleton service instances and manages their lifecycle.
-    Supports both eager and lazy initialization of services.
+    Container de DI com singletons por serviço, suportando inicialização preguiçosa.
+    Suporta API legada (DatabaseManager) ou a API modular (via adapter).
     """
-    
-    def __init__(self, db_manager: DatabaseManager):
+
+    def __init__(self, db_manager: Optional[DatabaseManager] = None, use_modular_api: bool = False) -> None:
         """
-        Initialize service container.
-        
         Args:
-            db_manager: Database manager instance to inject into services
+            db_manager: Instância do DatabaseManager (obrigatória se use_modular_api=False)
+            use_modular_api: True para usar a API modular
         """
         self.db_manager = db_manager
-        self.logger = logging.getLogger(__name__)
-        
-        # Service registry
+        self.use_modular_api = use_modular_api
+        self._logger = logging.getLogger(f"{__name__}.ServiceContainer")
+
+        if not use_modular_api and db_manager is None:
+            raise ValueError("db_manager é obrigatório quando use_modular_api=False")
+
+        self._logger.info(
+            "ServiceContainer initialized with %s",
+            "modular API" if use_modular_api else "legacy DatabaseManager",
+        )
+
         self._services: Dict[str, BaseService] = {}
         self._service_classes: Dict[str, Type[BaseService]] = {
-            'client': ClientService,
-            'project': ProjectService,
-            'epic': EpicService,
-            'task': TaskService,
-            'analytics': AnalyticsService,
-            'timer': TimerService,
+            "client": ClientService,
+            "project": ProjectService,
+            "epic": EpicService,
+            "task": TaskService,
+            "analytics": AnalyticsService,
+            "timer": TimerService,
         }
-        
-        # Configuration
+
         self._lazy_loading = True
         self._initialized = False
-    
+        self._lock = threading.Lock()
+
+    # --- ciclo de vida --------------------------------------------------------
     def initialize(self, lazy_loading: bool = True) -> None:
-        """
-        Initialize the service container.
-        
-        Args:
-            lazy_loading: If True, services are created on-demand. 
-                         If False, all services are created immediately.
-        """
         self._lazy_loading = lazy_loading
-        
+
         if not lazy_loading:
-            # Eagerly initialize all services
-            for service_name in self._service_classes.keys():
-                self._create_service(service_name)
-        
+            for name in list(self._service_classes.keys()):
+                self._create_service(name)
+
         self._initialized = True
-        self.logger.info(f"Service container initialized (lazy_loading={lazy_loading})")
-    
-    def get_client_service(self) -> ClientService:
-        """Get the client service instance."""
-        return self._get_service('client', ClientService)
-    
-    def get_project_service(self) -> ProjectService:
-        """Get the project service instance."""
-        return self._get_service('project', ProjectService)
-    
-    def get_epic_service(self) -> EpicService:
-        """Get the epic service instance."""
-        return self._get_service('epic', EpicService)
-    
-    def get_task_service(self) -> TaskService:
-        """Get the task service instance."""
-        return self._get_service('task', TaskService)
-    
-    def get_analytics_service(self) -> AnalyticsService:
-        """Get the analytics service instance."""
-        return self._get_service('analytics', AnalyticsService)
-    
-    def get_timer_service(self) -> TimerService:
-        """Get the timer service instance."""
-        return self._get_service('timer', TimerService)
-    
-    def get_service(self, service_name: str) -> BaseService:
-        """
-        Get a service by name.
-        
-        Args:
-            service_name: Name of the service to retrieve
-            
-        Returns:
-            Service instance
-            
-        Raises:
-            ServiceError: If service name is not recognized
-        """
-        if service_name not in self._service_classes:
-            raise ServiceError(f"Unknown service: {service_name}")
-        
-        return self._get_service(service_name, self._service_classes[service_name])
-    
-    def register_service(self, service_name: str, service_class: Type[BaseService]) -> None:
-        """
-        Register a new service class.
-        
-        Args:
-            service_name: Name to register the service under
-            service_class: Service class to register
-        """
-        self._service_classes[service_name] = service_class
-        
-        # If not lazy loading and already initialized, create the service immediately
-        if not self._lazy_loading and self._initialized:
-            self._create_service(service_name)
-        
-        self.logger.info(f"Registered service: {service_name} -> {service_class.__name__}")
-    
-    def has_service(self, service_name: str) -> bool:
-        """
-        Check if a service is registered.
-        
-        Args:
-            service_name: Name of the service to check
-            
-        Returns:
-            True if service is registered, False otherwise
-        """
-        return service_name in self._service_classes
-    
-    def list_services(self) -> Dict[str, str]:
-        """
-        List all registered services.
-        
-        Returns:
-            Dictionary mapping service names to class names
-        """
-        return {
-            name: cls.__name__ 
-            for name, cls in self._service_classes.items()
-        }
-    
-    def is_service_created(self, service_name: str) -> bool:
-        """
-        Check if a service instance has been created.
-        
-        Args:
-            service_name: Name of the service to check
-            
-        Returns:
-            True if service instance exists, False otherwise
-        """
-        return service_name in self._services
-    
-    def clear_service(self, service_name: str) -> None:
-        """
-        Clear a service instance (will be recreated on next access).
-        
-        Args:
-            service_name: Name of the service to clear
-        """
-        if service_name in self._services:
-            del self._services[service_name]
-            self.logger.info(f"Cleared service instance: {service_name}")
-    
-    def clear_all_services(self) -> None:
-        """Clear all service instances."""
-        service_names = list(self._services.keys())
-        self._services.clear()
-        self.logger.info(f"Cleared all service instances: {service_names}")
-    
+        self._logger.info("Service container initialized (lazy_loading=%s)", lazy_loading)
+
     def shutdown(self) -> None:
-        """Shutdown the service container and cleanup resources."""
+        """Desaloca instâncias e marca container como não inicializado."""
         self.clear_all_services()
         self._initialized = False
-        self.logger.info("Service container shutdown")
-    
+        self._logger.info("Service container shutdown")
+
+    # --- transações -----------------------------------------------------------
     @contextmanager
     def transaction_scope(self):
         """
-        Context manager for transactional operations across multiple services.
-        
-        This ensures all service operations within the scope use the same
-        database transaction context.
+        Escopo transacional real: usa a transação da API modular ou do DatabaseManager.
+        Todos os serviços usados dentro do bloco compartilham o mesmo contexto.
         """
-        # Note: Actual transaction implementation would depend on the database manager
-        # For now, this is a placeholder for future transaction management
+        if self.use_modular_api:
+            cm = db_connection.transaction()
+        else:
+            assert self.db_manager is not None
+            cm = self.db_manager.transaction()
+
         try:
-            yield self
-        except Exception as e:
-            # In a real implementation, this would rollback the transaction
-            self.logger.error(f"Transaction scope error: {e}")
+            with cm:
+                yield self
+        except Exception:
+            # rollback é responsabilidade do context manager subjacente
+            self._logger.exception("Transaction scope error")
             raise
-    
+
+    # --- registro e acesso a serviços ----------------------------------------
+    def register_service(self, service_name: str, service_class: Type[BaseService]) -> None:
+        self._service_classes[service_name] = service_class
+        if not self._lazy_loading and self._initialized:
+            self._create_service(service_name)
+        self._logger.info("Registered service: %s -> %s", service_name, service_class.__name__)
+
+    def has_service(self, service_name: str) -> bool:
+        return service_name in self._service_classes
+
+    def list_services(self) -> Dict[str, str]:
+        return {name: cls.__name__ for name, cls in self._service_classes.items()}
+
+    def is_service_created(self, service_name: str) -> bool:
+        return service_name in self._services
+
+    def clear_service(self, service_name: str) -> None:
+        if service_name in self._services:
+            del self._services[service_name]
+            self._logger.info("Cleared service instance: %s", service_name)
+
+    def clear_all_services(self) -> None:
+        names = list(self._services.keys())
+        self._services.clear()
+        self._logger.info("Cleared all service instances: %s", names)
+
+    def get_service_status(self) -> Dict[str, Any]:
+        return {
+            "initialized": self._initialized,
+            "lazy_loading": self._lazy_loading,
+            "registered_services": list(self._service_classes.keys()),
+            "created_services": list(self._services.keys()),
+            "service_count": len(self._service_classes),
+            "created_count": len(self._services),
+        }
+
     def validate_services(self) -> Dict[str, bool]:
         """
-        Validate all registered services can be created successfully.
-        
-        Returns:
-            Dictionary mapping service names to validation results
+        Verifica se todos os serviços podem ser instanciados.
+        Não persiste as instâncias quando validate_only=True.
         """
-        results = {}
-        
-        for service_name in self._service_classes.keys():
+        results: Dict[str, bool] = {}
+        for name in self._service_classes.keys():
             try:
-                # Try to create the service
-                service = self._create_service(service_name, validate_only=True)
-                results[service_name] = True
-                self.logger.debug(f"Service validation passed: {service_name}")
+                self._create_service(name, validate_only=True)
+                results[name] = True
+                self._logger.debug("Service validation passed: %s", name)
             except Exception as e:
-                results[service_name] = False
-                self.logger.error(f"Service validation failed: {service_name} - {e}")
-        
+                results[name] = False
+                self._logger.error("Service validation failed: %s - %s", name, e)
         return results
-    
-    def get_service_status(self) -> Dict[str, Any]:
-        """
-        Get status information about the service container.
-        
-        Returns:
-            Dictionary with container status information
-        """
-        return {
-            'initialized': self._initialized,
-            'lazy_loading': self._lazy_loading,
-            'registered_services': list(self._service_classes.keys()),
-            'created_services': list(self._services.keys()),
-            'service_count': len(self._service_classes),
-            'created_count': len(self._services)
-        }
-    
+
+    # --- getters específicos --------------------------------------------------
+    def get_client_service(self) -> ClientService:
+        return self._get_service("client", ClientService)
+
+    def get_project_service(self) -> ProjectService:
+        return self._get_service("project", ProjectService)
+
+    def get_epic_service(self) -> EpicService:
+        return self._get_service("epic", EpicService)
+
+    def get_task_service(self) -> TaskService:
+        return self._get_service("task", TaskService)
+
+    def get_analytics_service(self) -> AnalyticsService:
+        return self._get_service("analytics", AnalyticsService)
+
+    def get_timer_service(self) -> TimerService:
+        return self._get_service("timer", TimerService)
+
+    # --- núcleo de criação/recuperação ---------------------------------------
     def _get_service(self, service_name: str, service_class: Type[T]) -> T:
-        """
-        Get or create a service instance.
-        
-        Args:
-            service_name: Name of the service
-            service_class: Expected service class type
-            
-        Returns:
-            Service instance
-        """
-        if service_name not in self._services:
-            if not self._initialized:
-                raise ServiceError("Service container not initialized. Call initialize() first.")
-            
-            self._services[service_name] = self._create_service(service_name)
-        
-        service = self._services[service_name]
-        
-        # Type check for safety
-        if not isinstance(service, service_class):
-            raise ServiceError(
-                f"Service type mismatch: expected {service_class.__name__}, "
-                f"got {type(service).__name__}"
-            )
-        
-        return service
-    
+        with self._lock:
+            if service_name not in self._services:
+                if not self._initialized:
+                    raise ServiceError("Service container not initialized. Call initialize() first.")
+                self._services[service_name] = self._create_service(service_name)
+
+            service = self._services[service_name]
+            if not isinstance(service, service_class):
+                raise ServiceError(
+                    f"Service type mismatch: expected {service_class.__name__}, got {type(service).__name__}"
+                )
+            return service  # type: ignore[return-value]
+
     def _create_service(self, service_name: str, validate_only: bool = False) -> BaseService:
-        """
-        Create a new service instance.
-        
-        Args:
-            service_name: Name of the service to create
-            validate_only: If True, don't store the service instance
-            
-        Returns:
-            New service instance
-            
-        Raises:
-            ServiceError: If service cannot be created
-        """
         if service_name not in self._service_classes:
             raise ServiceError(f"Unknown service: {service_name}")
-        
-        service_class = self._service_classes[service_name]
-        
+
+        cls = self._service_classes[service_name]
         try:
-            # Create service with database manager dependency
-            service = service_class(self.db_manager)
-            
-            if not validate_only:
-                self.logger.debug(f"Created service: {service_name} -> {service_class.__name__}")
-            
+            if self.use_modular_api:
+                db_adapter = ModularDatabaseAdapter()
+                service = cls(db_adapter)
+                if not validate_only:
+                    logger.debug("Created service: %s -> %s (modular API)", service_name, cls.__name__)
+            else:
+                assert self.db_manager is not None
+                service = cls(self.db_manager)
+                if not validate_only:
+                    logger.debug("Created service: %s -> %s (legacy API)", service_name, cls.__name__)
             return service
-            
         except Exception as e:
             raise ServiceError(f"Failed to create service {service_name}: {e}") from e
 
 
-# Global service container instance
+# =============================================================================
+# Container global
+# =============================================================================
 _service_container: Optional[ServiceContainer] = None
 
 
 def get_service_container() -> ServiceContainer:
-    """
-    Get the global service container instance.
-    
-    Returns:
-        Global service container
-        
-    Raises:
-        ServiceError: If container not initialized
-    """
     global _service_container
-    
     if _service_container is None:
-        raise ServiceError(
-            "Service container not initialized. Call initialize_service_container() first."
-        )
-    
+        raise ServiceError("Service container not initialized. Call initialize_service_container() first.")
     return _service_container
 
 
 def initialize_service_container(db_manager: DatabaseManager, lazy_loading: bool = True) -> ServiceContainer:
-    """
-    Initialize the global service container.
-    
-    Args:
-        db_manager: Database manager instance
-        lazy_loading: Whether to use lazy loading for services
-        
-    Returns:
-        Initialized service container
-    """
     global _service_container
-    
     if _service_container is not None:
         _service_container.shutdown()
-    
-    _service_container = ServiceContainer(db_manager)
+    _service_container = ServiceContainer(db_manager=db_manager, use_modular_api=False)
     _service_container.initialize(lazy_loading)
-    
+    return _service_container
+
+
+def initialize_service_container_modular(lazy_loading: bool = True) -> ServiceContainer:
+    global _service_container
+    if _service_container is not None:
+        _service_container.shutdown()
+    _service_container = ServiceContainer(use_modular_api=True)
+    _service_container.initialize(lazy_loading)
     return _service_container
 
 
 def shutdown_service_container() -> None:
-    """Shutdown the global service container."""
     global _service_container
-    
     if _service_container is not None:
         _service_container.shutdown()
         _service_container = None
 
 
-# Convenience functions for accessing services
+# =============================================================================
+# Conveniências para acesso direto
+# =============================================================================
 def get_client_service() -> ClientService:
-    """Get the client service from the global container."""
     return get_service_container().get_client_service()
 
 
 def get_project_service() -> ProjectService:
-    """Get the project service from the global container."""
     return get_service_container().get_project_service()
 
 
 def get_epic_service() -> EpicService:
-    """Get the epic service from the global container."""
     return get_service_container().get_epic_service()
 
 
 def get_task_service() -> TaskService:
-    """Get the task service from the global container."""
     return get_service_container().get_task_service()
 
 
 def get_analytics_service() -> AnalyticsService:
-    """Get the analytics service from the global container."""
     return get_service_container().get_analytics_service()
 
 
 def get_timer_service() -> TimerService:
-    """Get the timer service from the global container."""
     return get_service_container().get_timer_service()
 
 
-# Context managers for service operations
+# =============================================================================
+# Context manager transacional para operações de serviço
+# =============================================================================
 @contextmanager
 def service_transaction():
-    """Context manager for transactional service operations."""
     container = get_service_container()
     with container.transaction_scope():
         yield container
 
 
-# Service health check functions
+# =============================================================================
+# Health Check dos serviços
+# =============================================================================
 def check_service_health() -> Dict[str, Any]:
-    """
-    Perform health check on all services.
-    
-    Returns:
-        Health status for all services
-    """
     try:
         container = get_service_container()
-        
-        # Validate all services
-        validation_results = container.validate_services()
-        
-        # Get container status
+        validation = container.validate_services()
         status = container.get_service_status()
-        
-        # Overall health
-        all_healthy = all(validation_results.values())
-        
+        all_ok = all(validation.values())
         return {
-            'overall_health': 'healthy' if all_healthy else 'unhealthy',
-            'container_status': status,
-            'service_validation': validation_results,
-            'timestamp': datetime.utcnow().isoformat() + "Z",
+            "overall_health": "healthy" if all_ok else "unhealthy",
+            "container_status": status,
+            "service_validation": validation,
+            "timestamp": datetime.utcnow().isoformat() + "Z",
         }
-        
     except Exception as e:
         return {
-            'overall_health': 'error',
-            'error': str(e),
-            'timestamp': datetime.utcnow().isoformat() + "Z",
+            "overall_health": "error",
+            "error": str(e),
+            "timestamp": datetime.utcnow().isoformat() + "Z",
         }
 
 
-# Example usage and testing functions
-def example_service_usage():
-    """Example of how to use the service container."""
-    # This would typically be done in your application startup
-    from ..utils.database import DatabaseManager
-    
-    # Initialize database manager
-    db_manager = DatabaseManager()
-    
-    # Initialize service container
-    container = initialize_service_container(db_manager, lazy_loading=True)
-    
-    # Use services
+# =============================================================================
+# Exemplo de uso (manual)
+# =============================================================================
+def example_service_usage() -> None:
+    """Exemplo simples de inicialização e uso do container (modo legado)."""
+    dm = DatabaseManager()  # type: ignore[call-arg]
+    container = initialize_service_container(dm, lazy_loading=True)
+
     try:
-        # Get services
         client_service = get_client_service()
         project_service = get_project_service()
         epic_service = get_epic_service()
         task_service = get_task_service()
         analytics_service = get_analytics_service()
         timer_service = get_timer_service()
-        
-        # Example operations
-        clients_result = client_service.list_clients()
-        if clients_result.success:
-            print(f"Found {clients_result.data.total} clients")
-        
-        # Example analytics
-        dashboard_result = analytics_service.get_dashboard_summary()
-        if dashboard_result.success:
-            print(f"Dashboard generated with {dashboard_result.data['overview']['total_projects']} projects")
-        
-        # Example timer
-        active_session_result = timer_service.get_active_session()
-        if active_session_result.success and active_session_result.data:
-            print(f"Active session: {active_session_result.data['elapsed_minutes']} minutes elapsed")
-        
-        # Use transaction scope for related operations
-        with service_transaction() as container:
-            # Perform multiple related operations
+
+        # Exemplos ilustrativos (ajuste conforme as assinaturas reais dos serviços)
+        _ = client_service  # evitar warnings
+        _ = project_service
+        _ = epic_service
+        _ = task_service
+        _ = analytics_service
+        _ = timer_service
+
+        # Escopo transacional real
+        with service_transaction():
+            # operações relacionadas...
             pass
-            
     finally:
-        # Cleanup
         shutdown_service_container()
 
 
 if __name__ == "__main__":
-    # Run example if this file is executed directly
     example_service_usage()
