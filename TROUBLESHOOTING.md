@@ -3,13 +3,13 @@
 > Essential solutions for common issues
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 
 ## 🚨 Common Issues
 
 ### **Setup & Dependencies**
 
-**Missing modules:** `pip install streamlit plotly sqlite3 pandas pathlib`  
+**Missing modules:** `pip install streamlit plotly pandas typer rich`  
 **Permission errors:** `sudo chown -R $USER:$USER .`  
 **Git not initialized:** `git init && git add . && git commit -m "Initial commit"`
 
@@ -41,7 +41,7 @@ print('✅ Both APIs coexist')
 ```bash
 # Check if you're using the faster modular API
 # SLOW (original): DatabaseManager().get_connection()
-# FAST (4,254x faster): get_connection()
+# FAST (optimized): get_connection()
 
 # Performance test
 python -c "
