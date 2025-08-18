@@ -38,12 +38,15 @@ class QueryCondition:
 
     def to_sql(self) -> Tuple[str, Any]:
         """Convert condition to SQL with parameter."""
-        if self.operator == "IN":
-            placeholders = ",".join("?" for _ in self.value)
-            return f"{self.field} IN ({placeholders})", self.value
-        elif self.operator == "NOT IN":
-            placeholders = ",".join("?" for _ in self.value)
-            return f"{self.field} NOT IN ({placeholders})", self.value
+        op = self.operator.upper()
+        if op in {"IN", "NOT IN"}:
+            seq = list(self.value) if isinstance(self.value, (list, tuple, set)) else []
+            if not seq:
+                # Empty IN: nunca casa; Empty NOT IN: sempre casa
+                return ("1=0", []) if op == "IN" else ("1=1", [])
+            placeholders = ",".join("?" for _ in seq)
+            clause = f"{self.field} {'NOT IN' if op == 'NOT IN' else 'IN'} ({placeholders})"
+            return clause, list(seq)
         else:
             return f"{self.field} {self.operator} ?", [self.value]
 
@@ -88,6 +91,11 @@ class SecureQueryBuilder:
     def _validate_operator(self, operator: str) -> None:
         if operator not in self.allowed_operators:
             raise ValueError(f"Operator {operator} not allowed")
+
+    def _validate_on_condition(self, on_condition: str) -> None:
+        """Validate simple ON condition pattern like 'a.b = c.d'."""
+        if not re.match(r"^[A-Za-z0-9_\.]+\s*=\s*[A-Za-z0-9_\.]+$", on_condition):
+            raise ValueError(f"Invalid join condition: {on_condition}")
 
     # ------------------------------------------------------------------
     # Query construction methods
@@ -148,6 +156,8 @@ class SecureQueryBuilder:
         join_type: JoinType = JoinType.INNER,
     ) -> "SecureQueryBuilder":
         """Add table join."""
+        self._validate_field(table)
+        self._validate_on_condition(on_condition)
         self.joins.append(QueryJoin(table, join_type, on_condition))
         return self
 
@@ -158,7 +168,10 @@ class SecureQueryBuilder:
     def order_by(self, field: str, direction: str = "ASC") -> "SecureQueryBuilder":
         """Add ORDER BY clause."""
         self._validate_field(field)
-        self.order_by_fields.append(f"{field} {direction}")
+        direction_upper = direction.upper()
+        if direction_upper not in {"ASC", "DESC"}:
+            raise ValueError(f"Invalid ORDER BY direction: {direction}")
+        self.order_by_fields.append(f"{field} {direction_upper}")
         return self
 
     def group_by(self, field: str) -> "SecureQueryBuilder":
@@ -169,11 +182,15 @@ class SecureQueryBuilder:
 
     def limit(self, count: int) -> "SecureQueryBuilder":
         """Add LIMIT clause."""
+        if not isinstance(count, int) or count < 0:
+            raise ValueError("LIMIT must be a non-negative integer")
         self.limit_value = count
         return self
 
     def offset(self, count: int) -> "SecureQueryBuilder":
         """Add OFFSET clause."""
+        if not isinstance(count, int) or count < 0:
+            raise ValueError("OFFSET must be a non-negative integer")
         self.offset_value = count
         return self
 
@@ -231,6 +248,8 @@ class SecureQueryBuilder:
     def _build_insert(self) -> Tuple[str, List[Any]]:
         """Build INSERT query."""
         fields = list(self.insert_data.keys())
+        for f in fields:
+            self._validate_field(f)
         placeholders = ",".join("?" for _ in fields)
         query = f"INSERT INTO {self.table} ({', '.join(fields)}) VALUES ({placeholders})"
         params = list(self.insert_data.values())
@@ -238,6 +257,8 @@ class SecureQueryBuilder:
 
     def _build_update(self) -> Tuple[str, List[Any]]:
         """Build UPDATE query."""
+        for f in self.update_data.keys():
+            self._validate_field(f)
         set_parts = [f"{field} = ?" for field in self.update_data.keys()]
         query_parts = [f"UPDATE {self.table}", f"SET {', '.join(set_parts)}"]
         params = list(self.update_data.values())

@@ -1,1060 +1,310 @@
  (cd "$(git rev-parse --show-toplevel)" && git apply --3way <<'EOF' 
-diff --git a/streamlit_extension/config/__init__.py b/streamlit_extension/config/__init__.py
-index 6c69f2f562e4c7531ae5f2c5db37e4e45060e947..d40952159345e4d5461fe969668af20b715afcbb 100644
---- a/streamlit_extension/config/__init__.py
-+++ b/streamlit_extension/config/__init__.py
-@@ -1,25 +1,21 @@
--"""
--🔧 Configuration Package
--
--Centralized configuration and constants for the TDD Framework.
--Addresses report.md requirement: "Centralize hard-coded strings in enums/config"
-+"""🔧 Configuration Package
+diff --git a/duration_system/CLAUDE.md b/duration_system/CLAUDE.md
+index 20e8da489dbcb30a18b1d000621b9b49466c04ba..3d870ab6cd0223d9a918ff11704b36ec0cc09576 100644
+--- a/duration_system/CLAUDE.md
++++ b/duration_system/CLAUDE.md
+@@ -1,31 +1,31 @@
+ # 🤖 CLAUDE.md - Duration System Module
  
--This package provides:
--- Application constants and enums
--- Configuration management  
--- Validation rules and patterns
-+Centraliza configuração e *constants* para o TDD Framework.
- """
+ **Module:** duration_system/  
+ **Purpose:** Enterprise duration calculation and security utilities  
+ **Architecture:** Standalone modules for duration handling, security, and data protection  
+-**Last Updated:** 2025-08-16
++**Last Updated:** 2025-08-18
  
- from .streamlit_config import StreamlitConfig, load_config, create_streamlit_config_file
- from .constants import (
--    TaskStatus, EpicStatus, ProjectStatus, GeneralStatus, TDDPhase,
--    ClientTier, CompanySize, Priority, TableNames, FieldNames,
--    UIConstants, FormFields, CacheConfig, FilterOptions, ValidationRules
-+    StatusValues as GeneralStatus,
-+    TDDPhases as TDDPhase,
-+    ClientTiers as ClientTier,
-+    CompanySizes as CompanySize,
-+    ErrorMessages,
-+    FormFields, CacheConfig, FilterOptions, ValidationRules
- )
+ ---
  
- __all__ = [
-     "StreamlitConfig", "load_config", "create_streamlit_config_file",
--    'TaskStatus', 'EpicStatus', 'ProjectStatus', 'GeneralStatus', 'TDDPhase',
--    'ClientTier', 'CompanySize', 'Priority', 'TableNames', 'FieldNames',
--    'UIConstants', 'FormFields', 'CacheConfig', 'FilterOptions', 'ValidationRules'
--]
-\ No newline at end of file
-+    'GeneralStatus', 'TDDPhase', 'ClientTier', 'CompanySize',
-+    'ErrorMessages',
-+    'FormFields', 'CacheConfig', 'FilterOptions', 'ValidationRules'
-+]
-diff --git a/streamlit_extension/config/backup_restore.py b/streamlit_extension/config/backup_restore.py
-index 6b5b1ec14814170d89c83dfa2ed662f312970c86..8b14feb527567d5a3ee248dffc3be7a1d39217fc 100644
---- a/streamlit_extension/config/backup_restore.py
-+++ b/streamlit_extension/config/backup_restore.py
-@@ -160,65 +160,64 @@ class ConfigurationBackupManager:
-                 # Backup database configuration (if available)
-                 db_config_files = [
-                     Path.cwd() / "framework.db.config",
-                     Path.cwd() / "task_timer.db.config"
-                 ]
-                 
-                 for i, db_config_file in enumerate(db_config_files):
-                     if db_config_file.exists():
-                         zipf.write(db_config_file, f"db_config_{i}.json")
-                         backup_info.includes_database_config = True
-                 
-                 # Add backup metadata
-                 metadata = {
-                     "backup_info": asdict(backup_info),
-                     "created_by": "StreamlitExtension",
-                     "version": "1.0",
-                     "components": {
-                         "streamlit_config": backup_info.includes_streamlit_config,
-                         "themes": backup_info.includes_themes,
-                         "cache_settings": backup_info.includes_cache_settings,
-                         "database_config": backup_info.includes_database_config
-                     }
-                 }
-                 
-                 zipf.writestr("backup_metadata.json", json.dumps(metadata, indent=2, default=str))
--                
--                # Update file size
--                backup_info.size_bytes = backup_file.stat().st_size
--                
--                # Add to index
--                self._backup_index[backup_name] = backup_info
--                self._save_backup_index()
--                
--                # Cleanup old backups
--                self._cleanup_old_backups()
--                
--                return backup_info
--                
-+
-+            backup_info.size_bytes = backup_file.stat().st_size
-+
-+            # Add to index
-+            self._backup_index[backup_name] = backup_info
-+            self._save_backup_index()
-+
-+            # Cleanup old backups
-+            self._cleanup_old_backups()
-+
-+            return backup_info
-+
-         except Exception as e:
--            # Cleanup failed backup file
-+            logger.exception("Failed to create backup %s", backup_name)
-             if backup_file.exists():
-                 backup_file.unlink()
-             return None
-     
-     def restore_backup(self, backup_name: str, components: List[str] = None) -> bool:
-         """Restore configuration from backup."""
-         if backup_name not in self._backup_index:
-             return False
-         
-         backup_info = self._backup_index[backup_name]
-         backup_file = backup_info.file_path
-         
-         if not backup_file.exists():
-             return False
-         
-         components = components or ["streamlit_config", "themes", "cache_settings", "database_config"]
-         
-         try:
-             with zipfile.ZipFile(backup_file, 'r') as zipf:
-                 # Restore streamlit config
-                 if "streamlit_config" in components and backup_info.includes_streamlit_config:
-                     try:
-                         config_data = json.loads(zipf.read("streamlit_config.json"))
-                         if CONFIG_AVAILABLE:
-                             # Apply configuration (this would need implementation in streamlit_config.py)
-@@ -244,119 +243,122 @@ class ConfigurationBackupManager:
-                         cache_settings = zipf.read("cache_settings.json")
-                         with open(cache_dir / "settings.json", 'wb') as f:
-                             f.write(cache_settings)
-                     except KeyError:
-                         pass
-                 
-                 # Restore database config
-                 if "database_config" in components and backup_info.includes_database_config:
-                     try:
-                         # Extract database config files
-                         for name in zipf.namelist():
-                             if name.startswith("db_config_"):
-                                 config_data = zipf.read(name)
-                                 config_file = Path.cwd() / f"{name.replace('db_config_', 'config_')}"
-                                 with open(config_file, 'wb') as f:
-                                     f.write(config_data)
-                     except Exception as e:
-                         # Log configuration restore failure but continue
-                         import logging
-                         logging.getLogger(__name__).warning(f"Failed to restore configuration files: {e}")
-                         # Continue processing other backup components
-                 
-                 return True
-                 
-         except Exception as e:
-+            logger.exception("Failed to restore backup %s", backup_name)
-             return False
-     
-     def export_configuration(self, export_path: Path, include_sensitive: bool = False) -> bool:
-         """Export configuration to external file."""
-         try:
-             config_data = {}
-             
-             # Export streamlit config
-             if CONFIG_AVAILABLE:
-                 config = get_config()
-                 config_dict = asdict(config)
-                 
-                 # Remove sensitive data if requested
-                 if not include_sensitive:
-                     sensitive_keys = ['github_token', 'api_keys', 'passwords']
-                     for key in sensitive_keys:
-                         if key in config_dict:
-                             config_dict[key] = "[REDACTED]"
-                 
-                 config_data["streamlit_config"] = config_dict
-             
-             # Export themes
-             if THEMES_AVAILABLE:
-                 theme_manager = get_theme_manager()
-                 config_data["themes"] = {
-                     "custom_themes": {name: asdict(theme) for name, theme in theme_manager.custom_themes.items()},
-                     "current_theme": theme_manager._current_theme
-                 }
-             
-             # Export metadata
-             config_data["export_metadata"] = {
-                 "exported_at": datetime.now().isoformat(),
-                 "version": "1.0",
-                 "includes_sensitive": include_sensitive
-             }
-             
-             # Write to file
-             with open(export_path, 'w') as f:
-                 json.dump(config_data, f, indent=2, default=str)
-             
-             return True
-             
-         except Exception as e:
-+            logger.exception("Failed to export configuration to %s", export_path)
-             return False
-     
-     def import_configuration(self, import_path: Path, components: List[str] = None) -> bool:
-         """Import configuration from external file."""
-         if not import_path.exists():
-             return False
-         
-         components = components or ["streamlit_config", "themes"]
-         
-         try:
-             with open(import_path, 'r') as f:
-                 config_data = json.load(f)
-             
-             # Import streamlit config
-             if "streamlit_config" in components and "streamlit_config" in config_data:
-                 if CONFIG_AVAILABLE:
-                     self._restore_streamlit_config(config_data["streamlit_config"])
-             
-             # Import themes
-             if "themes" in components and "themes" in config_data:
-                 if THEMES_AVAILABLE:
-                     self._restore_themes(config_data["themes"])
-             
-             return True
-             
-         except (json.JSONDecodeError, KeyError, Exception) as e:
-+            logger.exception("Failed to import configuration from %s", import_path)
-             return False
-     
-     def get_backup_list(self) -> List[BackupInfo]:
-         """Get list of all backups sorted by creation date."""
-         backups = list(self._backup_index.values())
-         backups.sort(key=lambda b: b.created_at, reverse=True)
-         return backups
-     
-     def delete_backup(self, backup_name: str) -> bool:
-         """Delete a backup."""
-         if backup_name not in self._backup_index:
-             return False
-         
-         backup_info = self._backup_index[backup_name]
-         
-         # Delete file
-         try:
-             if backup_info.file_path.exists():
-                 backup_info.file_path.unlink()
-         except OSError:
-             pass
-         
-         # Remove from index
-         del self._backup_index[backup_name]
-         self._save_backup_index()
-@@ -703,26 +705,26 @@ def render_backup_restore_ui() -> None:
-                 
-                 if st.button("📥 Import Configuration"):
-                     if import_components:
-                         if backup_manager.import_configuration(tmp_path, import_components):
-                             st.success("Configuration imported successfully!")
-                             st.info("Some changes may require restarting the application to take effect.")
-                         else:
-                             st.error("Failed to import configuration.")
-                     else:
-                         st.warning("Please select at least one component to import.")
-                 
-                 # Cleanup temp file
-                 try:
-                     tmp_path.unlink()
-                 except Exception as e:
-                     # Log temp file cleanup failure but don't fail the operation
-                     import logging
-                     logging.getLogger(__name__).debug(f"Failed to cleanup temp file {tmp_path}: {e}")
-                     # Temp file cleanup failure is not critical
+ ## ⏱️ **Module Overview**
+ 
+ Comprehensive duration and security system featuring:
+ - **Duration Engine**: Calculation and formatting with business calendar support
+ - **Security Stack**: JSON validation, cache protection, transaction safety
+ - **Data Protection**: GDPR compliance, secure serialization, sanitization
+ - **Performance**: Interrupt-safe caching, optimized queries, circuit breakers
+ 
+ ---
+ 
+ ## 🏗️ **Module Architecture**
+ 
+ ### **Core Components**
+ ```
+ duration_system/
+ ├── duration_calculator.py    # ⏱️ Core duration calculations
+ ├── duration_formatter.py     # 📝 Human-readable formatting
+ ├── business_calendar.py      # 📅 Business days + holidays
+ ├── json_handler.py          # 📊 JSON field operations
+ ├── json_security.py         # 🛡️ JSON validation & sanitization
+ ├── cache_fix.py             # 🔄 Interrupt-safe LRU cache
+ ├── database_transactions.py # 📊 Transaction safety
+diff --git a/duration_system/query_builders.py b/duration_system/query_builders.py
+index 3bcb2327d45593ad913eadfc7b8d1a928102d6e9..b89533d1474c08d1c60ff8abb24fba13c1e082ec 100644
+--- a/duration_system/query_builders.py
++++ b/duration_system/query_builders.py
+@@ -16,101 +16,109 @@ class QueryType(Enum):
+     """Query operation types."""
+     SELECT = "SELECT"
+     INSERT = "INSERT"
+     UPDATE = "UPDATE"
+     DELETE = "DELETE"
  
  
- # Export for convenience
- __all__ = [
-     "BackupType", "BackupInfo", "ConfigurationBackupManager",
-     "get_backup_manager", "render_backup_restore_ui"
--]
-\ No newline at end of file
-+]
-diff --git a/streamlit_extension/config/constants.py b/streamlit_extension/config/constants.py
-index 6d20b7c9727badbf625269655872d7d44d38864f..077e41cf5372f53690b1cd8b6bcd548fb2582176 100644
---- a/streamlit_extension/config/constants.py
-+++ b/streamlit_extension/config/constants.py
-@@ -1,37 +1,30 @@
- """
- 📋 Application Constants and Enums
- 
--Centralized hard-coded strings to improve maintainability and reduce
--magic strings throughout the codebase. Addresses report.md requirement:
--"Centralize hard-coded strings in enums/config"
--
--This module provides:
--- Status enums for different entity types
--- Configuration constants
--- UI text constants
--- Database field names
-+Centraliza strings e enums para reduzir *magic strings* no codebase.
-+Também cria **aliases compatíveis** com importações legadas do pacote.
- """
- 
- from enum import Enum
- from typing import List, Dict, Any
+ class JoinType(Enum):
+     """SQL join types."""
+     INNER = "INNER JOIN"
+     LEFT = "LEFT JOIN"
+     RIGHT = "RIGHT JOIN"
+     FULL = "FULL OUTER JOIN"
  
  
- class StatusValues(Enum):
-     """Centralized status values for all entities"""
-     ACTIVE = "active"
-     INACTIVE = "inactive"
-     PENDING = "pending"
-     COMPLETED = "completed"
-     PLANNING = "planning"
-     IN_PROGRESS = "in_progress"
-     ON_HOLD = "on_hold"
-     CANCELLED = "cancelled"
-     RED = "red"
-     GREEN = "green"
-     REFACTOR = "refactor"
-     BLOCKED = "blocked"
-     DRAFT = "draft"
-     REVIEW = "review"
-     APPROVED = "approved"
-     REJECTED = "rejected"
-     SUSPENDED = "suspended"
-@@ -100,50 +93,56 @@ class CompanySizes(Enum):
+ @dataclass
+ class QueryCondition:
+     """Represents a WHERE condition."""
+     field: str
+     operator: str  # =, !=, >, <, >=, <=, LIKE, IN, NOT IN
+     value: Any
+     logical_op: str = "AND"  # AND, OR
  
- class ErrorMessages:
-     """Centralized error message templates"""
-     # Client errors
-     CLIENT_LOAD_ERROR = "❌ Error loading clients: {error}"
-     CLIENT_CREATE_ERROR = "❌ Error creating client: {error}"
-     CLIENT_UPDATE_ERROR = "❌ Error updating client: {error}"
-     CLIENT_DELETE_ERROR = "❌ Error deleting client: {error}"
-     CLIENT_NOT_FOUND = "❌ Client not found"
-     CLIENT_CREATE_SUCCESS = "✅ Client created successfully!"
-     CLIENT_UPDATE_SUCCESS = "✅ Client updated successfully!"
-     CLIENT_DELETE_SUCCESS = "✅ Client deleted successfully!"
- 
-     # Project errors
-     PROJECT_LOAD_ERROR = "❌ Error loading projects: {error}"
-     PROJECT_CREATE_ERROR = "❌ Error creating project: {error}"
-     PROJECT_UPDATE_ERROR = "❌ Error updating project: {error}"
-     PROJECT_DELETE_ERROR = "❌ Error deleting project: {error}"
- 
-     # Generic errors
-     NO_MATCHES_FILTER = "⚠️ No {entity} match your current filters."
-     NO_ITEMS_FOUND = "🔍 No {entity} found"
-     LOADING_ERROR = "❌ Error loading {entity}: {error}"
- 
- 
-+# ──────────────────────────────────────────────────────────────────────────────
-+# UI constants (ícones e textos comuns)
-+# (mantidos conforme trechos existentes neste arquivo)
-+# ──────────────────────────────────────────────────────────────────────────────
-+
-+
- class TaskStatus(Enum):
-     """Task status options."""
-     TODO = "todo"
-     IN_PROGRESS = "in_progress"
-     COMPLETED = "completed"
-     BLOCKED = "blocked"
-     PENDING = "pending"
-     
-     @classmethod
-     def get_all_values(cls) -> List[str]:
-         """Get all status values as a list."""
-         return [status.value for status in cls]
-     
-     @classmethod
-     def get_active_statuses(cls) -> List[str]:
-         """Get statuses considered 'active' (not completed)."""
-         return [cls.TODO.value, cls.IN_PROGRESS.value, cls.BLOCKED.value, cls.PENDING.value]
- 
- 
- class EpicStatus(Enum):
-     """Epic status options."""
-     PLANNING = "planning"
-     ACTIVE = "active"
-     ON_HOLD = "on_hold"
-     COMPLETED = "completed"
-@@ -447,74 +446,98 @@ class FormFields:
-             "label": "Description",
-             "placeholder": "Project description...",
-             "required": False
-         }
-     }
- 
- 
- # Cache Configuration
- class CacheConfig:
-     """Cache configuration constants."""
-     # TTL (Time To Live) values in seconds
-     EPICS_TTL = 300  # 5 minutes
-     TASKS_TTL = 300  # 5 minutes
-     TIMER_SESSIONS_TTL = 60  # 1 minute
-     USER_STATS_TTL = 600  # 10 minutes
-     ACHIEVEMENTS_TTL = 3600  # 1 hour
-     
-     # Cache key patterns
-     EPICS_PATTERN = "db_query:get_epics:"
-     TASKS_PATTERN = "db_query:get_tasks:"
-     TIMER_PATTERN = "db_query:get_timer_sessions:"
- 
- 
- # Filter Options
- class FilterOptions:
--    """Filter dropdown options."""
--    
-+    """Opções de filtro com *fallbacks* seguros para enums ausentes."""
-+
-     ALL_OPTION = "all"
--    
-+
-+    @staticmethod
-+    def _values_or_statusvalues(enum_like) -> List[str]:
-+        """Usa get_all_values() se existir; caso contrário, usa StatusValues."""
-+        try:
-+            return enum_like.get_all_values()  # type: ignore[attr-defined]
-+        except Exception:
-+            return StatusValues.get_all_values()
-+
-+    # Mantém a semântica: se enums específicos existirem, usa; senão, fallback.
-     STATUS_FILTERS = {
--        "tasks": [ALL_OPTION] + TaskStatus.get_all_values(),
--        "epics": [ALL_OPTION] + EpicStatus.get_all_values(),
--        "clients": [ALL_OPTION] + GeneralStatus.get_all_values(),
--        "projects": [ALL_OPTION] + ProjectStatus.get_all_values()
-+        "tasks":   [ALL_OPTION] + _values_or_statusvalues.__func__(StatusValues),
-+        "epics":   [ALL_OPTION] + _values_or_statusvalues.__func__(StatusValues),
-+        "clients": [ALL_OPTION] + _values_or_statusvalues.__func__(StatusValues),
-+        "projects":[ALL_OPTION] + _values_or_statusvalues.__func__(StatusValues),
-     }
--    
--    TIER_FILTERS = [ALL_OPTION] + ClientTier.get_all_values()
--    SIZE_FILTERS = [ALL_OPTION] + CompanySize.get_all_values()
--    TDD_PHASE_FILTERS = [ALL_OPTION] + TDDPhase.get_all_values()
-+
-+    TIER_FILTERS = [ALL_OPTION] + ClientTiers.get_all_values()
-+    SIZE_FILTERS = [ALL_OPTION] + CompanySizes.get_all_values()
-+    TDD_PHASE_FILTERS = [ALL_OPTION] + TDDPhases.get_all_values()
- 
- 
- # Validation Rules
- class ValidationRules:
-     """Data validation rules."""
-     
-     # String length limits
-     MAX_NAME_LENGTH = 100
-     MAX_DESCRIPTION_LENGTH = 1000
-     MAX_EMAIL_LENGTH = 255
-     MAX_PHONE_LENGTH = 20
-     MIN_KEY_LENGTH = 3
-     MAX_KEY_LENGTH = 50
-     
-     # Numeric limits
-     MIN_PRIORITY = 1
-     MAX_PRIORITY = 3
-     MIN_HOURLY_RATE = 0.0
-     MAX_HOURLY_RATE = 10000.0
-     MIN_DURATION_MINUTES = 1
-     MAX_DURATION_MINUTES = 480  # 8 hours
-     
-     # Regex patterns
-     EMAIL_PATTERN = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
-     PHONE_PATTERN = r'^[\+]?[1-9][\d]{0,15}$'
-     KEY_PATTERN = r'^[a-zA-Z][a-zA-Z0-9_]*$'
- 
- 
--# Export all enums and constants for easy import
-+# ──────────────────────────────────────────────────────────────────────────────
-+# Aliases para compatibilidade com importações existentes no pacote:
-+#   - GeneralStatus → StatusValues
-+#   - TDDPhase      → TDDPhases
-+#   - ClientTier    → ClientTiers
-+#   - CompanySize   → CompanySizes
-+# Obs.: Aliases para TaskStatus/EpicStatus/ProjectStatus não são criados aqui
-+# por falta de definição original; filtros usam fallback seguro acima.
-+# ──────────────────────────────────────────────────────────────────────────────
-+GeneralStatus = StatusValues
-+TDDPhase = TDDPhases
-+ClientTier = ClientTiers
-+CompanySize = CompanySizes
-+
- __all__ = [
--    'StatusValues', 'TDDPhases', 'ClientTiers', 'CompanySizes', 'ErrorMessages',
--    'TaskStatus', 'EpicStatus', 'ProjectStatus', 'ClientStatus', 'GeneralStatus', 'TDDPhase',
--    'ClientTier', 'CompanySize', 'Priority', 'TableNames', 'FieldNames',
--    'UIConstants', 'FormFields', 'CacheConfig', 'FilterOptions', 'ValidationRules'
--]
-\ No newline at end of file
-+    'StatusValues', 'GeneralStatus',
-+    'TDDPhases', 'TDDPhase',
-+    'ClientTiers', 'ClientTier',
-+    'CompanySizes', 'CompanySize',
-+    'ErrorMessages',
-+    'FormFields', 'CacheConfig', 'FilterOptions', 'ValidationRules'
-+]
-diff --git a/streamlit_extension/config/env_manager.py b/streamlit_extension/config/env_manager.py
-index c09f1fc4f58691117af4486131525548bb301987..67185b254558b1fb6eabe2c7050a9f728b6aef69 100644
---- a/streamlit_extension/config/env_manager.py
-+++ b/streamlit_extension/config/env_manager.py
-@@ -30,59 +30,62 @@ class EnvironmentManager:
-         self.load_config()
- 
-     def load_config(self) -> None:
-         """Load configuration for current environment."""
-         module_name = f"config.environments.{self.environment}"
-         self.config_module = importlib.import_module(module_name)
-         self.database_config = deepcopy(getattr(self.config_module, "DATABASE_CONFIG", {}))
-         self.redis_config = deepcopy(getattr(self.config_module, "REDIS_CONFIG", {}))
-         self.security_config = deepcopy(getattr(self.config_module, "SECURITY_CONFIG", {}))
- 
-     def get_database_config(self) -> dict:
-         """Get database configuration with env var substitution."""
-         return self.substitute_env_vars(deepcopy(self.database_config))
- 
-     def get_redis_config(self) -> dict:
-         """Get Redis configuration with env var substitution."""
-         return self.substitute_env_vars(deepcopy(self.redis_config))
- 
-     def get_security_config(self) -> dict:
-         """Get security configuration."""
-         return deepcopy(self.security_config)
- 
-     def substitute_env_vars(self, config_dict: dict) -> dict:
-         """Substitute ${VAR} patterns with environment variables."""
-         pattern = re.compile(r"\$\{([^}]+)\}")
--        substituted = {}
--        for key, value in config_dict.items():
-+
-+        def _resolve(value):
-             if isinstance(value, str):
--                substituted[key] = pattern.sub(lambda m: os.getenv(m.group(1), ""), value)
--            elif isinstance(value, dict):
--                substituted[key] = self.substitute_env_vars(value)
--            else:
--                substituted[key] = value
--        return substituted
-+                return pattern.sub(lambda m: os.getenv(m.group(1), ""), value)
-+            if isinstance(value, dict):
-+                return {k: _resolve(v) for k, v in value.items()}
-+            if isinstance(value, list):
-+                return [_resolve(v) for v in value]
-+            return value
-+
-+        return _resolve(config_dict)
- 
-     def validate_config(self) -> bool:
-         """Validate configuration completeness and format."""
-         required = {
-             "database": ["framework_db_path", "timer_db_path"],
-             "redis": ["host", "port"],
-             "security": ["enable_csrf", "enable_rate_limiting"],
-         }
-         for name, keys in required.items():
-             cfg = getattr(self, f"{name}_config", {})
-             for key in keys:
-                 if key not in cfg:
-                     raise ValueError(f"Missing {name} config key: {key}")
-         return True
- 
-     def reload_config(self) -> None:
-         """Hot reload configuration from files."""
-         module_name = f"config.environments.{self.environment}"
-         if self.config_module and self.config_module.__name__ == module_name:
-             self.config_module = importlib.reload(self.config_module)
+     def to_sql(self) -> Tuple[str, Any]:
+         """Convert condition to SQL with parameter."""
+-        if self.operator == "IN":
+-            placeholders = ",".join("?" for _ in self.value)
+-            return f"{self.field} IN ({placeholders})", self.value
+-        elif self.operator == "NOT IN":
+-            placeholders = ",".join("?" for _ in self.value)
+-            return f"{self.field} NOT IN ({placeholders})", self.value
++        op = self.operator.upper()
++        if op in {"IN", "NOT IN"}:
++            seq = list(self.value) if isinstance(self.value, (list, tuple, set)) else []
++            if not seq:
++                # Empty IN: nunca casa; Empty NOT IN: sempre casa
++                return ("1=0", []) if op == "IN" else ("1=1", [])
++            placeholders = ",".join("?" for _ in seq)
++            clause = f"{self.field} {'NOT IN' if op == 'NOT IN' else 'IN'} ({placeholders})"
++            return clause, list(seq)
          else:
-             self.config_module = importlib.import_module(module_name)
-         self.database_config = deepcopy(getattr(self.config_module, "DATABASE_CONFIG", {}))
-         self.redis_config = deepcopy(getattr(self.config_module, "REDIS_CONFIG", {}))
-         self.security_config = deepcopy(getattr(self.config_module, "SECURITY_CONFIG", {}))
+             return f"{self.field} {self.operator} ?", [self.value]
+ 
+ 
+ @dataclass
+ class QueryJoin:
+     """Represents a table join."""
+     table: str
+     join_type: JoinType
+     on_condition: str
+ 
+ 
+ class SecureQueryBuilder:
+     """Secure SQL query builder with parameter binding and validation."""
+ 
+     allowed_operators = {"=", "!=", ">", "<", ">=", "<=", "LIKE", "IN", "NOT IN"}
+ 
+     def __init__(self, table: str, allowed_fields: Optional[Set[str]] = None):
+         """Initialize query builder for specific table."""
+         self.table = table
+         self.query_type: Optional[QueryType] = None
+         self.select_fields: List[str] = []
+         self.conditions: List[QueryCondition] = []
+         self.joins: List[QueryJoin] = []
+         self.order_by_fields: List[str] = []
+         self.group_by_fields: List[str] = []
+         self.limit_value: Optional[int] = None
+         self.offset_value: Optional[int] = None
+         self.insert_data: Dict[str, Any] = {}
+         self.update_data: Dict[str, Any] = {}
+         self._allowed_fields = allowed_fields
+ 
+     # ------------------------------------------------------------------
+     # Helper validation methods
+     def _validate_field(self, field: str) -> None:
+         if self._allowed_fields is not None and field not in self._allowed_fields:
+             raise ValueError(f"Field {field} not allowed")
+         # Basic regex validation to avoid injection through field names
+         if not re.match(r"^[A-Za-z0-9_\.]+$", field):
+             raise ValueError(f"Invalid field name: {field}")
+ 
+     def _validate_operator(self, operator: str) -> None:
+         if operator not in self.allowed_operators:
+             raise ValueError(f"Operator {operator} not allowed")
+ 
++    def _validate_on_condition(self, on_condition: str) -> None:
++        """Validate simple ON condition pattern like 'a.b = c.d'."""
++        if not re.match(r"^[A-Za-z0-9_\.]+\s*=\s*[A-Za-z0-9_\.]+$", on_condition):
++            raise ValueError(f"Invalid join condition: {on_condition}")
 +
-diff --git a/streamlit_extension/config/environment.py b/streamlit_extension/config/environment.py
-index 7adcf79043d4ac4ea70e8cd7a809584dde02b027..ea2dcc2bea8992656047a4e04a27d6cd9ff2a2df 100644
---- a/streamlit_extension/config/environment.py
-+++ b/streamlit_extension/config/environment.py
-@@ -35,50 +35,56 @@ class ConfigLoader:
-         return self.apply_environment_overrides(data)
+     # ------------------------------------------------------------------
+     # Query construction methods
+     def select(self, *fields: str) -> "SecureQueryBuilder":
+         """Add SELECT fields."""
+         self.query_type = QueryType.SELECT
+         if fields:
+             for field in fields:
+                 self._validate_field(field)
+             self.select_fields.extend(fields)
+         else:
+             self.select_fields = ["*"]
+         return self
  
-     def validate_schema(self, config: Dict[str, Any], schema_path: Path | None = None) -> bool:
-         """Validate configuration against JSON schema."""
-         schema_path = schema_path or Path("config/schemas/config_schema.json")
-         with schema_path.open("r", encoding="utf-8") as fh:
-             schema = json.load(fh)
-         validate(instance=config, schema=schema)
-         return True
+     def insert(self, data: Dict[str, Any]) -> "SecureQueryBuilder":
+         """Set INSERT data."""
+         self.query_type = QueryType.INSERT
+         self.insert_data = data
+         return self
  
-     def apply_environment_overrides(self, config: Dict[str, Any]) -> Dict[str, Any]:
-         """Apply environment variable overrides in ${VAR} format."""
+     def update(self, data: Dict[str, Any]) -> "SecureQueryBuilder":
+         """Set UPDATE data."""
+         self.query_type = QueryType.UPDATE
+         self.update_data = data
+         return self
  
-         def resolve(value: Any) -> Any:
-             if isinstance(value, str) and value.startswith("${") and value.endswith("}"):
-                 var = value[2:-1]
-                 return os.getenv(var, "")
-             if isinstance(value, dict):
-                 return {k: resolve(v) for k, v in value.items()}
-             if isinstance(value, list):
-                 return [resolve(v) for v in value]
-             return value
+@@ -126,76 +134,85 @@ class SecureQueryBuilder:
+         value: Any,
+         logical_op: str = "AND",
+     ) -> "SecureQueryBuilder":
+         """Add WHERE condition with validation."""
+         self._validate_field(field)
+         self._validate_operator(operator)
+         condition = QueryCondition(field, operator, value, logical_op)
+         self.conditions.append(condition)
+         return self
  
-         return resolve(config)
+     def where_in(self, field: str, values: List[Any]) -> "SecureQueryBuilder":
+         """Add WHERE IN condition."""
+         return self.where(field, "IN", values)
  
-+    # Utilitário público (reuso externo quando necessário)
-+    @staticmethod
-+    def resolve_env_placeholders(obj: Any) -> Any:
-+        loader = ConfigLoader()
-+        return loader.apply_environment_overrides(obj)
-+
+     def where_like(self, field: str, pattern: str) -> "SecureQueryBuilder":
+         """Add WHERE LIKE condition."""
+         return self.where(field, "LIKE", pattern)
  
- class EnvironmentManager:
-     """High level manager for environment configurations."""
+     def join(
+         self,
+         table: str,
+         on_condition: str,
+         join_type: JoinType = JoinType.INNER,
+     ) -> "SecureQueryBuilder":
+         """Add table join."""
++        self._validate_field(table)
++        self._validate_on_condition(on_condition)
+         self.joins.append(QueryJoin(table, join_type, on_condition))
+         return self
  
-     def __init__(self, environment: Environment | None = None) -> None:
-         self.environment = environment or self.get_current_environment()
-         self.loader = ConfigLoader()
+     def left_join(self, table: str, on_condition: str) -> "SecureQueryBuilder":
+         """Add LEFT JOIN."""
+         return self.join(table, on_condition, JoinType.LEFT)
  
-     def get_current_environment(self) -> Environment:
-         """Detect current environment from APP_ENV variable."""
-         env = os.getenv("APP_ENV", Environment.DEVELOPMENT.value).lower()
-         try:
-             return Environment(env)
-         except ValueError:
-             return Environment.DEVELOPMENT
+     def order_by(self, field: str, direction: str = "ASC") -> "SecureQueryBuilder":
+         """Add ORDER BY clause."""
+         self._validate_field(field)
+-        self.order_by_fields.append(f"{field} {direction}")
++        direction_upper = direction.upper()
++        if direction_upper not in {"ASC", "DESC"}:
++            raise ValueError(f"Invalid ORDER BY direction: {direction}")
++        self.order_by_fields.append(f"{field} {direction_upper}")
+         return self
  
-     def load_environment_config(self) -> Dict[str, Any]:
-         """Load and validate configuration for current environment."""
-         config = self.loader.load_yaml_config(self.environment)
-         self.validate_config(config)
-         return config
+     def group_by(self, field: str) -> "SecureQueryBuilder":
+         """Add GROUP BY clause."""
+         self._validate_field(field)
+         self.group_by_fields.append(field)
+         return self
  
-     def validate_config(self, config: Dict[str, Any]) -> bool:
-         """Validate configuration structure."""
-         try:
-diff --git a/streamlit_extension/config/feature_flags.py b/streamlit_extension/config/feature_flags.py
-index afd690ec9bae3698aa7af44579bf25eeed4737a0..1285eab8f069037076d0521b90e30a1e9f4bed24 100644
---- a/streamlit_extension/config/feature_flags.py
-+++ b/streamlit_extension/config/feature_flags.py
-@@ -16,25 +16,42 @@ class FeatureFlag(str, Enum):
+     def limit(self, count: int) -> "SecureQueryBuilder":
+         """Add LIMIT clause."""
++        if not isinstance(count, int) or count < 0:
++            raise ValueError("LIMIT must be a non-negative integer")
+         self.limit_value = count
+         return self
  
- class FeatureFlagManager:
-     """Manage feature flags with environment overrides."""
+     def offset(self, count: int) -> "SecureQueryBuilder":
+         """Add OFFSET clause."""
++        if not isinstance(count, int) or count < 0:
++            raise ValueError("OFFSET must be a non-negative integer")
+         self.offset_value = count
+         return self
  
-     def __init__(self) -> None:
-         self.flags: Dict[FeatureFlag, bool] = {flag: False for flag in FeatureFlag}
-         self.refresh_flags()
+     def build(self) -> Tuple[str, List[Any]]:
+         """Build final SQL query with parameters and complexity checks."""
+         if len(self.joins) > 5:
+             raise ValueError("Too many joins in query")
+         if len(self.conditions) > 20:
+             raise ValueError("Too many conditions in query")
  
-     def is_enabled(self, flag: FeatureFlag) -> bool:
-         return bool(self.flags.get(flag, False))
+         if self.query_type == QueryType.SELECT:
+             return self._build_select()
+         if self.query_type == QueryType.INSERT:
+             return self._build_insert()
+         if self.query_type == QueryType.UPDATE:
+             return self._build_update()
+         if self.query_type == QueryType.DELETE:
+             return self._build_delete()
+         raise ValueError("Query type not set")
  
-     def get_flag_value(self, flag: FeatureFlag) -> Any:
-         return self.flags.get(flag)
+     def _build_select(self) -> Tuple[str, List[Any]]:
+         """Build SELECT query."""
+         query_parts = [f"SELECT {', '.join(self.select_fields)}"]
+         query_parts.append(f"FROM {self.table}")
+         params: List[Any] = []
+@@ -209,57 +226,61 @@ class SecureQueryBuilder:
+                 sql_part, condition_params = condition.to_sql()
+                 if i > 0:
+                     where_parts.append(condition.logical_op)
+                 where_parts.append(sql_part)
+                 params.extend(
+                     condition_params if isinstance(condition_params, list) else [condition_params]
+                 )
+             query_parts.append("WHERE " + " ".join(where_parts))
  
-     def refresh_flags(self) -> Dict[FeatureFlag, bool]:
-         for flag in FeatureFlag:
-             env_var = f"FF_{flag.value}"
-             if env_var in os.environ:
-                 value = os.environ[env_var]
-                 self.flags[flag] = value.lower() in {"1", "true", "yes", "on"}
-         return self.flags
+         if self.group_by_fields:
+             query_parts.append(f"GROUP BY {', '.join(self.group_by_fields)}")
  
-     def override_flag(self, flag: FeatureFlag, value: bool) -> None:
-         self.flags[flag] = value
+         if self.order_by_fields:
+             query_parts.append(f"ORDER BY {', '.join(self.order_by_fields)}")
  
-+    # Conveniências para testes/CLI
-+    def enable(self, flag: FeatureFlag) -> None:
-+        self.override_flag(flag, True)
-+
-+    def disable(self, flag: FeatureFlag) -> None:
-+        self.override_flag(flag, False)
-+
-+    @classmethod
-+    def from_env_dict(cls, env: Dict[str, str]) -> "FeatureFlagManager":
-+        """Cria um manager a partir de um dict de env (útil para testes)."""
-+        mgr = cls()
-+        for flag in FeatureFlag:
-+            key = f"FF_{flag.value}"
-+            if key in env:
-+                mgr.flags[flag] = env[key].lower() in {"1", "true", "yes", "on"}
-+        return mgr
-+
-diff --git a/streamlit_extension/config/secrets_manager.py b/streamlit_extension/config/secrets_manager.py
-index 96d7ac9cd7d8db0e1806dd15fb72af9e5666bf80..846012045c02fc5f6fdd0b73e2b69986db12bfb9 100644
---- a/streamlit_extension/config/secrets_manager.py
-+++ b/streamlit_extension/config/secrets_manager.py
-@@ -1,79 +1,100 @@
- from __future__ import annotations
+         if self.limit_value is not None:
+             query_parts.append(f"LIMIT {self.limit_value}")
+             if self.offset_value is not None:
+                 query_parts.append(f"OFFSET {self.offset_value}")
  
- """Secrets management with environment variables and vault support."""
+         return " ".join(query_parts), params
  
- import os
-+import json
- from enum import Enum
- from typing import Any, Dict, Optional
+     def _build_insert(self) -> Tuple[str, List[Any]]:
+         """Build INSERT query."""
+         fields = list(self.insert_data.keys())
++        for f in fields:
++            self._validate_field(f)
+         placeholders = ",".join("?" for _ in fields)
+         query = f"INSERT INTO {self.table} ({', '.join(fields)}) VALUES ({placeholders})"
+         params = list(self.insert_data.values())
+         return query, params
  
+     def _build_update(self) -> Tuple[str, List[Any]]:
+         """Build UPDATE query."""
++        for f in self.update_data.keys():
++            self._validate_field(f)
+         set_parts = [f"{field} = ?" for field in self.update_data.keys()]
+         query_parts = [f"UPDATE {self.table}", f"SET {', '.join(set_parts)}"]
+         params = list(self.update_data.values())
  
- class SecretType(str, Enum):
-     """Types of secrets supported."""
+         if self.conditions:
+             where_parts: List[str] = []
+             for i, condition in enumerate(self.conditions):
+                 sql_part, condition_params = condition.to_sql()
+                 if i > 0:
+                     where_parts.append(condition.logical_op)
+                 where_parts.append(sql_part)
+                 params.extend(
+                     condition_params if isinstance(condition_params, list) else [condition_params]
+                 )
+             query_parts.append("WHERE " + " ".join(where_parts))
  
-     DATABASE_URL = "DATABASE_URL"
-     API_KEYS = "API_KEYS"
-     ENCRYPTION_KEYS = "ENCRYPTION_KEYS"
-     OAUTH_SECRETS = "OAUTH_SECRETS"
+         return " ".join(query_parts), params
  
+     def _build_delete(self) -> Tuple[str, List[Any]]:
+         """Build DELETE query."""
+         query_parts = [f"DELETE FROM {self.table}"]
+         params: List[Any] = []
  
- class VaultIntegration:
-     """Simple in-memory vault integration simulation."""
- 
-     def __init__(self) -> None:
-         self._cache: Dict[SecretType, Any] = {}
- 
-     def connect_to_vault(self) -> bool:
-         return True
- 
-     def retrieve_secrets(self) -> Dict[SecretType, Any]:
-         secrets = {
-             SecretType.DATABASE_URL: "vault-db-url",
-             SecretType.API_KEYS: {"service": "vault-key"},
-             SecretType.ENCRYPTION_KEYS: "vault-encryption-key",
-             SecretType.OAUTH_SECRETS: {"client_id": "vault-client"},
-         }
-         self.cache_secrets(secrets)
-         return secrets
- 
-     def cache_secrets(self, secrets: Dict[SecretType, Any]) -> None:
-         self._cache.update(secrets)
- 
-     def get_cached(self, secret_type: SecretType) -> Any:
-         return self._cache.get(secret_type)
- 
- 
- class SecretsManager:
-     """Manage application secrets from env vars or vault."""
- 
-     def __init__(self, vault: VaultIntegration | None = None) -> None:
-         self.vault = vault or VaultIntegration()
-         self._secrets: Dict[SecretType, Any] = {}
- 
-     def load_from_env_vars(self) -> Dict[SecretType, Any]:
-+        """Carrega segredos do ambiente, tentando decodificar JSON quando aplicável."""
-         for secret in SecretType:
-             if secret.value in os.environ:
--                self._secrets[secret] = os.environ[secret.value]
--        return self._secrets
-+                raw = os.environ[secret.value]
-+                parsed: Any = raw
-+                if secret in (SecretType.API_KEYS, SecretType.OAUTH_SECRETS):
-+                    try:
-+                        parsed = json.loads(raw)
-+                    except Exception:
-+                        parsed = raw
-+                self._secrets[secret] = parsed
-+        return dict(self._secrets)
- 
-     def load_from_vault(self) -> Dict[SecretType, Any]:
-         if self.vault.connect_to_vault():
-             secrets = self.vault.retrieve_secrets()
-             self._secrets.update(secrets)
-             return secrets
-         return {}
- 
-     def get_secret(self, secret_type: SecretType) -> Optional[Any]:
-+        """Obtém um segredo já carregado (env/vault/cache)."""
-         return self._secrets.get(secret_type)
- 
--    def rotate_secrets(self) -> Dict[SecretType, Any]:
--        rotated = {secret: f"rotated-{secret.value.lower()}" for secret in SecretType}
-+    def rotate_secrets(self, preserve_types: bool = True) -> Dict[SecretType, Any]:
-+        """
-+        Gera novos valores simulados para todos os segredos (exemplo).
-+        preserve_types: se True, mantém tipo (dict/str) quando possível.
-+        """
-+        rotated: Dict[SecretType, Any] = {}
-+        for secret in SecretType:
-+            old = self._secrets.get(secret)
-+            if preserve_types and isinstance(old, dict):
-+                rotated[secret] = {"rotated": True, **old}
-+            else:
-+                rotated[secret] = f"rotated-{secret.value.lower()}"
-         self._secrets.update(rotated)
-         self.vault.cache_secrets(rotated)
--        return rotated
-+        return dict(rotated)
- 
-     def validate_secrets(self) -> bool:
-+        """Valida presença de todos os segredos necessários."""
-         missing = [s.value for s in SecretType if s not in self._secrets]
-         if missing:
-             raise ValueError(f"Missing secrets: {', '.join(missing)}")
-         return True
- 
-diff --git a/streamlit_extension/config/streamlit_config.py b/streamlit_extension/config/streamlit_config.py
-index fc14a833851c0c47a506b8a9a6ecfe83a518b244..34f1e2ded7255a4e70cfb0ce71da6ec56e5abb03 100644
---- a/streamlit_extension/config/streamlit_config.py
-+++ b/streamlit_extension/config/streamlit_config.py
-@@ -371,104 +371,94 @@ def load_config(env_file: Optional[str] = None) -> StreamlitConfig:
-         
-         # Security
-         session_timeout=get_env("SESSION_TIMEOUT", 480, int),
-         
-         # Development
-         debug_mode=get_env("DEBUG_MODE", False, bool),
-         enable_profiler=get_env("ENABLE_PROFILER", False, bool),
-         log_level=get_env("LOG_LEVEL", "INFO"),
-         testing_mode=get_env("TESTING_MODE", False, bool),
-         test_database_url=get_env("TEST_DATABASE_URL", "sqlite:///./test_framework.db")
-     )
-     
-     # Check for missing dependencies
-     missing_deps = []
-     if not DOTENV_AVAILABLE:
-         missing_deps.append("python-dotenv")
-     if not PYTZ_AVAILABLE:
-         missing_deps.append("pytz")
-     
-     config.missing_dependencies = missing_deps
-     config.config_loaded_at = str(Path.cwd())
-     
-     return config
- 
- 
--def create_streamlit_config_file(config: StreamlitConfig, output_path: str = ".streamlit/config.toml"):
-+_CONFIG_SINGLETON: Optional[StreamlitConfig] = None
-+
-+
-+def get_config(env_file: Optional[str] = None) -> StreamlitConfig:
-+    """Singleton de configuração com carregamento preguiçoso."""
-+    global _CONFIG_SINGLETON
-+    if _CONFIG_SINGLETON is None:
-+        _CONFIG_SINGLETON = load_config(env_file)
-+        _CONFIG_SINGLETON.config_loaded_at = datetime.utcnow().isoformat()
-+    return _CONFIG_SINGLETON
-+
-+
-+def create_streamlit_config_file(output_dir: Optional[Path] = None) -> Path:
-     """
--    Create Streamlit config.toml file from configuration.
--    
--    Args:
--        config: StreamlitConfig instance
--        output_path: Path to save config.toml file
-+    Gera `.streamlit/config.toml` a partir de `get_streamlit_config_dict()`.
-+    Retorna o caminho do arquivo gerado.
-     """
--    # Create .streamlit directory if it doesn't exist
--    config_path = Path(output_path)
--    config_path.parent.mkdir(exist_ok=True)
--    
--    # Get streamlit configuration
--    streamlit_config = config.get_streamlit_config_dict()
--    
--    # Convert to TOML format
--    toml_content = "[server]\n"
--    for key, value in streamlit_config["server"].items():
--        if isinstance(value, str):
--            toml_content += f'{key} = "{value}"\n'
--        else:
--            toml_content += f'{key} = {str(value).lower()}\n'
--    
--    toml_content += "\n[theme]\n"
--    for key, value in streamlit_config["theme"].items():
--        toml_content += f'{key} = "{value}"\n'
--    
--    toml_content += "\n[client]\n"
--    for key, value in streamlit_config["client"].items():
--        if isinstance(value, bool):
--            toml_content += f'{key} = {str(value).lower()}\n'
--        else:
--            toml_content += f'{key} = "{value}"\n'
--    
--    toml_content += "\n[runner]\n"
--    for key, value in streamlit_config["runner"].items():
--        toml_content += f'{key} = {str(value).lower()}\n'
--    
--    # Write to file
--    with open(config_path, 'w') as f:
--        f.write(toml_content)
--    
--    print(f"📁 Streamlit config saved to: {output_path}")
-+    cfg = get_config()
-+    data = cfg.get_streamlit_config_dict()
-+
-+    toml_parts: List[str] = []
-+    for section, content in data.items():
-+        toml_parts.append(f"[{section}]")
-+        if isinstance(content, dict):
-+            for k, v in content.items():
-+                if isinstance(v, dict):
-+                    toml_parts.append(f"\n[{section}.{k}]")
-+                    for k2, v2 in v.items():
-+                        val = f"\"{v2}\"" if isinstance(v2, str) else str(v2).lower() if isinstance(v2, bool) else v2
-+                        toml_parts.append(f"{k2} = {val}")
-+                else:
-+                    val = f"\"{v}\"" if isinstance(v, str) else str(v).lower() if isinstance(v, bool) else v
-+                    toml_parts.append(f"{k} = {val}")
-+        toml_parts.append("")
- 
-+    toml_content = "\n".join(toml_parts).strip() + "\n"
- 
--# Global configuration instance (lazy loaded)
--_config: Optional[StreamlitConfig] = None
-+    out_dir = output_dir or (Path.cwd() / ".streamlit")
-+    out_dir.mkdir(exist_ok=True, parents=True)
-+    out_path = out_dir / "config.toml"
-+    out_path.write_text(toml_content, encoding="utf-8")
-+    return out_path
- 
--def get_config() -> StreamlitConfig:
--    """Get global configuration instance (lazy loaded)."""
--    global _config
--    if _config is None:
--        _config = load_config()
--    return _config
- 
- def reload_config(env_file: Optional[str] = None) -> StreamlitConfig:
-     """Reload configuration from environment."""
--    global _config
--    _config = load_config(env_file)
--    return _config
-+    global _CONFIG_SINGLETON
-+    _CONFIG_SINGLETON = load_config(env_file)
-+    _CONFIG_SINGLETON.config_loaded_at = datetime.utcnow().isoformat()
-+    return _CONFIG_SINGLETON
- 
- 
- # Utility functions for timezone handling
- def format_datetime_user_tz(dt: datetime, format_str: str = "%Y-%m-%d %H:%M:%S") -> str:
-     """Format datetime in user's timezone (convenience function)."""
-     config = get_config()
-     return config.format_datetime(dt, format_str)
- 
- 
- def format_time_ago_user_tz(dt: datetime) -> str:
-     """Format time ago in user's timezone (convenience function)."""
-     config = get_config()
-     return config.format_time_ago(dt)
- 
- 
- def get_current_user_time() -> datetime:
-     """Get current time in user's timezone (convenience function)."""
-     config = get_config()
--    return config.get_current_time()
-\ No newline at end of file
-+    return config.get_current_time()
-diff --git a/streamlit_extension/config/themes.py b/streamlit_extension/config/themes.py
-index d00df51a37ba4d8f6707b787f8041db3b69c5fff..1675bbf92856a3fbd08c191f5efbd761ab6c42a7 100644
---- a/streamlit_extension/config/themes.py
-+++ b/streamlit_extension/config/themes.py
-@@ -471,69 +471,69 @@ class ThemeManager:
-             background-color: var(--primary-dark);
-         }}
-         
-         /* Sidebar styling */
-         .css-1d391kg {{
-             background-color: var(--background-secondary);
-         }}
-         
-         /* Metric styling */
-         .metric-container {{
-             background-color: var(--card-background);
-             border: 1px solid var(--card-border);
-             border-radius: var(--border-radius-md);
-             padding: var(--spacing-md);
-             box-shadow: var(--shadow-sm);
-         }}
-         </style>
-         """
-         
-         return css
-     
-     def _load_custom_themes(self) -> Dict[str, Theme]:
-         """Load custom themes from file."""
-         if not self.themes_file.exists():
-             return {}
--        
-         try:
-             with open(self.themes_file, 'r') as f:
--                themes_data = json.load(f)
--            
--            custom_themes = {}
--            for name, theme_dict in themes_data.items():
--                # Reconstruct ColorScheme
--                colors_dict = theme_dict.pop("colors", {})
-+                data = json.load(f)
-+            custom_themes: Dict[str, Theme] = {}
-+            for name, theme_dict in data.items():
-+                mode_value = theme_dict.get("mode", "light")
-+                theme_dict["mode"] = ThemeMode(mode_value)
-+                colors_dict = theme_dict.get("colors", {})
-                 colors = ColorScheme(**colors_dict)
--                
--                # Reconstruct Theme
-+
-                 theme_dict["colors"] = colors
-                 custom_themes[name] = Theme(**theme_dict)
--            
-+
-             return custom_themes
--            
-         except (json.JSONDecodeError, KeyError, TypeError):
-             return {}
-+
-+    # Observação: evitar CSS com classes internas do Streamlit (frágeis).
-+    # Mantido por compatibilidade; preferir seletores estáveis quando possível.
-     
-     def _save_custom_themes(self) -> None:
-         """Save custom themes to file."""
-         themes_data = {}
-         for name, theme in self.custom_themes.items():
-             data = asdict(theme)
-             data["mode"] = theme.mode.value
-             themes_data[name] = data
-         
-         try:
-             with open(self.themes_file, 'w') as f:
-                 json.dump(themes_data, f, indent=2)
-         except OSError:
-             pass  # Fail silently
-     
-     def _load_current_theme(self) -> Optional[str]:
-         """Load current theme selection."""
-         if not self.current_theme_file.exists():
-             return None
-         
-         try:
-             with open(self.current_theme_file, 'r') as f:
-                 return f.read().strip()
-         except OSError:
-             return None
-@@ -593,26 +593,26 @@ def render_theme_selector(key: str = "theme_selector") -> None:
-         range(len(theme_options)),
-         format_func=lambda i: theme_labels[i],
-         index=default_index,
-         key=key,
-         help="Select a visual theme for the application"
-     )
-     
-     selected_theme_name = theme_options[selected_index]
-     
-     # Apply theme if changed
-     if selected_theme_name != current_theme.name:
-         theme_manager.set_current_theme(selected_theme_name)
-         st.rerun()
-     
-     # Show theme description
-     selected_theme = available_themes[selected_theme_name]
-     if selected_theme.description:
-         st.caption(f"💡 {selected_theme.description}")
- 
- 
- # Export for convenience
- __all__ = [
-     "Theme", "ColorScheme", "ThemeMode", "ThemeManager", 
-     "PREDEFINED_THEMES", "get_theme_manager", 
-     "apply_current_theme", "render_theme_selector"
--]
-\ No newline at end of file
-+]
+         if self.conditions:
+             where_parts: List[str] = []
  
 EOF
 )

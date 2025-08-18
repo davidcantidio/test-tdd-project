@@ -1,869 +1,310 @@
  (cd "$(git rev-parse --show-toplevel)" && git apply --3way <<'EOF' 
-diff --git a/tdah_tools/__init__.py b/tdah_tools/__init__.py
-index e24ca89b3798b849f70049d5e9afb169517005fb..1c2b8002a23532c51e9b0906b502f0723750653b 100644
---- a/tdah_tools/__init__.py
-+++ b/tdah_tools/__init__.py
-@@ -1 +1,43 @@
--# TDAH Tools - TDD Task Management and Analytics
-+"""
-+TDAH Tools - TDD Task Management and Analytics
-+
-+Convenience package exports for error handling, performance utils and analytics.
-+"""
-+
-+__all__ = [
-+    "__version__",
-+    # error handler
-+    "get_error_handler",
-+    "handle_error",
-+    "log_info",
-+    "log_warning",
-+    "log_error",
-+    "with_error_handling",
-+    "TDDErrorHandler",
-+    "ErrorSeverity",
-+    "ErrorCategory",
-+    "TDDBaseException",
-+    "ValidationError",
-+    "ConfigurationError",
-+    "DependencyError",
-+    "FileSystemError",
-+    "ProcessError",
-+    "UserInputError",
-+    "AnalyticsError",
-+    "GitError",
-+    "GitHubError",
-+    # performance
-+    "get_performance_monitor",
-+    "cached",
-+    "performance_critical",
-+]
-+
-+__version__ = "0.1.0"
-+
-+from .error_handler import (  # noqa: E402
-+    get_error_handler, handle_error, log_info, log_warning, log_error,
-+    with_error_handling, TDDErrorHandler, ErrorSeverity, ErrorCategory,
-+    TDDBaseException, ValidationError, ConfigurationError, DependencyError,
-+    FileSystemError, ProcessError, UserInputError, AnalyticsError, GitError, GitHubError,
-+)
-+from .performance_utils import get_performance_monitor, cached, performance_critical  # noqa: E402
-diff --git a/tdah_tools/analytics_engine.py b/tdah_tools/analytics_engine.py
-index 74a9f62df7d3af9697cb10e803a551e996eab8ac..a203d4350fb4892c1d6d31cc61150ac415ae4d8f 100644
---- a/tdah_tools/analytics_engine.py
-+++ b/tdah_tools/analytics_engine.py
-@@ -1,28 +1,29 @@
- #!/usr/bin/env python3
- """
- 📊 TDD Analytics Engine - TDAH Time Tracking Analytics
-+Patch: decorator order for accurate perf metrics, safer cache checks
+diff --git a/duration_system/CLAUDE.md b/duration_system/CLAUDE.md
+index 20e8da489dbcb30a18b1d000621b9b49466c04ba..3d870ab6cd0223d9a918ff11704b36ec0cc09576 100644
+--- a/duration_system/CLAUDE.md
++++ b/duration_system/CLAUDE.md
+@@ -1,31 +1,31 @@
+ # 🤖 CLAUDE.md - Duration System Module
  
- Advanced analytics for TDAH-optimized TDD workflow including:
- - Time estimation accuracy analysis
- - Focus pattern identification
- - Productivity insights
- - Pomodoro-style break recommendations
- - Epic completion predictions
- """
+ **Module:** duration_system/  
+ **Purpose:** Enterprise duration calculation and security utilities  
+ **Architecture:** Standalone modules for duration handling, security, and data protection  
+-**Last Updated:** 2025-08-16
++**Last Updated:** 2025-08-18
  
- import sqlite3
- import json
- import sys
- from datetime import datetime, timedelta
- from pathlib import Path
- from typing import Dict, List, Optional, Tuple, Any
- from dataclasses import dataclass
+ ---
  
- # Import standardized error handling
- from .error_handler import (
-     get_error_handler, handle_error, log_info, log_warning, log_error,
-     AnalyticsError, FileSystemError, DependencyError, ErrorSeverity
- )
- # Import performance utilities
- from .performance_utils import (
-     get_performance_monitor, cached, performance_critical,
-@@ -58,52 +59,52 @@ except ImportError:
- class ProductivityMetrics:
-     """Productivity metrics for TDAH analysis."""
-     focus_score: float
-     accuracy_score: float
-     consistency_score: float
-     break_adherence: float
-     optimal_work_duration: int  # minutes
-     recommended_break_frequency: int  # minutes
-     
+ ## ⏱️ **Module Overview**
  
- class TDDAHAnalytics:
-     """Analytics engine for TDAH-optimized TDD workflow with performance optimizations."""
-     
-     def __init__(self, db_path: str = "task_timer.db", enable_caching: bool = True):
-         self.db_path = Path(db_path)
-         self.data_cache = {}
-         self.enable_caching = enable_caching
-         self.performance_monitor = get_performance_monitor()
-         
-         # Advanced caching for large datasets
-         if enable_caching:
-             self.lru_cache = LRUCache(max_size=1000, ttl_seconds=1800)
-         else:
-             self.lru_cache = None
-         
--    @performance_critical("load_session_data")
-     @cached(ttl_seconds=1800, use_persistent=True)
-+    @performance_critical("load_session_data")
-     def load_session_data(self, days: int = 30) -> Any:
-         """Load task session data with performance optimizations."""
-         if not self._check_analytics_dependencies():
-             return self._load_session_data_basic(days)
-         
-         # Check advanced cache first
-         if self.lru_cache:
-             cache_key = f"sessions_df_{days}"
-             cached_result = self.lru_cache.get(cache_key)
-             if cached_result is not None:
-                 log_info("Cache hit for session data", {"days": days, "size": len(cached_result)})
-                 return cached_result
-             
-         if f"sessions_{days}" in self.data_cache:
-             return self.data_cache[f"sessions_{days}"]
-             
-         cutoff = datetime.now() - timedelta(days=days)
-         
-         with sqlite3.connect(self.db_path) as conn:
-             # Optimized query with proper indexing hints
-             query = """
-                 SELECT 
-                     task_id, epic_id, start_time, end_time,
-                     estimate_minutes, actual_seconds, status,
-                     paused_duration, created_at,
-@@ -185,52 +186,52 @@ class TDDAHAnalytics:
-                 # Basic focus quality calculation
-                 pause_ratio = (session['paused_duration'] or 0) / session['actual_seconds'] if session['actual_seconds'] > 0 else 0
-                 accuracy_penalty = abs(session['accuracy_ratio'] - 1.0)
-                 session['focus_quality'] = max(0, 1.0 - pause_ratio * 0.4 - accuracy_penalty * 0.6)
-                 
-                 sessions.append(session)
-             
-         self.data_cache[f"sessions_basic_{days}"] = sessions
-         return sessions
-     
-     def _calculate_focus_quality(self, df):
-         """Calculate focus quality score based on pauses and overruns."""
-         if not PANDAS_AVAILABLE:
-             # This method should only be called when pandas is available
-             return [0.5] * len(df)  # Fallback values
-             
-         # Lower pause time = better focus
-         pause_score = 1.0 - (df['paused_duration'] / df['actual_seconds']).fillna(0)
-         
-         # Accuracy close to 1.0 = better focus 
-         accuracy_score = 1.0 - abs(df['accuracy_ratio'] - 1.0).fillna(1.0)
-         
-         # Combined focus quality (0-1 scale)
-         return (pause_score * 0.4 + accuracy_score * 0.6).clip(0, 1)
-     
--    @performance_critical("generate_productivity_metrics")
-     @cached(ttl_seconds=900)  # 15 minute cache for metrics
-+    @performance_critical("generate_productivity_metrics")
-     def generate_productivity_metrics(self, days: int = 30) -> ProductivityMetrics:
-         """Generate comprehensive productivity metrics with performance optimization."""
-         data = self.load_session_data(days)
-         
-         if not self._check_analytics_dependencies():
-             return self._generate_productivity_metrics_basic(data)
-         
-         if data.empty:
-             return ProductivityMetrics(0, 0, 0, 0, 25, 5)  # Default values
-         
-         # Use efficient pandas operations
-         completed_mask = data['status'] == 'completed'
-         completed_df = data[completed_mask]
-         
-         if completed_df.empty:
-             return ProductivityMetrics(0, 0, 0, 0, 25, 5)
-         
-         # Vectorized calculations for better performance
-         focus_values = completed_df['focus_quality'].values
-         accuracy_values = completed_df['accuracy_ratio'].values
-         is_accurate_values = completed_df['is_accurate'].values
-         
-         # Focus score (using numpy for speed)
-         focus_score = np.mean(focus_values) if len(focus_values) > 0 else 0.0
-         
-@@ -548,51 +549,51 @@ class TDDAHAnalytics:
-                     user_action="Check epic file format"
-                 )
-                 continue
-         
-         return 60  # Default estimate
-     
-     def _predict_completion_date(self, remaining_minutes: int) -> str:
-         """Predict completion date based on historical productivity."""
-         # Assume 2 hours of focused work per day on average (TDAH-realistic)
-         daily_minutes = 120
-         days_remaining = max(1, int(remaining_minutes / daily_minutes))
-         
-         completion_date = datetime.now() + timedelta(days=days_remaining)
-         return completion_date.strftime("%Y-%m-%d")
-     
-     @performance_critical("create_focus_dashboard")
-     def create_focus_dashboard(self, output_path: str = "focus_dashboard.html") -> str:
-         """Create interactive focus analytics dashboard with performance optimization."""
-         if not PLOTLY_AVAILABLE:
-             return self._create_dashboard_fallback(output_path)
-         
-         # Check cache for dashboard data
-         cache_key = f"dashboard_data_{hash(output_path)}"
-         if self.lru_cache:
-             cached_data = self.lru_cache.get(cache_key)
--            if cached_data:
-+            if cached_data is not None:
-                 log_info("Using cached dashboard data")
-                 return self._render_dashboard_from_cache(cached_data, output_path)
-         
-         data = self.load_session_data(30)
-         
-         if not self._check_analytics_dependencies():
-             return self._create_dashboard_fallback(output_path)
-         
-         if data.empty:
-             return "No data available for dashboard"
-         
-         completed_df = data[data['status'] == 'completed'] 
-         
-         if completed_df.empty:
-             return self._create_empty_dashboard(output_path)
-         
-         # Create subplot dashboard
-         from plotly.subplots import make_subplots
-         
-         fig = make_subplots(
-             rows=2, cols=2,
-             subplot_titles=("Focus Quality Over Time", "Time Accuracy Analysis", 
-                           "Hourly Productivity", "Epic Progress"),
-             specs=[[{"secondary_y": False}, {"secondary_y": False}],
-                    [{"secondary_y": False}, {"secondary_y": False}]]
-@@ -836,26 +837,26 @@ def main():
-             print(f"Estimated remaining: {prediction['estimated_remaining_hours']} hours")
-             
-         elif args.command == "dashboard":
-             output = args.output or "focus_dashboard.html"
-             result = analytics.create_focus_dashboard(output)
-             print(f"📈 {result}")
-             
-         elif args.command == "report":
-             output = args.output or "tdah_analytics_report.json"  
-             result = analytics.export_analytics_report(output)
-             print(f"📋 {result}")
-             
-     except Exception as e:
-         error_report = handle_error(
-             exception=e,
-             user_action="Check analytics configuration and data files",
-             context={"command": args.command, "args": vars(args)}
-         )
-         print(f"❌ Error running analytics: {error_report.message}")
-         return 1
-     
-     return 0
+ Comprehensive duration and security system featuring:
+ - **Duration Engine**: Calculation and formatting with business calendar support
+ - **Security Stack**: JSON validation, cache protection, transaction safety
+ - **Data Protection**: GDPR compliance, secure serialization, sanitization
+ - **Performance**: Interrupt-safe caching, optimized queries, circuit breakers
+ 
+ ---
+ 
+ ## 🏗️ **Module Architecture**
+ 
+ ### **Core Components**
+ ```
+ duration_system/
+ ├── duration_calculator.py    # ⏱️ Core duration calculations
+ ├── duration_formatter.py     # 📝 Human-readable formatting
+ ├── business_calendar.py      # 📅 Business days + holidays
+ ├── json_handler.py          # 📊 JSON field operations
+ ├── json_security.py         # 🛡️ JSON validation & sanitization
+ ├── cache_fix.py             # 🔄 Interrupt-safe LRU cache
+ ├── database_transactions.py # 📊 Transaction safety
+diff --git a/duration_system/query_builders.py b/duration_system/query_builders.py
+index 3bcb2327d45593ad913eadfc7b8d1a928102d6e9..b89533d1474c08d1c60ff8abb24fba13c1e082ec 100644
+--- a/duration_system/query_builders.py
++++ b/duration_system/query_builders.py
+@@ -16,101 +16,109 @@ class QueryType(Enum):
+     """Query operation types."""
+     SELECT = "SELECT"
+     INSERT = "INSERT"
+     UPDATE = "UPDATE"
+     DELETE = "DELETE"
  
  
- if __name__ == "__main__":
--    main()
-\ No newline at end of file
-+    main()
-diff --git a/tdah_tools/error_handler.py b/tdah_tools/error_handler.py
-index 722efc88613026a7a0767cb824a9a25dc1b44766..d07e52fb6b08418a00e4485c8348670adc4ab514 100644
---- a/tdah_tools/error_handler.py
-+++ b/tdah_tools/error_handler.py
-@@ -1,50 +1,52 @@
- #!/usr/bin/env python3
- """
- 🚨 TDD Error Handler - Standardized Error Management
-+Patch: safer logging setup, wraps for decorators
- 
- This module provides centralized error handling, logging, and custom exceptions
- for the TDD project template. Ensures consistent error messages and logging
- across all components.
- 
- Features:
- - Custom exception hierarchy
- - Structured logging with different levels
- - User-friendly error messages
- - Development vs production error modes
- - Error reporting and analytics
- """
- 
- import logging
- import json
- import sys
- from datetime import datetime
- from pathlib import Path
- from typing import Dict, List, Optional, Any, Union
- from enum import Enum
- from dataclasses import dataclass
- import traceback
-+from functools import wraps
- 
- 
- class ErrorSeverity(Enum):
-     """Error severity levels."""
-     DEBUG = "debug"
-     INFO = "info"
-     WARNING = "warning"
-     ERROR = "error"
-     CRITICAL = "critical"
- 
- 
- class ErrorCategory(Enum):
-     """Error category classification."""
-     VALIDATION = "validation"
-     CONFIGURATION = "configuration"
-     DEPENDENCY = "dependency"
-     FILE_SYSTEM = "filesystem"
-     NETWORK = "network"
-     PROCESS = "process"
-     USER_INPUT = "user_input"
-     ANALYTICS = "analytics"
-     TEMPLATE = "template"
-     GIT = "git"
-     GITHUB = "github"
- 
-@@ -149,78 +151,76 @@ class GitHubError(TDDBaseException):
- 
- 
- class TDDErrorHandler:
-     """Centralized error handling and logging system."""
-     
-     def __init__(
-         self, 
-         log_file: Optional[Path] = None,
-         console_level: str = "INFO",
-         file_level: str = "DEBUG",
-         development_mode: bool = False
-     ):
-         """Initialize error handler with logging configuration."""
-         self.log_file = log_file or Path("tdd_errors.log")
-         self.console_level = getattr(logging, console_level.upper())
-         self.file_level = getattr(logging, file_level.upper())
-         self.development_mode = development_mode
-         self.error_reports: List[ErrorReport] = []
-         
-         self._setup_logging()
-     
-     def _setup_logging(self) -> None:
-         """Configure structured logging."""
-         # Create logs directory if it doesn't exist
-         self.log_file.parent.mkdir(exist_ok=True)
--        
--        # Clear any existing handlers
--        logging.getLogger().handlers.clear()
--        
-+
-         # Create formatter
-         formatter = logging.Formatter(
-             '%(asctime)s | %(levelname)-8s | %(name)-20s | %(funcName)-15s | %(message)s',
-             datefmt='%Y-%m-%d %H:%M:%S'
-         )
--        
--        # Console handler
--        console_handler = logging.StreamHandler(sys.stdout)
--        console_handler.setLevel(self.console_level)
--        console_handler.setFormatter(formatter)
--        
--        # File handler
--        file_handler = logging.FileHandler(self.log_file, encoding='utf-8')
--        file_handler.setLevel(self.file_level)
--        file_handler.setFormatter(formatter)
--        
--        # Configure root logger
--        root_logger = logging.getLogger()
--        root_logger.setLevel(logging.DEBUG)
--        root_logger.addHandler(console_handler)
--        root_logger.addHandler(file_handler)
--        
--        # Create TDD-specific logger
-+
-+        # Create TDD-specific logger (avoid mutating root)
-         self.logger = logging.getLogger("TDD_TEMPLATE")
-+        self.logger.setLevel(logging.DEBUG)
-+        self.logger.propagate = False  # keep logs local to this logger
-+
-+        # Prevent duplicate handlers on re-init
-+        existing_handlers = {type(h) for h in self.logger.handlers}
-+
-+        if logging.StreamHandler not in existing_handlers:
-+            console_handler = logging.StreamHandler(sys.stdout)
-+            console_handler.setLevel(self.console_level)
-+            console_handler.setFormatter(formatter)
-+            self.logger.addHandler(console_handler)
-+
-+        if logging.FileHandler not in existing_handlers:
-+            file_handler = logging.FileHandler(self.log_file, encoding='utf-8')
-+            file_handler.setLevel(self.file_level)
-+            file_handler.setFormatter(formatter)
-+            self.logger.addHandler(file_handler)
-     
-     def handle_exception(
-         self,
-         exception: Exception,
-         severity: ErrorSeverity = ErrorSeverity.ERROR,
-         user_action: Optional[str] = None,
-         context: Optional[Dict[str, Any]] = None,
-         reraise: bool = False
-     ) -> ErrorReport:
-         """Handle and log exception with structured reporting."""
-         
-         # Extract exception details
-         exc_type = type(exception).__name__
-         exc_message = str(exception)
-         
-         # Get stack trace info
-         tb = traceback.extract_tb(exception.__traceback__)
-         if tb:
-             last_frame = tb[-1]
-             file_path = last_frame.filename
-             line_number = last_frame.lineno
-             function_name = last_frame.name
-         else:
-             file_path = None
-             line_number = None
-@@ -468,38 +468,39 @@ def handle_error(
- 
- def log_info(message: str, context: Optional[Dict[str, Any]] = None) -> None:
-     """Convenience function for info logging."""
-     handler = get_error_handler()
-     handler.log_info(message, context)
- 
- 
- def log_warning(message: str, context: Optional[Dict[str, Any]] = None) -> None:
-     """Convenience function for warning logging."""
-     handler = get_error_handler()
-     handler.log_warning(message, context)
- 
- 
- def log_error(message: str, context: Optional[Dict[str, Any]] = None) -> None:
-     """Convenience function for error logging.""" 
-     handler = get_error_handler()
-     handler.log_error(message, context)
- 
- 
- def with_error_handling(
-     user_action: Optional[str] = None,
-     reraise: bool = True
- ):
-     """Decorator for automatic error handling."""
-     def decorator(func):
-+        @wraps(func)
-         def wrapper(*args, **kwargs):
-             try:
-                 return func(*args, **kwargs)
-             except Exception as e:
-                 handle_error(
-                     exception=e,
-                     user_action=user_action,
-                     context={"function": func.__name__, "args": str(args), "kwargs": str(kwargs)},
-                     reraise=reraise
-                 )
-                 return None
-         return wrapper
--    return decorator
-\ No newline at end of file
-+    return decorator
-diff --git a/tdah_tools/performance_utils.py b/tdah_tools/performance_utils.py
-index 575bc610abac358e58e03a23cb454bcd17742b6f..3649b31a60f9b2412bfef3937dea0c96656254f7 100644
---- a/tdah_tools/performance_utils.py
-+++ b/tdah_tools/performance_utils.py
-@@ -1,28 +1,29 @@
- #!/usr/bin/env python3
- """
- 🚀 Performance Utilities - Optimization Tools for Large Datasets
-+Patch: stable cache keys, correct hit rate, safer git ops, better perf metrics
- 
- This module provides performance optimization utilities for TDD template scripts,
- including caching, parallel processing, and efficient data handling.
- 
- Features:
- - Intelligent caching with TTL
- - Parallel processing for I/O operations  
- - Memory-efficient data streaming
- - Optimized Git operations
- - Performance profiling and monitoring
- """
- 
- import hashlib
- import json
- import time
- import functools
- import threading
- import multiprocessing
- from pathlib import Path
- from typing import Any, Dict, List, Optional, Callable, Iterator, Tuple
- from datetime import datetime, timedelta
- from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor, as_completed
- import subprocess
- import sqlite3
- import msgpack
-@@ -31,108 +32,113 @@ import logging
- 
- # Import standardized error handling
- from .error_handler import get_error_handler, handle_error, log_info, ErrorSeverity
+ class JoinType(Enum):
+     """SQL join types."""
+     INNER = "INNER JOIN"
+     LEFT = "LEFT JOIN"
+     RIGHT = "RIGHT JOIN"
+     FULL = "FULL OUTER JOIN"
  
  
  @dataclass
- class PerformanceMetrics:
-     """Performance metrics for operations."""
-     operation: str
-     duration_seconds: float
-     memory_mb: float
-     items_processed: int
-     cache_hit_rate: float = 0.0
-     parallel_workers: int = 1
+ class QueryCondition:
+     """Represents a WHERE condition."""
+     field: str
+     operator: str  # =, !=, >, <, >=, <=, LIKE, IN, NOT IN
+     value: Any
+     logical_op: str = "AND"  # AND, OR
+ 
+     def to_sql(self) -> Tuple[str, Any]:
+         """Convert condition to SQL with parameter."""
+-        if self.operator == "IN":
+-            placeholders = ",".join("?" for _ in self.value)
+-            return f"{self.field} IN ({placeholders})", self.value
+-        elif self.operator == "NOT IN":
+-            placeholders = ",".join("?" for _ in self.value)
+-            return f"{self.field} NOT IN ({placeholders})", self.value
++        op = self.operator.upper()
++        if op in {"IN", "NOT IN"}:
++            seq = list(self.value) if isinstance(self.value, (list, tuple, set)) else []
++            if not seq:
++                # Empty IN: nunca casa; Empty NOT IN: sempre casa
++                return ("1=0", []) if op == "IN" else ("1=1", [])
++            placeholders = ",".join("?" for _ in seq)
++            clause = f"{self.field} {'NOT IN' if op == 'NOT IN' else 'IN'} ({placeholders})"
++            return clause, list(seq)
+         else:
+             return f"{self.field} {self.operator} ?", [self.value]
  
  
- class LRUCache:
-     """Thread-safe LRU cache with TTL support."""
-     
-     def __init__(self, max_size: int = 1000, ttl_seconds: int = 3600):
-         self.max_size = max_size
-         self.ttl_seconds = ttl_seconds
-         self.cache: Dict[str, Tuple[Any, float]] = {}
-         self.access_order: List[str] = []
-         self._lock = threading.RLock()
-+        self._requests = 0
-+        self._hits = 0
-     
-     def _is_expired(self, timestamp: float) -> bool:
-         """Check if cache entry has expired."""
-         return time.time() - timestamp > self.ttl_seconds
-     
-     def get(self, key: str) -> Optional[Any]:
-         """Get value from cache."""
-         with self._lock:
-+            self._requests += 1
-             if key in self.cache:
-                 value, timestamp = self.cache[key]
--                
+ @dataclass
+ class QueryJoin:
+     """Represents a table join."""
+     table: str
+     join_type: JoinType
+     on_condition: str
+ 
+ 
+ class SecureQueryBuilder:
+     """Secure SQL query builder with parameter binding and validation."""
+ 
+     allowed_operators = {"=", "!=", ">", "<", ">=", "<=", "LIKE", "IN", "NOT IN"}
+ 
+     def __init__(self, table: str, allowed_fields: Optional[Set[str]] = None):
+         """Initialize query builder for specific table."""
+         self.table = table
+         self.query_type: Optional[QueryType] = None
+         self.select_fields: List[str] = []
+         self.conditions: List[QueryCondition] = []
+         self.joins: List[QueryJoin] = []
+         self.order_by_fields: List[str] = []
+         self.group_by_fields: List[str] = []
+         self.limit_value: Optional[int] = None
+         self.offset_value: Optional[int] = None
+         self.insert_data: Dict[str, Any] = {}
+         self.update_data: Dict[str, Any] = {}
+         self._allowed_fields = allowed_fields
+ 
+     # ------------------------------------------------------------------
+     # Helper validation methods
+     def _validate_field(self, field: str) -> None:
+         if self._allowed_fields is not None and field not in self._allowed_fields:
+             raise ValueError(f"Field {field} not allowed")
+         # Basic regex validation to avoid injection through field names
+         if not re.match(r"^[A-Za-z0-9_\.]+$", field):
+             raise ValueError(f"Invalid field name: {field}")
+ 
+     def _validate_operator(self, operator: str) -> None:
+         if operator not in self.allowed_operators:
+             raise ValueError(f"Operator {operator} not allowed")
+ 
++    def _validate_on_condition(self, on_condition: str) -> None:
++        """Validate simple ON condition pattern like 'a.b = c.d'."""
++        if not re.match(r"^[A-Za-z0-9_\.]+\s*=\s*[A-Za-z0-9_\.]+$", on_condition):
++            raise ValueError(f"Invalid join condition: {on_condition}")
 +
-                 if self._is_expired(timestamp):
-                     # Remove expired entry
-                     del self.cache[key]
-                     if key in self.access_order:
-                         self.access_order.remove(key)
-                     return None
--                
-+
-                 # Update access order
-                 if key in self.access_order:
-                     self.access_order.remove(key)
-                 self.access_order.append(key)
--                
-+                self._hits += 1
-                 return value
-             return None
-     
-     def set(self, key: str, value: Any) -> None:
-         """Set value in cache."""
-         with self._lock:
-             current_time = time.time()
-             
-             # Remove oldest entries if at capacity
-             while len(self.cache) >= self.max_size and self.access_order:
-                 oldest_key = self.access_order.pop(0)
-                 if oldest_key in self.cache:
-                     del self.cache[oldest_key]
-             
-             # Add new entry
-             self.cache[key] = (value, current_time)
-             if key in self.access_order:
-                 self.access_order.remove(key)
-             self.access_order.append(key)
-     
-     def clear(self) -> None:
-         """Clear all cache entries."""
-         with self._lock:
-             self.cache.clear()
-             self.access_order.clear()
-     
-     def size(self) -> int:
-         """Get current cache size."""
-         return len(self.cache)
-     
-     def hit_rate(self, total_requests: int) -> float:
-         """Calculate cache hit rate."""
--        if total_requests == 0:
--            return 0.0
--        return len(self.cache) / total_requests
-+        with self._lock:
-+            req = self._requests if total_requests == 0 else total_requests
-+            if req == 0:
-+                return 0.0
-+            return self._hits / req
+     # ------------------------------------------------------------------
+     # Query construction methods
+     def select(self, *fields: str) -> "SecureQueryBuilder":
+         """Add SELECT fields."""
+         self.query_type = QueryType.SELECT
+         if fields:
+             for field in fields:
+                 self._validate_field(field)
+             self.select_fields.extend(fields)
+         else:
+             self.select_fields = ["*"]
+         return self
  
+     def insert(self, data: Dict[str, Any]) -> "SecureQueryBuilder":
+         """Set INSERT data."""
+         self.query_type = QueryType.INSERT
+         self.insert_data = data
+         return self
  
- class PersistentCache:
-     """SQLite-based persistent cache for expensive operations."""
-     
-     def __init__(self, cache_file: Path = Path("performance_cache.db")):
-         self.cache_file = cache_file
-         self.cache_file.parent.mkdir(exist_ok=True)
-         self._init_db()
-     
-     def _init_db(self) -> None:
-         """Initialize cache database."""
-         with sqlite3.connect(self.cache_file) as conn:
-             conn.execute("""
-                 CREATE TABLE IF NOT EXISTS cache_entries (
-                     key TEXT PRIMARY KEY,
-                     value BLOB,
-                     timestamp REAL,
-                     ttl_seconds INTEGER
+     def update(self, data: Dict[str, Any]) -> "SecureQueryBuilder":
+         """Set UPDATE data."""
+         self.query_type = QueryType.UPDATE
+         self.update_data = data
+         return self
+ 
+@@ -126,76 +134,85 @@ class SecureQueryBuilder:
+         value: Any,
+         logical_op: str = "AND",
+     ) -> "SecureQueryBuilder":
+         """Add WHERE condition with validation."""
+         self._validate_field(field)
+         self._validate_operator(operator)
+         condition = QueryCondition(field, operator, value, logical_op)
+         self.conditions.append(condition)
+         return self
+ 
+     def where_in(self, field: str, values: List[Any]) -> "SecureQueryBuilder":
+         """Add WHERE IN condition."""
+         return self.where(field, "IN", values)
+ 
+     def where_like(self, field: str, pattern: str) -> "SecureQueryBuilder":
+         """Add WHERE LIKE condition."""
+         return self.where(field, "LIKE", pattern)
+ 
+     def join(
+         self,
+         table: str,
+         on_condition: str,
+         join_type: JoinType = JoinType.INNER,
+     ) -> "SecureQueryBuilder":
+         """Add table join."""
++        self._validate_field(table)
++        self._validate_on_condition(on_condition)
+         self.joins.append(QueryJoin(table, join_type, on_condition))
+         return self
+ 
+     def left_join(self, table: str, on_condition: str) -> "SecureQueryBuilder":
+         """Add LEFT JOIN."""
+         return self.join(table, on_condition, JoinType.LEFT)
+ 
+     def order_by(self, field: str, direction: str = "ASC") -> "SecureQueryBuilder":
+         """Add ORDER BY clause."""
+         self._validate_field(field)
+-        self.order_by_fields.append(f"{field} {direction}")
++        direction_upper = direction.upper()
++        if direction_upper not in {"ASC", "DESC"}:
++            raise ValueError(f"Invalid ORDER BY direction: {direction}")
++        self.order_by_fields.append(f"{field} {direction_upper}")
+         return self
+ 
+     def group_by(self, field: str) -> "SecureQueryBuilder":
+         """Add GROUP BY clause."""
+         self._validate_field(field)
+         self.group_by_fields.append(field)
+         return self
+ 
+     def limit(self, count: int) -> "SecureQueryBuilder":
+         """Add LIMIT clause."""
++        if not isinstance(count, int) or count < 0:
++            raise ValueError("LIMIT must be a non-negative integer")
+         self.limit_value = count
+         return self
+ 
+     def offset(self, count: int) -> "SecureQueryBuilder":
+         """Add OFFSET clause."""
++        if not isinstance(count, int) or count < 0:
++            raise ValueError("OFFSET must be a non-negative integer")
+         self.offset_value = count
+         return self
+ 
+     def build(self) -> Tuple[str, List[Any]]:
+         """Build final SQL query with parameters and complexity checks."""
+         if len(self.joins) > 5:
+             raise ValueError("Too many joins in query")
+         if len(self.conditions) > 20:
+             raise ValueError("Too many conditions in query")
+ 
+         if self.query_type == QueryType.SELECT:
+             return self._build_select()
+         if self.query_type == QueryType.INSERT:
+             return self._build_insert()
+         if self.query_type == QueryType.UPDATE:
+             return self._build_update()
+         if self.query_type == QueryType.DELETE:
+             return self._build_delete()
+         raise ValueError("Query type not set")
+ 
+     def _build_select(self) -> Tuple[str, List[Any]]:
+         """Build SELECT query."""
+         query_parts = [f"SELECT {', '.join(self.select_fields)}"]
+         query_parts.append(f"FROM {self.table}")
+         params: List[Any] = []
+@@ -209,57 +226,61 @@ class SecureQueryBuilder:
+                 sql_part, condition_params = condition.to_sql()
+                 if i > 0:
+                     where_parts.append(condition.logical_op)
+                 where_parts.append(sql_part)
+                 params.extend(
+                     condition_params if isinstance(condition_params, list) else [condition_params]
                  )
-             """)
-             conn.execute("""
-                 CREATE INDEX IF NOT EXISTS idx_timestamp 
-                 ON cache_entries(timestamp)
-             """)
-@@ -195,51 +201,51 @@ class PersistentCache:
-                 conn.execute(
-                     "DELETE FROM cache_entries WHERE timestamp + ttl_seconds < ?",
-                     (current_time,)
+             query_parts.append("WHERE " + " ".join(where_parts))
+ 
+         if self.group_by_fields:
+             query_parts.append(f"GROUP BY {', '.join(self.group_by_fields)}")
+ 
+         if self.order_by_fields:
+             query_parts.append(f"ORDER BY {', '.join(self.order_by_fields)}")
+ 
+         if self.limit_value is not None:
+             query_parts.append(f"LIMIT {self.limit_value}")
+             if self.offset_value is not None:
+                 query_parts.append(f"OFFSET {self.offset_value}")
+ 
+         return " ".join(query_parts), params
+ 
+     def _build_insert(self) -> Tuple[str, List[Any]]:
+         """Build INSERT query."""
+         fields = list(self.insert_data.keys())
++        for f in fields:
++            self._validate_field(f)
+         placeholders = ",".join("?" for _ in fields)
+         query = f"INSERT INTO {self.table} ({', '.join(fields)}) VALUES ({placeholders})"
+         params = list(self.insert_data.values())
+         return query, params
+ 
+     def _build_update(self) -> Tuple[str, List[Any]]:
+         """Build UPDATE query."""
++        for f in self.update_data.keys():
++            self._validate_field(f)
+         set_parts = [f"{field} = ?" for field in self.update_data.keys()]
+         query_parts = [f"UPDATE {self.table}", f"SET {', '.join(set_parts)}"]
+         params = list(self.update_data.values())
+ 
+         if self.conditions:
+             where_parts: List[str] = []
+             for i, condition in enumerate(self.conditions):
+                 sql_part, condition_params = condition.to_sql()
+                 if i > 0:
+                     where_parts.append(condition.logical_op)
+                 where_parts.append(sql_part)
+                 params.extend(
+                     condition_params if isinstance(condition_params, list) else [condition_params]
                  )
-                 
-                 return count
-                 
-         except Exception as e:
-             handle_error(e, severity=ErrorSeverity.DEBUG)
-             return 0
+             query_parts.append("WHERE " + " ".join(where_parts))
  
+         return " ".join(query_parts), params
  
- class OptimizedGitOperations:
-     """Optimized Git operations for large repositories."""
-     
-     def __init__(self, cache: Optional[LRUCache] = None):
-         self.cache = cache or LRUCache(max_size=10000, ttl_seconds=1800)  # 30 minutes
-         self.batch_size = 1000
-     
-     def get_commits_batch(self, since_date: str = "2025-01-01", pattern: str = "\\[EPIC-") -> List[str]:
-         """Get commits in batches with caching."""
-         cache_key = f"commits_batch_{since_date}_{pattern}"
-         
-         # Try cache first
-         cached_result = self.cache.get(cache_key)
--        if cached_result:
-+        if cached_result is not None:
-             return cached_result
-         
-         try:
-             # Use more efficient git command
-             cmd = [
-                 'git', 'log', '--oneline', '--no-merges',
-                 f'--grep={pattern}', f'--since={since_date}',
-                 '--pretty=format:%H|%ad|%s', '--date=iso'
-             ]
-             
-             result = subprocess.run(
-                 cmd, capture_output=True, text=True, check=True, timeout=60
-             )
-             
-             commits = [line for line in result.stdout.split('\n') if line.strip()]
-             
-             # Cache result
-             self.cache.set(cache_key, commits)
-             
-             log_info(f"Retrieved {len(commits)} commits", {"since": since_date, "pattern": pattern})
-             
-             return commits
-             
-         except subprocess.TimeoutExpired:
-             handle_error(
-@@ -264,52 +270,52 @@ class OptimizedGitOperations:
-         # Split into smaller chunks for parallel processing
-         chunk_size = max(1, len(commit_hashes) // max_workers)
-         chunks = [commit_hashes[i:i + chunk_size] for i in range(0, len(commit_hashes), chunk_size)]
-         
-         with ThreadPoolExecutor(max_workers=max_workers) as executor:
-             future_to_chunk = {
-                 executor.submit(self._process_commit_chunk, chunk): chunk 
-                 for chunk in chunks
-             }
-             
-             for future in as_completed(future_to_chunk):
-                 chunk_results = future.result()
-                 results.update(chunk_results)
-         
-         return results
-     
-     def _process_commit_chunk(self, commit_hashes: List[str]) -> Dict[str, Dict]:
-         """Process a chunk of commits efficiently."""
-         results = {}
-         
-         # Batch git commands for efficiency
-         if not commit_hashes:
-             return results
-         
-         try:
--            # Get all commit info in one command
--            cmd = ['git', 'log', '--pretty=format:%H|%ad|%s|%B---COMMIT-SEPARATOR---'] + commit_hashes
-+            # Use git show -s for exact commits to avoid traversal quirks
-+            cmd = ['git', 'show', '-s', '--pretty=format:%H|%ad|%s|%B---COMMIT-SEPARATOR---', '--date=iso'] + commit_hashes
-             result = subprocess.run(cmd, capture_output=True, text=True, check=True, timeout=30)
-             
-             commit_blocks = result.stdout.split('---COMMIT-SEPARATOR---')
-             
-             for block in commit_blocks:
-                 if not block.strip():
-                     continue
-                 
-                 lines = block.strip().split('\n')
-                 if not lines:
-                     continue
-                 
-                 # Parse first line: hash|date|subject
-                 header_parts = lines[0].split('|', 2)
-                 if len(header_parts) < 3:
-                     continue
-                 
-                 commit_hash, date_str, subject = header_parts
-                 body = '\n'.join(lines[1:]) if len(lines) > 1 else ""
-                 
-                 results[commit_hash] = {
-                     'hash': commit_hash,
-                     'date': date_str,
-                     'subject': subject,
-                     'body': body
-@@ -396,54 +402,58 @@ class PerformanceMonitor:
-     """Performance monitoring and profiling utilities."""
-     
-     def __init__(self):
-         self.metrics: List[PerformanceMetrics] = []
-         self.cache_requests = 0
-         self.cache_hits = 0
-     
-     def time_operation(self, operation_name: str):
-         """Decorator to time operations and collect metrics."""
-         def decorator(func):
-             @functools.wraps(func)
-             def wrapper(*args, **kwargs):
-                 start_time = time.time()
-                 start_memory = self._get_memory_usage()
-                 
-                 try:
-                     result = func(*args, **kwargs)
-                     
-                     # Calculate metrics
-                     duration = time.time() - start_time
-                     end_memory = self._get_memory_usage()
-                     memory_delta = max(0, end_memory - start_memory)
-                     
-                     # Determine items processed
-                     items_processed = 1
--                    if hasattr(result, '__len__'):
--                        items_processed = len(result)
--                    elif isinstance(result, dict) and 'count' in result:
-+                    # Prefer explicit 'count' in dicts
-+                    if isinstance(result, dict) and 'count' in result:
-                         items_processed = result['count']
-+                    elif hasattr(result, '__len__'):
-+                        try:
-+                            items_processed = len(result)  # may fail for generators
-+                        except Exception:
-+                            items_processed = 1
-                     
-                     # Record metrics
-                     metrics = PerformanceMetrics(
-                         operation=operation_name,
-                         duration_seconds=duration,
-                         memory_mb=memory_delta,
-                         items_processed=items_processed,
-                         cache_hit_rate=self.get_cache_hit_rate()
-                     )
-                     self.metrics.append(metrics)
-                     
-                     log_info(
-                         f"Performance: {operation_name}",
-                         {
-                             "duration_seconds": round(duration, 3),
-                             "memory_mb": round(memory_delta, 2),
-                             "items_processed": items_processed,
-                             "rate_per_second": round(items_processed / max(duration, 0.001), 2)
-                         }
-                     )
-                     
-                     return result
-                     
-                 except Exception as e:
-                     # Still record metrics for failed operations
-@@ -548,56 +558,66 @@ _performance_monitor = PerformanceMonitor()
- _global_cache = LRUCache(max_size=5000, ttl_seconds=3600)
- _persistent_cache = PersistentCache()
+     def _build_delete(self) -> Tuple[str, List[Any]]:
+         """Build DELETE query."""
+         query_parts = [f"DELETE FROM {self.table}"]
+         params: List[Any] = []
  
- 
- def get_performance_monitor() -> PerformanceMonitor:
-     """Get global performance monitor instance."""
-     return _performance_monitor
- 
- 
- def get_global_cache() -> LRUCache:
-     """Get global cache instance."""
-     return _global_cache
- 
- 
- def get_persistent_cache() -> PersistentCache:
-     """Get persistent cache instance.""" 
-     return _persistent_cache
- 
- 
- def cached(ttl_seconds: int = 3600, use_persistent: bool = False):
-     """Decorator for caching function results."""
-     def decorator(func):
-         @functools.wraps(func)
-         def wrapper(*args, **kwargs):
-             # Create cache key from function name and arguments
--            cache_key = f"{func.__name__}_{hashlib.sha256(str(args).encode() + str(kwargs).encode()).hexdigest()}"
-+            try:
-+                # Stable, order-insensitive kwargs + best-effort repr for args
-+                key_payload = {
-+                    "fn": func.__name__,
-+                    "args": [repr(a) for a in args],
-+                    "kwargs": {k: repr(v) for k, v in sorted(kwargs.items())},
-+                }
-+                cache_key = hashlib.sha256(json.dumps(key_payload, sort_keys=True).encode("utf-8")).hexdigest()
-+            except Exception:
-+                # Fallback
-+                cache_key = f"{func.__name__}_{hashlib.sha256(repr((args, kwargs)).encode()).hexdigest()}"
-             
-             cache = _persistent_cache if use_persistent else _global_cache
-             monitor = get_performance_monitor()
-             
-             # Try to get from cache
-             cached_result = cache.get(cache_key)
-             if cached_result is not None:
-                 monitor.record_cache_request(hit=True)
-                 return cached_result
-             
-             # Execute function and cache result
-             monitor.record_cache_request(hit=False)
-             result = func(*args, **kwargs)
-             
-             # Cache the result
-             if use_persistent:
-                 cache.set(cache_key, result, ttl_seconds)
-             else:
-                 cache.set(cache_key, result)
-             
-             return result
-         return wrapper
-     return decorator
- 
- 
- def performance_critical(operation_name: str):
-     """Decorator to mark and monitor performance-critical operations."""
-     def decorator(func):
-         return get_performance_monitor().time_operation(operation_name)(func)
--    return decorator
-\ No newline at end of file
-+    return decorator
+         if self.conditions:
+             where_parts: List[str] = []
  
 EOF
 )
