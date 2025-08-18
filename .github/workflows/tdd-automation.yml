@@ -9,8 +9,8 @@ on:
     paths:
       - 'epics/*.json'          # Epic JSON files
       - 'epic_*.json'           # Legacy epic format
-      - 'generate_all_diagrams.py'
-      - 'gantt_tracker.py'
+      - 'scripts/analysis/generate_all_diagrams.py'
+      - 'scripts/testing/gantt_tracker.py'
       - 'commit_helper.py'
       - '.github/workflows/tdd-automation.yml'
       - 'trigger_workflow.txt'
@@ -123,7 +123,7 @@ jobs:
           echo "📁 Output Dir: $OUTPUT_DIR"
           
           # Execute generator with GitHub integration
-          python3 generate_all_diagrams.py \
+          python3 scripts/analysis/generate_all_diagrams.py \
             --github-repo "$REPO" \
             --output-dir "$OUTPUT_DIR"
           
@@ -157,7 +157,7 @@ jobs:
           pip install plotly pandas
           
           # Generate progress dashboard
-          python3 gantt_tracker.py --output docs/gantt_progress.html --no-open
+          python3 scripts/testing/gantt_tracker.py --output docs/gantt_progress.html --no-open
           
           echo "✅ Enhanced Gantt progress tracker generated"
       
