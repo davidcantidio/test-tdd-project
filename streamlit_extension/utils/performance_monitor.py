@@ -21,7 +21,7 @@ class PerformanceMonitor:
         The values are returned as percentages in the range 0-100.
         """
 
-        return {
-            "cpu_usage": psutil.cpu_percent(interval=0.0),
-            "memory_usage": psutil.virtual_memory().percent,
-        }
+        # interval=None usa o intervalo desde a última chamada sem bloquear.
+        cpu = psutil.cpu_percent(interval=None)
+        mem = psutil.virtual_memory().percent
+        return {"cpu_usage": float(cpu), "memory_usage": float(mem)}

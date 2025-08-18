@@ -11,7 +11,7 @@ collecting metrics and basic system statistics.
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
-from typing import Callable, Iterable, List
+from typing import Callable, Iterable, List, Optional
 
 from .metrics_collector import MetricsCollector
 from .performance_monitor import PerformanceMonitor
@@ -20,12 +20,13 @@ from .performance_monitor import PerformanceMonitor
 class LoadTester:
     """Execute simple load test scenarios."""
 
-    def __init__(self, users: int, duration: float, actions: Iterable[Callable[[], None]]):
+    def __init__(self, users: int, duration: float, actions: Iterable[Callable[[], None]], on_error: Optional[Callable[[BaseException], None]] = None):
         self.users = users
         self.duration = duration
         self.actions: List[Callable[[], None]] = list(actions)
         self.metrics = MetricsCollector()
         self.monitor = PerformanceMonitor()
+        self._on_error = on_error
 
     def _user_loop(self, stop_time: float) -> None:
         while time.perf_counter() < stop_time:
@@ -34,10 +35,22 @@ class LoadTester:
                 success = True
                 try:
                     action()
-                except Exception:
+                except Exception as exc:  # captura exceção para telemetria
                     success = False
+                    if self._on_error:
+                        try:
+                            self._on_error(exc)
+                        except Exception:
+                            pass
+                    self.metrics.record_exception(exc, (time.perf_counter() - start) * 1000)
+                    # Verifica tempo novamente para não ultrapassar duração
+                    if time.perf_counter() >= stop_time:
+                        break
+                    continue
                 elapsed = (time.perf_counter() - start) * 1000
                 self.metrics.record(elapsed, success)
+                if time.perf_counter() >= stop_time:
+                    break
 
     def run(self) -> dict:
         """Run the configured scenario and return collected metrics."""

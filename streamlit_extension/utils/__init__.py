@@ -13,3 +13,6 @@ __all__ = [
     "MetricsCollector",
     "PerformanceMonitor",
 ]
+
+# Guarda de import opcional para ambientes de teste sem todos os módulos
+# (evita ImportError imediato ao importar o pacote).

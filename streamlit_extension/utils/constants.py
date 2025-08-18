@@ -1,5 +1,7 @@
+from __future__ import annotations
+
 from enum import Enum, IntEnum
-from typing import Final
+from typing import Final, List
 
 class TableNames:
     """Database table names."""
@@ -115,3 +117,11 @@ class TimeConstants:
     POMODORO_MINUTES: Final[int] = 25
     SHORT_BREAK_MINUTES: Final[int] = 5
     LONG_BREAK_MINUTES: Final[int] = 15
+
+# Explicit re-exports para linting/type checkers
+__all__: List[str] = [
+    "TableNames", "FieldNames", "ClientStatus", "ProjectStatus", "TaskStatus",
+    "EpicStatus", "TDDPhase", "Priority", "Complexity", "UIConstants",
+    "ValidationRules", "TimeConstants",
+]
+

@@ -1,15 +1,16 @@
-"""
-🔍 Form Validation Module
+"""🔍 Form Validation Module
 
-Centralized validation functions for form components:
-- Required field validation
-- Business rules validation
-- Format validation (email, phone)
-- Input sanitization
+Centraliza validações de formulários:
+- Campos obrigatórios
+- Regras de negócio
+- Formatos (email, telefone)
+- Sanitização de entradas
 """
+
+from __future__ import annotations
 
 import re
-from typing import Dict, List, Optional, Any
+from typing import Any, Dict, Iterable, List, Optional
 
 try:
     from .security import sanitize_input, validate_form
@@ -17,31 +18,45 @@ except ImportError:  # pragma: no cover
     sanitize_input = lambda x, field_name="input": x  # type: ignore
     validate_form = None
 
+EMAIL_RE = re.compile(r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$")
+PHONE_RE = re.compile(r"^[+\d][\d\s().-]{7,}$")
 
-def validate_required_fields(data: Dict, required_fields: List[str]) -> List[str]:
-    """Validate that required fields are present and non-empty."""
-    errors = []
+__all__ = [
+    "validate_required_fields", "validate_email_format", "validate_phone_format",
+    "validate_text_length", "validate_business_rules_client",
+    "validate_business_rules_project", "sanitize_form_inputs",
+]
+
+
+def validate_required_fields(data: Dict[str, Any], required_fields: Iterable[str]) -> List[str]:
+    """Valida se campos obrigatórios existem e não são vazios/whitespace."""
+    errors: List[str] = []
     for field in required_fields:
-        if not data.get(field):
+        value = data.get(field)
+        if value is None:
+            errors.append(f"Missing required field: {field}")
+        elif isinstance(value, str) and value.strip() == "":
             errors.append(f"Missing required field: {field}")
     return errors
 
 
 def validate_email_format(email: str) -> bool:
-    """Validate email format using regex pattern."""
-    pattern = r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$"
-    return bool(re.match(pattern, email or ""))
+    """Valida formato de email (regex pré-compilado e fullmatch)."""
+    if not email:
+        return False
+    return EMAIL_RE.fullmatch(email) is not None
 
 
 def validate_phone_format(phone: str) -> bool:
-    """Validate phone number format (international compatible)."""
-    pattern = r"^[+\d][\d\s().-]{7,}$"
-    return bool(re.match(pattern, phone or ""))
+    """Valida telefone (compatível internacional)."""
+    if not phone:
+        return False
+    return PHONE_RE.fullmatch(phone) is not None
 
 
 def validate_text_length(text: str, min_len: int, max_len: int, field_name: str) -> List[str]:
     """Validate text length constraints."""
-    errors = []
+    errors: List[str] = []
     text = text or ""
     if len(text) < min_len:
         errors.append(f"{field_name} must be at least {min_len} characters")
@@ -50,7 +65,7 @@ def validate_text_length(text: str, min_len: int, max_len: int, field_name: str)
     return errors
 
 
-def validate_business_rules_client(data: Dict) -> List[str]:
+def validate_business_rules_client(data: Dict[str, Any]) -> List[str]:
     """Validate business rules specific to client entities."""
     errors: List[str] = []
     errors.extend(validate_text_length(data.get("client_key", ""), 2, 50, "client_key"))
@@ -58,7 +73,7 @@ def validate_business_rules_client(data: Dict) -> List[str]:
     return errors
 
 
-def validate_business_rules_project(data: Dict) -> List[str]:
+def validate_business_rules_project(data: Dict[str, Any]) -> List[str]:
     """Validate business rules specific to project entities."""
     errors: List[str] = []
     errors.extend(validate_text_length(data.get("project_key", ""), 2, 50, "project_key"))
@@ -66,17 +81,18 @@ def validate_business_rules_project(data: Dict) -> List[str]:
     return errors
 
 
-def sanitize_form_inputs(data: Dict) -> Dict:
-    """Sanitize all form inputs for security."""
+def sanitize_form_inputs(data: Dict[str, Any]) -> Dict[str, Any]:
+    """Sanitiza todas as entradas string; preserva None e tipos primitivos.
+
+    Observação: `validate_form` (se existir) roda após sanitização.
+    """
     sanitized: Dict[str, Any] = {}
     for key, value in data.items():
         if isinstance(value, str):
             sanitized[key] = sanitize_input(value, key)
         else:
             sanitized[key] = value
-    
-    # Apply additional form validation if available
+
     if validate_form:
-        validate_form(sanitized)
-    
+        validate_form(sanitized)  # type: ignore[misc]
     return sanitized

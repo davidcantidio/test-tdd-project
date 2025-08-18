@@ -16,7 +16,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional, Set
 import streamlit as st
-import jwt
+# NOTE: jwt import removido (não utilizado)
 
 
 @dataclass
@@ -115,21 +115,23 @@ class CSRFProtection:
 
 class PasswordManager:
     """Secure password hashing and validation."""
-    
+    # Permite configurar custo via secrets (fallback seguro)
+    _DEFAULT_ITERS = 200_000
+
     @staticmethod
     def hash_password(password: str, salt: Optional[str] = None) -> tuple[str, str]:
         """Hash password with salt."""
         if salt is None:
             salt = secrets.token_hex(32)
-        
-        # Use PBKDF2 with high iteration count
+
+        iterations = int(st.secrets.get("auth_pbkdf2_iters", PasswordManager._DEFAULT_ITERS))
         password_hash = hashlib.pbkdf2_hmac(
             'sha256',
             password.encode(),
             salt.encode(),
-            100000  # iterations
+            iterations
         ).hex()
-        
+
         return password_hash, salt
     
     @staticmethod
@@ -260,8 +262,16 @@ class AuthenticationManager:
         session = self.get_current_session()
         if not session:
             return False
-        
+
         return self.csrf_protection.validate_token(token, session.session_id)
+
+    def rotate_csrf(self) -> Optional[str]:
+        """Gera e instala novo CSRF token para a sessão atual (defesa contra replay)."""
+        session = self.get_current_session()
+        if not session:
+            return None
+        session.csrf_token = self.csrf_protection.generate_token(session.session_id)
+        return session.csrf_token
     
     def logout(self) -> None:
         """Logout current user and invalidate session."""
@@ -354,9 +364,11 @@ def login_form() -> Optional[Session]:
                 ip_address=st.session_state.get('client_ip', 'unknown'),
                 user_agent=st.session_state.get('user_agent', 'unknown')
             )
-            
+
             if session:
                 st.success("✅ Login successful!")
+                # Rotaciona CSRF após login
+                AuthenticationManager(st.secrets.get("auth_secret_key", "dev-secret-key")).rotate_csrf()
                 st.rerun()
                 return session
             else:

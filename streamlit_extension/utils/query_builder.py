@@ -13,6 +13,7 @@ Replaces ad-hoc SQL strings with structured query building:
 from __future__ import annotations
 
 from typing import Any, Dict, Iterable, List, Sequence, Tuple
+import re
 
 
 class QueryBuilder:
@@ -32,6 +33,20 @@ class QueryBuilder:
         self.offset_value: int | None = None
         self.values: Dict[str, Any] = {}
         self.parameters: List[Any] = []
+        self._identifier_re = re.compile(r"^[A-Za-z_][A-Za-z0-9_\.]*$")
+
+    # ------------------------- helpers -------------------------
+    def _safe_ident(self, ident: str) -> str:
+        """Valida identificadores simples (tabela/coluna/direção)."""
+        if not self._identifier_re.fullmatch(ident):
+            raise ValueError(f"Unsafe SQL identifier: {ident!r}")
+        return ident
+
+    def _safe_direction(self, direction: str) -> str:
+        d = direction.upper()
+        if d not in {"ASC", "DESC"}:
+            raise ValueError("Order direction must be ASC or DESC")
+        return d
 
     # ------------------------------------------------------------------
     # Core query construction methods
@@ -39,7 +54,10 @@ class QueryBuilder:
     def select(self, *columns: str) -> "QueryBuilder":
         """Add SELECT columns."""
         self.query_type = "SELECT"
-        self.columns.extend(columns)
+        if columns:
+            self.columns.extend(self._safe_ident(c) for c in columns)
+        else:
+            self.columns.clear()
         return self
 
     def where(self, condition: str, *params: Any) -> "QueryBuilder":
@@ -71,7 +89,7 @@ class QueryBuilder:
 
     def order_by(self, column: str, direction: str = "ASC") -> "QueryBuilder":
         """Add ORDER BY clause."""
-        self._order_by.append(f"{column} {direction}")
+        self._order_by.append(f"{self._safe_ident(column)} {self._safe_direction(direction)}")
         return self
 
     def limit(self, count: int) -> "QueryBuilder":
@@ -118,6 +136,22 @@ class QueryBuilder:
         if self.query_type == "DELETE":
             return self._build_delete()
         raise ValueError("No query type specified")
+
+    # Estado mutável pode vazar entre builds; oferecemos reset explícito
+    def reset(self) -> "QueryBuilder":
+        """Limpa estado interno para construção de novo comando."""
+        self.query_type = None
+        self.columns.clear()
+        self.conditions.clear()
+        self.joins.clear()
+        self._order_by.clear()
+        self._group_by.clear()
+        self._having.clear()
+        self.limit_value = None
+        self.offset_value = None
+        self.values.clear()
+        self.parameters.clear()
+        return self
 
     # Internal builders -------------------------------------------------
     def _build_select(self) -> Tuple[str, Tuple[Any, ...]]:

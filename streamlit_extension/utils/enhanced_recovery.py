@@ -1,14 +1,16 @@
-"""Enhanced error recovery strategies."""
+"""Enhanced error recovery strategies.
+
+Fornece engine extensível para tentar recuperações automáticas e fallbacks.
+"""
 
 from __future__ import annotations
 
 import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Any, List, Optional
+from typing import Any, List, Optional, Protocol
 
 from ..middleware.context_manager import UserContext
-
 
 # Custom exception types used in recovery strategies
 class OperationalError(Exception):
@@ -28,6 +30,12 @@ class RecoveryResult:
     success: bool
     result: Optional[Any] = None
     fallback: Optional[Any] = None
+
+    def unwrap_or(self, default: Any) -> Any:
+        """Retorna result se sucesso, senão fallback ou default."""
+        if self.success:
+            return self.result
+        return self.fallback if self.fallback is not None else default
 
 
 class RecoveryStrategy(ABC):

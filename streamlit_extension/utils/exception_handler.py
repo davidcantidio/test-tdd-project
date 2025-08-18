@@ -716,63 +716,11 @@ def show_error_dashboard():
         reset_error_statistics()
         st.success("Error statistics reset successfully")
         st.rerun()
+__all__ = [
+    "ErrorSeverity", "ErrorCategory", "StreamlitError", "GlobalExceptionHandler",
+    "handle_streamlit_exceptions", "streamlit_error_boundary",
+    "safe_streamlit_operation", "handle_error", "install_global_exception_handler",
+    "get_error_statistics", "reset_error_statistics", "show_error_dashboard",
+    "global_exception_handler",
+]
 
-
-@contextmanager
-def streamlit_error_boundary(operation_name: str = "operation"):
-    """
-    Context manager for error boundary around Streamlit operations.
-    
-    Args:
-        operation_name: Name of the operation for logging
-    """
-    try:
-        yield
-    except Exception as e:
-        context = {
-            "operation": operation_name,
-            "timestamp": datetime.now().isoformat()
-        }
-        
-        global_exception_handler.handle_exception(
-            e, context=context,
-            show_user_message=True,
-            attempt_recovery=True
-        )
-
-
-def safe_streamlit_operation(func: Callable, 
-                           *args, 
-                           default_return: Any = None,
-                           operation_name: Optional[str] = None,
-                           **kwargs) -> Any:
-    """
-    Safely execute a Streamlit operation with error handling.
-    
-    Args:
-        func: Function to execute
-        *args: Arguments for the function
-        default_return: Default return value on error
-        operation_name: Name of operation for logging
-        **kwargs: Keyword arguments for the function
-        
-    Returns:
-        Function result or default_return on error
-    """
-    try:
-        return func(*args, **kwargs)
-    except Exception as e:
-        context = {
-            "function": func.__name__ if hasattr(func, '__name__') else str(func),
-            "operation": operation_name or "safe_operation",
-            "args_count": len(args),
-            "kwargs_keys": list(kwargs.keys()) if kwargs else []
-        }
-        
-        global_exception_handler.handle_exception(
-            e, context=context,
-            show_user_message=True,
-            attempt_recovery=True
-        )
-        
-        return default_return

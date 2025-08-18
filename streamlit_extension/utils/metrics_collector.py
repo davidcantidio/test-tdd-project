@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 import math
 import statistics
 import time
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 
 def _percentile(values: List[float], percent: float) -> float:
@@ -45,6 +45,7 @@ class MetricsCollector:
     errors: int = 0
     start_time: float | None = None
     end_time: float | None = None
+    _fail_examples: List[str] = field(default_factory=list)
 
     def start(self) -> None:
         """Record the start time of the measurement window."""
@@ -58,10 +59,18 @@ class MetricsCollector:
 
     def record(self, elapsed_ms: float, success: bool = True) -> None:
         """Store a single operation's elapsed time and success flag."""
-
-        self.response_times.append(elapsed_ms)
+        if elapsed_ms < 0:
+            # Protege contra valores negativos por clock skew/erros
+            elapsed_ms = 0.0
+        self.response_times.append(float(elapsed_ms))
         if not success:
             self.errors += 1
+
+    def record_exception(self, exc: BaseException, elapsed_ms: float) -> None:
+        """Atalho para registrar falha com amostra do erro (limitado)."""
+        self.record(elapsed_ms, success=False)
+        if len(self._fail_examples) < 5:
+            self._fail_examples.append(type(exc).__name__)
 
     # summary returns dict with response_time, throughput, errors
     def summary(self) -> Dict[str, Dict[str, float]]:
@@ -88,5 +97,8 @@ class MetricsCollector:
         return {
             "response_time": rt_stats,
             "throughput": {"requests_per_second": throughput},
-            "errors": {"total_errors": self.errors, "error_rate": error_rate},
+            "errors": {
+                "total_errors": self.errors,
+                "error_rate": error_rate,
+            },
         }
