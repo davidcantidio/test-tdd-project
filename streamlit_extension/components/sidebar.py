@@ -19,16 +19,22 @@ try:
 except ImportError:
     get_config = None
 
-# Import database utilities for real data
+# Import database utilities - migrated to modular API
 try:
-    from ..utils.database import DatabaseManager
+    from ..database import get_connection, transaction
+    from ..database.queries import list_epics, list_tasks, list_timer_sessions
     DATABASE_AVAILABLE = True
 except ImportError:
     try:
-        from streamlit_extension.utils.database import DatabaseManager
+        from streamlit_extension.database import get_connection, transaction
+        from streamlit_extension.database.queries import list_epics, list_tasks, list_timer_sessions
         DATABASE_AVAILABLE = True
     except ImportError:
-        DatabaseManager = None
+        get_connection = None
+        transaction = None
+        list_epics = None
+        list_tasks = None
+        list_timer_sessions = None
         DATABASE_AVAILABLE = False
 
 
@@ -219,16 +225,16 @@ def _get_gamification_data() -> Dict[str, Any]:
         return _get_fallback_gamification_data()
     
     try:
-        db_manager = DatabaseManager()
-        
-        # Get user stats (points, completed tasks)
-        user_stats = db_manager.get_user_stats()
-        
-        # Get achievements
-        achievements = db_manager.get_achievements()
+        if DATABASE_AVAILABLE:
+            # Get user stats (points, completed tasks)
+            from ..database.queries import get_user_stats, get_achievements
+            user_stats = get_user_stats()
+            
+            # Get achievements
+            achievements = get_achievements()
         
         # Get timer sessions for streak calculation
-        timer_sessions = db_manager.get_timer_sessions(days=30)
+        timer_sessions = list_timer_sessions(days=30) if list_timer_sessions else []
         
         # Calculate streaks
         current_streak, streak_type = _calculate_streaks(timer_sessions)

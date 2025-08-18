@@ -719,7 +719,7 @@ def main() -> None:
         temp_file = tmp.name
         db_path = temp_file
 
-    if args.print-db-path:
+    if args.print_db_path:
         print(f"🗄️  Database path: {db_path}")
 
     try:
