@@ -319,3 +319,18 @@ temp_migrations/
 # Local configuration overrides
 local_config.py
 local_settings.py
+
+# ===================================================
+# DEMO FOLDERS PRESERVATION
+# ===================================================
+# IMPORTANT: Demo folders must be maintained (user requirement)
+# Override global ignores for demo folders
+!demo_*/
+!demo_*/**/*
+!demo_logs/
+!demo_logs/*.log
+!demo_secrets_vault/
+!demo_secrets_vault/*.db
+!demo_secrets_vault/*.key
+!demo_reports/
+!demo_reports/*
