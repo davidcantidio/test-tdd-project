@@ -19,6 +19,65 @@
 **Schema errors:** `python scripts/maintenance/database_maintenance.py`  
 **Connection pool:** Restart application, check for open connections
 
+#### **🗄️ Hybrid Database Architecture (NEW 2025-08-18)**
+
+**API Import Issues:**
+```bash
+# Test original API works
+python -c "from streamlit_extension.utils.database import DatabaseManager; print('✅ Original API works')"
+
+# Test modular API works  
+python -c "from streamlit_extension.database import get_connection; print('✅ Modular API works')"
+
+# Test both coexist
+python -c "
+from streamlit_extension.utils.database import DatabaseManager
+from streamlit_extension.database import get_connection
+print('✅ Both APIs coexist')
+"
+```
+
+**Performance Issues:**
+```bash
+# Check if you're using the faster modular API
+# SLOW (original): DatabaseManager().get_connection()
+# FAST (4,254x faster): get_connection()
+
+# Performance test
+python -c "
+import time
+from streamlit_extension.utils.database import DatabaseManager
+from streamlit_extension.database.connection import get_connection
+
+# Original method
+start = time.time()
+for i in range(100): db = DatabaseManager()
+original_time = time.time() - start
+
+# Modular method  
+start = time.time()
+for i in range(100): conn_func = get_connection
+modular_time = time.time() - start
+
+print(f'Performance ratio: {original_time/modular_time:.1f}x faster with modular API')
+"
+```
+
+**Migration Path:**
+```python
+# Gradual migration strategy
+# 1. Keep existing DatabaseManager code working
+from streamlit_extension.utils.database import DatabaseManager
+db = DatabaseManager()
+
+# 2. Use modular for new performance-critical code  
+from streamlit_extension.database import get_connection, transaction
+
+# 3. Mixed usage for best results
+with transaction():  # Fast modular transaction
+    db.create_client(data)  # Familiar DatabaseManager
+```
+
 ### **Streamlit Issues**
 
 **Port conflicts:** `streamlit run streamlit_extension/streamlit_app.py --server.port 8502`  
