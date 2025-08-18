@@ -1,124 +1,504 @@
  (cd "$(git rev-parse --show-toplevel)" && git apply --3way <<'EOF' 
-diff --git a/streamlit_extension/services/client_service.py b/streamlit_extension/services/client_service.py
-index 5a9f5c3e1600009fd41b01f92b4fc103628d00e7..f5ac86bf7cc64753b814e6be203698240c820400 100644
---- a/streamlit_extension/services/client_service.py
-+++ b/streamlit_extension/services/client_service.py
-@@ -59,53 +59,53 @@ class ClientRepository(BaseRepository):
-             if filters:
-                 if filters.has('status'):
-                     where_conditions.append("status = ?")
-                     params.append(filters.get('status'))
+diff --git a/streamlit_extension/auth/auth_manager.py b/streamlit_extension/auth/auth_manager.py
+index 21174695819b0773573b9655237bca30d7893ec7..7ce4d9fa0b3d8267e31e67f7d775a3a9a4a522eb 100644
+--- a/streamlit_extension/auth/auth_manager.py
++++ b/streamlit_extension/auth/auth_manager.py
+@@ -6,50 +6,51 @@ application.  It provides helpers for user registration, login, logout and
+ password changes while enforcing security features such as account
+ lockouts and session validation.
+ 
+ Example:
+     Basic login flow::
+ 
+         from streamlit_extension.auth.auth_manager import AuthManager
+ 
+         auth = AuthManager("framework.db")
+         result = auth.register_user("alice", "alice@example.com", "s3cret")
+         if result.success:
+             auth.authenticate("alice", "s3cret")
+ 
+ Classes:
+     AuthManager: Core class responsible for authentication operations.
+     AuthResult: Dataclass describing authentication outcomes.
+ 
+ Todo:
+     * Implement password reset via email
+     * Add token based authentication for API usage
+ """
+ 
+ from __future__ import annotations
+ import hashlib
+ import secrets
++import hmac
+ from dataclasses import dataclass
+ from typing import Optional, Dict, Any
+ from datetime import datetime, timedelta
+ import sqlite3
+ 
+ try:
+     from .user_model import User, UserRole
+     from .session_handler import SessionHandler, SessionData
+ except ImportError:  # pragma: no cover - simplifies standalone usage
+     class User:  # type: ignore
+         """Fallback user model."""
+ 
+     class UserRole:  # type: ignore
+         USER = "user"
+ 
+     class SessionData:  # type: ignore
+         user: Optional[User] = None
+ 
+     class SessionHandler:  # type: ignore
+         def create_session(self, user: User) -> str:  # pragma: no cover
+             return ""
+ 
+         def destroy_session(self, session_id: str) -> bool:  # pragma: no cover
+             return False
+ 
+@@ -103,50 +104,55 @@ class AuthManager:
+                     id INTEGER PRIMARY KEY AUTOINCREMENT,
+                     username TEXT UNIQUE NOT NULL,
+                     email TEXT UNIQUE NOT NULL,
+                     password_hash TEXT NOT NULL,
+                     salt TEXT NOT NULL,
+                     role TEXT NOT NULL DEFAULT 'user',
+                     is_active BOOLEAN DEFAULT 1,
+                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                     last_login TIMESTAMP,
+                     failed_login_attempts INTEGER DEFAULT 0,
+                     locked_until TIMESTAMP NULL
+                 )
+             """)
+             
+             conn.execute("""
+                 CREATE INDEX IF NOT EXISTS idx_auth_users_username ON auth_users(username)
+             """)
+             
+             conn.execute("""
+                 CREATE INDEX IF NOT EXISTS idx_auth_users_email ON auth_users(email)
+             """)
+     
+     def _hash_password(self, password: str, salt: str) -> str:
+         """Hash password with salt using SHA-256."""
+         return hashlib.sha256((password + salt).encode()).hexdigest()
++
++    def _verify_password(self, password: str, salt: str, stored_hash: str) -> bool:
++        """Secure constant-time password verification."""
++        computed = self._hash_password(password, salt)
++        return hmac.compare_digest(computed, stored_hash)
+     
+     def _generate_salt(self) -> str:
+         """Generate cryptographically secure salt."""
+         return secrets.token_hex(32)
+     
+     def register_user(
+         self,
+         username: str,
+         email: str,
+         password: str,
+         role: UserRole = UserRole.USER,
+     ) -> AuthResult:
+         """Register a new user in the authentication database.
+ 
+         Args:
+             username: Desired unique username (at least 3 characters).
+             email: Contact e-mail address.
+             password: Raw password string (minimum 8 characters).
+             role: Optional role assigned to the user. Defaults to
+                 :class:`UserRole.USER`.
+ 
+         Returns:
+             AuthResult: Result object with success flag and optional user.
+ 
+         Raises:
+@@ -220,52 +226,51 @@ class AuthManager:
+             False
+         """
+         try:
+             with sqlite3.connect(self.db_path) as conn:
+                 # Get user data
+                 row = conn.execute("""
+                     SELECT id, username, email, password_hash, salt, role, is_active, 
+                            failed_login_attempts, locked_until
+                     FROM auth_users WHERE username = ?
+                 """, (username,)).fetchone()
                  
-                 if filters.has('name'):
-                     where_conditions.append("name LIKE ?")
-                     params.append(f"%{filters.get('name')}%")
+                 if not row:
+                     return AuthResult(False, message="Invalid credentials")
                  
-                 if filters.has('email'):
-                     where_conditions.append("email LIKE ?")
-                     params.append(f"%{filters.get('email')}%")
+                 user_id, username, email, stored_hash, salt, role, is_active, failed_attempts, locked_until = row
                  
-                 if filters.has('company'):
-                     where_conditions.append("company LIKE ?")
-                     params.append(f"%{filters.get('company')}%")
-             
-             # Build WHERE clause
-             where_clause = " WHERE " + " AND ".join(where_conditions) if where_conditions else ""
-             
-             # Build ORDER BY clause
-             order_clause = ""
-             if sort:
-                 order_clause = f" ORDER BY {sort.field} {'ASC' if sort.ascending else 'DESC'}"
-             
--            # Count total records
--            count_query = f"SELECT COUNT(*) FROM framework_clients{where_clause}"
--            total_count = self.db_manager.execute_query(count_query, params)[0]['COUNT(*)']
-+            # Count total records (usar alias para chave estável no resultado)
-+            count_query = f"SELECT COUNT(*) AS total FROM framework_clients{where_clause}"
-+            total_count = self.db_manager.execute_query(count_query, params)[0]['total']
-             
-             # Calculate pagination
-             offset = (page - 1) * page_size
-             total_pages = (total_count + page_size - 1) // page_size
-             
-             # Get paginated results
-             data_query = f"""
-                 SELECT * FROM framework_clients
-                 {where_clause}
-                 {order_clause}
-                 LIMIT ? OFFSET ?
-             """
-             data_params = params + [page_size, offset]
-             clients = self.db_manager.execute_query(data_query, data_params)
-             
-             return PaginatedResult(
-                 items=clients,
-                 total=total_count,
-                 page=page,
-                 page_size=page_size,
-                 total_pages=total_pages
-             )
-             
-         except Exception as e:
-             self.db_manager.logger.error(f"Error finding clients: {e}")
-diff --git a/streamlit_extension/services/timer_service.py b/streamlit_extension/services/timer_service.py
-index bb13d245adaeccf4d136e58e646b8c451efeb8fd..a6ff8e2fa55f6384ad939690f6237c2d47cfae0c 100644
---- a/streamlit_extension/services/timer_service.py
-+++ b/streamlit_extension/services/timer_service.py
-@@ -906,51 +906,53 @@ class TimerService(BaseService):
-         self.log_operation("update_session_ratings", session_id=session_id, ratings=ratings)
-         
-         # Validate ratings
-         validation_errors = self.validate_business_rules(ratings)
-         if validation_errors:
-             return ServiceResult.fail_multiple(validation_errors)
+                 # Check if account is locked
+                 if locked_until and datetime.fromisoformat(locked_until) > datetime.now():
+                     return AuthResult(False, message="Account temporarily locked")
+                 
+                 # Check if account is active
+                 if not is_active:
+                     return AuthResult(False, message="Account is disabled")
+                 
+                 # Verify password
+-                password_hash = self._hash_password(password, salt)
+-                if password_hash != stored_hash:
++                if not self._verify_password(password, salt, stored_hash):
+                     # Increment failed attempts
+                     failed_attempts += 1
+                     lock_time = None
+                     if failed_attempts >= 5:
+                         lock_time = datetime.now() + timedelta(minutes=15)
+                     
+                     conn.execute("""
+                         UPDATE auth_users 
+                         SET failed_login_attempts = ?, locked_until = ?
+                         WHERE id = ?
+                     """, (failed_attempts, lock_time, user_id))
+                     
+                     return AuthResult(False, message="Invalid credentials")
+                 
+                 # Successful login - reset failed attempts and update last login
+                 conn.execute("""
+                     UPDATE auth_users 
+                     SET failed_login_attempts = 0, locked_until = NULL, last_login = ?
+                     WHERE id = ?
+                 """, (datetime.now(), user_id))
+                 
+                 # Create user object
+                 user = User(
+                     id=user_id,
+                     username=username,
+@@ -299,53 +304,51 @@ class AuthManager:
+         """Get current user from session."""
+         session_data = self.session_handler.get_session(session_id)
+         return session_data.user if session_data else None
+     
+     def is_authenticated(self, session_id: str) -> bool:
+         """Check if session is valid and user is authenticated."""
+         return self.session_handler.is_valid_session(session_id)
+     
+     def change_password(self, user_id: int, old_password: str, new_password: str) -> AuthResult:
+         """Change user password with validation."""
+         if len(new_password) < 8:
+             return AuthResult(False, message="New password must be at least 8 characters")
          
          try:
-             success = self.repository.update_session(session_id, ratings)
-             
-             if success:
-                 self.log_operation("update_session_ratings_success", session_id=session_id)
-                 return ServiceResult.ok(True)
-             else:
-                 return ServiceResult.business_rule_violation("Failed to update session ratings")
+             with sqlite3.connect(self.db_path) as conn:
+                 # Verify old password
+                 row = conn.execute(
+                     "SELECT password_hash, salt FROM auth_users WHERE id = ?",
+                     (user_id,)
+                 ).fetchone()
+                 
+                 if not row:
+                     return AuthResult(False, message="User not found")
+                 
+                 stored_hash, salt = row
+-                old_hash = self._hash_password(old_password, salt)
+-                
+-                if old_hash != stored_hash:
++                if not self._verify_password(old_password, salt, stored_hash):
+                     return AuthResult(False, message="Current password is incorrect")
+                 
+                 # Set new password
+                 new_salt = self._generate_salt()
+                 new_hash = self._hash_password(new_password, new_salt)
+                 
+                 conn.execute("""
+                     UPDATE auth_users 
+                     SET password_hash = ?, salt = ?
+                     WHERE id = ?
+                 """, (new_hash, new_salt, user_id))
+                 
+                 return AuthResult(True, message="Password changed successfully")
                  
          except Exception as e:
-             return self.handle_database_error("update_session_ratings", e)
+             return AuthResult(False, message=f"Password change failed: {str(e)}")
      
-     # Private helper methods
-     
-     def _calculate_elapsed_time(self, session: Dict[str, Any]) -> int:
-         """Calculate elapsed time for active session."""
-         start_time = session['start_time']
-         if isinstance(start_time, str):
--            start_time = datetime.fromisoformat(start_time)
-+            # Normaliza ISO 8601 com sufixo 'Z' (UTC) para compatibilidade com fromisoformat
-+            iso_str = start_time.replace('Z', '+00:00') if start_time.endswith('Z') else start_time
-+            start_time = datetime.fromisoformat(iso_str)
+     def get_user_by_id(self, user_id: int) -> Optional[User]:
+         """Get user by ID."""
+         try:
+             with sqlite3.connect(self.db_path) as conn:
+                 row = conn.execute("""
+                     SELECT id, username, email, role, is_active, created_at, last_login
+                     FROM auth_users WHERE id = ?
+                 """, (user_id,)).fetchone()
+diff --git a/streamlit_extension/auth/login_page.py b/streamlit_extension/auth/login_page.py
+index 3f2a9d5d91eb0869e37f362733a1e826cbace6ff..7cc0f0f37a0f2334e7adcfd3d386789a6b76fa62 100644
+--- a/streamlit_extension/auth/login_page.py
++++ b/streamlit_extension/auth/login_page.py
+@@ -94,36 +94,30 @@ def render_user_profile():
          
-         elapsed = datetime.now() - start_time
-         return int(elapsed.total_seconds() / 60)
+         if user.last_login:
+             st.write(f"**Last Login:** {user.last_login.strftime('%Y-%m-%d %H:%M')}")
      
-     def _calculate_remaining_time(self, session: Dict[str, Any]) -> int:
-         """Calculate remaining time for session."""
-         planned_duration = session.get('planned_duration_minutes', 0)
-         elapsed = self._calculate_elapsed_time(session)
+     with col2:
+         st.subheader("Change Password")
          
-         return max(0, planned_duration - elapsed)
+         with st.form("change_password_form"):
+             old_password = st.text_input("Current Password", type="password")
+             new_password = st.text_input("New Password", type="password")
+             confirm_new = st.text_input("Confirm New Password", type="password")
+             
+             if st.form_submit_button("Change Password"):
+                 if not all([old_password, new_password, confirm_new]):
+                     st.error("Please fill in all password fields.")
+                 elif new_password != confirm_new:
+                     st.error("New passwords do not match.")
+                 else:
+                     result = auth_manager.change_password(user.id, old_password, new_password)
+                     
+                     if result.success:
+                         st.success("Password changed successfully!")
+                     else:
+                         st.error(result.message)
      
-     def _calculate_progress_percentage(self, session: Dict[str, Any]) -> float:
-         """Calculate progress percentage for session."""
-         planned_duration = session.get('planned_duration_minutes', 0)
-         if planned_duration <= 0:
-             return 0.0
-         
-         elapsed = self._calculate_elapsed_time(session)
-         return min(100.0, (elapsed / planned_duration) * 100)
+-    # Logout button
++    # Logout button (reuse middleware)
++    from .middleware import logout_user
+     if st.button("🚪 Logout", type="secondary"):
+-        if "session_id" in st.session_state:
+-            auth_manager.logout(st.session_state.session_id)
+-            del st.session_state.session_id
+-        
+-        if "current_user" in st.session_state:
+-            del st.session_state.current_user
+-        
++        logout_user()
+         st.success("Logged out successfully!")
+-        st.rerun()
+diff --git a/streamlit_extension/auth/middleware.py b/streamlit_extension/auth/middleware.py
+index f7f126ec2f7dcfc7de02e27de5b6a49b06d7aa0b..4436d7ef0cea1352ff67e7cea116ca14a636d830 100644
+--- a/streamlit_extension/auth/middleware.py
++++ b/streamlit_extension/auth/middleware.py
+@@ -1,107 +1,103 @@
+ """
+ 🔐 Authentication Middleware for Streamlit Pages
+ 
+ Enhanced authentication middleware that integrates with the DRY form components
+ and provides comprehensive page protection with role-based access control.
+ """
+ 
+ from functools import wraps
+ from typing import Callable, Optional
+ import streamlit as st
+ 
+ from .auth_manager import AuthManager
+ from .user_model import User, UserRole
+ 
+ 
+ # Global auth manager instance
+ _auth_manager: Optional[AuthManager] = None
+ 
+ 
+ def get_auth_manager() -> AuthManager:
+     """Get global auth manager instance."""
+     global _auth_manager
+     if _auth_manager is None:
++        # Singleton instância única
+         _auth_manager = AuthManager()
+     return _auth_manager
+ 
+ 
+ def require_auth(roles: Optional[list[UserRole]] = None):
+     """Decorator to require authentication for Streamlit functions."""
+     def decorator(func: Callable):
+         @wraps(func)
+         def wrapper(*args, **kwargs):
+             # Check authentication
+             if "session_id" not in st.session_state:
+                 st.error("🔒 Access denied. Please log in.")
+                 st.stop()
+             
+             auth_manager = get_auth_manager()
+             user = auth_manager.get_current_user(st.session_state.session_id)
+             
+             if not user:
+                 st.error("🔒 Session expired. Please log in again.")
+                 if "session_id" in st.session_state:
+                     del st.session_state.session_id
+                 st.stop()
+             
+             # Check role permissions
+             if roles and user.role not in roles:
+                 st.error(f"🔒 Access denied. Required role: {[r.display_name for r in roles]}")
+                 st.stop()
+             
+             # Store current user in session state
+             st.session_state.current_user = user
+             
+             return func(*args, **kwargs)
+         return wrapper
+     return decorator
+ 
+ 
+ def require_admin(func: Callable):
+     """Decorator to require admin role."""
+     return require_auth([UserRole.ADMIN])(func)
+ 
+ 
+ def auth_middleware() -> Optional[User]:
+     """Middleware to check authentication state."""
+-    if "session_id" not in st.session_state:
++    session_id = st.session_state.get("session_id")
++    if not session_id:
+         return None
+-    
+     auth_manager = get_auth_manager()
+-    user = auth_manager.get_current_user(st.session_state.session_id)
+-    
+-    if user:
+-        st.session_state.current_user = user
+-        return user
+-    else:
+-        # Clean up invalid session
+-        if "session_id" in st.session_state:
+-            del st.session_state.session_id
+-        if "current_user" in st.session_state:
+-            del st.session_state.current_user
++    user = auth_manager.get_current_user(session_id)
++    if not user:
++        st.session_state.pop("session_id", None)
++        st.session_state.pop("current_user", None)
+         return None
++    st.session_state.current_user = user
++    return user
+ 
+ 
+ def get_current_user() -> Optional[User]:
+     """Get current authenticated user."""
+     return st.session_state.get("current_user")
+ 
+ 
+ def is_authenticated() -> bool:
+     """Check if current user is authenticated."""
+     return get_current_user() is not None
+ 
+ 
+ def logout_user():
+     """Logout current user."""
+     if "session_id" in st.session_state:
+         auth_manager = get_auth_manager()
+         auth_manager.logout(st.session_state.session_id)
+         del st.session_state.session_id
      
-     def _format_duration(self, minutes: float) -> str:
-         """Format duration in minutes to human-readable string."""
-         if minutes is None:
-             return "0 minutes"
+     if "current_user" in st.session_state:
+         del st.session_state.current_user
+     
+     st.rerun()
+ 
+ 
+diff --git a/streamlit_extension/auth/session_handler.py b/streamlit_extension/auth/session_handler.py
+index 9251dc0dd6901c31df65b25cf0ebc6c3f3a0212c..801260d06ced2f76f09f24de36d90e340329f6c9 100644
+--- a/streamlit_extension/auth/session_handler.py
++++ b/streamlit_extension/auth/session_handler.py
+@@ -31,58 +31,60 @@ class SessionHandler:
+     
+     def create_session(self, user: User) -> str:
+         """Create new session for user."""
+         session_id = secrets.token_urlsafe(32)
+         now = datetime.now()
          
+         session_data = SessionData(
+             user=user,
+             created_at=now,
+             last_activity=now,
+             session_id=session_id,
+             expires_at=now + self.session_timeout
+         )
+         
+         self._sessions[session_id] = session_data
+         self._cleanup_expired_sessions()
+         
+         return session_id
+     
+     def get_session(self, session_id: str) -> Optional[SessionData]:
+         """Get session data if valid."""
+         if session_id not in self._sessions:
+             return None
+         
+         session = self._sessions[session_id]
+-        
++
+         # Check if expired
+         if datetime.now() > session.expires_at:
+             del self._sessions[session_id]
+             return None
+-        
+-        # Update last activity
+-        session.last_activity = datetime.now()
++
++        # Update last activity and extend expiration
++        now = datetime.now()
++        session.last_activity = now
++        session.expires_at = now + self.session_timeout
+         return session
+     
+     def is_valid_session(self, session_id: str) -> bool:
+         """Check if session is valid."""
+         return self.get_session(session_id) is not None
+     
+     def destroy_session(self, session_id: str) -> bool:
+         """Destroy session."""
+         if session_id in self._sessions:
+             del self._sessions[session_id]
+             return True
+         return False
+     
+     def extend_session(self, session_id: str, hours: int = 24) -> bool:
+         """Extend session expiration."""
+         if session_id in self._sessions:
+             session = self._sessions[session_id]
+             session.expires_at = datetime.now() + timedelta(hours=hours)
+             return True
+         return False
+     
+     def get_active_sessions_count(self) -> int:
+         """Get count of active sessions."""
+         self._cleanup_expired_sessions()
+         return len(self._sessions)
+diff --git a/streamlit_extension/auth/user_model.py b/streamlit_extension/auth/user_model.py
+index e3871509c3ef147e6cb136efbcea254a5c4185b3..f8546234938ec4ba9983fa86ae45af2bb2bbba86 100644
+--- a/streamlit_extension/auth/user_model.py
++++ b/streamlit_extension/auth/user_model.py
+@@ -59,33 +59,33 @@ class User:
+     def is_admin(self) -> bool:
+         """Check if user is admin."""
+         return self.role.can_admin()
+     
+     @property
+     def can_edit(self) -> bool:
+         """Check if user can edit data."""
+         return self.role.can_edit() and self.is_active
+     
+     def to_dict(self) -> dict:
+         """Convert to dictionary."""
+         return {
+             "id": self.id,
+             "username": self.username,
+             "email": self.email,
+             "role": self.role.value,
+             "is_active": self.is_active,
+             "created_at": self.created_at.isoformat() if self.created_at else None,
+             "last_login": self.last_login.isoformat() if self.last_login else None
+         }
+     
+     @classmethod
+     def from_dict(cls, data: dict) -> User:
+         """Create from dictionary."""
+         return cls(
+-            id=data["id"],
+-            username=data["username"],
+-            email=data["email"],
+-            role=UserRole(data["role"]),
+-            is_active=data["is_active"],
+-            created_at=datetime.fromisoformat(data["created_at"]) if data["created_at"] else None,
+-            last_login=datetime.fromisoformat(data["last_login"]) if data["last_login"] else None
++            id=data.get("id", 0),
++            username=data.get("username", ""),
++            email=data.get("email", ""),
++            role=UserRole(data.get("role", "user")),
++            is_active=data.get("is_active", True),
++            created_at=datetime.fromisoformat(data["created_at"]) if data.get("created_at") else None,
++            last_login=datetime.fromisoformat(data["last_login"]) if data.get("last_login") else None
+         )
  
 EOF
 )

@@ -28,6 +28,7 @@ Todo:
 from __future__ import annotations
 import hashlib
 import secrets
+import hmac
 from dataclasses import dataclass
 from typing import Optional, Dict, Any
 from datetime import datetime, timedelta
@@ -125,6 +126,11 @@ class AuthManager:
     def _hash_password(self, password: str, salt: str) -> str:
         """Hash password with salt using SHA-256."""
         return hashlib.sha256((password + salt).encode()).hexdigest()
+
+    def _verify_password(self, password: str, salt: str, stored_hash: str) -> bool:
+        """Secure constant-time password verification."""
+        computed = self._hash_password(password, salt)
+        return hmac.compare_digest(computed, stored_hash)
     
     def _generate_salt(self) -> str:
         """Generate cryptographically secure salt."""
@@ -242,8 +248,7 @@ class AuthManager:
                     return AuthResult(False, message="Account is disabled")
                 
                 # Verify password
-                password_hash = self._hash_password(password, salt)
-                if password_hash != stored_hash:
+                if not self._verify_password(password, salt, stored_hash):
                     # Increment failed attempts
                     failed_attempts += 1
                     lock_time = None
@@ -321,9 +326,7 @@ class AuthManager:
                     return AuthResult(False, message="User not found")
                 
                 stored_hash, salt = row
-                old_hash = self._hash_password(old_password, salt)
-                
-                if old_hash != stored_hash:
+                if not self._verify_password(old_password, salt, stored_hash):
                     return AuthResult(False, message="Current password is incorrect")
                 
                 # Set new password

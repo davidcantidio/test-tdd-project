@@ -116,14 +116,8 @@ def render_user_profile():
                     else:
                         st.error(result.message)
     
-    # Logout button
+    # Logout button (reuse middleware)
+    from .middleware import logout_user
     if st.button("🚪 Logout", type="secondary"):
-        if "session_id" in st.session_state:
-            auth_manager.logout(st.session_state.session_id)
-            del st.session_state.session_id
-        
-        if "current_user" in st.session_state:
-            del st.session_state.current_user
-        
+        logout_user()
         st.success("Logged out successfully!")
-        st.rerun()

@@ -81,11 +81,11 @@ class User:
     def from_dict(cls, data: dict) -> User:
         """Create from dictionary."""
         return cls(
-            id=data["id"],
-            username=data["username"],
-            email=data["email"],
-            role=UserRole(data["role"]),
-            is_active=data["is_active"],
-            created_at=datetime.fromisoformat(data["created_at"]) if data["created_at"] else None,
-            last_login=datetime.fromisoformat(data["last_login"]) if data["last_login"] else None
+            id=data.get("id", 0),
+            username=data.get("username", ""),
+            email=data.get("email", ""),
+            role=UserRole(data.get("role", "user")),
+            is_active=data.get("is_active", True),
+            created_at=datetime.fromisoformat(data["created_at"]) if data.get("created_at") else None,
+            last_login=datetime.fromisoformat(data["last_login"]) if data.get("last_login") else None
         )

@@ -21,6 +21,7 @@ def get_auth_manager() -> AuthManager:
     """Get global auth manager instance."""
     global _auth_manager
     if _auth_manager is None:
+        # Singleton instância única
         _auth_manager = AuthManager()
     return _auth_manager
 
@@ -64,22 +65,17 @@ def require_admin(func: Callable):
 
 def auth_middleware() -> Optional[User]:
     """Middleware to check authentication state."""
-    if "session_id" not in st.session_state:
+    session_id = st.session_state.get("session_id")
+    if not session_id:
         return None
-    
     auth_manager = get_auth_manager()
-    user = auth_manager.get_current_user(st.session_state.session_id)
-    
-    if user:
-        st.session_state.current_user = user
-        return user
-    else:
-        # Clean up invalid session
-        if "session_id" in st.session_state:
-            del st.session_state.session_id
-        if "current_user" in st.session_state:
-            del st.session_state.current_user
+    user = auth_manager.get_current_user(session_id)
+    if not user:
+        st.session_state.pop("session_id", None)
+        st.session_state.pop("current_user", None)
         return None
+    st.session_state.current_user = user
+    return user
 
 
 def get_current_user() -> Optional[User]:

@@ -53,14 +53,16 @@ class SessionHandler:
             return None
         
         session = self._sessions[session_id]
-        
+
         # Check if expired
         if datetime.now() > session.expires_at:
             del self._sessions[session_id]
             return None
-        
-        # Update last activity
-        session.last_activity = datetime.now()
+
+        # Update last activity and extend expiration
+        now = datetime.now()
+        session.last_activity = now
+        session.expires_at = now + self.session_timeout
         return session
     
     def is_valid_session(self, session_id: str) -> bool:
