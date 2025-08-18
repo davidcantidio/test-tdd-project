@@ -23,6 +23,7 @@ Features:
 """
 
 import logging
+import logging.handlers
 import json
 import time
 import uuid
@@ -36,6 +37,9 @@ import traceback
 import os
 import socket
 from enum import Enum
+import contextvars
+
+request_id_ctx: contextvars.ContextVar[str | None] = contextvars.ContextVar("request_id", default=None)
 
 # Prometheus metrics (optional dependency)
 try:
@@ -587,7 +591,8 @@ class StructuredFormatter(logging.Formatter):
             "message": record.getMessage(),
             "module": record.module,
             "function": record.funcName,
-            "line": record.lineno
+            "line": record.lineno,
+            "request_id": request_id_ctx.get(),
         }
         
         if record.exc_info:

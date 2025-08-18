@@ -9,11 +9,16 @@ Validation utilities for Streamlit extension with:
 - Client and Project data validation
 """
 
+from __future__ import annotations
+
 from typing import Dict, Any, List, Tuple, Optional
 from pathlib import Path
 import re
 import json
 from datetime import datetime
+from email.utils import parseaddr
+
+VALID_METHODS = {"agile", "waterfall", "kanban", "scrum", "lean", "hybrid"}
 
 # Graceful imports
 try:
@@ -578,7 +583,7 @@ def validate_project_data(project: Dict[str, Any]) -> Tuple[bool, List[str]]:
         errors.append(f"Invalid project type '{project_type}'. Valid options: {', '.join(valid_types)}")
     
     # Validate methodology
-    valid_methodologies = ["agile", "waterfall", "kanban", "scrum", "lean", "hybrid"]
+    valid_methodologies = list(VALID_METHODS)
     methodology = project.get("methodology", "agile")
     if methodology and methodology not in valid_methodologies:
         errors.append(f"Invalid methodology '{methodology}'. Valid options: {', '.join(valid_methodologies)}")
@@ -734,9 +739,17 @@ def validate_project_key_uniqueness(project_key: str, client_id: int, existing_p
     for project in existing_projects:
         if exclude_project_id and project.get("id") == exclude_project_id:
             continue
-        
-        if (project.get("client_id") == client_id and 
+
+        if (project.get("client_id") == client_id and
             project.get("project_key", "").lower() == project_key.lower()):
             return False
-    
+
     return True
+
+
+def is_valid_email(email: str) -> bool:
+    """Loose e-mail validation without regex pitfalls."""
+    if not email:
+        return False
+    _, addr = parseaddr(email)
+    return "@" in addr and "." in addr.split("@")[-1]

@@ -10,6 +10,7 @@ Reusable layout containers and structural components:
 from typing import Optional, Dict, Any, Union, List, Callable
 from dataclasses import dataclass
 from contextlib import contextmanager, nullcontext
+import uuid
 
 # Graceful imports
 try:
@@ -77,9 +78,10 @@ class CardContainer:
         hover_css = "transition: box-shadow 0.2s ease; cursor: pointer;" if self.style.hover_effect else ""
         hover_shadow = ":hover { box-shadow: 0 4px 8px rgba(0,0,0,0.15); }" if self.style.hover_effect else ""
         
+        _cid = f"card-container-{uuid.uuid4().hex[:8]}"
         card_css = f"""
         <style>
-        .card-container {{
+        .{_cid} {{
             border: 1px solid {self.style.border_color};
             background-color: {self.style.background_color};
             border-radius: {self.style.border_radius};
@@ -88,14 +90,14 @@ class CardContainer:
             {shadow_css}
             {hover_css}
         }}
-        .card-container{hover_shadow}
+        .{_cid}{hover_shadow}
         </style>
         """
-        
+
         st.markdown(card_css, unsafe_allow_html=True)
-        
+
         # Start card container
-        st.markdown('<div class="card-container">', unsafe_allow_html=True)
+        st.markdown(f'<div class="{_cid}">', unsafe_allow_html=True)
         
         # Render title and subtitle
         if self.title:
@@ -129,6 +131,8 @@ class CardContainer:
                 print()
             return
         
+        # protege contra columns<1
+        columns = max(1, int(columns))
         cols = st.columns(columns)
 
         for i, card_data in enumerate(cards):
@@ -296,8 +300,8 @@ class TabContainer:
         if len(self.icons) < len(self.tabs):
             self.icons.extend(["📄"] * (len(self.tabs) - len(self.icons)))
     
-    def render(self) -> int:
-        """Render tabs and return the selected tab index."""
+    def render(self):
+        """Render tabs e retorna objetos dos tabs (padrão st.tabs)."""
         if not STREAMLIT_AVAILABLE:
             print(f"[TABS] Available: {', '.join(self.tabs)}")
             return self.default_tab
@@ -306,8 +310,9 @@ class TabContainer:
         tab_labels = [f"{self.icons[i]} {tab}" for i, tab in enumerate(self.tabs)]
         
         # Create tabs
+        # Usa uma key estável para evitar reordenação em reruns
         tab_objects = st.tabs(tab_labels)
-        
+
         return tab_objects
     
     @contextmanager

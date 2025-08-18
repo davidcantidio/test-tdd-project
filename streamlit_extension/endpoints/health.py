@@ -73,7 +73,7 @@ class HealthCheckEndpoint:
         return datetime.utcnow().isoformat() + "Z"
 
     # ------------------------------------------------------------------
-    def basic_health(self) -> Dict[str, str]:
+    def basic_health(self) -> Dict[str, object]:
         """Return a very small health payload."""
 
         uptime_seconds = int(time.time() - self.start_time)

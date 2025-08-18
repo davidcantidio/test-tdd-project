@@ -20,12 +20,43 @@ Integration Strategy:
 import sys
 import time
 import threading
+import sqlite3
 from pathlib import Path
-from typing import Dict, List, Optional, Any, Union, Tuple
+from typing import Dict, List, Optional, Any, Union, Tuple, Iterable, Callable
 from functools import wraps
+from contextlib import contextmanager
 
 # Add parent directories to path
 sys.path.append(str(Path(__file__).parent.parent.parent))
+
+
+class CachedDatabase:
+    """SQLite helper with row_factory, thread-safety and context management."""
+
+    def __init__(self, path: str, init_pragmas: Optional[Iterable[str]] = None):
+        self.path = path
+        self._conn = sqlite3.connect(self.path, check_same_thread=False)
+        self._conn.row_factory = sqlite3.Row
+        self._lock = threading.RLock()
+        for pragma in (init_pragmas or ("PRAGMA journal_mode=WAL;", "PRAGMA synchronous=NORMAL;")):
+            try:
+                self._conn.execute(pragma)
+            except Exception:
+                pass
+
+    @contextmanager
+    def _cursor(self):
+        with self._lock:
+            cur = self._conn.cursor()
+            try:
+                yield cur
+            finally:
+                cur.close()
+
+    def query(self, sql: str, params: Tuple[Any, ...] = ()) -> List[Dict[str, Any]]:
+        with self._cursor() as cur:
+            cur.execute(sql, params)
+            return [dict(row) for row in cur.fetchall()]
 
 try:
     from streamlit_extension.utils.database import DatabaseManager

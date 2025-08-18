@@ -15,6 +15,7 @@ import os
 import shutil
 import time
 from datetime import datetime
+from time import monotonic
 from typing import Callable, Dict, List, Optional
 
 try:
@@ -66,10 +67,16 @@ class ComponentHealth:
 class HealthChecker:
     """Comprehensive health checking system."""
 
-    def __init__(self) -> None:
+    def __init__(self,
+                 db_ping: Optional[Callable[[], None]] = None,
+                 redis_ping: Optional[Callable[[], None]] = None,
+                 fs_path: str = ".") -> None:
         """Initialize health checker with all components."""
 
         self.custom_checks: Dict[str, Callable[[], bool]] = {}
+        self._db_ping = db_ping
+        self._redis_ping = redis_ping
+        self._fs_path = fs_path
 
     # ------------------------------------------------------------------
     # Individual component checks
@@ -77,36 +84,46 @@ class HealthChecker:
     def check_database_health(self) -> ComponentHealth:
         """Check database connectivity and performance."""
 
-        start = time.time()
+        start = monotonic()
         try:
-            status = HealthStatus.HEALTHY
-            message = "Database connection successful"
+            if self._db_ping:
+                self._db_ping()
+                status = HealthStatus.HEALTHY
+                message = "Database connection successful"
+            else:
+                status = HealthStatus.UNKNOWN
+                message = "No database ping configured"
         except Exception as exc:  # pragma: no cover - no real DB
             status = HealthStatus.UNHEALTHY
             message = str(exc)
-        duration = (time.time() - start) * 1000
+        duration = (monotonic() - start) * 1000.0
         return ComponentHealth("database", status, message, duration)
 
     def check_redis_health(self) -> ComponentHealth:
         """Check Redis cache availability."""
 
-        start = time.time()
+        start = monotonic()
         try:
-            status = HealthStatus.HEALTHY
-            message = "Redis connection successful"
+            if self._redis_ping:
+                self._redis_ping()
+                status = HealthStatus.HEALTHY
+                message = "Redis connection successful"
+            else:
+                status = HealthStatus.UNKNOWN
+                message = "No redis ping configured"
         except Exception as exc:  # pragma: no cover - no real Redis
             status = HealthStatus.UNHEALTHY
             message = str(exc)
-        duration = (time.time() - start) * 1000
+        duration = (monotonic() - start) * 1000.0
         return ComponentHealth("redis", status, message, duration)
 
     def check_filesystem_health(self) -> ComponentHealth:
         """Check file system access and disk space."""
 
-        start = time.time()
+        start = monotonic()
         try:
-            os.listdir(".")
-            free = shutil.disk_usage(".").free
+            os.listdir(self._fs_path)
+            free = shutil.disk_usage(self._fs_path).free
             status = HealthStatus.HEALTHY
             message = "Filesystem accessible"
             metadata = {"free_bytes": free}
@@ -114,13 +131,13 @@ class HealthChecker:
             status = HealthStatus.UNHEALTHY
             message = str(exc)
             metadata = {}
-        duration = (time.time() - start) * 1000
+        duration = (monotonic() - start) * 1000.0
         return ComponentHealth("filesystem", status, message, duration, metadata)
 
     def check_memory_health(self) -> ComponentHealth:
         """Check memory usage and availability."""
 
-        start = time.time()
+        start = monotonic()
         if psutil is None:
             status = HealthStatus.UNKNOWN
             message = "psutil not available"
@@ -134,7 +151,7 @@ class HealthChecker:
             )
             message = f"Available memory: {memory.available}"
             metadata = {"available": memory.available, "percent": memory.percent}
-        duration = (time.time() - start) * 1000
+        duration = (monotonic() - start) * 1000.0
         return ComponentHealth("memory", status, message, duration, metadata)
 
     def check_application_health(self) -> ComponentHealth:
@@ -194,7 +211,7 @@ class HealthChecker:
                 overall = HealthStatus.DEGRADED
         return {
             "status": overall,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.utcnow().isoformat() + "Z",
             "components": [c.to_dict() for c in checks],
         }
 

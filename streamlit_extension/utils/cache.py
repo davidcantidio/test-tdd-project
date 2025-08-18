@@ -21,6 +21,7 @@ from functools import wraps
 from threading import Lock
 import json
 import logging
+from inspect import signature
 
 # Graceful imports
 try:
@@ -111,6 +112,23 @@ class AdvancedCache:
         # Invalidation tracking
         self._invalidation_patterns = set()
         self._invalidation_callbacks = {}
+
+    # ---------- Key generation ----------
+    def _stable_key(self, func: Callable, args: tuple, kwargs: dict) -> str:
+        """Create a deterministic hash for function+args/kwargs."""
+        try:
+            bound = signature(func).bind_partial(*args, **kwargs)
+            bound.apply_defaults()
+            payload = {
+                "f": f"{func.__module__}.{func.__qualname__}",
+                "args": bound.args,
+                "kwargs": dict(sorted(bound.kwargs.items())),
+            }
+        except Exception:
+            payload = {"f": repr(func), "args": args, "kwargs": kwargs}
+        raw = msgpack.packb(payload, use_bin_type=True)
+        digest = hashlib.sha256(raw).hexdigest()
+        return digest
     
     def _generate_key(self, key: Union[str, tuple, dict]) -> str:
         """Generate a consistent cache key from various input types."""
@@ -860,6 +878,9 @@ def clear_all_caches():
             st.cache_data.clear()
         except AttributeError:
             pass
+
+    # Also trigger disk cache cleanup
+    cache._cleanup_disk_cache()
 
 
 def cleanup_expired_cache():

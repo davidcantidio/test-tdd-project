@@ -7,7 +7,7 @@ Reusable status indicators, badges, and metric display components:
 - MetricCard: Key performance indicators with deltas and trends
 """
 
-from typing import Optional, Dict, Any, Union, List
+from typing import Optional, Dict, Any, Union, List, Tuple
 from dataclasses import dataclass
 from datetime import datetime
 from contextlib import nullcontext
@@ -61,6 +61,35 @@ class StatusBadge:
         self.status = status
         self.config = custom_config or STATUS_CONFIGS.get(status, STATUS_CONFIGS["info"])
     
+    def _rgba(self, color: str, alpha: float) -> str:
+        """Converte nome/hex de cor para rgba(). Garante CSS válido para alphas.
+        Suporta nomes básicos ('red','green','blue','orange','gray','yellow')."""
+        NAMED = {
+            "red": (255, 0, 0),
+            "green": (0, 128, 0),
+            "blue": (0, 0, 255),
+            "orange": (255, 165, 0),
+            "gray": (128, 128, 128),
+            "yellow": (255, 215, 0),
+            "black": (0, 0, 0),
+            "white": (255, 255, 255),
+        }
+        color = (color or "").strip().lower()
+        if color.startswith("#"):
+            h = color.lstrip("#")
+            if len(h) == 3:
+                h = "".join([c * 2 for c in h])
+            try:
+                r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
+                return f"rgba({r},{g},{b},{max(0, min(alpha, 1))})"
+            except Exception:
+                pass
+        if color in NAMED:
+            r, g, b = NAMED[color]
+            return f"rgba({r},{g},{b},{max(0, min(alpha, 1))})"
+        # fallback: azul neutro
+        return f"rgba(31,119,180,{max(0, min(alpha, 1))})"
+
     def render(self, text: str = None, show_icon: bool = True, size: str = "normal") -> None:
         """Render the status badge."""
         if not STREAMLIT_AVAILABLE:
@@ -81,11 +110,12 @@ class StatusBadge:
             font_size = "14px"
             padding = "4px 8px"
         
-        # Create badge HTML
+        # Create badge HTML (corrige alpha: usa rgba() em vez de 'nomeDeCor' + 'AA')
+        bg_rgba = self._rgba(self.config.color, self.config.background_alpha)
         badge_html = f"""
         <div style="
             display: inline-block;
-            background-color: {self.config.color}{hex(int(255 * self.config.background_alpha))[2:].zfill(2)};
+            background-color: {bg_rgba};
             color: {self.config.text_color};
             border: 1px solid {self.config.color};
             border-radius: 12px;

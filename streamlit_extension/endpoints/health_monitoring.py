@@ -6,9 +6,8 @@ Comprehensive health checks for production deployment
 import time
 import psutil
 import sqlite3
-import threading
-from datetime import datetime, timedelta
-from typing import Dict, Any, List, Optional, Callable
+from datetime import datetime
+from typing import Dict, Any, List
 from dataclasses import dataclass, asdict
 from enum import Enum
 
@@ -179,11 +178,11 @@ class SystemResourceChecker:
     
     def check_resources(self) -> List[HealthCheck]:
         """Check system resource health"""
-        start_time = time.time()
         metrics = self.get_system_metrics()
         checks = []
-        
+
         # CPU check
+        start_cpu = time.time()
         if metrics.cpu_percent > 90:
             cpu_status = HealthStatus.CRITICAL
             cpu_message = "CPU usage is critically high"
@@ -200,10 +199,11 @@ class SystemResourceChecker:
             message=cpu_message,
             details={"cpu_percent": metrics.cpu_percent},
             timestamp=datetime.utcnow(),
-            duration_ms=(time.time() - start_time) * 1000
+            duration_ms=(time.time() - start_cpu) * 1000
         ))
-        
+
         # Memory check
+        start_mem = time.time()
         if metrics.memory_percent > 90:
             memory_status = HealthStatus.CRITICAL
             memory_message = "Memory usage is critically high"
@@ -223,10 +223,11 @@ class SystemResourceChecker:
                 "available_mb": round(metrics.available_memory_mb, 2)
             },
             timestamp=datetime.utcnow(),
-            duration_ms=(time.time() - start_time) * 1000
+            duration_ms=(time.time() - start_mem) * 1000
         ))
-        
+
         # Disk check
+        start_disk = time.time()
         if metrics.disk_percent > 95:
             disk_status = HealthStatus.CRITICAL
             disk_message = "Disk space is critically low"
@@ -246,7 +247,7 @@ class SystemResourceChecker:
                 "available_gb": round(metrics.available_disk_gb, 2)
             },
             timestamp=datetime.utcnow(),
-            duration_ms=(time.time() - start_time) * 1000
+            duration_ms=(time.time() - start_disk) * 1000
         ))
         
         return checks
@@ -450,25 +451,7 @@ class HealthMonitor:
 # Global health monitor instance
 health_monitor = HealthMonitor()
 
-# Convenience functions for different probe types
-def _serialize_health_check(obj):
-    """Custom JSON serializer for health check objects"""
-    if isinstance(obj, HealthStatus):
-        return obj.value
-    elif isinstance(obj, datetime):
-        return obj.isoformat() + "Z"
-    elif hasattr(obj, '__dict__'):
-        # Convert dataclasses and other objects to dict
-        result = {}
-        for key, value in obj.__dict__.items():
-            if isinstance(value, HealthStatus):
-                result[key] = value.value
-            elif isinstance(value, datetime):
-                result[key] = value.isoformat() + "Z"
-            else:
-                result[key] = value
-        return result
-    return obj
+# Convenience functions for different probe types (JSON safe handled below)
 
 def health_check_endpoint() -> Dict[str, Any]:
     """Main health check endpoint with JSON serialization"""

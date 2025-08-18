@@ -21,7 +21,10 @@ Features:
 import time
 import threading
 import sqlite3
-import psutil
+try:
+    import psutil
+except Exception:  # pragma: no cover
+    psutil = None
 import tracemalloc
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Dict, List, Optional, Any, Callable
@@ -111,43 +114,49 @@ class PerformanceProfiler:
             current, peak = tracemalloc.get_traced_memory()
             return current / 1024 / 1024  # Convert to MB
         else:
-            return psutil.Process().memory_info().rss / 1024 / 1024
+            if psutil:
+                return psutil.Process().memory_info().rss / 1024 / 1024
+            return 0.0
     
     def get_statistics(self, operation_name: Optional[str] = None) -> Dict[str, Any]:
         """Generate comprehensive statistics for operations."""
         filtered_metrics = self.metrics
         if operation_name:
             filtered_metrics = [m for m in self.metrics if m.operation_name == operation_name]
-        
+
         if not filtered_metrics:
             return {"error": "No metrics found"}
-        
-        response_times = [m.response_time for m in filtered_metrics if m.success]
-        memory_usage = [m.memory_usage for m in filtered_metrics if m.success]
-        
-        if not response_times:
-            return {"error": "No successful operations found"}
-        
-        return {
-            "operation_name": operation_name or "all_operations",
-            "total_operations": len(filtered_metrics),
-            "successful_operations": len(response_times),
-            "success_rate": len(response_times) / len(filtered_metrics) * 100,
+
+        response_times = [m.response_time for m in filtered_metrics]
+        mem_deltas = [abs(m.memory_usage) for m in filtered_metrics]
+        successes = sum(1 for m in filtered_metrics if m.success)
+        total_ops = len(filtered_metrics)
+        success_rate = (successes / total_ops) * 100 if total_ops else 0.0
+        throughput = total_ops / max(1e-6, (filtered_metrics[-1].timestamp - filtered_metrics[0].timestamp).total_seconds())
+
+        def pct(arr, p):
+            if not arr:
+                return 0.0
+            s = sorted(arr)
+            k = int(max(0, min(len(s)-1, round((p/100) * (len(s)-1)))))
+            return float(s[k])
+
+        stats = {
+            "total_operations": total_ops,
+            "success_rate": success_rate,
+            "throughput": throughput,
             "response_time": {
-                "min": min(response_times),
+                "avg": float(sum(response_times)/len(response_times)),
+                "p50": pct(response_times, 50),
+                "p95": pct(response_times, 95),
                 "max": max(response_times),
-                "avg": statistics.mean(response_times),
-                "median": statistics.median(response_times),
-                "p95": self._percentile(response_times, 95),
-                "p99": self._percentile(response_times, 99)
             },
             "memory": {
-                "min": min(memory_usage) if memory_usage else 0,
-                "max": max(memory_usage) if memory_usage else 0,
-                "avg": statistics.mean(memory_usage) if memory_usage else 0
+                "avg_delta_mb": float(sum(mem_deltas)/len(mem_deltas)),
+                "max": max(mem_deltas) if mem_deltas else 0.0
             },
-            "throughput": len(response_times) / ((filtered_metrics[-1].timestamp - filtered_metrics[0].timestamp).total_seconds() or 1)
         }
+        return stats
     
     def _percentile(self, data: List[float], percentile: int) -> float:
         """Calculate percentile."""
@@ -370,6 +379,7 @@ class PerformanceMonitor:
         self.monitoring_active = False
         if self.monitor_thread:
             self.monitor_thread.join()
+        tracemalloc.stop()
     
     def _monitor_loop(self, interval: int):
         """Main monitoring loop."""
@@ -385,14 +395,16 @@ class PerformanceMonitor:
     
     def _collect_system_metrics(self) -> Dict[str, Any]:
         """Collect current system metrics."""
+        cpu = psutil.cpu_percent(interval=0.2) if psutil else 0.0
+        vm = psutil.virtual_memory() if psutil else None
         return {
             "timestamp": datetime.datetime.now().isoformat(),
-            "cpu_percent": psutil.cpu_percent(),
-            "memory_percent": psutil.virtual_memory().percent,
-            "memory_available": psutil.virtual_memory().available / 1024 / 1024,  # MB
-            "disk_usage": psutil.disk_usage('/').percent,
+            "cpu_percent": cpu,
+            "memory_percent": (vm.percent if vm else 0.0),
+            "memory_available": ((vm.available / 1024 / 1024) if vm else 0.0),  # MB
+            "disk_usage": (psutil.disk_usage('/').percent if psutil else 0.0),
             "active_threads": threading.active_count(),
-            "process_count": len(psutil.pids())
+            "process_count": (len(psutil.pids()) if psutil else 0)
         }
     
     def get_current_metrics(self) -> Dict[str, Any]:

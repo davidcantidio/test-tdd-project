@@ -57,7 +57,7 @@ def render_sidebar() -> Dict[str, Any]:
             st.session_state.timer_running = False
             st.session_state.timer_start_time = None
             st.session_state.current_task = None
-            st.session_state.elapsed_seconds = 0
+            st.session_state.elapsed_seconds = 0  # acumulado quando pausado
         
         # Task selection (placeholder)
         current_task = st.selectbox(
@@ -76,9 +76,14 @@ def render_sidebar() -> Dict[str, Any]:
             if st.button("▶️ Start" if not st.session_state.timer_running else "⏸️ Pause"):
                 if not st.session_state.timer_running:
                     st.session_state.timer_running = True
+                    # retoma mantendo acumulado; se estava parado, reinicia start
                     st.session_state.timer_start_time = datetime.now()
                 else:
+                    # pausa: acumula
                     st.session_state.timer_running = False
+                    if st.session_state.timer_start_time:
+                        st.session_state.elapsed_seconds += int((datetime.now() - st.session_state.timer_start_time).total_seconds())
+                        st.session_state.timer_start_time = None
                 st.rerun()
         
         with col2:
@@ -88,15 +93,12 @@ def render_sidebar() -> Dict[str, Any]:
                 st.session_state.elapsed_seconds = 0
                 st.rerun()
         
-        # Timer display
+        # display considera acumulado + sessão atual
+        total_secs = st.session_state.elapsed_seconds
         if st.session_state.timer_running and st.session_state.timer_start_time:
-            elapsed = datetime.now() - st.session_state.timer_start_time
-            elapsed_seconds = int(elapsed.total_seconds())
-            minutes = elapsed_seconds // 60
-            seconds = elapsed_seconds % 60
-            st.markdown(f"### ⏰ {minutes:02d}:{seconds:02d}")
-        else:
-            st.markdown("### ⏰ 00:00")
+            total_secs += int((datetime.now() - st.session_state.timer_start_time).total_seconds())
+        minutes, seconds = total_secs // 60, total_secs % 60
+        st.markdown(f"### ⏰ {minutes:02d}:{seconds:02d}")
         
         sidebar_state["timer_running"] = st.session_state.timer_running
         sidebar_state["current_task"] = st.session_state.current_task
@@ -123,7 +125,8 @@ def render_sidebar() -> Dict[str, Any]:
         st.markdown("---")
         
         # Gamification Section (real data)
-        if get_config and get_config().enable_gamification:
+        cfg = get_config() if get_config else None
+        if cfg and getattr(cfg, "enable_gamification", False):
             st.markdown("## 🏆 Achievements")
             
             # Get real gamification data
@@ -170,14 +173,14 @@ def render_sidebar() -> Dict[str, Any]:
         
         # GitHub sync status
         st.markdown("### 🐙 GitHub Sync")
-        if get_config and get_config().is_github_configured():
+        if cfg and hasattr(cfg, "is_github_configured") and cfg.is_github_configured():
             st.success("✅ Connected")
             if st.button("🔄 Sync Now"):
                 st.info("Sync functionality coming in Task 1.2.8")
         else:
             st.warning("⚠️ Not configured")
-        
-        sidebar_state["github_configured"] = get_config().is_github_configured() if get_config else False
+
+        sidebar_state["github_configured"] = bool(cfg and hasattr(cfg, "is_github_configured") and cfg.is_github_configured())
         
         st.markdown("---")
         

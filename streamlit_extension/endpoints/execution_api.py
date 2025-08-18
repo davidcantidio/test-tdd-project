@@ -22,73 +22,82 @@ Features:
 
 import logging
 import json
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, Tuple
 from datetime import datetime
 
-from ..services import get_task_service, ServiceResult
+from ..services import get_task_service
 from ..utils.exception_handler import handle_streamlit_exceptions, streamlit_error_boundary
-from ..auth.middleware import is_authenticated, get_current_user
-from ..utils.security import check_rate_limit
+from .api_middleware import (
+    validate_api_request,
+    log_api_request,
+    create_api_error_response,
+    create_api_success_response,
+)
 
 logger = logging.getLogger(__name__)
 
 @handle_streamlit_exceptions(show_error=False, attempt_recovery=False)
 def handle_api_request(api_endpoint: str, query_params: Dict[str, str]) -> Dict[str, Any]:
-    """
-    Main API request handler for TaskExecutionPlanner endpoints.
-    
-    Args:
-        api_endpoint: The API endpoint name (execution, validate, scoring, etc.)
-        query_params: Dict of query parameters from Streamlit
-        
-    Returns:
-        Dict containing JSON response data
-    """
-    # Authentication check
-    if not is_authenticated():
-        return {
-            "error": "Authentication required",
-            "code": "AUTH_REQUIRED",
-            "timestamp": datetime.now().isoformat()
-        }
-    
-    # Rate limiting check
-    rate_allowed, rate_error = check_rate_limit("api_request")
-    if not rate_allowed:
-        return {
-            "error": f"Rate limit exceeded: {rate_error}",
-            "code": "RATE_LIMIT_EXCEEDED", 
-            "timestamp": datetime.now().isoformat()
-        }
-    
-    # Route to appropriate handler
+    """Main API request handler for TaskExecutionPlanner endpoints."""
+    validation = validate_api_request(query_params)
+    if not validation.get("success"):
+        return create_api_error_response(
+            error_message="; ".join(validation.get("errors", ["Validation failed"])),
+            error_code="VALIDATION_ERROR",
+            details={"auth_method": validation.get("auth_method")},
+        )
+    user_id = validation.get("user_id")
+
     handlers = {
         "execution": handle_execution_planning,
         "validate": handle_epic_validation,
         "scoring": handle_scoring_analysis,
         "summary": handle_execution_summary,
-        "presets": handle_presets_list
+        "presets": handle_presets_list,
     }
-    
+
     handler = handlers.get(api_endpoint)
     if not handler:
-        return {
-            "error": f"Unknown API endpoint: {api_endpoint}",
-            "code": "INVALID_ENDPOINT",
-            "available_endpoints": list(handlers.keys()),
-            "timestamp": datetime.now().isoformat()
-        }
-    
+        return create_api_error_response(
+            error_message=f"Unknown API endpoint: {api_endpoint}",
+            error_code="INVALID_ENDPOINT",
+            details={"available_endpoints": list(handlers.keys())},
+        )
+
     try:
         with streamlit_error_boundary(f"api_handler_{api_endpoint}"):
-            return handler(query_params)
+            started = datetime.now()
+            resp = handler(query_params)
+            try:
+                log_api_request(
+                    query_params,
+                    user_id=user_id,
+                    auth_method=validation.get("auth_method"),
+                    response_time=(datetime.now() - started).total_seconds(),
+                )
+            finally:
+                return resp
     except Exception as e:
-        logger.error(f"API handler error for {api_endpoint}: {e}")
-        return {
-            "error": f"Internal server error: {str(e)}",
-            "code": "INTERNAL_ERROR",
-            "timestamp": datetime.now().isoformat()
-        }
+        logger.exception("API handler error for %s", api_endpoint)
+        return create_api_error_response(
+            error_message="Internal server error",
+            error_code="INTERNAL_ERROR",
+            details=str(e),
+        )
+
+def _parse_epic_id(query_params: Dict[str, str]) -> Tuple[Optional[int], Optional[Dict[str, Any]]]:
+    """Helper único para ler/validar epic_id."""
+    epic_id_str = query_params.get("epic_id")
+    if not epic_id_str:
+        return None, create_api_error_response("Missing required parameter: epic_id", "MISSING_PARAMETER")
+    try:
+        return int(epic_id_str), None
+    except ValueError:
+        return None, create_api_error_response(
+            f"Invalid epic_id: {epic_id_str}. Must be integer.",
+            "INVALID_PARAMETER",
+        )
+
 
 def handle_execution_planning(query_params: Dict[str, str]) -> Dict[str, Any]:
     """
@@ -102,23 +111,9 @@ def handle_execution_planning(query_params: Dict[str, str]) -> Dict[str, Any]:
     Returns:
         JSON response with execution plan or error
     """
-    # Validate required parameters
-    epic_id_str = query_params.get("epic_id")
-    if not epic_id_str:
-        return {
-            "error": "Missing required parameter: epic_id",
-            "code": "MISSING_PARAMETER",
-            "timestamp": datetime.now().isoformat()
-        }
-    
-    try:
-        epic_id = int(epic_id_str)
-    except ValueError:
-        return {
-            "error": f"Invalid epic_id: {epic_id_str}. Must be integer.",
-            "code": "INVALID_PARAMETER",
-            "timestamp": datetime.now().isoformat()
-        }
+    epic_id, err = _parse_epic_id(query_params)
+    if err:
+        return err
     
     # Optional parameters
     preset = query_params.get("preset", "balanced")
@@ -129,20 +124,11 @@ def handle_execution_planning(query_params: Dict[str, str]) -> Dict[str, Any]:
         try:
             custom_weights = json.loads(custom_weights_str)
         except json.JSONDecodeError as e:
-            return {
-                "error": f"Invalid custom_weights JSON: {str(e)}",
-                "code": "INVALID_JSON",
-                "timestamp": datetime.now().isoformat()
-            }
+            return create_api_error_response(f"Invalid custom_weights JSON: {str(e)}", "INVALID_JSON")
     
-    # Get task service and execute planning
     task_service = get_task_service()
     if not task_service:
-        return {
-            "error": "Task service not available",
-            "code": "SERVICE_UNAVAILABLE",
-            "timestamp": datetime.now().isoformat()
-        }
+        return create_api_error_response("Task service not available", "SERVICE_UNAVAILABLE")
     
     result = task_service.plan_epic_execution(
         epic_id=epic_id,
@@ -152,26 +138,17 @@ def handle_execution_planning(query_params: Dict[str, str]) -> Dict[str, Any]:
     
     if result.success:
         plan = result.data
-        return {
-            "success": True,
-            "data": {
-                "epic_id": plan.epic_id,
-                "execution_order": plan.execution_order,
-                "task_scores": plan.task_scores,
-                "critical_path": plan.critical_path,
-                "execution_metrics": plan.execution_metrics,
-                "dag_validation": plan.dag_validation,
-                "created_at": plan.created_at.isoformat()
-            },
-            "timestamp": datetime.now().isoformat()
+        payload = {
+            "epic_id": plan.epic_id,
+            "execution_order": plan.execution_order,
+            "task_scores": plan.task_scores,
+            "critical_path": plan.critical_path,
+            "execution_metrics": plan.execution_metrics,
+            "dag_validation": plan.dag_validation,
+            "created_at": plan.created_at.isoformat(),
         }
-    else:
-        return {
-            "error": "Execution planning failed",
-            "code": "PLANNING_FAILED",
-            "details": result.errors,
-            "timestamp": datetime.now().isoformat()
-        }
+        return create_api_success_response(payload)
+    return create_api_error_response("Execution planning failed", "PLANNING_FAILED", details=result.errors)
 
 def handle_epic_validation(query_params: Dict[str, str]) -> Dict[str, Any]:
     """
@@ -183,49 +160,20 @@ def handle_epic_validation(query_params: Dict[str, str]) -> Dict[str, Any]:
     Returns:
         JSON response with validation results
     """
-    # Validate required parameters
-    epic_id_str = query_params.get("epic_id")
-    if not epic_id_str:
-        return {
-            "error": "Missing required parameter: epic_id",
-            "code": "MISSING_PARAMETER",
-            "timestamp": datetime.now().isoformat()
-        }
-    
-    try:
-        epic_id = int(epic_id_str)
-    except ValueError:
-        return {
-            "error": f"Invalid epic_id: {epic_id_str}. Must be integer.",
-            "code": "INVALID_PARAMETER",
-            "timestamp": datetime.now().isoformat()
-        }
+    epic_id, err = _parse_epic_id(query_params)
+    if err:
+        return err
     
     # Get task service and validate dependencies
     task_service = get_task_service()
     if not task_service:
-        return {
-            "error": "Task service not available",
-            "code": "SERVICE_UNAVAILABLE",
-            "timestamp": datetime.now().isoformat()
-        }
+        return create_api_error_response("Task service not available", "SERVICE_UNAVAILABLE")
     
     result = task_service.validate_epic_dependencies(epic_id)
     
     if result.success:
-        validation = result.data
-        return {
-            "success": True,
-            "data": validation,
-            "timestamp": datetime.now().isoformat()
-        }
-    else:
-        return {
-            "error": "Dependency validation failed",
-            "code": "VALIDATION_FAILED",
-            "details": result.errors,
-            "timestamp": datetime.now().isoformat()
-        }
+        return create_api_success_response(result.data)
+    return create_api_error_response("Dependency validation failed", "VALIDATION_FAILED", details=result.errors)
 
 def handle_scoring_analysis(query_params: Dict[str, str]) -> Dict[str, Any]:
     """
@@ -238,23 +186,9 @@ def handle_scoring_analysis(query_params: Dict[str, str]) -> Dict[str, Any]:
     Returns:
         JSON response with scoring analysis
     """
-    # Validate required parameters
-    epic_id_str = query_params.get("epic_id")
-    if not epic_id_str:
-        return {
-            "error": "Missing required parameter: epic_id",
-            "code": "MISSING_PARAMETER",
-            "timestamp": datetime.now().isoformat()
-        }
-    
-    try:
-        epic_id = int(epic_id_str)
-    except ValueError:
-        return {
-            "error": f"Invalid epic_id: {epic_id_str}. Must be integer.",
-            "code": "INVALID_PARAMETER",
-            "timestamp": datetime.now().isoformat()
-        }
+    epic_id, err = _parse_epic_id(query_params)
+    if err:
+        return err
     
     # Optional parameters
     preset = query_params.get("preset", "balanced")
@@ -262,28 +196,13 @@ def handle_scoring_analysis(query_params: Dict[str, str]) -> Dict[str, Any]:
     # Get task service and analyze scoring
     task_service = get_task_service()
     if not task_service:
-        return {
-            "error": "Task service not available",
-            "code": "SERVICE_UNAVAILABLE",
-            "timestamp": datetime.now().isoformat()
-        }
+        return create_api_error_response("Task service not available", "SERVICE_UNAVAILABLE")
     
     result = task_service.get_task_scoring_analysis(epic_id, preset)
     
     if result.success:
-        analysis = result.data
-        return {
-            "success": True,
-            "data": analysis,
-            "timestamp": datetime.now().isoformat()
-        }
-    else:
-        return {
-            "error": "Scoring analysis failed",
-            "code": "ANALYSIS_FAILED",
-            "details": result.errors,
-            "timestamp": datetime.now().isoformat()
-        }
+        return create_api_success_response(result.data)
+    return create_api_error_response("Scoring analysis failed", "ANALYSIS_FAILED", details=result.errors)
 
 def handle_execution_summary(query_params: Dict[str, str]) -> Dict[str, Any]:
     """
@@ -296,23 +215,9 @@ def handle_execution_summary(query_params: Dict[str, str]) -> Dict[str, Any]:
     Returns:
         JSON response with execution summary
     """
-    # Validate required parameters
-    epic_id_str = query_params.get("epic_id")
-    if not epic_id_str:
-        return {
-            "error": "Missing required parameter: epic_id",
-            "code": "MISSING_PARAMETER",
-            "timestamp": datetime.now().isoformat()
-        }
-    
-    try:
-        epic_id = int(epic_id_str)
-    except ValueError:
-        return {
-            "error": f"Invalid epic_id: {epic_id_str}. Must be integer.",
-            "code": "INVALID_PARAMETER",
-            "timestamp": datetime.now().isoformat()
-        }
+    epic_id, err = _parse_epic_id(query_params)
+    if err:
+        return err
     
     # Optional parameters
     preset = query_params.get("preset", "balanced")
@@ -320,28 +225,13 @@ def handle_execution_summary(query_params: Dict[str, str]) -> Dict[str, Any]:
     # Get task service and get summary
     task_service = get_task_service()
     if not task_service:
-        return {
-            "error": "Task service not available",
-            "code": "SERVICE_UNAVAILABLE",
-            "timestamp": datetime.now().isoformat()
-        }
+        return create_api_error_response("Task service not available", "SERVICE_UNAVAILABLE")
     
     result = task_service.get_execution_summary(epic_id, preset)
     
     if result.success:
-        summary = result.data
-        return {
-            "success": True,
-            "data": summary,
-            "timestamp": datetime.now().isoformat()
-        }
-    else:
-        return {
-            "error": "Execution summary failed",
-            "code": "SUMMARY_FAILED",
-            "details": result.errors,
-            "timestamp": datetime.now().isoformat()
-        }
+        return create_api_success_response(result.data)
+    return create_api_error_response("Execution summary failed", "SUMMARY_FAILED", details=result.errors)
 
 def handle_presets_list(query_params: Dict[str, str]) -> Dict[str, Any]:
     """
@@ -359,22 +249,14 @@ def handle_presets_list(query_params: Dict[str, str]) -> Dict[str, Any]:
         scoring_system = ScoringSystem()
         presets = scoring_system.list_presets()
         
-        return {
-            "success": True,
-            "data": {
-                "presets": presets,
-                "default_preset": "balanced",
-                "total_presets": len(presets)
-            },
-            "timestamp": datetime.now().isoformat()
-        }
+        return create_api_success_response({
+            "presets": presets,
+            "default_preset": "balanced",
+            "total_presets": len(presets),
+        })
     except Exception as e:
-        logger.error(f"Error listing presets: {e}")
-        return {
-            "error": f"Failed to list presets: {str(e)}",
-            "code": "PRESETS_ERROR",
-            "timestamp": datetime.now().isoformat()
-        }
+        logger.exception("Error listing presets")
+        return create_api_error_response("Failed to list presets", "PRESETS_ERROR", details=str(e))
 
 def get_api_documentation() -> Dict[str, Any]:
     """

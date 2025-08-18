@@ -15,8 +15,7 @@ from typing import Dict, Any, List, Optional
 from datetime import datetime, timedelta
 from dataclasses import dataclass
 
-# Add parent directory to path
-sys.path.append(str(Path(__file__).parent.parent.parent))
+# Evite mexer em sys.path; prefira imports relativos e flags de disponibilidade
 
 # Graceful imports
 try:
@@ -83,7 +82,7 @@ class StreamlitAnalyticsEngine:
         self.db_manager = db_manager
         self.engine = AnalyticsEngine() if ANALYTICS_ENGINE_AVAILABLE else None
     
-    @streamlit_cached(ttl=600, show_spinner=True) if STREAMLIT_AVAILABLE else lambda f: f
+    @streamlit_cached(ttl=600, show_spinner=True) if STREAMLIT_AVAILABLE else (lambda f: f)
     def generate_productivity_report(self, days: int = 30) -> AnalyticsReport:
         """Generate comprehensive productivity report with caching."""
         
@@ -98,7 +97,7 @@ class StreamlitAnalyticsEngine:
         # Fallback to database-based analytics
         return self._generate_fallback_report(days)
     
-    @streamlit_cached(ttl=300) if STREAMLIT_AVAILABLE else lambda f: f
+    @streamlit_cached(ttl=300) if STREAMLIT_AVAILABLE else (lambda f: f)
     def get_focus_trends(self, days: int = 14) -> Dict[str, Any]:
         """Get focus rating trends with caching."""
         
@@ -110,13 +109,14 @@ class StreamlitAnalyticsEngine:
         # Analyze focus trends
         daily_focus = self._calculate_daily_focus_trends(timer_sessions)
         hourly_focus = self._calculate_hourly_focus_trends(timer_sessions)
-        
+        trend_direction = "up" if (daily_focus[-1]["avg"] - daily_focus[0]["avg"]) > 0 else "down" if daily_focus else "flat"
+
         return {
             "daily_focus": daily_focus,
             "hourly_focus": hourly_focus,
-            "trend_direction": self._calculate_trend_direction(daily_focus),
+            "trend_direction": trend_direction,
             "best_focus_hour": max(hourly_focus, key=hourly_focus.get) if hourly_focus else None,
-            "avg_daily_focus": sum(daily_focus.values()) / len(daily_focus) if daily_focus else 0
+            "avg_daily_focus": sum(daily_focus.values()) / len(daily_focus) if daily_focus else 0,
         }
     
     @streamlit_cached(ttl=900) if STREAMLIT_AVAILABLE else lambda f: f

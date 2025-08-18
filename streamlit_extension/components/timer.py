@@ -60,7 +60,7 @@ class TimerComponent:
             
         if self.session_key not in st.session_state:
             st.session_state[self.session_key] = None
-        
+
         if self.config_key not in st.session_state:
             st.session_state[self.config_key] = {
                 "focus_duration": 25,
@@ -69,6 +69,8 @@ class TimerComponent:
                 "sessions_until_long_break": 4,
                 "completed_sessions": 0
             }
+        # tempo acumulado em segundos quando pausado
+        st.session_state.setdefault("timer_accum_seconds", 0)
     
     def render(self, container=None) -> Dict[str, Any]:
         """
@@ -233,19 +235,16 @@ class TimerComponent:
     
     def _get_time_display(self, session: Optional[TimerSession], config: Dict) -> str:
         """Get formatted time display."""
-        if not session or not session.is_active:
+        if not session:
             return "00:00"
-        
-        elapsed = datetime.now() - session.started_at
-        elapsed_minutes = int(elapsed.total_seconds() / 60)
-        
-        total_minutes = config.get(f"{session.session_type}_duration", 25)
-        remaining_minutes = max(0, total_minutes - elapsed_minutes)
-        
-        minutes = remaining_minutes
-        seconds = 0  # Simplified for now
-        
-        return f"{minutes:02d}:{seconds:02d}"
+        total_minutes = int(config.get(f"{session.session_type}_duration", 25))
+        # segundos já decorridos = acumulado + (agora - started_at se ativo)
+        elapsed = st.session_state.get("timer_accum_seconds", 0)
+        if session.is_active and session.started_at:
+            elapsed += int((datetime.now() - session.started_at).total_seconds())
+        remain = max(0, total_minutes * 60 - elapsed)
+        mm, ss = remain // 60, remain % 60
+        return f"{mm:02d}:{ss:02d}"
     
     def _calculate_progress(self, session: TimerSession, config: Dict) -> float:
         """Calculate session progress (0.0 to 1.0)."""
@@ -300,18 +299,22 @@ class TimerComponent:
         
         elif action == "pause":
             if current_session and current_session.is_active:
+                # acumula ao pausar
+                st.session_state["timer_accum_seconds"] += int((datetime.now() - current_session.started_at).total_seconds())
                 current_session.is_active = False
         
         elif action == "stop":
             if current_session:
                 self._end_session(current_session, config)
                 st.session_state[self.session_key] = None
+                st.session_state["timer_accum_seconds"] = 0
                 st.rerun()
         
         elif action == "skip":
             if current_session:
                 self._end_session(current_session, config)
                 st.session_state[self.session_key] = None
+                st.session_state["timer_accum_seconds"] = 0
                 st.rerun()
         
         elif action == "extend":
@@ -323,11 +326,15 @@ class TimerComponent:
         """End a timer session and update stats."""
         session.is_active = False
         session.ended_at = datetime.now()
-        
+        # soma acumulado + trecho final
+        acc = st.session_state.get("timer_accum_seconds", 0)
+        if session.started_at and session.ended_at:
+            acc += int((session.ended_at - session.started_at).total_seconds())
         # Calculate actual duration
-        if session.ended_at and session.started_at:
-            actual_duration = (session.ended_at - session.started_at).total_seconds() / 60
+        if acc:
+            actual_duration = acc / 60
             session.actual_duration_minutes = int(actual_duration)
+        st.session_state["timer_accum_seconds"] = 0
         
         # Update completed sessions count
         if session.session_type == "focus":

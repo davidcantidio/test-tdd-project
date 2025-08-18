@@ -39,6 +39,9 @@ class StandardForm:
         self.errors: List[str] = []
         self.submitted: bool = False
 
+    def _required_hint(self, label: str, required: bool) -> str:
+        return f"{label}{' *' if required else ''}"
+
     # ------------------------------------------------------------------
     # Core rendering helpers - extensible field system
     def render_text_input(self, label: str, key: str, required: bool = False, 
@@ -49,7 +52,7 @@ class StandardForm:
             return ""
         
         value = self.st.text_input(
-            label, 
+            self._required_hint(label, required),
             key=f"{self.form_id}_{key}",
             placeholder=placeholder,
             help=help_text if help_text else None
@@ -65,7 +68,7 @@ class StandardForm:
             return ""
         
         value = self.st.text_area(
-            label, 
+            self._required_hint(label, required),
             key=f"{self.form_id}_{key}",
             placeholder=placeholder,
             help=help_text if help_text else None
@@ -81,8 +84,8 @@ class StandardForm:
             return self.form_data[key]
         
         value = self.st.selectbox(
-            label, 
-            options=options, 
+            self._required_hint(label, required),
+            options=options,
             key=f"{self.form_id}_{key}",
             help=help_text if help_text else None
         )

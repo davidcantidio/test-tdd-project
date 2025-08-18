@@ -14,6 +14,7 @@ from typing import Optional, Dict, Any, List, Union, Tuple
 from datetime import datetime, timedelta
 from dataclasses import dataclass
 import math
+import re
 
 # Graceful imports
 try:
@@ -192,7 +193,7 @@ class SparklineChart:
     """Mini trend chart for inline data visualization."""
     
     @staticmethod
-    def render(data: List[float], color: str = "#1f77b4", 
+    def render(data: List[float], color: str = "#1f77b4",
               show_points: bool = False, height: int = 60) -> None:
         """
         Render a sparkline chart.
@@ -218,6 +219,16 @@ class SparklineChart:
         
         fig = go.Figure()
         
+        # garante hex para calcular fillcolor; caso contrário usa rgba default
+        def _hex_to_rgba_fill(c: str, alpha: float = 0.1) -> str:
+            if isinstance(c, str) and re.match(r"^#([0-9a-fA-F]{6}|[0-9a-fA-F]{3})$", c):
+                h = c[1:]
+                if len(h) == 3:
+                    h = "".join([ch * 2 for ch in h])
+                r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
+                return f"rgba({r},{g},{b},{alpha})"
+            return "rgba(31,119,180,0.1)"
+
         fig.add_trace(go.Scatter(
             y=data,
             x=list(range(len(data))),
@@ -225,7 +236,7 @@ class SparklineChart:
             line=dict(color=color, width=2),
             marker=dict(size=4, color=color) if show_points else None,
             fill='tozeroy',
-            fillcolor=f"rgba({int(color[1:3], 16)}, {int(color[3:5], 16)}, {int(color[5:7], 16)}, 0.1)",
+            fillcolor=_hex_to_rgba_fill(color, 0.1),
             showlegend=False,
             hovertemplate="%{y:.1f}<extra></extra>"
         ))

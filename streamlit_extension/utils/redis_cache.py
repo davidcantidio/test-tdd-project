@@ -21,6 +21,7 @@ import sys
 import json
 import time
 import hashlib
+import logging
 import threading
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Callable, Union, Tuple
@@ -44,7 +45,17 @@ try:
     LOG_SANITIZATION_AVAILABLE = True
 except ImportError:
     LOG_SANITIZATION_AVAILABLE = False
-    import logging
+
+    def create_secure_logger(name: str) -> logging.Logger:
+        logger = logging.getLogger(name)
+        if not logger.handlers:
+            handler = logging.StreamHandler()
+            logger.addHandler(handler)
+        logger.setLevel(logging.INFO)
+        return logger
+
+    def sanitize_log_message(msg: str) -> str:
+        return msg
 
 try:
     from .security import sanitize_display
@@ -147,12 +158,60 @@ class CacheMetrics:
         with self._lock:
             self.stats = {
                 "hits": 0,
-                "misses": 0, 
+                "misses": 0,
                 "errors": 0,
                 "total_requests": 0,
                 "avg_response_time": 0.0,
                 "last_reset": time.time()
             }
+
+
+class RedisCache:
+    """Thin wrapper with key hashing, TTL and graceful fallback."""
+
+    def __init__(self, host: str = "localhost", port: int = 6379, db: int = 0,
+                 prefix: str = "tdd", ttl: int = 300) -> None:
+        self.host = host
+        self.port = port
+        self.db = db
+        self.prefix = prefix
+        self.ttl = ttl
+        self.logger = create_secure_logger(__name__)
+        self.is_available = False
+        self._client = None
+        if REDIS_AVAILABLE:
+            try:
+                pool = ConnectionPool(host=host, port=port, db=db, socket_timeout=1.5)
+                self._client = redis.Redis(connection_pool=pool)
+                self._client.ping()
+                self.is_available = True
+                self.logger.info("Redis cache initialized on %s:%s", host, port)
+            except Exception as e:
+                self.logger.warning("Redis unavailable: %s", sanitize_log_message(str(e)))
+
+    def _hkey(self, key: str) -> str:
+        digest = hashlib.sha256(key.encode()).hexdigest()
+        return f"{self.prefix}:{digest}"
+
+    def get(self, key: str) -> Optional[str]:
+        if not self.is_available:
+            return None
+        try:
+            val = self._client.get(self._hkey(key))
+            return val.decode() if isinstance(val, (bytes, bytearray)) else val
+        except Exception as e:
+            self.logger.warning("Redis get error: %s", sanitize_log_message(str(e)))
+            return None
+
+    def set(self, key: str, value: str, ttl: Optional[int] = None) -> bool:
+        if not self.is_available:
+            return False
+        try:
+            self._client.set(self._hkey(key), value, ex=ttl or self.ttl)
+            return True
+        except Exception as e:
+            self.logger.warning("Redis set error: %s", sanitize_log_message(str(e)))
+            return False
 
 
 class RedisCacheManager:
