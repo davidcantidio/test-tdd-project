@@ -59,7 +59,7 @@ class ConnectionPool:
                 if now - last_used < self.idle_timeout:
                     self._connections.pop(i)
                     self._active_connections.add(id(conn))
-                    logger.debug(f"Reused connection {id(conn)}")
+                    logger.debug("Reused connection %d", id(conn))
                     return conn
             
             # Create new connection if under limit
@@ -67,11 +67,11 @@ class ConnectionPool:
                 conn = self._create_connection()
                 self._active_connections.add(id(conn))
                 self._created_count += 1
-                logger.debug(f"Created new connection {id(conn)} (total: {self._created_count})")
+                logger.debug("Created new connection %d (total: %d)", id(conn), self._created_count)
                 return conn
             
             # Pool exhausted
-            logger.warning(f"Connection pool exhausted: {len(self._active_connections)}/{self.max_connections}")
+            logger.warning("Connection pool exhausted: %d/%d", len(self._active_connections), self.max_connections)
             raise ConnectionError(f"Connection pool exhausted")
     
     def return_connection(self, conn):
@@ -81,9 +81,9 @@ class ConnectionPool:
             if conn_id in self._active_connections:
                 self._active_connections.remove(conn_id)
                 self._connections.append((conn, time.time()))
-                logger.debug(f"Returned connection {conn_id}")
+                logger.debug("Returned connection %d", conn_id)
             else:
-                logger.warning(f"Attempted to return unknown connection {conn_id}")
+                logger.warning("Attempted to return unknown connection %d", conn_id)
     
     def _create_connection(self):
         """Create new database connection"""
@@ -98,15 +98,15 @@ class ConnectionPool:
             active_connections = []
             removed_count = 0
             
-            for conn, last_used in self._connections:
+            for conn, last_used in list(self._connections):
                 if now - last_used < self.idle_timeout:
                     active_connections.append((conn, last_used))
                 else:
                     removed_count += 1
-                    logger.debug(f"Removed idle connection {id(conn)}")
+                    logger.debug("Removed idle connection %d", id(conn))
             
             self._connections = active_connections
-            logger.info(f"Cleanup removed {removed_count} idle connections")
+            logger.info("Cleanup removed %d idle connections", removed_count)
     
     def get_stats(self) -> Dict[str, Any]:
         """Get connection pool statistics"""
@@ -116,7 +116,7 @@ class ConnectionPool:
                 "idle_connections": len(self._connections),
                 "max_connections": self.max_connections,
                 "total_created": self._created_count,
-                "utilization": len(self._active_connections) / self.max_connections
+                "utilization": len(self._active_connections) / self.max_connections if self.max_connections else 0.0
             }
 
 class CircuitBreaker:
@@ -189,7 +189,7 @@ class CircuitBreaker:
             elif (self.state == CircuitState.CLOSED and 
                   self.failure_count >= self.config.failure_threshold):
                 self.state = CircuitState.OPEN
-                logger.warning(f"Circuit breaker OPEN - {self.failure_count} failures detected")
+                logger.warning("Circuit breaker OPEN - %d failures detected", self.failure_count)
     
     def get_state(self) -> Dict[str, Any]:
         """Get circuit breaker state"""
@@ -218,11 +218,11 @@ class RetryManager:
                 last_exception = e
                 
                 if attempt == self.config.max_attempts - 1:
-                    logger.error(f"All {self.config.max_attempts} attempts failed")
+                    logger.error("All %d attempts failed for %s", self.config.max_attempts, func.__name__, exc_info=True)
                     break
                 
                 delay = self._calculate_delay(attempt)
-                logger.warning(f"Attempt {attempt + 1} failed: {e}. Retrying in {delay:.2f}s")
+                logger.warning("Attempt %d failed for %s: %s. Retrying in %.2fs", attempt + 1, func.__name__, e, delay)
                 time.sleep(delay)
         
         raise last_exception
@@ -261,7 +261,7 @@ class DatabaseResilience:
                     self.connection_pool.cleanup_idle_connections()
                     time.sleep(60)  # Cleanup every minute
                 except Exception as e:
-                    logger.error(f"Cleanup thread error: {e}")
+                    logger.error("Cleanup thread error: %s", e, exc_info=True)
                     time.sleep(60)
         
         self._cleanup_thread = threading.Thread(target=cleanup_worker, daemon=True)

@@ -819,7 +819,7 @@ class DatabaseManager(PerformancePaginationMixin):
                     "total_pages": total_pages
                 }
         except Exception as e:
-            print(f"Error loading epics: {e}")
+            logger.error(f"Error loading epics: {e}", exc_info=True)
             return {
                 "data": [],
                 "total": 0,
@@ -932,7 +932,7 @@ class DatabaseManager(PerformancePaginationMixin):
             logger.error(f"Error loading tasks: {e}")
             if STREAMLIT_AVAILABLE and st:
                 st.error(f"❌ Error loading tasks: {e}")
-            print(f"Error loading tasks: {e}")
+            logger.error(f"Error loading tasks: {e}", exc_info=True)
             return {
                 "data": [],
                 "total": 0,
@@ -974,7 +974,7 @@ class DatabaseManager(PerformancePaginationMixin):
                     cursor.execute(query, [f"-{days}"])
                     return [dict(row) for row in cursor.fetchall()]
         except Exception as e:
-            print(f"Error loading timer sessions: {e}")
+            logger.error(f"Error loading timer sessions: {e}", exc_info=True)
             return []
     
     def get_user_stats(self, user_id: int = 1) -> Dict[str, Any]:
@@ -1038,7 +1038,7 @@ class DatabaseManager(PerformancePaginationMixin):
                 return stats
                 
         except Exception as e:
-            print(f"Error loading user stats: {e}")
+            logger.error(f"Error loading user stats: {e}", exc_info=True)
             return {
                 "completed_tasks": 0,
                 "total_points": 0,
@@ -1067,7 +1067,7 @@ class DatabaseManager(PerformancePaginationMixin):
                     return [dict(row) for row in cursor.fetchall()]
                     
         except Exception as e:
-            print(f"Error loading achievements: {e}")
+            logger.error(f"Error loading achievements: {e}", exc_info=True)
             return []
     
     @invalidate_cache_on_change("db_query:get_tasks:", "db_query:get_epics:") if CACHE_AVAILABLE else lambda f: f
@@ -1112,7 +1112,7 @@ class DatabaseManager(PerformancePaginationMixin):
                 return True
                 
         except Exception as e:
-            print(f"Error updating task status: {e}")
+            logger.error(f"Error updating task status: {e}", exc_info=True)
             return False
     
     @invalidate_cache_on_change("db_query:get_timer_sessions:") if CACHE_AVAILABLE else lambda f: f
@@ -1165,7 +1165,7 @@ class DatabaseManager(PerformancePaginationMixin):
                 return True
                 
         except Exception as e:
-            print(f"Error creating timer session: {e}")
+            logger.error(f"Error creating timer session: {e}", exc_info=True)
             return False
     
     def get_epic_progress(self, epic_id: int) -> Dict[str, Any]:
@@ -1173,10 +1173,10 @@ class DatabaseManager(PerformancePaginationMixin):
 
         # Early validation
         if epic_id is None:
-            print("DEBUG: get_epic_progress called with epic_id=None")
+            logger.debug("get_epic_progress called with epic_id=None")
             return self._get_default_progress()
 
-        print(f"DEBUG: get_epic_progress called with epic_id={epic_id}, type={type(epic_id)}")
+        logger.debug(f"get_epic_progress called with epic_id={epic_id}, type={type(epic_id)}")
 
         try:
             with self.get_connection("framework") as conn:
@@ -1187,10 +1187,10 @@ class DatabaseManager(PerformancePaginationMixin):
                         "FROM framework_epics "
                         "WHERE id = :epic_id AND deleted_at IS NULL"
                     )
-                    print(f"DEBUG: Executing epic query: {epic_query}")
+                    logger.debug(f"Executing epic query: {epic_query}")
                     epic_result = conn.execute(text(epic_query), {"epic_id": epic_id})
                     epic_row = epic_result.fetchone()
-                    print(f"DEBUG: Epic row: {epic_row}, type={type(epic_row)}")
+                    logger.debug(f"Epic row: {epic_row}, type={type(epic_row)}")
                     if not epic_row:
                         return self._get_default_progress()
                     epic = dict(epic_row._mapping)
@@ -1204,10 +1204,10 @@ class DatabaseManager(PerformancePaginationMixin):
                         "FROM framework_tasks "
                         "WHERE epic_id = :epic_id AND deleted_at IS NULL"
                     )
-                    print(f"DEBUG: Executing task query: {task_query}")
+                    logger.debug(f"Executing task query: {task_query}")
                     task_result = conn.execute(text(task_query), {"epic_id": epic_id})
                     task_row = task_result.fetchone()
-                    print(f"DEBUG: Task row: {task_row}, type={type(task_row)}")
+                    logger.debug(f"Task row: {task_row}, type={type(task_row)}")
                     if not task_row:
                         tasks = {"total_tasks": 0, "completed_tasks": 0, "in_progress_tasks": 0}
                     else:
@@ -1221,10 +1221,10 @@ class DatabaseManager(PerformancePaginationMixin):
                         "SELECT id, epic_key, name, status, points_earned "
                         "FROM framework_epics WHERE id = ? AND deleted_at IS NULL"
                     )
-                    print(f"DEBUG: Executing epic query: {epic_query}")
+                    logger.debug(f"Executing epic query: {epic_query}")
                     cursor.execute(epic_query, [epic_id])
                     epic_row = cursor.fetchone()
-                    print(f"DEBUG: Epic row: {epic_row}, type={type(epic_row)}")
+                    logger.debug(f"Epic row: {epic_row}, type={type(epic_row)}")
                     if not epic_row:
                         return self._get_default_progress()
                     epic = dict(epic_row)
@@ -1237,10 +1237,10 @@ class DatabaseManager(PerformancePaginationMixin):
                         "    SUM(CASE WHEN status = 'in_progress' THEN 1 ELSE 0 END) as in_progress_tasks "
                         "FROM framework_tasks WHERE epic_id = ? AND deleted_at IS NULL"
                     )
-                    print(f"DEBUG: Executing task query: {task_query}")
+                    logger.debug(f"Executing task query: {task_query}")
                     cursor.execute(task_query, [epic_id])
                     task_row = cursor.fetchone()
-                    print(f"DEBUG: Task row: {task_row}, type={type(task_row)}")
+                    logger.debug(f"Task row: {task_row}, type={type(task_row)}")
                     if not task_row:
                         tasks = {"total_tasks": 0, "completed_tasks": 0, "in_progress_tasks": 0}
                     else:
@@ -1257,11 +1257,12 @@ class DatabaseManager(PerformancePaginationMixin):
                     "progress_percentage": round(progress_pct, 1),
                     "points_earned": epic.get("points_earned") or 0,
                 }
-                print(f"DEBUG: Returning: {progress_dict}")
+                # use logger instead de prints para não poluir stdout/Streamlit
+                logging.getLogger(__name__).debug("Returning epic progress: %s", progress_dict)
                 return progress_dict
 
         except Exception as e:
-            print(f"Error getting epic progress: {e}")
+            logging.getLogger(__name__).error("Error getting epic progress: %s", e, exc_info=True)
             return self._get_default_progress()
     
     def _get_default_progress(self) -> Dict[str, Any]:
@@ -1311,9 +1312,8 @@ class DatabaseManager(PerformancePaginationMixin):
                     conn.execute("SELECT 1")
                 health["framework_db_connected"] = True
         except Exception as e:
-            # Log database connection failure for debugging
-            import logging
-            logging.getLogger(__name__).debug(f"Framework DB connection failed: {e}")
+            # Log database connection failure (debug)
+            logging.getLogger(__name__).debug("Framework DB connection failed: %s", e, exc_info=False)
             health["framework_db_connected"] = False
         
         # Test timer DB connection
@@ -1326,9 +1326,8 @@ class DatabaseManager(PerformancePaginationMixin):
                         conn.execute("SELECT 1")
                     health["timer_db_connected"] = True
             except Exception as e:
-                # Log timer database connection failure for debugging
-                import logging
-                logging.getLogger(__name__).debug(f"Timer DB connection failed: {e}")
+                # Log timer database connection failure (debug)
+                logging.getLogger(__name__).debug("Timer DB connection failed: %s", e, exc_info=False)
                 health["timer_db_connected"] = False
         
         return health
@@ -1412,13 +1411,13 @@ class DatabaseManager(PerformancePaginationMixin):
             >>> db_manager.clear_cache("db_query:get_clients:")
         """
         if not CACHE_AVAILABLE:
-            print("Cache not available")
+            logger.warning("Cache not available")
             return False
 
         cache = get_cache()
         pattern = cache_pattern or "db_query:"
         cache.invalidate_pattern(pattern)
-        print("Database cache cleared")
+        logger.info("Database cache cleared")
         return True
     
     def get_cache_stats(self) -> Dict[str, Any]:
@@ -1607,7 +1606,7 @@ class DatabaseManager(PerformancePaginationMixin):
             stats["best_streak"] = self._get_best_streak()
             
         except Exception as e:
-            print(f"Error getting productivity stats: {e}")
+            logger.error(f"Error getting productivity stats: {e}", exc_info=True)
         
         return stats
     
@@ -1729,7 +1728,7 @@ class DatabaseManager(PerformancePaginationMixin):
                             summary["focus_time_minutes"] = row[1] or 0
         
         except Exception as e:
-            print(f"Error getting daily summary: {e}")
+            logger.error(f"Error getting daily summary: {e}", exc_info=True)
         
         return summary
     
@@ -1776,7 +1775,7 @@ class DatabaseManager(PerformancePaginationMixin):
                         })
         
         except Exception as e:
-            print(f"Error getting notifications: {e}")
+            logger.error(f"Error getting notifications: {e}", exc_info=True)
         
         return notifications
     
@@ -1832,7 +1831,7 @@ class DatabaseManager(PerformancePaginationMixin):
                         })
         
         except Exception as e:
-            print(f"Error getting achievements: {e}")
+            logger.error(f"Error getting achievements: {e}", exc_info=True)
         
         return achievements
     
@@ -1933,7 +1932,7 @@ class DatabaseManager(PerformancePaginationMixin):
                     conn.commit()
                     return cursor.lastrowid
         except Exception as e:
-            print(f"Error creating task: {e}")
+            logger.error(f"Error creating task: {e}", exc_info=True)
             return None
     
     def update_task(
@@ -2012,7 +2011,7 @@ class DatabaseManager(PerformancePaginationMixin):
                 
                 return True
         except Exception as e:
-            print(f"Error updating task {task_id}: {e}")
+            logger.error(f"Error updating task {task_id}: {e}", exc_info=True)
             return False
     
     def delete_task(self, task_id: int, soft_delete: bool = True) -> bool:
@@ -2056,7 +2055,7 @@ class DatabaseManager(PerformancePaginationMixin):
                 
                 return True
         except Exception as e:
-            print(f"Error deleting task {task_id}: {e}")
+            logger.error(f"Error deleting task {task_id}: {e}", exc_info=True)
             return False
     
     @cache_database_query("get_kanban_tasks", ttl=60) if CACHE_AVAILABLE else lambda f: f
@@ -2096,7 +2095,7 @@ class DatabaseManager(PerformancePaginationMixin):
                 return grouped
                 
         except Exception as e:
-            print(f"Error loading kanban tasks: {e}")
+            logger.error(f"Error loading kanban tasks: {e}", exc_info=True)
             return {"todo": [], "in_progress": [], "completed": []}
     
     def get_task_statistics(self) -> Dict[str, int]:
@@ -2144,7 +2143,7 @@ class DatabaseManager(PerformancePaginationMixin):
                     return stats
                     
         except Exception as e:
-            print(f"Error getting task statistics: {e}")
+            logger.error(f"Error getting task statistics: {e}", exc_info=True)
             return {"todo": 0, "in_progress": 0, "completed": 0, "total": 0}
     
     # ==================================================================================
@@ -2354,7 +2353,7 @@ class DatabaseManager(PerformancePaginationMixin):
                 return timeline_data
                 
         except Exception as e:
-            print(f"Error getting epic timeline for {epic_id}: {e}")
+            logger.error(f"Error getting epic timeline for {epic_id}: {e}", exc_info=True)
             return {"error": str(e)}
     
     def validate_date_consistency(self, epic_id: int) -> bool:
@@ -2406,7 +2405,7 @@ class DatabaseManager(PerformancePaginationMixin):
                 return validation["is_valid"]
                 
         except Exception as e:
-            print(f"Error validating date consistency for epic {epic_id}: {e}")
+            logger.error(f"Error validating date consistency for epic {epic_id}: {e}", exc_info=True)
             return False
     
     # Helper methods for duration system

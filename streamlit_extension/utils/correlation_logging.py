@@ -11,6 +11,7 @@ from datetime import datetime
 from typing import Any, Dict, Optional, Union
 from contextlib import contextmanager
 from functools import wraps
+import threading
 
 # Safe imports
 try:
@@ -35,12 +36,14 @@ class CorrelationIDManager:
         """Get current correlation ID from context"""
         if STREAMLIT_AVAILABLE and st and hasattr(st, "session_state"):
             return st.session_state.get("correlation_id")
-        return None
+        return self._correlation_storage.get(threading.get_ident())
 
     def set_correlation_id(self, correlation_id: str) -> None:
         """Set correlation ID in current context"""
         if STREAMLIT_AVAILABLE and st and hasattr(st, "session_state"):
             st.session_state["correlation_id"] = correlation_id
+        else:
+            self._correlation_storage[threading.get_ident()] = correlation_id
 
     def ensure_correlation_id(self) -> str:
         """Ensure correlation ID exists, create if needed"""
@@ -68,7 +71,9 @@ class StructuredLogger:
 
         handler = logging.StreamHandler()
         handler.setFormatter(JSONFormatter())
-        self.logger.addHandler(handler)
+        # Evita handlers duplicados em hot-reload
+        if not any(isinstance(h, logging.StreamHandler) for h in self.logger.handlers):
+            self.logger.addHandler(handler)
         self.logger.setLevel(logging.INFO)
 
     def _get_session_info(self) -> Dict[str, Any]:
@@ -103,31 +108,24 @@ class StructuredLogger:
         correlation_id = self.correlation_manager.ensure_correlation_id()
         session_info = self._get_session_info()
 
-        log_entry: Dict[str, Any] = {
-            "timestamp": datetime.utcnow().isoformat() + "Z",
+        # Monta extras para o formatter estruturar (sem serializar duas vezes)
+        extras: Dict[str, Any] = {
             "correlation_id": correlation_id,
             "operation": operation,
-            "level": level,
-            "message": message,
             "success": success,
+            "metadata": metadata or {},
             **session_info,
         }
 
         if duration_ms is not None:
-            log_entry["duration_ms"] = round(duration_ms, 2)
+            extras["duration_ms"] = round(duration_ms, 2)
 
-        if error:
-            log_entry["error"] = {
-                "type": type(error).__name__,
-                "message": str(error),
-                "traceback": str(error) if hasattr(error, "__traceback__") else None,
-            }
-
-        if metadata:
-            log_entry["metadata"] = metadata
-
+        # Deixa exceção para exc_info (o formatter cuidará)
         log_level = getattr(logging, level.upper(), logging.INFO)
-        self.logger.log(log_level, json.dumps(log_entry))
+        if error is not None:
+            self.logger.log(log_level, message or operation, extra=extras, exc_info=error)
+        else:
+            self.logger.log(log_level, message or operation, extra=extras)
 
     def info(self, operation: str, message: str, **kwargs: Any) -> None:
         """Log info level operation"""
@@ -154,7 +152,7 @@ class StructuredLogger:
         self.info(
             f"{operation}_start",
             f"Starting operation: {operation}",
-            metadata={"correlation_id": correlation_id, **(metadata or {})},
+            metadata=metadata or {},
         )
 
         try:
