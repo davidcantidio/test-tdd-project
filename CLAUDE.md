@@ -227,7 +227,8 @@ Duration calculation, security utilities, and data protection modules.
 
 ### **🔗 See Also - System Documentation**
 - **🧪 Testing Framework**: [tests/CLAUDE.md](tests/CLAUDE.md) - Comprehensive test suite (525+ tests)
-- **🔄 Migration System**: [migration/CLAUDE.md](migration/CLAUDE.md) - Bidirectional sync & schema evolution  
+- **🔄 Migration System**: [migration/CLAUDE.md](migration/CLAUDE.md) - Bidirectional sync & schema evolution
+  - **⚠️ IMPORTANT**: All migrations in `/migration/migrations/` - NEVER create `/migrations/` in root
 - **🔧 Utility Scripts**: [scripts/CLAUDE.md](scripts/CLAUDE.md) - 80+ maintenance & analysis tools
 - **📊 Monitoring Stack**: [monitoring/CLAUDE.md](monitoring/CLAUDE.md) - Observability & alerting
 - **⚙️ Configuration**: [config/CLAUDE.md](config/CLAUDE.md) - Multi-environment architecture

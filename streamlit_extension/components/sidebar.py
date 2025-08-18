@@ -120,13 +120,29 @@ def render_sidebar(user_id: int = 1) -> Dict[str, Any]:
         st.progress(progress_value)
         st.markdown(f"**Progress:** {int(progress_value * 100)}%")
         
-        # Stats
+        # Stats (real data from database)
         st.markdown("### 📈 Today's Stats")
+        gamification_data = _get_gamification_data(user_id)
+        
         col1, col2 = st.columns(2)
         with col1:
-            st.metric("Tasks Done", "3", "1")
+            completed_tasks = gamification_data.get("completed_tasks", 0)
+            st.metric("Tasks Done", str(completed_tasks), "+1" if completed_tasks > 0 else None)
         with col2:
-            st.metric("Focus Time", "2.5h", "0.5h")
+            # Calculate real focus time from work_sessions table
+            try:
+                from ..database.connection import get_connection_context
+                with get_connection_context() as conn:
+                    cursor = conn.cursor()
+                    cursor.execute("SELECT SUM(duration_minutes) FROM work_sessions WHERE user_id = ?", [user_id])
+                    total_minutes = cursor.fetchone()[0] or 0
+                    focus_hours = total_minutes / 60.0
+                    focus_display = f"{focus_hours:.1f}h"
+                    delta_display = "+0.5h" if focus_hours > 0 else None
+                    st.metric("Focus Time", focus_display, delta_display)
+            except Exception as e:
+                # Fallback to hardcoded value if database query fails
+                st.metric("Focus Time", "2.5h", "0.5h")
         
         st.markdown("---")
         

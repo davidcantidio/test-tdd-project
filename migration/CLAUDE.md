@@ -31,14 +31,23 @@ migration/
 ├── query_builder.py             # 🔍 Safe SQL query construction
 ├── cleanup_scripts.py           # 🧹 Data cleanup utilities
 ├── schema_migration_v7.py       # 📋 Version-specific migrations
-└── migrations/                  # 📁 SQL migration files
+└── migrations/                  # 📁 SQL migration files (OFFICIAL LOCATION)
     ├── 001_create_migration_table.sql
     ├── 001_rollback.sql
     ├── 002_enhance_framework_epics.sql
     ├── 002_rollback.sql
     ├── 003_add_performance_indexes.sql
-    └── 003_rollback.sql
+    ├── 003_rollback.sql
+    ├── 004_add_missing_columns.sql      # Migrated from root
+    ├── 004_rollback.sql
+    ├── 005_create_additional_indexes.sql # Migrated from root
+    ├── 005_rollback.sql
+    ├── 006_data_cleanup.sql             # Migrated from root
+    └── 006_rollback.sql
 ```
+
+**⚠️ IMPORTANT:** All database migrations MUST be placed in `/migration/migrations/`. 
+Never create a `/migrations/` folder in the project root.
 
 ### **Core Components**
 
