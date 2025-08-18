@@ -8,6 +8,7 @@ Provides centralized service creation and lifecycle management.
 from typing import Dict, Any, Optional, Type, TypeVar
 import logging
 from contextlib import contextmanager
+from datetime import datetime
 
 from .base import BaseService
 from .client_service import ClientService
@@ -428,18 +429,14 @@ def check_service_health() -> Dict[str, Any]:
             'overall_health': 'healthy' if all_healthy else 'unhealthy',
             'container_status': status,
             'service_validation': validation_results,
-            'timestamp': logging.Formatter().formatTime(logging.LogRecord(
-                '', 0, '', 0, '', (), None
-            ))
+            'timestamp': datetime.utcnow().isoformat() + "Z",
         }
         
     except Exception as e:
         return {
             'overall_health': 'error',
             'error': str(e),
-            'timestamp': logging.Formatter().formatTime(logging.LogRecord(
-                '', 0, '', 0, '', (), None
-            ))
+            'timestamp': datetime.utcnow().isoformat() + "Z",
         }
 
 

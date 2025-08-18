@@ -316,7 +316,8 @@ class AnalyticsService(BaseService):
             
             summary = {
                 'period_days': days,
-                'generated_at': datetime.now().isoformat(),
+                # usar UTC para relatórios consistentes
+                'generated_at': datetime.utcnow().isoformat() + "Z",
                 'overview': {
                     'total_clients': client_metrics.get('total_clients', 0),
                     'total_projects': client_metrics.get('total_projects', 0),
@@ -439,7 +440,7 @@ class AnalyticsService(BaseService):
             
             report = {
                 'period_days': days,
-                'generated_at': datetime.now().isoformat(),
+                'generated_at': datetime.utcnow().isoformat() + "Z",
                 'daily_trends': daily_trends,
                 'focus_patterns': focus_patterns,
                 'estimate_accuracy': accuracy_analysis,
@@ -476,7 +477,7 @@ class AnalyticsService(BaseService):
             
             report = {
                 'period_days': days,
-                'generated_at': datetime.now().isoformat(),
+                'generated_at': datetime.utcnow().isoformat() + "Z",
                 'phase_distribution': tdd_metrics.get('phase_distribution', {}),
                 'phase_avg_times': tdd_metrics.get('phase_avg_times', {}),
                 'completed_cycles': tdd_metrics.get('completed_cycles', 0),
@@ -515,7 +516,8 @@ class AnalyticsService(BaseService):
             
             report = {
                 'period_days': days,
-                'generated_at': datetime.now().isoformat(),
+                # usar UTC para relatórios consistentes
+                'generated_at': datetime.utcnow().isoformat() + "Z",
                 'daily_patterns': daily_analysis,
                 'hourly_patterns': hourly_analysis,
                 'estimate_accuracy': accuracy_analysis,

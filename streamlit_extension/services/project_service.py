@@ -116,13 +116,14 @@ class ProjectRepository(BaseRepository):
                 order_clause = f" ORDER BY {sort_field} {'ASC' if sort.ascending else 'DESC'}"
             
             # Count total records
+            # Count total records (usar alias para chave estável no resultado)
             count_query = f"""
-                SELECT COUNT(*)
+                SELECT COUNT(*) AS total
                 FROM framework_projects p
                 LEFT JOIN framework_clients c ON p.client_id = c.id
                 {where_clause}
             """
-            total_count = self.db_manager.execute_query(count_query, params)[0]['COUNT(*)']
+            total_count = self.db_manager.execute_query(count_query, params)[0]['total']
             
             # Calculate pagination
             offset = (page - 1) * page_size

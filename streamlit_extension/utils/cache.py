@@ -62,13 +62,13 @@ class CacheEntry:
         self.last_accessed = datetime.now()
         return self.value
     
-    def refresh(self, ttl_seconds: int = None):
+    def refresh(self, ttl_seconds: Optional[int] = None):
         """Refresh the expiration time."""
-        if ttl_seconds:
+        if ttl_seconds is not None:
             self.expires_at = datetime.now() + timedelta(seconds=ttl_seconds)
         else:
             # Extend by original TTL
-            original_ttl = (self.expires_at - self.created_at).seconds
+            original_ttl = int((self.expires_at - self.created_at).total_seconds())
             self.expires_at = datetime.now() + timedelta(seconds=original_ttl)
 
 

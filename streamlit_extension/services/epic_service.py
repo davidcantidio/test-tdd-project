@@ -286,9 +286,9 @@ class EpicRepository(BaseRepository):
     def count_tasks(self, epic_id: int) -> int:
         """Count tasks for an epic."""
         try:
-            query = "SELECT COUNT(*) FROM framework_tasks WHERE epic_id = ?"
+            query = "SELECT COUNT(*) AS total FROM framework_tasks WHERE epic_id = ?"
             result = self.db_manager.execute_query(query, (epic_id,))
-            return result[0]['COUNT(*)'] if result else 0
+            return int(result[0]['total']) if result else 0
         except Exception as e:
             self.db_manager.logger.error(f"Error counting tasks for epic {epic_id}: {e}")
             return 0

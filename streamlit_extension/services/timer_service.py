@@ -927,9 +927,18 @@ class TimerService(BaseService):
     def _calculate_elapsed_time(self, session: Dict[str, Any]) -> int:
         """Calculate elapsed time for active session."""
         start_time = session['start_time']
-        if isinstance(start_time, str):
-            start_time = datetime.fromisoformat(start_time)
+        was_utc_format = False
         
+        if isinstance(start_time, str):
+            # Normaliza ISO 8601 com sufixo 'Z' (UTC) para compatibilidade com fromisoformat
+            was_utc_format = start_time.endswith('Z')
+            iso_str = start_time.replace('Z', '+00:00') if was_utc_format else start_time
+            start_time = datetime.fromisoformat(iso_str)
+            # Convert to naive datetime to avoid timezone mixing issues
+            if start_time.tzinfo is not None:
+                start_time = start_time.replace(tzinfo=None)
+        
+        # Always use local naive datetime for compatibility
         elapsed = datetime.now() - start_time
         return int(elapsed.total_seconds() / 60)
     

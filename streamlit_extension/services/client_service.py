@@ -81,9 +81,9 @@ class ClientRepository(BaseRepository):
             if sort:
                 order_clause = f" ORDER BY {sort.field} {'ASC' if sort.ascending else 'DESC'}"
             
-            # Count total records
-            count_query = f"SELECT COUNT(*) FROM framework_clients{where_clause}"
-            total_count = self.db_manager.execute_query(count_query, params)[0]['COUNT(*)']
+            # Count total records (usar alias para chave estável no resultado)
+            count_query = f"SELECT COUNT(*) AS total FROM framework_clients{where_clause}"
+            total_count = self.db_manager.execute_query(count_query, params)[0]['total']
             
             # Calculate pagination
             offset = (page - 1) * page_size
