@@ -452,20 +452,20 @@ class StreamlitSecurityManager:
             else:
                 self.logger.error(f"Failed to reset rate limits: {str(e)[:100]}")
     
-    def _get_streamlit_session_id(self) -> Optional[str]:
-        """Extract session ID from Streamlit context."""
+    def _get_streamlit_session_id(self) -> str:
+        """Obtém ID único da sessão Streamlit de forma segura."""
         try:
             import streamlit as st
             if hasattr(st, 'session_state') and hasattr(st.session_state, 'session_id'):
-                return st.session_state.session_id
-            # Fallback: use runtime ID if available
+                return str(st.session_state.session_id)
             from streamlit.runtime.scriptrunner import get_script_run_ctx
             ctx = get_script_run_ctx()
             if ctx and hasattr(ctx, 'session_id'):
-                return ctx.session_id
-        except:
+                return str(ctx.session_id)
+        except Exception:
             pass
-        return None
+        import uuid
+        return str(uuid.uuid4())
     
     def is_security_enabled(self) -> bool:
         """Check if advanced security features are available."""
@@ -696,8 +696,8 @@ class StreamlitSecurityManager:
                 self.logger.error(sanitize_log_message(f"Failed to generate CSRF token: {e}", 'ERROR'))
             else:
                 self.logger.error(f"Failed to generate CSRF token: {str(e)[:100]}")
-            # Fallback token
-            return hashlib.sha256(f"{form_id}:{time.time()}:{secrets.token_hex(8)}".encode()).hexdigest()[:16]
+            # Fallback robusto: manter alta entropia (~256 bits)
+            return secrets.token_urlsafe(32)
     
     def validate_csrf_token(self, form_id: str, provided_token: str, max_age_seconds: int = 3600) -> bool:
         """

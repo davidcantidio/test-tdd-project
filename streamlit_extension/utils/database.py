@@ -3560,6 +3560,25 @@ class DatabaseManager(PerformancePaginationMixin):
                 st.error(f"❌ Error deleting project: {e}")
             return False
 
+    def close(self) -> None:
+        """
+        Fecha conexões e libera recursos do banco de dados.
+        Importante para cleanup adequado em testes e shutdown.
+        """
+        try:
+            if hasattr(self, 'engine'):
+                self.engine.dispose()
+                logger.info("Database engine disposed successfully")
+            if hasattr(self, 'timer_engine') and getattr(self, 'timer_engine'):
+                try:
+                    self.timer_engine.dispose()
+                    logger.info("Timer database engine disposed successfully")
+                except Exception as te:
+                    logger.warning(f"Error closing timer engine: {te}")
+        except Exception as e:
+            logger.error(f"Error closing database: {e}")
+            # Não re-raise para permitir cleanup gracioso
+
 
 # =============================================================================
 # 🔧 CONTEXT MANAGERS - Utility context managers for database operations

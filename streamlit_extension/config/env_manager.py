@@ -52,15 +52,17 @@ class EnvironmentManager:
     def substitute_env_vars(self, config_dict: dict) -> dict:
         """Substitute ${VAR} patterns with environment variables."""
         pattern = re.compile(r"\$\{([^}]+)\}")
-        substituted = {}
-        for key, value in config_dict.items():
+
+        def _resolve(value):
             if isinstance(value, str):
-                substituted[key] = pattern.sub(lambda m: os.getenv(m.group(1), ""), value)
-            elif isinstance(value, dict):
-                substituted[key] = self.substitute_env_vars(value)
-            else:
-                substituted[key] = value
-        return substituted
+                return pattern.sub(lambda m: os.getenv(m.group(1), ""), value)
+            if isinstance(value, dict):
+                return {k: _resolve(v) for k, v in value.items()}
+            if isinstance(value, list):
+                return [_resolve(v) for v in value]
+            return value
+
+        return _resolve(config_dict)
 
     def validate_config(self) -> bool:
         """Validate configuration completeness and format."""
@@ -86,3 +88,4 @@ class EnvironmentManager:
         self.database_config = deepcopy(getattr(self.config_module, "DATABASE_CONFIG", {}))
         self.redis_config = deepcopy(getattr(self.config_module, "REDIS_CONFIG", {}))
         self.security_config = deepcopy(getattr(self.config_module, "SECURITY_CONFIG", {}))
+

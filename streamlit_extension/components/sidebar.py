@@ -38,7 +38,7 @@ except ImportError:
         DATABASE_AVAILABLE = False
 
 
-def render_sidebar() -> Dict[str, Any]:
+def render_sidebar(user_id: int = 1) -> Dict[str, Any]:
     """
     Render the persistent sidebar with timer and navigation.
     
@@ -136,7 +136,7 @@ def render_sidebar() -> Dict[str, Any]:
             st.markdown("## 🏆 Achievements")
             
             # Get real gamification data
-            gamification_data = _get_gamification_data()
+            gamification_data = _get_gamification_data(user_id)
             
             # Points display
             total_points = gamification_data.get("total_points", 0)
@@ -219,19 +219,19 @@ def render_timer_controls() -> Dict[str, Any]:
     }
 
 
-def _get_gamification_data() -> Dict[str, Any]:
+def _get_gamification_data(user_id: int = 1) -> Dict[str, Any]:
     """Get real gamification data from database."""
     if not DATABASE_AVAILABLE:
         return _get_fallback_gamification_data()
-    
+
     try:
         if DATABASE_AVAILABLE:
             # Get user stats (points, completed tasks)
             from ..database.queries import get_user_stats, get_achievements
-            user_stats = get_user_stats()
-            
+            user_stats = get_user_stats(user_id)
+
             # Get achievements
-            achievements = get_achievements()
+            achievements = get_achievements(user_id)
         
         # Get timer sessions for streak calculation
         timer_sessions = list_timer_sessions(days=30) if list_timer_sessions else []

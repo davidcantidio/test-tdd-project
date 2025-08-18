@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
 📊 TDD Analytics Engine - TDAH Time Tracking Analytics
+Patch: decorator order for accurate perf metrics, safer cache checks
 
 Advanced analytics for TDAH-optimized TDD workflow including:
 - Time estimation accuracy analysis
@@ -80,8 +81,8 @@ class TDDAHAnalytics:
         else:
             self.lru_cache = None
         
-    @performance_critical("load_session_data")
     @cached(ttl_seconds=1800, use_persistent=True)
+    @performance_critical("load_session_data")
     def load_session_data(self, days: int = 30) -> Any:
         """Load task session data with performance optimizations."""
         if not self._check_analytics_dependencies():
@@ -207,8 +208,8 @@ class TDDAHAnalytics:
         # Combined focus quality (0-1 scale)
         return (pause_score * 0.4 + accuracy_score * 0.6).clip(0, 1)
     
-    @performance_critical("generate_productivity_metrics")
     @cached(ttl_seconds=900)  # 15 minute cache for metrics
+    @performance_critical("generate_productivity_metrics")
     def generate_productivity_metrics(self, days: int = 30) -> ProductivityMetrics:
         """Generate comprehensive productivity metrics with performance optimization."""
         data = self.load_session_data(days)
@@ -570,7 +571,7 @@ class TDDAHAnalytics:
         cache_key = f"dashboard_data_{hash(output_path)}"
         if self.lru_cache:
             cached_data = self.lru_cache.get(cache_key)
-            if cached_data:
+            if cached_data is not None:
                 log_info("Using cached dashboard data")
                 return self._render_dashboard_from_cache(cached_data, output_path)
         

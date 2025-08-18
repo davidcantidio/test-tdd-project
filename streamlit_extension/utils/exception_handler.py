@@ -18,8 +18,9 @@ import time
 import traceback
 import functools
 import threading
+from collections import deque
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Tuple, Union
+from typing import Any, Callable, Deque, Dict, List, Optional, Tuple, Union
 from datetime import datetime
 from contextlib import contextmanager
 
@@ -179,7 +180,7 @@ class GlobalExceptionHandler:
             "total_errors": 0,
             "errors_by_category": {},
             "errors_by_severity": {},
-            "recent_errors": [],
+            "recent_errors": deque(maxlen=100),
             "last_reset": time.time()
         }
         
@@ -334,8 +335,8 @@ class GlobalExceptionHandler:
             severity_stats = self.error_stats["errors_by_severity"]
             severity_stats[error.severity] = severity_stats.get(error.severity, 0) + 1
             
-            # Add to recent errors (keep last 10)
-            recent = self.error_stats["recent_errors"]
+            # Add to recent errors (deque handles max size)
+            recent: Deque[Dict[str, Any]] = self.error_stats["recent_errors"]
             recent.append({
                 "error_id": error.error_id,
                 "category": error.category,
@@ -343,10 +344,6 @@ class GlobalExceptionHandler:
                 "timestamp": error.timestamp.isoformat(),
                 "message": str(error.exception)[:100]
             })
-            
-            # Keep only last 10 errors
-            if len(recent) > 10:
-                recent.pop(0)
     
     def _log_error(self, error: StreamlitError):
         """Log error with appropriate level."""

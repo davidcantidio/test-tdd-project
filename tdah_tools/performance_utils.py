@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
 🚀 Performance Utilities - Optimization Tools for Large Datasets
+Patch: stable cache keys, correct hit rate, safer git ops, better perf metrics
 
 This module provides performance optimization utilities for TDD template scripts,
 including caching, parallel processing, and efficient data handling.
@@ -53,6 +54,8 @@ class LRUCache:
         self.cache: Dict[str, Tuple[Any, float]] = {}
         self.access_order: List[str] = []
         self._lock = threading.RLock()
+        self._requests = 0
+        self._hits = 0
     
     def _is_expired(self, timestamp: float) -> bool:
         """Check if cache entry has expired."""
@@ -61,21 +64,22 @@ class LRUCache:
     def get(self, key: str) -> Optional[Any]:
         """Get value from cache."""
         with self._lock:
+            self._requests += 1
             if key in self.cache:
                 value, timestamp = self.cache[key]
-                
+
                 if self._is_expired(timestamp):
                     # Remove expired entry
                     del self.cache[key]
                     if key in self.access_order:
                         self.access_order.remove(key)
                     return None
-                
+
                 # Update access order
                 if key in self.access_order:
                     self.access_order.remove(key)
                 self.access_order.append(key)
-                
+                self._hits += 1
                 return value
             return None
     
@@ -108,9 +112,11 @@ class LRUCache:
     
     def hit_rate(self, total_requests: int) -> float:
         """Calculate cache hit rate."""
-        if total_requests == 0:
-            return 0.0
-        return len(self.cache) / total_requests
+        with self._lock:
+            req = self._requests if total_requests == 0 else total_requests
+            if req == 0:
+                return 0.0
+            return self._hits / req
 
 
 class PersistentCache:
@@ -217,7 +223,7 @@ class OptimizedGitOperations:
         
         # Try cache first
         cached_result = self.cache.get(cache_key)
-        if cached_result:
+        if cached_result is not None:
             return cached_result
         
         try:
@@ -286,8 +292,8 @@ class OptimizedGitOperations:
             return results
         
         try:
-            # Get all commit info in one command
-            cmd = ['git', 'log', '--pretty=format:%H|%ad|%s|%B---COMMIT-SEPARATOR---'] + commit_hashes
+            # Use git show -s for exact commits to avoid traversal quirks
+            cmd = ['git', 'show', '-s', '--pretty=format:%H|%ad|%s|%B---COMMIT-SEPARATOR---', '--date=iso'] + commit_hashes
             result = subprocess.run(cmd, capture_output=True, text=True, check=True, timeout=30)
             
             commit_blocks = result.stdout.split('---COMMIT-SEPARATOR---')
@@ -418,10 +424,14 @@ class PerformanceMonitor:
                     
                     # Determine items processed
                     items_processed = 1
-                    if hasattr(result, '__len__'):
-                        items_processed = len(result)
-                    elif isinstance(result, dict) and 'count' in result:
+                    # Prefer explicit 'count' in dicts
+                    if isinstance(result, dict) and 'count' in result:
                         items_processed = result['count']
+                    elif hasattr(result, '__len__'):
+                        try:
+                            items_processed = len(result)  # may fail for generators
+                        except Exception:
+                            items_processed = 1
                     
                     # Record metrics
                     metrics = PerformanceMetrics(
@@ -570,7 +580,17 @@ def cached(ttl_seconds: int = 3600, use_persistent: bool = False):
         @functools.wraps(func)
         def wrapper(*args, **kwargs):
             # Create cache key from function name and arguments
-            cache_key = f"{func.__name__}_{hashlib.sha256(str(args).encode() + str(kwargs).encode()).hexdigest()}"
+            try:
+                # Stable, order-insensitive kwargs + best-effort repr for args
+                key_payload = {
+                    "fn": func.__name__,
+                    "args": [repr(a) for a in args],
+                    "kwargs": {k: repr(v) for k, v in sorted(kwargs.items())},
+                }
+                cache_key = hashlib.sha256(json.dumps(key_payload, sort_keys=True).encode("utf-8")).hexdigest()
+            except Exception:
+                # Fallback
+                cache_key = f"{func.__name__}_{hashlib.sha256(repr((args, kwargs)).encode()).hexdigest()}"
             
             cache = _persistent_cache if use_persistent else _global_cache
             monitor = get_performance_monitor()

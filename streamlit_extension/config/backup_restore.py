@@ -182,21 +182,20 @@ class ConfigurationBackupManager:
                 }
                 
                 zipf.writestr("backup_metadata.json", json.dumps(metadata, indent=2, default=str))
-                
-                # Update file size
-                backup_info.size_bytes = backup_file.stat().st_size
-                
-                # Add to index
-                self._backup_index[backup_name] = backup_info
-                self._save_backup_index()
-                
-                # Cleanup old backups
-                self._cleanup_old_backups()
-                
-                return backup_info
-                
+
+            backup_info.size_bytes = backup_file.stat().st_size
+
+            # Add to index
+            self._backup_index[backup_name] = backup_info
+            self._save_backup_index()
+
+            # Cleanup old backups
+            self._cleanup_old_backups()
+
+            return backup_info
+
         except Exception as e:
-            # Cleanup failed backup file
+            logger.exception("Failed to create backup %s", backup_name)
             if backup_file.exists():
                 backup_file.unlink()
             return None
@@ -266,6 +265,7 @@ class ConfigurationBackupManager:
                 return True
                 
         except Exception as e:
+            logger.exception("Failed to restore backup %s", backup_name)
             return False
     
     def export_configuration(self, export_path: Path, include_sensitive: bool = False) -> bool:
@@ -309,6 +309,7 @@ class ConfigurationBackupManager:
             return True
             
         except Exception as e:
+            logger.exception("Failed to export configuration to %s", export_path)
             return False
     
     def import_configuration(self, import_path: Path, components: List[str] = None) -> bool:
@@ -335,6 +336,7 @@ class ConfigurationBackupManager:
             return True
             
         except (json.JSONDecodeError, KeyError, Exception) as e:
+            logger.exception("Failed to import configuration from %s", import_path)
             return False
     
     def get_backup_list(self) -> List[BackupInfo]:

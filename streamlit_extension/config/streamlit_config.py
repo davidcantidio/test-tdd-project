@@ -393,66 +393,56 @@ def load_config(env_file: Optional[str] = None) -> StreamlitConfig:
     return config
 
 
-def create_streamlit_config_file(config: StreamlitConfig, output_path: str = ".streamlit/config.toml"):
+_CONFIG_SINGLETON: Optional[StreamlitConfig] = None
+
+
+def get_config(env_file: Optional[str] = None) -> StreamlitConfig:
+    """Singleton de configuração com carregamento preguiçoso."""
+    global _CONFIG_SINGLETON
+    if _CONFIG_SINGLETON is None:
+        _CONFIG_SINGLETON = load_config(env_file)
+        _CONFIG_SINGLETON.config_loaded_at = datetime.utcnow().isoformat()
+    return _CONFIG_SINGLETON
+
+
+def create_streamlit_config_file(output_dir: Optional[Path] = None) -> Path:
     """
-    Create Streamlit config.toml file from configuration.
-    
-    Args:
-        config: StreamlitConfig instance
-        output_path: Path to save config.toml file
+    Gera `.streamlit/config.toml` a partir de `get_streamlit_config_dict()`.
+    Retorna o caminho do arquivo gerado.
     """
-    # Create .streamlit directory if it doesn't exist
-    config_path = Path(output_path)
-    config_path.parent.mkdir(exist_ok=True)
-    
-    # Get streamlit configuration
-    streamlit_config = config.get_streamlit_config_dict()
-    
-    # Convert to TOML format
-    toml_content = "[server]\n"
-    for key, value in streamlit_config["server"].items():
-        if isinstance(value, str):
-            toml_content += f'{key} = "{value}"\n'
-        else:
-            toml_content += f'{key} = {str(value).lower()}\n'
-    
-    toml_content += "\n[theme]\n"
-    for key, value in streamlit_config["theme"].items():
-        toml_content += f'{key} = "{value}"\n'
-    
-    toml_content += "\n[client]\n"
-    for key, value in streamlit_config["client"].items():
-        if isinstance(value, bool):
-            toml_content += f'{key} = {str(value).lower()}\n'
-        else:
-            toml_content += f'{key} = "{value}"\n'
-    
-    toml_content += "\n[runner]\n"
-    for key, value in streamlit_config["runner"].items():
-        toml_content += f'{key} = {str(value).lower()}\n'
-    
-    # Write to file
-    with open(config_path, 'w') as f:
-        f.write(toml_content)
-    
-    print(f"📁 Streamlit config saved to: {output_path}")
+    cfg = get_config()
+    data = cfg.get_streamlit_config_dict()
 
+    toml_parts: List[str] = []
+    for section, content in data.items():
+        toml_parts.append(f"[{section}]")
+        if isinstance(content, dict):
+            for k, v in content.items():
+                if isinstance(v, dict):
+                    toml_parts.append(f"\n[{section}.{k}]")
+                    for k2, v2 in v.items():
+                        val = f"\"{v2}\"" if isinstance(v2, str) else str(v2).lower() if isinstance(v2, bool) else v2
+                        toml_parts.append(f"{k2} = {val}")
+                else:
+                    val = f"\"{v}\"" if isinstance(v, str) else str(v).lower() if isinstance(v, bool) else v
+                    toml_parts.append(f"{k} = {val}")
+        toml_parts.append("")
 
-# Global configuration instance (lazy loaded)
-_config: Optional[StreamlitConfig] = None
+    toml_content = "\n".join(toml_parts).strip() + "\n"
 
-def get_config() -> StreamlitConfig:
-    """Get global configuration instance (lazy loaded)."""
-    global _config
-    if _config is None:
-        _config = load_config()
-    return _config
+    out_dir = output_dir or (Path.cwd() / ".streamlit")
+    out_dir.mkdir(exist_ok=True, parents=True)
+    out_path = out_dir / "config.toml"
+    out_path.write_text(toml_content, encoding="utf-8")
+    return out_path
+
 
 def reload_config(env_file: Optional[str] = None) -> StreamlitConfig:
     """Reload configuration from environment."""
-    global _config
-    _config = load_config(env_file)
-    return _config
+    global _CONFIG_SINGLETON
+    _CONFIG_SINGLETON = load_config(env_file)
+    _CONFIG_SINGLETON.config_loaded_at = datetime.utcnow().isoformat()
+    return _CONFIG_SINGLETON
 
 
 # Utility functions for timezone handling

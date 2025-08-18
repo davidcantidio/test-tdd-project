@@ -3,6 +3,7 @@ from __future__ import annotations
 """Secrets management with environment variables and vault support."""
 
 import os
+import json
 from enum import Enum
 from typing import Any, Dict, Optional
 
@@ -50,10 +51,18 @@ class SecretsManager:
         self._secrets: Dict[SecretType, Any] = {}
 
     def load_from_env_vars(self) -> Dict[SecretType, Any]:
+        """Carrega segredos do ambiente, tentando decodificar JSON quando aplicável."""
         for secret in SecretType:
             if secret.value in os.environ:
-                self._secrets[secret] = os.environ[secret.value]
-        return self._secrets
+                raw = os.environ[secret.value]
+                parsed: Any = raw
+                if secret in (SecretType.API_KEYS, SecretType.OAUTH_SECRETS):
+                    try:
+                        parsed = json.loads(raw)
+                    except Exception:
+                        parsed = raw
+                self._secrets[secret] = parsed
+        return dict(self._secrets)
 
     def load_from_vault(self) -> Dict[SecretType, Any]:
         if self.vault.connect_to_vault():
@@ -63,15 +72,27 @@ class SecretsManager:
         return {}
 
     def get_secret(self, secret_type: SecretType) -> Optional[Any]:
+        """Obtém um segredo já carregado (env/vault/cache)."""
         return self._secrets.get(secret_type)
 
-    def rotate_secrets(self) -> Dict[SecretType, Any]:
-        rotated = {secret: f"rotated-{secret.value.lower()}" for secret in SecretType}
+    def rotate_secrets(self, preserve_types: bool = True) -> Dict[SecretType, Any]:
+        """
+        Gera novos valores simulados para todos os segredos (exemplo).
+        preserve_types: se True, mantém tipo (dict/str) quando possível.
+        """
+        rotated: Dict[SecretType, Any] = {}
+        for secret in SecretType:
+            old = self._secrets.get(secret)
+            if preserve_types and isinstance(old, dict):
+                rotated[secret] = {"rotated": True, **old}
+            else:
+                rotated[secret] = f"rotated-{secret.value.lower()}"
         self._secrets.update(rotated)
         self.vault.cache_secrets(rotated)
-        return rotated
+        return dict(rotated)
 
     def validate_secrets(self) -> bool:
+        """Valida presença de todos os segredos necessários."""
         missing = [s.value for s in SecretType if s not in self._secrets]
         if missing:
             raise ValueError(f"Missing secrets: {', '.join(missing)}")

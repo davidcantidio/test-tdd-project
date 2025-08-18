@@ -1,1449 +1,1118 @@
  (cd "$(git rev-parse --show-toplevel)" && git apply --3way <<'EOF' 
-diff --git a/streamlit_extension/utils/connection_resilience.py b/streamlit_extension/utils/connection_resilience.py
-index a08cb45997e2b2c860df7dd8868a20adcb469d31..5395608dee0fb35441692389d6aaea4046600f7b 100644
---- a/streamlit_extension/utils/connection_resilience.py
-+++ b/streamlit_extension/utils/connection_resilience.py
-@@ -37,108 +37,108 @@ class CircuitBreakerConfig:
-     recovery_timeout: float = 60.0
-     success_threshold: int = 2
-     timeout: float = 30.0
+diff --git a/streamlit_extension/components/sidebar.py b/streamlit_extension/components/sidebar.py
+index 95de49b89f4476037144d6ebd032d3c2e013f2dd..cfd211b3be88c6530f0f36c5df2e8d7d7efd3702 100644
+--- a/streamlit_extension/components/sidebar.py
++++ b/streamlit_extension/components/sidebar.py
+@@ -16,51 +16,51 @@ except ImportError:
  
- class ConnectionPool:
-     """Thread-safe connection pool with leak detection"""
+ try:
+     from ..config import get_config
+ except ImportError:
+     get_config = None
+ 
+ # Import database utilities - migrated to modular API
+ try:
+     from ..database import get_connection, transaction
+     from ..database.queries import list_epics, list_tasks, list_timer_sessions
+     DATABASE_AVAILABLE = True
+ except ImportError:
+     try:
+         from streamlit_extension.database import get_connection, transaction
+         from streamlit_extension.database.queries import list_epics, list_tasks, list_timer_sessions
+         DATABASE_AVAILABLE = True
+     except ImportError:
+         get_connection = None
+         transaction = None
+         list_epics = None
+         list_tasks = None
+         list_timer_sessions = None
+         DATABASE_AVAILABLE = False
+ 
+ 
+-def render_sidebar() -> Dict[str, Any]:
++def render_sidebar(user_id: int = 1) -> Dict[str, Any]:
+     """
+     Render the persistent sidebar with timer and navigation.
      
-     def __init__(self, max_connections: int = 10, idle_timeout: float = 300.0):
-         self.max_connections = max_connections
-         self.idle_timeout = idle_timeout
-         self._connections = []
-         self._active_connections = set()
-         self._lock = threading.RLock()
-         self._created_count = 0
-         self._leaked_connections = []
+     Returns:
+         Dict containing sidebar state and user actions
+     """
+     if not STREAMLIT_AVAILABLE:
+         return {"error": "Streamlit not available"}
+     
+     sidebar_state = {}
+     
+     with st.sidebar:
+         # Header
+         st.markdown("# 🚀 TDD Framework")
+         st.markdown("---")
          
-     def get_connection(self):
-         """Get connection from pool with leak detection"""
-         with self._lock:
-             # Check for available connection
-             now = time.time()
-             for i, (conn, last_used) in enumerate(self._connections):
-                 if now - last_used < self.idle_timeout:
-                     self._connections.pop(i)
-                     self._active_connections.add(id(conn))
--                    logger.debug(f"Reused connection {id(conn)}")
-+                    logger.debug("Reused connection %d", id(conn))
-                     return conn
+         # Timer Section (placeholder for now)
+         st.markdown("## ⏱️ Timer")
+         
+         # Initialize timer state
+         if "timer_running" not in st.session_state:
+             st.session_state.timer_running = False
+             st.session_state.timer_start_time = None
+             st.session_state.current_task = None
+             st.session_state.elapsed_seconds = 0  # acumulado quando pausado
+@@ -114,51 +114,51 @@ def render_sidebar() -> Dict[str, Any]:
+         
+         # Epic Progress Section (placeholder)
+         st.markdown("## 📊 Current Epic")
+         
+         # Progress bar (placeholder)
+         progress_value = 0.65  # 65% completion
+         st.progress(progress_value)
+         st.markdown(f"**Progress:** {int(progress_value * 100)}%")
+         
+         # Stats
+         st.markdown("### 📈 Today's Stats")
+         col1, col2 = st.columns(2)
+         with col1:
+             st.metric("Tasks Done", "3", "1")
+         with col2:
+             st.metric("Focus Time", "2.5h", "0.5h")
+         
+         st.markdown("---")
+         
+         # Gamification Section (real data)
+         cfg = get_config() if get_config else None
+         if cfg and getattr(cfg, "enable_gamification", False):
+             st.markdown("## 🏆 Achievements")
              
-             # Create new connection if under limit
-             if len(self._active_connections) < self.max_connections:
-                 conn = self._create_connection()
-                 self._active_connections.add(id(conn))
-                 self._created_count += 1
--                logger.debug(f"Created new connection {id(conn)} (total: {self._created_count})")
-+                logger.debug("Created new connection %d (total: %d)", id(conn), self._created_count)
-                 return conn
+             # Get real gamification data
+-            gamification_data = _get_gamification_data()
++            gamification_data = _get_gamification_data(user_id)
              
-             # Pool exhausted
--            logger.warning(f"Connection pool exhausted: {len(self._active_connections)}/{self.max_connections}")
-+            logger.warning("Connection pool exhausted: %d/%d", len(self._active_connections), self.max_connections)
-             raise ConnectionError(f"Connection pool exhausted")
-     
-     def return_connection(self, conn):
-         """Return connection to pool"""
-         with self._lock:
-             conn_id = id(conn)
-             if conn_id in self._active_connections:
-                 self._active_connections.remove(conn_id)
-                 self._connections.append((conn, time.time()))
--                logger.debug(f"Returned connection {conn_id}")
-+                logger.debug("Returned connection %d", conn_id)
+             # Points display
+             total_points = gamification_data.get("total_points", 0)
+             recent_points = gamification_data.get("recent_points", 0)
+             st.metric("🌟 Total Points", f"{total_points:,}", f"+{recent_points}" if recent_points > 0 else None)
+             
+             # Streak
+             current_streak = gamification_data.get("current_streak", 0)
+             streak_type = gamification_data.get("streak_type", "daily focus")
+             st.metric("🔥 Current Streak", f"{current_streak} days", f"{streak_type}")
+             
+             # Recent achievements
+             achievements = gamification_data.get("recent_achievements", [])
+             if achievements:
+                 st.markdown("### 🏅 Recent Badges")
+                 for achievement in achievements[:3]:  # Show last 3
+                     badge_emoji = _get_achievement_emoji(achievement.get("code", ""))
+                     st.markdown(f"{badge_emoji} **{achievement.get('name', 'Achievement')}** - {achievement.get('description', '')}")
              else:
--                logger.warning(f"Attempted to return unknown connection {conn_id}")
-+                logger.warning("Attempted to return unknown connection %d", conn_id)
-     
-     def _create_connection(self):
-         """Create new database connection"""
-         # This would be implemented with actual database connection logic
-         # For now, return a mock connection
-         return f"connection_{self._created_count}"
-     
-     def cleanup_idle_connections(self):
-         """Remove idle connections from pool"""
-         with self._lock:
-             now = time.time()
-             active_connections = []
-             removed_count = 0
+                 st.markdown("### 🏅 Keep working to unlock badges!")
              
--            for conn, last_used in self._connections:
-+            for conn, last_used in list(self._connections):
-                 if now - last_used < self.idle_timeout:
-                     active_connections.append((conn, last_used))
-                 else:
-                     removed_count += 1
--                    logger.debug(f"Removed idle connection {id(conn)}")
-+                    logger.debug("Removed idle connection %d", id(conn))
-             
-             self._connections = active_connections
--            logger.info(f"Cleanup removed {removed_count} idle connections")
-+            logger.info("Cleanup removed %d idle connections", removed_count)
+             # Progress to next achievement
+             next_achievement = _get_next_achievement_progress(gamification_data)
+             if next_achievement:
+                 st.markdown("### 🎯 Next Goal")
+@@ -197,63 +197,63 @@ def render_sidebar() -> Dict[str, Any]:
      
-     def get_stats(self) -> Dict[str, Any]:
-         """Get connection pool statistics"""
-         with self._lock:
-             return {
-                 "active_connections": len(self._active_connections),
-                 "idle_connections": len(self._connections),
-                 "max_connections": self.max_connections,
-                 "total_created": self._created_count,
--                "utilization": len(self._active_connections) / self.max_connections
-+                "utilization": len(self._active_connections) / self.max_connections if self.max_connections else 0.0
-             }
+     return sidebar_state
  
- class CircuitBreaker:
-     """Circuit breaker for database operations"""
-     
-     def __init__(self, config: CircuitBreakerConfig):
-         self.config = config
-         self.state = CircuitState.CLOSED
-         self.failure_count = 0
-         self.success_count = 0
-         self.last_failure_time = None
-         self._lock = threading.Lock()
-     
-     def call(self, func: Callable, *args, **kwargs):
-         """Execute function with circuit breaker protection"""
-         with self._lock:
-             if self.state == CircuitState.OPEN:
-                 if self._should_attempt_reset():
-                     self.state = CircuitState.HALF_OPEN
-                     logger.info("Circuit breaker transitioning to HALF_OPEN")
-                 else:
-                     raise ConnectionError("Circuit breaker is OPEN")
-         
-         try:
-             start_time = time.time()
-@@ -167,123 +167,123 @@ class CircuitBreaker:
-         """Handle successful operation"""
-         with self._lock:
-             if self.state == CircuitState.HALF_OPEN:
-                 self.success_count += 1
-                 if self.success_count >= self.config.success_threshold:
-                     self.state = CircuitState.CLOSED
-                     self.failure_count = 0
-                     self.success_count = 0
-                     logger.info("Circuit breaker CLOSED - service recovered")
-             elif self.state == CircuitState.CLOSED:
-                 self.failure_count = 0
-     
-     def _on_failure(self):
-         """Handle failed operation"""
-         with self._lock:
-             self.failure_count += 1
-             self.last_failure_time = time.time()
-             
-             if self.state == CircuitState.HALF_OPEN:
-                 self.state = CircuitState.OPEN
-                 self.success_count = 0
-                 logger.warning("Circuit breaker OPEN - service still failing")
-             elif (self.state == CircuitState.CLOSED and 
-                   self.failure_count >= self.config.failure_threshold):
-                 self.state = CircuitState.OPEN
--                logger.warning(f"Circuit breaker OPEN - {self.failure_count} failures detected")
-+                logger.warning("Circuit breaker OPEN - %d failures detected", self.failure_count)
-     
-     def get_state(self) -> Dict[str, Any]:
-         """Get circuit breaker state"""
-         with self._lock:
-             return {
-                 "state": self.state.value,
-                 "failure_count": self.failure_count,
-                 "success_count": self.success_count,
-                 "last_failure_time": self.last_failure_time
-             }
  
- class RetryManager:
-     """Retry manager with exponential backoff"""
+ def render_timer_controls() -> Dict[str, Any]:
+     """
+     Render just the timer controls (for embedding in other components).
      
-     def __init__(self, config: RetryConfig):
-         self.config = config
+     Returns:
+         Dict containing timer state
+     """
+     if not STREAMLIT_AVAILABLE:
+         return {"error": "Streamlit not available"}
      
-     def execute_with_retry(self, func: Callable, *args, **kwargs):
-         """Execute function with retry logic"""
-         last_exception = None
-         
-         for attempt in range(self.config.max_attempts):
-             try:
-                 return func(*args, **kwargs)
-             except Exception as e:
-                 last_exception = e
-                 
-                 if attempt == self.config.max_attempts - 1:
--                    logger.error(f"All {self.config.max_attempts} attempts failed")
-+                    logger.error("All %d attempts failed for %s", self.config.max_attempts, func.__name__, exc_info=True)
-                     break
-                 
-                 delay = self._calculate_delay(attempt)
--                logger.warning(f"Attempt {attempt + 1} failed: {e}. Retrying in {delay:.2f}s")
-+                logger.warning("Attempt %d failed for %s: %s. Retrying in %.2fs", attempt + 1, func.__name__, e, delay)
-                 time.sleep(delay)
-         
-         raise last_exception
+     # This would be a more focused timer component
+     # Implementation would be similar to the sidebar version
+     # but optimized for embedding in other pages
      
-     def _calculate_delay(self, attempt: int) -> float:
-         """Calculate delay for next attempt"""
-         delay = self.config.base_delay * (self.config.exponential_base ** attempt)
-         delay = min(delay, self.config.max_delay)
-         
-         if self.config.jitter:
-             import random
-             delay *= (0.5 + random.random() * 0.5)  # 50-100% of calculated delay
-         
-         return delay
+     return {
+         "timer_running": False,
+         "elapsed_time": "00:00",
+         "current_task": None
+     }
  
- class DatabaseResilience:
-     """Main resilience coordinator"""
-     
-     def __init__(
-         self,
-         retry_config: Optional[RetryConfig] = None,
-         circuit_config: Optional[CircuitBreakerConfig] = None,
-         pool_size: int = 10
-     ):
-         self.retry_manager = RetryManager(retry_config or RetryConfig())
-         self.circuit_breaker = CircuitBreaker(circuit_config or CircuitBreakerConfig())
-         self.connection_pool = ConnectionPool(max_connections=pool_size)
-         self._cleanup_thread = None
-         self._start_cleanup_thread()
-     
-     def _start_cleanup_thread(self):
-         """Start background cleanup thread"""
-         def cleanup_worker():
-             while True:
-                 try:
-                     self.connection_pool.cleanup_idle_connections()
-                     time.sleep(60)  # Cleanup every minute
-                 except Exception as e:
--                    logger.error(f"Cleanup thread error: {e}")
-+                    logger.error("Cleanup thread error: %s", e, exc_info=True)
-                     time.sleep(60)
-         
-         self._cleanup_thread = threading.Thread(target=cleanup_worker, daemon=True)
-         self._cleanup_thread.start()
-     
-     @contextmanager
-     def get_connection(self):
-         """Get database connection with resilience"""
-         conn = None
-         try:
-             # Get connection through circuit breaker and retry logic
-             conn = self.retry_manager.execute_with_retry(
-                 lambda: self.circuit_breaker.call(self.connection_pool.get_connection)
-             )
-             yield conn
-         finally:
-             if conn:
-                 self.connection_pool.return_connection(conn)
-     
-     def execute_query(self, query_func: Callable, *args, **kwargs):
-         """Execute database query with full resilience"""
-         with self.get_connection() as conn:
-             return query_func(conn, *args, **kwargs)
-     
-     def get_health_status(self) -> Dict[str, Any]:
-diff --git a/streamlit_extension/utils/correlation_logging.py b/streamlit_extension/utils/correlation_logging.py
-index e9407b77c82c4f16d4ba18c29e28678fac4d2ca9..17452c5d60174b8dbcf24c7f979118af7dea3f94 100644
---- a/streamlit_extension/utils/correlation_logging.py
-+++ b/streamlit_extension/utils/correlation_logging.py
-@@ -1,68 +1,71 @@
- """
- Correlation ID Logging System
- Provides request tracking and structured logging for multi-user environments
- """
  
- import uuid
- import time
- import logging
- import json
- from datetime import datetime
- from typing import Any, Dict, Optional, Union
- from contextlib import contextmanager
- from functools import wraps
+-def _get_gamification_data() -> Dict[str, Any]:
++def _get_gamification_data(user_id: int = 1) -> Dict[str, Any]:
+     """Get real gamification data from database."""
+     if not DATABASE_AVAILABLE:
+         return _get_fallback_gamification_data()
+-    
++
+     try:
+         if DATABASE_AVAILABLE:
+             # Get user stats (points, completed tasks)
+             from ..database.queries import get_user_stats, get_achievements
+-            user_stats = get_user_stats()
+-            
++            user_stats = get_user_stats(user_id)
++
+             # Get achievements
+-            achievements = get_achievements()
++            achievements = get_achievements(user_id)
+         
+         # Get timer sessions for streak calculation
+         timer_sessions = list_timer_sessions(days=30) if list_timer_sessions else []
+         
+         # Calculate streaks
+         current_streak, streak_type = _calculate_streaks(timer_sessions)
+         
+         # Calculate recent points (last 7 days)
+         recent_points = _calculate_recent_points(timer_sessions, achievements)
+         
+         return {
+             "total_points": user_stats.get("total_points", 0),
+             "recent_points": recent_points,
+             "current_streak": current_streak,
+             "streak_type": streak_type,
+             "recent_achievements": achievements[:5],  # Last 5 achievements
+             "completed_tasks": user_stats.get("completed_tasks", 0),
+             "active_streaks": user_stats.get("active_streaks", 0)
+         }
+         
+     except Exception as e:
+         print(f"Error loading gamification data: {e}")
+         return _get_fallback_gamification_data()
+ 
+ 
+diff --git a/streamlit_extension/database/connection.py b/streamlit_extension/database/connection.py
+index a4327f6c72a49a26c7f6ba793b6a89ad4cda6647..5539e1f225e141476c0ca67eafaaa1c38d344f5c 100644
+--- a/streamlit_extension/database/connection.py
++++ b/streamlit_extension/database/connection.py
+@@ -1,49 +1,57 @@
+ from __future__ import annotations
+ 
 +import threading
+ from contextlib import contextmanager
+ from typing import Any, Iterable, Iterator, Optional
  
- # Safe imports
+ # Ajuste o import conforme a localização real do DatabaseManager
+ from streamlit_extension.utils.database import DatabaseManager  # type: ignore
+ 
+ _DBM_INSTANCE: DatabaseManager | None = None  # type: ignore
++_DBM_LOCK = threading.Lock()
+ 
+ 
+ def set_database_manager(dbm: DatabaseManager) -> None:
+     """Permite injetar um ``DatabaseManager`` (ex.: testes)."""
+ 
+     global _DBM_INSTANCE
+     _DBM_INSTANCE = dbm  # type: ignore
+ 
+ 
+ def _db() -> DatabaseManager:
+-    global _DBM_INSTANCE  # type: ignore
+-    try:
+-        return _DBM_INSTANCE  # type: ignore
+-    except NameError:
+-        _DBM_INSTANCE = DatabaseManager()  # type: ignore
++    """
++    Thread-safe singleton pattern para DatabaseManager.
++    Usa double-checked locking para performance.
++    """
++    global _DBM_INSTANCE
++    if _DBM_INSTANCE is not None:
++        return _DBM_INSTANCE
++
++    with _DBM_LOCK:
++        if _DBM_INSTANCE is None:
++            _DBM_INSTANCE = DatabaseManager()
+         return _DBM_INSTANCE
+ 
+ 
+ def get_connection():
+     """Obtém uma conexão do manager atual."""
+ 
+     return _db().get_connection()
+ 
+ 
+ def release_connection(conn) -> None:
+     """Libera uma conexão obtida via ``get_connection()``."""
+ 
+     return _db().release_connection(conn)
+ 
+ 
+ @contextmanager
+ def transaction() -> Iterator[Any]:
+     """Delegação de transação para o manager atual."""
+ 
+     with _db().transaction() as tx:
+         yield tx
+ 
+ 
+ def execute(sql: str, params: Optional[Iterable[Any]] = None) -> Any:
+     """Execução genérica de SQL, delegada ao manager."""
+diff --git a/streamlit_extension/database/health.py b/streamlit_extension/database/health.py
+index 1c31154013ac185e50104396461ef998798a1bc0..ea92d92b157b32b0771239efcd8e2c82dd65583c 100644
+--- a/streamlit_extension/database/health.py
++++ b/streamlit_extension/database/health.py
+@@ -1,41 +1,49 @@
+ from __future__ import annotations
+ 
++import threading
+ from pathlib import Path
+ from typing import Any, Dict
+ 
+ from streamlit_extension.utils.database import DatabaseManager  # type: ignore
+ 
+ _DBM_INSTANCE: DatabaseManager | None = None  # type: ignore
++_DBM_LOCK = threading.Lock()
+ 
+ 
+ def _db() -> DatabaseManager:
+-    global _DBM_INSTANCE  # type: ignore
+-    try:
+-        return _DBM_INSTANCE  # type: ignore
+-    except NameError:
+-        _DBM_INSTANCE = DatabaseManager()  # type: ignore
++    """
++    Thread-safe singleton pattern para DatabaseManager.
++    Usa double-checked locking para performance.
++    """
++    global _DBM_INSTANCE
++    if _DBM_INSTANCE is not None:
++        return _DBM_INSTANCE
++
++    with _DBM_LOCK:
++        if _DBM_INSTANCE is None:
++            _DBM_INSTANCE = DatabaseManager()
+         return _DBM_INSTANCE
+ 
+ 
+ def check_health() -> Dict[str, Any]:
+     """Health-check do banco via manager."""
+ 
+     return _db().check_database_health()
+ 
+ 
+ def get_query_stats() -> Dict[str, Any]:
+     """Estatísticas de queries conforme implementado no manager."""
+ 
+     return _db().get_query_statistics()
+ 
+ 
+ def optimize() -> Dict[str, Any]:
+     """Executa rotinas de otimização do banco (VACUUM/ANALYZE/etc.)."""
+ 
+     return _db().optimize_database()
+ 
+ 
+ def create_backup(path: str) -> str:
+     """Cria backup no caminho informado. Garante diretório existente."""
+ 
+     p = Path(path)
+diff --git a/streamlit_extension/database/queries.py b/streamlit_extension/database/queries.py
+index e948b402a20ea2e2106b91686e6dd415f19b3982..4b0c5702b0166c955910c4b189d0efb54958fc5f 100644
+--- a/streamlit_extension/database/queries.py
++++ b/streamlit_extension/database/queries.py
+@@ -1,40 +1,48 @@
+ from __future__ import annotations
+ 
++import threading
+ from typing import Any, Dict, List
+ 
+ from streamlit_extension.utils.database import DatabaseManager  # type: ignore
+ 
+ _DBM_INSTANCE: DatabaseManager | None = None  # type: ignore
++_DBM_LOCK = threading.Lock()
+ 
+ 
+ def _db() -> DatabaseManager:
+-    global _DBM_INSTANCE  # type: ignore
+-    try:
+-        return _DBM_INSTANCE  # type: ignore
+-    except NameError:
+-        _DBM_INSTANCE = DatabaseManager()  # type: ignore
++    """
++    Thread-safe singleton pattern para DatabaseManager.
++    Usa double-checked locking para performance.
++    """
++    global _DBM_INSTANCE
++    if _DBM_INSTANCE is not None:
++        return _DBM_INSTANCE
++
++    with _DBM_LOCK:
++        if _DBM_INSTANCE is None:
++            _DBM_INSTANCE = DatabaseManager()
+         return _DBM_INSTANCE
+ 
+ 
+ def list_epics() -> List[Dict[str, Any]]:
+     """Lista epics ativos conforme regra do ``DatabaseManager``."""
+ 
+     return _db().get_epics()
+ 
+ 
+ def list_all_epics() -> List[Dict[str, Any]]:
+     """Lista epics, incluindo arquivados/deletados (se suportado)."""
+ 
+     return _db().get_all_epics()
+ 
+ 
+ def list_tasks(epic_id: int) -> List[Dict[str, Any]]:
+     """Lista tasks de um epic específico."""
+ 
+     return _db().get_tasks(epic_id)
+ 
+ 
+ def list_all_tasks() -> List[Dict[str, Any]]:
+     """Lista todas as tasks; pode ser custoso."""
+ 
+     return _db().get_all_tasks()
+diff --git a/streamlit_extension/database/schema.py b/streamlit_extension/database/schema.py
+index 548c4d92c63a77d84a3217a35532228a01b2faa8..8a8103a374651282420fc847ac48e4bb39ed0951 100644
+--- a/streamlit_extension/database/schema.py
++++ b/streamlit_extension/database/schema.py
+@@ -1,33 +1,41 @@
+ from __future__ import annotations
+ 
++import threading
+ from streamlit_extension.utils.database import DatabaseManager  # type: ignore
+ 
+ _DBM_INSTANCE: DatabaseManager | None = None  # type: ignore
++_DBM_LOCK = threading.Lock()
+ 
+ 
+ def set_database_manager(dbm: DatabaseManager) -> None:
+     """Permite injetar um ``DatabaseManager`` (ex.: testes)."""
+ 
+     global _DBM_INSTANCE
+     _DBM_INSTANCE = dbm  # type: ignore
+ 
+ 
+ def _db() -> DatabaseManager:
+-    global _DBM_INSTANCE  # type: ignore
+-    try:
+-        return _DBM_INSTANCE  # type: ignore
+-    except NameError:
+-        _DBM_INSTANCE = DatabaseManager()  # type: ignore
++    """
++    Thread-safe singleton pattern para DatabaseManager.
++    Usa double-checked locking para performance.
++    """
++    global _DBM_INSTANCE
++    if _DBM_INSTANCE is not None:
++        return _DBM_INSTANCE
++
++    with _DBM_LOCK:
++        if _DBM_INSTANCE is None:
++            _DBM_INSTANCE = DatabaseManager()
+         return _DBM_INSTANCE
+ 
+ 
+ def create_schema_if_needed(verbose: bool = False) -> None:
+     """
+     Ponto central de DDL.
+     Fase 1: delega para o manager (se existir).
+     """
+ 
+     db = _db()
+     if hasattr(db, "create_schema_if_needed"):
+         db.create_schema_if_needed(verbose=verbose)  # type: ignore[attr-defined]
+ 
+diff --git a/streamlit_extension/services/service_container.py b/streamlit_extension/services/service_container.py
+index 9f70cb38f09bb44c741582171bef77a929b33b97..fe1509a3e4053d00bbc5cb62cedf8220700cd57a 100644
+--- a/streamlit_extension/services/service_container.py
++++ b/streamlit_extension/services/service_container.py
+@@ -1,34 +1,35 @@
+ """
+ 🏗️ Service Container
+ 
+ Dependency injection container for managing service instances.
+ Provides centralized service creation and lifecycle management.
+ """
+ 
+ from typing import Dict, Any, Optional, Type, TypeVar
+ import logging
++import threading
+ from contextlib import contextmanager
+ from datetime import datetime
+ 
+ from .base import BaseService
+ from .client_service import ClientService
+ from .project_service import ProjectService
+ from .epic_service import EpicService
+ from .task_service import TaskService
+ from .analytics_service import AnalyticsService
+ from .timer_service import TimerService
+ from ..utils.database import DatabaseManager
+ 
+ # Type variable for service types
+ T = TypeVar('T', bound=BaseService)
+ 
+ 
+ class ServiceError(Exception):
+     """Exception raised by service container operations."""
+     pass
+ 
+ 
+ class ServiceContainer:
+     """
+     Dependency injection container for managing service instances.
+     
+@@ -38,50 +39,51 @@ class ServiceContainer:
+     
+     def __init__(self, db_manager: DatabaseManager):
+         """
+         Initialize service container.
+         
+         Args:
+             db_manager: Database manager instance to inject into services
+         """
+         self.db_manager = db_manager
+         self.logger = logging.getLogger(__name__)
+         
+         # Service registry
+         self._services: Dict[str, BaseService] = {}
+         self._service_classes: Dict[str, Type[BaseService]] = {
+             'client': ClientService,
+             'project': ProjectService,
+             'epic': EpicService,
+             'task': TaskService,
+             'analytics': AnalyticsService,
+             'timer': TimerService,
+         }
+         
+         # Configuration
+         self._lazy_loading = True
+         self._initialized = False
++        self._lock = threading.Lock()
+     
+     def initialize(self, lazy_loading: bool = True) -> None:
+         """
+         Initialize the service container.
+         
+         Args:
+             lazy_loading: If True, services are created on-demand. 
+                          If False, all services are created immediately.
+         """
+         self._lazy_loading = lazy_loading
+         
+         if not lazy_loading:
+             # Eagerly initialize all services
+             for service_name in self._service_classes.keys():
+                 self._create_service(service_name)
+         
+         self._initialized = True
+         self.logger.info(f"Service container initialized (lazy_loading={lazy_loading})")
+     
+     def get_client_service(self) -> ClientService:
+         """Get the client service instance."""
+         return self._get_service('client', ClientService)
+     
+     def get_project_service(self) -> ProjectService:
+         """Get the project service instance."""
+@@ -239,66 +241,67 @@ class ServiceContainer:
+         Get status information about the service container.
+         
+         Returns:
+             Dictionary with container status information
+         """
+         return {
+             'initialized': self._initialized,
+             'lazy_loading': self._lazy_loading,
+             'registered_services': list(self._service_classes.keys()),
+             'created_services': list(self._services.keys()),
+             'service_count': len(self._service_classes),
+             'created_count': len(self._services)
+         }
+     
+     def _get_service(self, service_name: str, service_class: Type[T]) -> T:
+         """
+         Get or create a service instance.
+         
+         Args:
+             service_name: Name of the service
+             service_class: Expected service class type
+             
+         Returns:
+             Service instance
+         """
+-        if service_name not in self._services:
+-            if not self._initialized:
+-                raise ServiceError("Service container not initialized. Call initialize() first.")
+-            
+-            self._services[service_name] = self._create_service(service_name)
+-        
+-        service = self._services[service_name]
+-        
+-        # Type check for safety
+-        if not isinstance(service, service_class):
+-            raise ServiceError(
+-                f"Service type mismatch: expected {service_class.__name__}, "
+-                f"got {type(service).__name__}"
+-            )
+-        
+-        return service
++        with self._lock:
++            if service_name not in self._services:
++                if not self._initialized:
++                    raise ServiceError("Service container not initialized. Call initialize() first.")
++
++                self._services[service_name] = self._create_service(service_name)
++
++            service = self._services[service_name]
++
++            # Type check for safety
++            if not isinstance(service, service_class):
++                raise ServiceError(
++                    f"Service type mismatch: expected {service_class.__name__}, "
++                    f"got {type(service).__name__}"
++                )
++
++            return service
+     
+     def _create_service(self, service_name: str, validate_only: bool = False) -> BaseService:
+         """
+         Create a new service instance.
+         
+         Args:
+             service_name: Name of the service to create
+             validate_only: If True, don't store the service instance
+             
+         Returns:
+             New service instance
+             
+         Raises:
+             ServiceError: If service cannot be created
+         """
+         if service_name not in self._service_classes:
+             raise ServiceError(f"Unknown service: {service_name}")
+         
+         service_class = self._service_classes[service_name]
+         
+         try:
+             # Create service with database manager dependency
+             service = service_class(self.db_manager)
+             
+             if not validate_only:
+diff --git a/streamlit_extension/utils/app_setup.py b/streamlit_extension/utils/app_setup.py
+index 3307a6d49bb9e4290043260cc73ae0f25b5036f9..b4b83767d369b06b1c0b26eb93dc1b6ee7578d91 100644
+--- a/streamlit_extension/utils/app_setup.py
++++ b/streamlit_extension/utils/app_setup.py
+@@ -1,43 +1,44 @@
+ #!/usr/bin/env python3
+ # -*- coding: utf-8 -*-
+ """
+ 🚀 Application Setup Utilities
+ 
+ Centraliza setup/boot do app Streamlit:
+ - Inicialização do container de serviços
+ - Checagem/saúde do banco (API modular)
+ - Estado de sessão Streamlit (quando disponível)
+ - Limpeza controlada de recursos
+ 
+ Compatível com:
+ - API modular de banco (streamlit_extension.database.*)
+ - DatabaseManager legado (streamlit_extension.utils.database.DatabaseManager) para o ServiceContainer
+ """
+ 
+ from __future__ import annotations
+ 
++import atexit
+ import logging
+ from dataclasses import dataclass
+ from pathlib import Path
+ from typing import Any, Callable, Dict, Optional, Tuple, TypeVar
+ from threading import Lock
+ 
+ # Streamlit (opcional)
+ try:
+     import streamlit as st
+     STREAMLIT_AVAILABLE = True
+ except Exception:
+     st = None  # type: ignore
+     STREAMLIT_AVAILABLE = False
+ 
+ # Banco (API modular)
+ # Mantém o consumo da API modular criada no refactor (get_connection, transaction, check_health)
+ from ..database import get_connection, transaction, check_health  # type: ignore
+ 
+ # Services
+ from ..services import (  # type: ignore
+     ServiceContainer,
+     initialize_service_container,
+     shutdown_service_container,
+     ServiceError,
+ )
+@@ -296,50 +297,84 @@ def get_session_services() -> Tuple[Optional["DatabaseManager"], Optional["Servi
+ def cleanup_application() -> None:
+     """
+     Libera recursos do app. Chamar no shutdown.
+     - Encerra ServiceContainer
+     - Solta referências a singletons
+     - Limpa session_state (se existir)
+     """
+     global _service_container_singleton, _db_manager_singleton
+ 
+     try:
+         if _service_container_singleton:
+             shutdown_service_container()
+             _service_container_singleton = None
+ 
+         _db_manager_singleton = None  # se precisar, feche conexões no DatabaseManager ao migrar
+ 
+         if _is_streamlit() and hasattr(st, "session_state"):
+             for key in ("db_manager", "service_container", "services_initialized"):
+                 if key in st.session_state:
+                     del st.session_state[key]
+ 
+         _logger.info("Cleanup concluído.")
+     except Exception as e:  # pragma: no cover
+         _logger.error("Erro no cleanup: %s", e, exc_info=True)
+ 
++
++def cleanup_resources() -> None:
++    """Limpa recursos ao encerrar a aplicação."""
++    try:
++        closed_any = False
++        try:
++            from streamlit_extension.database.queries import _DBM_INSTANCE as _Q_DBM  # type: ignore
++            if _Q_DBM is not None and hasattr(_Q_DBM, "close"):
++                _Q_DBM.close()
++                closed_any = True
++        except Exception:
++            pass
++        try:
++            from streamlit_extension.database.schema import _DBM_INSTANCE as _S_DBM  # type: ignore
++            if _S_DBM is not None and hasattr(_S_DBM, "close"):
++                _S_DBM.close()
++                closed_any = True
++        except Exception:
++            pass
++        try:
++            from streamlit_extension.database.connection import _DBM_INSTANCE as _C_DBM  # type: ignore
++            if _C_DBM is not None and hasattr(_C_DBM, "close"):
++                _C_DBM.close()
++                closed_any = True
++        except Exception:
++            pass
++        if closed_any:
++            _logger.info("Database resources cleaned up")
++    except Exception as e:
++        _logger.error(f"Error during cleanup: {e}")
++
++
++atexit.register(cleanup_resources)
++
+ # --------------------------------------------------------------------------------------
+ # Setup “one-shot” do app
+ # --------------------------------------------------------------------------------------
+ def setup_application() -> None:
+     """
+     Ponto único de setup para a aplicação Streamlit.
+     - Inicializa sessão/serviços
+     - Exibe status de saúde
+     """
+     if not _is_streamlit():
+         _logger.warning("Streamlit indisponível - setup de UI ignorado.")
+         return
+ 
+     try:
+         initialize_streamlit_session()
+         health = check_services_health()
+ 
+         if not health.get("overall", {}).get("healthy", False):
+             st.error("⚠️ Serviços não estão totalmente operacionais.")
+             with st.expander("🔍 Detalhes de Saúde", expanded=False):
+                 st.json(health)
+         else:
+             _logger.info("Setup da aplicação concluído com sucesso.")
+     except Exception as e:  # pragma: no cover
+         _logger.error("Application setup failed: %s", e, exc_info=True)
+diff --git a/streamlit_extension/utils/database.py b/streamlit_extension/utils/database.py
+index 52d28147ddfd1705b88a50e332d6ed4f99a71d67..c55a79ebb54c85fb7d0b9a4fd2a9febd9ef174b1 100644
+--- a/streamlit_extension/utils/database.py
++++ b/streamlit_extension/utils/database.py
+@@ -3538,61 +3538,80 @@ class DatabaseManager(PerformancePaginationMixin):
+                     else:
+                         cursor = conn.cursor()
+                         cursor.execute("""
+                             UPDATE {TableNames.PROJECTS}
+                             SET deleted_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+                             WHERE id = ?
+                         """, (project_id,))
+                         conn.commit()
+                 else:
+                     # Use transaction-wrapped cascade delete for hard deletes
+                     # This prevents table locks during cascade operations  
+                     return self.delete_cascade_safe(
+                         table_name="projects",
+                         record_id=project_id,
+                         cascade_tables=["epics", "tasks"]  # Delete dependent records first
+                     )
+                 
+                 return True
+                 
+         except Exception as e:
+             logger.error(f"Error deleting project: {e}")
+             if STREAMLIT_AVAILABLE and st:
+                 st.error(f"❌ Error deleting project: {e}")
+             return False
+ 
++    def close(self) -> None:
++        """
++        Fecha conexões e libera recursos do banco de dados.
++        Importante para cleanup adequado em testes e shutdown.
++        """
++        try:
++            if hasattr(self, 'engine'):
++                self.engine.dispose()
++                logger.info("Database engine disposed successfully")
++            if hasattr(self, 'timer_engine') and getattr(self, 'timer_engine'):
++                try:
++                    self.timer_engine.dispose()
++                    logger.info("Timer database engine disposed successfully")
++                except Exception as te:
++                    logger.warning(f"Error closing timer engine: {te}")
++        except Exception as e:
++            logger.error(f"Error closing database: {e}")
++            # Não re-raise para permitir cleanup gracioso
++
+ 
+ # =============================================================================
+ # 🔧 CONTEXT MANAGERS - Utility context managers for database operations
+ # =============================================================================
+ 
+ @contextmanager
+ def dict_rows(connection: SQLiteConnection) -> Iterator[None]:
+     """
+     Context manager to temporarily set SQLite connection to return dict-like rows.
+     
+     This utility allows repository code to work with SQLite rows as dictionaries,
+     making it easier to extract values safely and convert to dataclass objects.
+     
+     Args:
+         connection: SQLite connection object
+         
+     Yields:
+         None (modifies connection row_factory temporarily)
+         
+     Example:
+         >>> with db_manager.get_connection() as conn:
+         ...     with dict_rows(conn):
+         ...         rows = conn.execute("SELECT * FROM tasks").fetchall()
+         ...         for row in rows:
+         ...             task_key = row.get('task_key', 'unknown')  # Safe access
+     """
+     # Store original row factory
+     original_row_factory = connection.row_factory
+     
+     try:
+         # Set row factory to return sqlite3.Row objects (dict-like)
+         connection.row_factory = sqlite3.Row
+         yield
+     finally:
+         # Restore original row factory
+-        connection.row_factory = original_row_factory
+\ No newline at end of file
++        connection.row_factory = original_row_factory
+diff --git a/streamlit_extension/utils/exception_handler.py b/streamlit_extension/utils/exception_handler.py
+index 2d94c701569b23bfdd2d625e1c95155e5ea60612..3160d54c3274c1777ba3077f013caddf827b0772 100644
+--- a/streamlit_extension/utils/exception_handler.py
++++ b/streamlit_extension/utils/exception_handler.py
+@@ -1,47 +1,48 @@
+ """
+ 🛡️ Global Exception Handler for Streamlit Applications
+ 
+ Comprehensive exception handling system that prevents raw error messages from reaching the UI
+ and provides structured error logging with security considerations.
+ 
+ Features:
+ - Global exception catching for all Streamlit operations
+ - Sanitized error messages for users
+ - Comprehensive error logging for developers
+ - Security-aware error handling (no sensitive data leakage)
+ - Integration with existing security framework
+ - Production-ready error recovery
+ """
+ 
+ import sys
+ import time
+ import traceback
+ import functools
+ import threading
++from collections import deque
+ from pathlib import Path
+-from typing import Any, Callable, Dict, List, Optional, Tuple, Union
++from typing import Any, Callable, Deque, Dict, List, Optional, Tuple, Union
+ from datetime import datetime
+ from contextlib import contextmanager
+ 
+ # Add duration_system to path for security module
+ sys.path.append(str(Path(__file__).parent.parent.parent / "duration_system"))
+ 
  try:
      import streamlit as st
      STREAMLIT_AVAILABLE = True
  except ImportError:
      STREAMLIT_AVAILABLE = False
-     st = None
- 
- 
- class CorrelationIDManager:
-     """Manages correlation IDs for request tracking"""
- 
-     def __init__(self) -> None:
-         self._correlation_storage = {}
- 
-     def generate_correlation_id(self, prefix: str = "req") -> str:
-         """Generate a new correlation ID"""
-         return f"{prefix}_{uuid.uuid4().hex[:12]}"
- 
-     def get_current_correlation_id(self) -> Optional[str]:
-         """Get current correlation ID from context"""
-         if STREAMLIT_AVAILABLE and st and hasattr(st, "session_state"):
-             return st.session_state.get("correlation_id")
--        return None
-+        return self._correlation_storage.get(threading.get_ident())
- 
-     def set_correlation_id(self, correlation_id: str) -> None:
-         """Set correlation ID in current context"""
-         if STREAMLIT_AVAILABLE and st and hasattr(st, "session_state"):
-             st.session_state["correlation_id"] = correlation_id
-+        else:
-+            self._correlation_storage[threading.get_ident()] = correlation_id
- 
-     def ensure_correlation_id(self) -> str:
-         """Ensure correlation ID exists, create if needed"""
-         correlation_id = self.get_current_correlation_id()
-         if not correlation_id:
-             correlation_id = self.generate_correlation_id()
-             self.set_correlation_id(correlation_id)
-         return correlation_id
- 
- 
- class StructuredLogger:
-     """Structured logging with correlation ID support"""
- 
-     def __init__(self, name: str) -> None:
-         self.logger = logging.getLogger(name)
-         self.correlation_manager = CorrelationIDManager()
- 
-         # Configure JSON formatter if not already configured
-         if not self.logger.handlers:
-             self._setup_json_logging()
- 
-     def _setup_json_logging(self) -> None:
-         """Setup JSON-based logging format"""
-         from .log_formatter import JSONFormatter
- 
-@@ -132,51 +135,51 @@ class StructuredLogger:
-     def info(self, operation: str, message: str, **kwargs: Any) -> None:
-         """Log info level operation"""
-         self.log_operation(operation, "INFO", message, **kwargs)
- 
-     def error(
-         self, operation: str, message: str, error: Exception | None = None, **kwargs: Any
-     ) -> None:
-         """Log error level operation"""
-         self.log_operation(operation, "ERROR", message, error=error, success=False, **kwargs)
- 
-     def warning(self, operation: str, message: str, **kwargs: Any) -> None:
-         """Log warning level operation"""
-         self.log_operation(operation, "WARNING", message, **kwargs)
- 
-     @contextmanager
-     def track_operation(
-         self, operation: str, metadata: Optional[Dict[str, Any]] = None
-     ):
-         """Context manager to track operation duration and success"""
-         start_time = time.time()
-         correlation_id = self.correlation_manager.ensure_correlation_id()
- 
-         self.info(
-             f"{operation}_start",
-             f"Starting operation: {operation}",
--            metadata={"correlation_id": correlation_id, **(metadata or {})},
-+            metadata=metadata or {},
-         )
- 
-         try:
-             yield correlation_id
-             duration_ms = (time.time() - start_time) * 1000
-             self.info(
-                 f"{operation}_complete",
-                 f"Operation completed successfully: {operation}",
-                 duration_ms=duration_ms,
-                 metadata=metadata,
-             )
-         except Exception as e:
-             duration_ms = (time.time() - start_time) * 1000
-             self.error(
-                 f"{operation}_failed",
-                 f"Operation failed: {operation}",
-                 error=e,
-                 duration_ms=duration_ms,
-                 metadata=metadata,
-             )
-             raise
- 
- 
- def with_correlation_logging(operation: str, metadata_func=None):
-     """Decorator to add correlation logging to functions"""
-diff --git a/streamlit_extension/utils/database.py b/streamlit_extension/utils/database.py
-index 52d28147ddfd1705b88a50e332d6ed4f99a71d67..8cf9e679ab9afb56ca4d2158b6d89737adfb735d 100644
---- a/streamlit_extension/utils/database.py
-+++ b/streamlit_extension/utils/database.py
-@@ -797,51 +797,51 @@ class DatabaseManager(PerformancePaginationMixin):
-                            points_earned, difficulty_level, project_id
-                     FROM {TableNames.EPICS}
-                     WHERE {where_clause}
-                     ORDER BY created_at DESC
-                     LIMIT :limit OFFSET :offset
-                 """
-                 params["limit"] = page_size
-                 params["offset"] = offset
-                 
-                 if SQLALCHEMY_AVAILABLE:
-                     result = conn.execute(text(data_query), params)
-                     data = [dict(row._mapping) for row in result]
-                 else:
-                     cursor = conn.cursor()
-                     cursor.execute(data_query, params)
-                     data = [dict(row) for row in cursor.fetchall()]
-                 
-                 return {
-                     "data": data,
-                     "total": total,
-                     "page": page,
-                     "page_size": page_size,
-                     "total_pages": total_pages
-                 }
-         except Exception as e:
--            print(f"Error loading epics: {e}")
-+            logger.error(f"Error loading epics: {e}", exc_info=True)
-             return {
-                 "data": [],
-                 "total": 0,
-                 "page": page,
-                 "page_size": page_size,
-                 "total_pages": 0
-             }
      
-     def get_all_epics(self) -> List[Dict[str, Any]]:
-         """Backward compatibility method - get all epics without pagination."""
-         result = self.get_epics(page=1, page_size=1000)  # Large page size to get all
-         return result["data"] if isinstance(result, dict) else result
+     # Mock streamlit for testing
+     class MockStreamlit:
+         def __getattr__(self, name):
+             def mock_func(*args, **kwargs):
+                 return None
+             return mock_func
+     st = MockStreamlit()
+ 
+ try:
+     from log_sanitization import create_secure_logger, sanitize_log_message, sanitize_exception
+     LOG_SANITIZATION_AVAILABLE = True
+ except ImportError:
+     LOG_SANITIZATION_AVAILABLE = False
+@@ -157,51 +158,51 @@ class GlobalExceptionHandler:
      
-     @cache_database_query("get_tasks", ttl=300) if CACHE_AVAILABLE else lambda f: f
-     def get_tasks(
-         self,
-         epic_id: Optional[int] = None,
-         page: int = 1,
-         page_size: int = 100,
-         status_filter: Optional[Union[TaskStatus, str]] = None,
-         tdd_phase_filter: Optional[Union[TDDPhase, str]] = None,
-     ) -> Dict[str, Any]:
-         """Get tasks with intelligent caching, pagination, and filtering.
-         
-         Args:
-@@ -907,96 +907,95 @@ class DatabaseManager(PerformancePaginationMixin):
-                     FROM {TableNames.TASKS} t
-                     JOIN {TableNames.EPICS} e ON t.epic_id = e.id
-                     WHERE {where_clause}
-                     ORDER BY t.position ASC, t.created_at DESC
-                     LIMIT :limit OFFSET :offset
-                 """
-                 params["limit"] = page_size
-                 params["offset"] = offset
-                 
-                 if SQLALCHEMY_AVAILABLE:
-                     result = conn.execute(text(data_query), params)
-                     data = [dict(row._mapping) for row in result]
-                 else:
-                     cursor = conn.cursor()
-                     cursor.execute(data_query, list(params.values()))
-                     data = [dict(row) for row in cursor.fetchall()]
-                 
-                 return {
-                     "data": data,
-                     "total": total,
-                     "page": page,
-                     "page_size": page_size,
-                     "total_pages": total_pages
-                 }
-         except Exception as e:
--            logger.error(f"Error loading tasks: {e}")
-+            logger.error(f"Error loading tasks: {e}", exc_info=True)
-             if STREAMLIT_AVAILABLE and st:
-                 st.error(f"❌ Error loading tasks: {e}")
--            print(f"Error loading tasks: {e}")
-             return {
-                 "data": [],
-                 "total": 0,
-                 "page": page,
-                 "page_size": page_size,
-                 "total_pages": 0
-             }
-     
-     def get_all_tasks(self, epic_id: Optional[int] = None) -> List[Dict[str, Any]]:
-         """Backward compatibility method - get all tasks without pagination."""
-         result = self.get_tasks(epic_id=epic_id, page=1, page_size=1000)  # Large page size to get all
-         return result["data"] if isinstance(result, dict) else result
-     
-     @cache_database_query("get_timer_sessions", ttl=60) if CACHE_AVAILABLE else lambda f: f
-     def get_timer_sessions(self, days: int = 30) -> List[Dict[str, Any]]:
-         """Get recent timer sessions with short-term caching."""
-         if not self.timer_db_path.exists():
-             return []
-         
-         try:
-             with self.get_connection("timer") as conn:
-                 query = """
-                     SELECT task_reference, user_identifier, started_at, ended_at,
-                            planned_duration_minutes, actual_duration_minutes,
-                            focus_rating, energy_level, mood_rating,
-                            interruptions_count,
-                            created_at
-                     FROM timer_sessions
-                     WHERE created_at >= DATE('now', ? || ' days')
-                     ORDER BY created_at DESC
-                     LIMIT 1000
-                 """
-                 
-                 if SQLALCHEMY_AVAILABLE:
-                     result = conn.execute(text(query), [f"-{days}"])
-                     return [dict(row._mapping) for row in result]
-                 else:
-                     cursor = conn.cursor()
-                     cursor.execute(query, [f"-{days}"])
-                     return [dict(row) for row in cursor.fetchall()]
-         except Exception as e:
--            print(f"Error loading timer sessions: {e}")
-+            logger.error(f"Error loading timer sessions: {e}", exc_info=True)
-             return []
-     
-     def get_user_stats(self, user_id: int = 1) -> Dict[str, Any]:
-         """Get user statistics and gamification data."""
-         try:
-             with self.get_connection("framework") as conn:
-                 stats = {}
-                 
-                 # Basic stats
-                 if SQLALCHEMY_AVAILABLE:
-                     # Tasks completed
-                     result = conn.execute(text("""
-                         SELECT COUNT(*) as completed_tasks
-                         FROM framework_tasks
-                         WHERE status = 'completed' AND deleted_at IS NULL
-                     """))
-                     stats["completed_tasks"] = result.scalar() or 0
-                     
-                     # Total points
-                     result = conn.execute(text("""
-                         SELECT COALESCE(SUM(points_earned), 0) as total_points
-                         FROM framework_epics WHERE deleted_at IS NULL
-                     """))
-                     stats["total_points"] = result.scalar() or 0
-                     
-@@ -1016,125 +1015,125 @@ class DatabaseManager(PerformancePaginationMixin):
-                         SELECT COUNT(*) FROM framework_tasks
-                         WHERE status = 'completed' AND deleted_at IS NULL
-                     """)
-                     row = cursor.fetchone()
-                     stats["completed_tasks"] = row[0] if row and row[0] is not None else 0
-                     
-                     # Total points
-                     cursor.execute("""
-                         SELECT COALESCE(SUM(points_earned), 0)
-                         FROM framework_epics WHERE deleted_at IS NULL
-                     """)
-                     row = cursor.fetchone()
-                     stats["total_points"] = row[0] if row and row[0] is not None else 0
-                     
-                     # Active streaks
-                     cursor.execute("""
-                         SELECT COUNT(*) FROM user_streaks
-                         WHERE user_id = ? AND current_count > 0
-                     """, [user_id])
-                     row = cursor.fetchone()
-                     stats["active_streaks"] = row[0] if row and row[0] is not None else 0
-                 
-                 return stats
-                 
-         except Exception as e:
--            print(f"Error loading user stats: {e}")
-+            logger.error(f"Error loading user stats: {e}", exc_info=True)
-             return {
-                 "completed_tasks": 0,
-                 "total_points": 0,
-                 "active_streaks": 0
-             }
-     
-     def get_achievements(self, user_id: int = 1) -> List[Dict[str, Any]]:
-         """Get user achievements."""
-         try:
-             with self.get_connection("framework") as conn:
-                 query = """
-                     SELECT at.code, at.name, at.description, at.category,
-                            at.points_reward, at.rarity, ua.unlocked_at
-                     FROM user_achievements ua
-                     JOIN achievement_types at ON ua.achievement_code = at.code
-                     WHERE ua.user_id = ?
-                     ORDER BY ua.unlocked_at DESC
-                 """
-                 
-                 if SQLALCHEMY_AVAILABLE:
-                     result = conn.execute(text(query), [user_id])
-                     return [dict(row._mapping) for row in result]
-                 else:
-                     cursor = conn.cursor()
-                     cursor.execute(query, [user_id])
-                     return [dict(row) for row in cursor.fetchall()]
-                     
-         except Exception as e:
--            print(f"Error loading achievements: {e}")
-+            logger.error(f"Error loading achievements: {e}", exc_info=True)
-             return []
-     
-     @invalidate_cache_on_change("db_query:get_tasks:", "db_query:get_epics:") if CACHE_AVAILABLE else lambda f: f
-     def update_task_status(self, task_id: int, status: str, tdd_phase: Optional[str] = None) -> bool:
-         """Update task status and TDD phase with cache invalidation."""
-         try:
-             with self.get_connection("framework") as conn:
-                 if SQLALCHEMY_AVAILABLE:
-                     query = "UPDATE framework_tasks SET status = ?, updated_at = CURRENT_TIMESTAMP"
-                     params = [status]
-                     
-                     if tdd_phase:
-                         query += ", tdd_phase = ?"
-                         params.append(tdd_phase)
-                     
-                     if status == 'completed':
-                         query += ", completed_at = CURRENT_TIMESTAMP"
-                     
-                     query += " WHERE id = ?"
-                     params.append(task_id)
-                     
-                     conn.execute(text(query), params)
-                     conn.commit()
-                 else:
-                     cursor = conn.cursor()
-                     query = "UPDATE framework_tasks SET status = ?, updated_at = CURRENT_TIMESTAMP"
-                     params = [status]
-                     
-                     if tdd_phase:
-                         query += ", tdd_phase = ?"
-                         params.append(tdd_phase)
-                     
-                     if status == 'completed':
-                         query += ", completed_at = CURRENT_TIMESTAMP"
-                     
-                     query += " WHERE id = ?"
-                     params.append(task_id)
-                     
-                     cursor.execute(query, params)
-                     conn.commit()
-                 
-                 return True
-                 
-         except Exception as e:
--            print(f"Error updating task status: {e}")
-+            logger.error(f"Error updating task status: {e}", exc_info=True)
-             return False
-     
-     @invalidate_cache_on_change("db_query:get_timer_sessions:") if CACHE_AVAILABLE else lambda f: f
-     def create_timer_session(self, task_id: Optional[int], duration_minutes: int, 
-                            focus_rating: Optional[int] = None, interruptions: int = 0,
-                            actual_duration_minutes: Optional[int] = None,
-                            ended_at: Optional[str] = None, notes: Optional[str] = None) -> bool:
-         """Create a new timer session record with cache invalidation."""
-         if not self.timer_db_path.exists():
-             return False
-         
-         try:
-             with self.get_connection("timer") as conn:
-                 if SQLALCHEMY_AVAILABLE:
-                     conn.execute(text("""
-                         INSERT INTO timer_sessions (
-                             task_reference, user_identifier, started_at, ended_at,
-                             planned_duration_minutes, actual_duration_minutes,
-                             focus_rating, interruptions_count, notes, created_at
-                         ) VALUES (?, 'user1', CURRENT_TIMESTAMP, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-                     """), [
-                         str(task_id) if task_id else None,
-                         ended_at,
-                         duration_minutes,
-                         actual_duration_minutes or duration_minutes,
-@@ -1143,147 +1142,146 @@ class DatabaseManager(PerformancePaginationMixin):
-                         notes
-                     ])
-                     conn.commit()
-                 else:
-                     cursor = conn.cursor()
-                     cursor.execute("""
-                         INSERT INTO timer_sessions (
-                             task_reference, user_identifier, started_at, ended_at,
-                             planned_duration_minutes, actual_duration_minutes,
-                             focus_rating, interruptions_count, notes, created_at
-                         ) VALUES (?, 'user1', CURRENT_TIMESTAMP, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-                     """, [
-                         str(task_id) if task_id else None,
-                         ended_at,
-                         duration_minutes,
-                         actual_duration_minutes or duration_minutes,
-                         focus_rating,
-                         interruptions,
-                         notes
-                     ])
-                     conn.commit()
-                 
-                 return True
-                 
-         except Exception as e:
--            print(f"Error creating timer session: {e}")
-+            logger.error(f"Error creating timer session: {e}", exc_info=True)
-             return False
-     
-     def get_epic_progress(self, epic_id: int) -> Dict[str, Any]:
-         """Get detailed progress for an epic with extensive debugging."""
- 
-         # Early validation
-         if epic_id is None:
--            print("DEBUG: get_epic_progress called with epic_id=None")
-+            logger.debug("get_epic_progress called with epic_id=None")
-             return self._get_default_progress()
- 
--        print(f"DEBUG: get_epic_progress called with epic_id={epic_id}, type={type(epic_id)}")
-+        logger.debug(f"get_epic_progress called with epic_id={epic_id}, type={type(epic_id)}")
- 
-         try:
-             with self.get_connection("framework") as conn:
-                 if SQLALCHEMY_AVAILABLE:
-                     # Get epic info
-                     epic_query = (
-                         "SELECT id, epic_key, name, status, points_earned "
-                         "FROM framework_epics "
-                         "WHERE id = :epic_id AND deleted_at IS NULL"
-                     )
--                    print(f"DEBUG: Executing epic query: {epic_query}")
-                     epic_result = conn.execute(text(epic_query), {"epic_id": epic_id})
-                     epic_row = epic_result.fetchone()
--                    print(f"DEBUG: Epic row: {epic_row}, type={type(epic_row)}")
-+                    logger.debug(f"Executing epic query: {epic_query}")
-+                    logger.debug(f"Epic row: {epic_row}, type={type(epic_row)}")
-                     if not epic_row:
-                         return self._get_default_progress()
-                     epic = dict(epic_row._mapping)
- 
-                     # Get task counts
-                     task_query = (
-                         "SELECT "
-                         "    COUNT(*) as total_tasks, "
-                         "    SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed_tasks, "
-                         "    SUM(CASE WHEN status = 'in_progress' THEN 1 ELSE 0 END) as in_progress_tasks "
-                         "FROM framework_tasks "
-                         "WHERE epic_id = :epic_id AND deleted_at IS NULL"
-                     )
--                    print(f"DEBUG: Executing task query: {task_query}")
-                     task_result = conn.execute(text(task_query), {"epic_id": epic_id})
-                     task_row = task_result.fetchone()
--                    print(f"DEBUG: Task row: {task_row}, type={type(task_row)}")
-+                    logger.debug(f"Task row: {task_row}, type={type(task_row)}")
-                     if not task_row:
-                         tasks = {"total_tasks": 0, "completed_tasks": 0, "in_progress_tasks": 0}
-                     else:
-                         tasks = {k: (v or 0) for k, v in dict(task_row._mapping).items()}
- 
-                 else:
-                     cursor = conn.cursor()
- 
-                     # Get epic info
-                     epic_query = (
-                         "SELECT id, epic_key, name, status, points_earned "
-                         "FROM framework_epics WHERE id = ? AND deleted_at IS NULL"
-                     )
--                    print(f"DEBUG: Executing epic query: {epic_query}")
-                     cursor.execute(epic_query, [epic_id])
-                     epic_row = cursor.fetchone()
--                    print(f"DEBUG: Epic row: {epic_row}, type={type(epic_row)}")
-+                    logger.debug(f"Executing epic query: {epic_query}")
-+                    logger.debug(f"Epic row: {epic_row}, type={type(epic_row)}")
-                     if not epic_row:
-                         return self._get_default_progress()
-                     epic = dict(epic_row)
- 
-                     # Get task counts
-                     task_query = (
-                         "SELECT "
-                         "    COUNT(*) as total_tasks, "
-                         "    SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed_tasks, "
-                         "    SUM(CASE WHEN status = 'in_progress' THEN 1 ELSE 0 END) as in_progress_tasks "
-                         "FROM framework_tasks WHERE epic_id = ? AND deleted_at IS NULL"
-                     )
--                    print(f"DEBUG: Executing task query: {task_query}")
-                     cursor.execute(task_query, [epic_id])
-                     task_row = cursor.fetchone()
--                    print(f"DEBUG: Task row: {task_row}, type={type(task_row)}")
-+                    logger.debug(f"Executing task query: {task_query}")
-+                    logger.debug(f"Task row: {task_row}, type={type(task_row)}")
-                     if not task_row:
-                         tasks = {"total_tasks": 0, "completed_tasks": 0, "in_progress_tasks": 0}
-                     else:
-                         tasks = {k: (v or 0) for k, v in dict(task_row).items()}
- 
-                 # Calculate progress
-                 total = tasks.get("total_tasks") or 0
-                 completed = tasks.get("completed_tasks") or 0
-                 progress_pct = (completed / total * 100) if total > 0 else 0
- 
-                 progress_dict = {
-                     **epic,
-                     **tasks,
-                     "progress_percentage": round(progress_pct, 1),
-                     "points_earned": epic.get("points_earned") or 0,
-                 }
--                print(f"DEBUG: Returning: {progress_dict}")
-+                logger.debug(f"Returning progress: {progress_dict}")
-                 return progress_dict
- 
-         except Exception as e:
--            print(f"Error getting epic progress: {e}")
-+            logger.error(f"Error getting epic progress: {e}", exc_info=True)
-             return self._get_default_progress()
-     
-     def _get_default_progress(self) -> Dict[str, Any]:
-         """Return default progress structure when epic not found."""
-         return {
-             "id": 0,
-             "epic_key": "N/A",
-             "name": "Unknown",
-             "status": "unknown",
-             "points_earned": 0,
-             "total_tasks": 0,
-             "completed_tasks": 0,
-             "in_progress_tasks": 0,
-             "progress_percentage": 0.0
-         }
-     
-     def check_database_health(self) -> Dict[str, Any]:
-         """Comprehensive database health check with diagnostics.
- 
-         Performs connection tests against both framework and timer databases and
-         reports the availability of optional dependencies used by the
-         application.
- 
-         Returns:
-             Dict[str, Any]: Dictionary describing connection status and
-@@ -1390,57 +1388,57 @@ class DatabaseManager(PerformancePaginationMixin):
-             if 'ended_at' in session and session['ended_at']:
-                 session['ended_at_formatted'] = self.format_database_datetime(session['ended_at'], "short")
-                 session['ended_at_ago'] = self.format_database_datetime(session['ended_at'], "ago")
-             
-             if 'created_at' in session:
-                 session['created_at_formatted'] = self.format_database_datetime(session['created_at'], "short")
-                 session['created_at_ago'] = self.format_database_datetime(session['created_at'], "ago")
-         
-         return sessions
-     
-     def clear_cache(self, cache_pattern: Optional[str] = None) -> bool:
-         """Clear query result caches with optional pattern matching.
- 
-         Args:
-             cache_pattern: Optional pattern to selectively invalidate caches.
-                 When ``None`` all database query caches are removed.
- 
-         Returns:
-             bool: ``True`` if cache was cleared, ``False`` if caching is
-                 unavailable.
- 
-         Example:
-             >>> db_manager.clear_cache("db_query:get_clients:")
-         """
-         if not CACHE_AVAILABLE:
--            print("Cache not available")
-+            logger.warning("Cache not available")
-             return False
- 
-         cache = get_cache()
-         pattern = cache_pattern or "db_query:"
-         cache.invalidate_pattern(pattern)
--        print("Database cache cleared")
-+        logger.info("Database cache cleared")
-         return True
-     
-     def get_cache_stats(self) -> Dict[str, Any]:
-         """Get database cache statistics."""
-         if CACHE_AVAILABLE:
-             from .cache import get_cache_statistics
-             return get_cache_statistics()
+     def __init__(self):
+         """Initialize the global exception handler."""
+         # Initialize secure logging
+         if LOG_SANITIZATION_AVAILABLE:
+             self.logger = create_secure_logger('streamlit_exceptions')
          else:
-             return {"cache_available": False}
- 
-     def get_query_statistics(self) -> Dict[str, Any]:
-         """Get detailed query performance statistics.
- 
-         Returns:
-             Dict[str, Any]: Mapping of engine names to connection pool metrics.
- 
-         Example:
-             >>> stats = db_manager.get_query_statistics()
-         """
-         stats: Dict[str, Any] = {}
-         if not SQLALCHEMY_AVAILABLE:
-             return stats
- 
-         for name, engine in self.engines.items():
-             pool = getattr(engine, "pool", None)
-@@ -1585,52 +1583,52 @@ class DatabaseManager(PerformancePaginationMixin):
-                             SELECT DATE(started_at) as date,
-                                    SUM(actual_duration_minutes) as total_minutes
-                             FROM timer_sessions
-                             WHERE started_at >= DATE('now', ?)
-                             GROUP BY DATE(started_at)
-                         """, (f"-{days} days",))
-                         
-                         for row in cursor.fetchall():
-                             stats["focus_time_total"] += row[1] or 0
+             import logging
+             self.logger = logging.getLogger('streamlit_exceptions')
+             self.logger.setLevel(logging.ERROR)
              
-             # Calculate averages
-             if days > 0:
-                 stats["average_daily_tasks"] = round(stats["tasks_completed_total"] / days, 1)
-                 stats["average_focus_time"] = round(stats["focus_time_total"] / days, 1)
-             
-             # Find most productive day
-             if stats["activity_by_date"]:
-                 most_productive = max(stats["activity_by_date"].items(), key=lambda x: x[1])
-                 stats["most_productive_day"] = most_productive[0]
-             
-             # Calculate streaks
-             stats["current_streak"] = self._calculate_current_streak()
-             stats["best_streak"] = self._get_best_streak()
-             
-         except Exception as e:
--            print(f"Error getting productivity stats: {e}")
--        
-+            logger.error(f"Error getting productivity stats: {e}", exc_info=True)
-+
-         return stats
-     
-     @cache_database_query("get_daily_summary", ttl=60) if CACHE_AVAILABLE else lambda f: f
-     def get_daily_summary(self) -> Dict[str, Any]:
-         """Get today's activity summary."""
-         summary = {
-             "tasks_completed": 0,
-             "tasks_in_progress": 0,
-             "tasks_created": 0,
-             "focus_time_minutes": 0,
-             "timer_sessions": 0,
-             "achievements_today": 0,
-             "streak_days": 0,
-             "points_earned_today": 0
+             # Create console handler if none exists
+             if not self.logger.handlers:
+                 handler = logging.StreamHandler()
+                 formatter = logging.Formatter(
+                     '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+                 )
+                 handler.setFormatter(formatter)
+                 self.logger.addHandler(handler)
+         
+         # Error statistics
+         self.error_stats = {
+             "total_errors": 0,
+             "errors_by_category": {},
+             "errors_by_severity": {},
+-            "recent_errors": [],
++            "recent_errors": deque(maxlen=100),
+             "last_reset": time.time()
          }
          
-         today = datetime.now().date().isoformat()
+         # Error recovery strategies
+         self.recovery_strategies = {}
+         self._setup_default_recovery_strategies()
          
-         try:
-             with self.get_connection("framework") as conn:
-                 if SQLALCHEMY_AVAILABLE:
-                     # Tasks completed today
-                     result = conn.execute(text("""
-                         SELECT COUNT(*) FROM framework_tasks
-                         WHERE DATE(updated_at) = :today AND status = 'completed'
-@@ -1707,99 +1705,99 @@ class DatabaseManager(PerformancePaginationMixin):
-                     if SQLALCHEMY_AVAILABLE:
-                         result = conn.execute(text("""
-                             SELECT COUNT(*) as sessions, 
-                                    SUM(actual_duration_minutes) as total_minutes
-                             FROM timer_sessions
-                             WHERE DATE(started_at) = :today
-                         """), {"today": today})
-                         row = result.fetchone()
-                         if row:
-                             summary["timer_sessions"] = row[0] or 0
-                             summary["focus_time_minutes"] = row[1] or 0
-                     else:
-                         cursor = conn.cursor()
-                         cursor.execute("""
-                             SELECT COUNT(*) as sessions,
-                                    SUM(actual_duration_minutes) as total_minutes
-                             FROM timer_sessions
-                             WHERE DATE(started_at) = ?
-                         """, (today,))
-                         row = cursor.fetchone()
-                         if row:
-                             summary["timer_sessions"] = row[0] or 0
-                             summary["focus_time_minutes"] = row[1] or 0
+         # Thread lock for stats
+         self._stats_lock = threading.Lock()
          
-         except Exception as e:
--            print(f"Error getting daily summary: {e}")
--        
-+            logger.error(f"Error getting daily summary: {e}", exc_info=True)
-+
-         return summary
+     def _setup_default_recovery_strategies(self):
+         """Setup default error recovery strategies."""
+         self.recovery_strategies = {
+             ErrorCategory.DATABASE: self._recover_database_error,
+             ErrorCategory.AUTHENTICATION: self._recover_auth_error,
+             ErrorCategory.VALIDATION: self._recover_validation_error,
+             ErrorCategory.NETWORK: self._recover_network_error,
+             ErrorCategory.FILE_SYSTEM: self._recover_filesystem_error,
+             ErrorCategory.SECURITY: self._recover_security_error,
+             ErrorCategory.USER_INPUT: self._recover_user_input_error,
+             ErrorCategory.BUSINESS_LOGIC: self._recover_business_logic_error,
+             ErrorCategory.SYSTEM: self._recover_system_error
+         }
      
-     @cache_database_query("get_pending_notifications", ttl=30) if CACHE_AVAILABLE else lambda f: f
-     def get_pending_notifications(self) -> List[Dict[str, Any]]:
-         """Get pending notifications for the user."""
-         notifications = []
-         
-         try:
-             with self.get_connection("framework") as conn:
-                 # Check for overdue tasks
-                 if SQLALCHEMY_AVAILABLE:
-                     result = conn.execute(text("""
-                         SELECT title, due_date FROM framework_tasks
-                         WHERE status != 'completed' 
-                         AND due_date IS NOT NULL
-                         AND DATE(due_date) <= DATE('now')
-                         LIMIT 5
-                     """))
-                     
-                     for row in result:
-                         notifications.append({
-                             "type": "warning",
-                             "title": "Task Overdue",
-                             "message": f"{row[0]} was due {row[1]}",
-                             "timestamp": datetime.now()
-                         })
-                 
-                 # Check for long-running tasks
-                 if SQLALCHEMY_AVAILABLE:
-                     result = conn.execute(text("""
-                         SELECT title FROM framework_tasks
-                         WHERE status = 'in_progress'
-                         AND julianday('now') - julianday(updated_at) > 3
-                         LIMIT 3
-                     """))
-                     
-                     for row in result:
-                         notifications.append({
-                             "type": "info",
-                             "title": "Long Running Task",
-                             "message": f"{row[0]} has been in progress for over 3 days",
-                             "timestamp": datetime.now()
-                         })
-         
-         except Exception as e:
--            print(f"Error getting notifications: {e}")
--        
-+            logger.error(f"Error getting notifications: {e}", exc_info=True)
-+
-         return notifications
-     
-     @cache_database_query("get_user_achievements", ttl=300) if CACHE_AVAILABLE else lambda f: f
-     def get_user_achievements(self, limit: int = 10) -> List[Dict[str, Any]]:
-         """Get user achievements."""
-         achievements = []
-         
-         try:
-             with self.get_connection("framework") as conn:
-                 if SQLALCHEMY_AVAILABLE:
-                     result = conn.execute(text("""
-                         SELECT at.name, at.description, at.icon, at.points_value,
-                                ua.unlocked_at, ua.progress_value
-                         FROM achievement_types at
-                         LEFT JOIN user_achievements ua ON at.id = ua.achievement_id
-                         WHERE at.is_active = TRUE
-                         ORDER BY ua.unlocked_at DESC NULLS LAST
-                         LIMIT :limit
-                     """), {"limit": limit})
-                     
-                     for row in result:
-                         achievements.append({
-                             "name": row[0],
-                             "description": row[1], 
-                             "icon": row[2] or "🏆",
-@@ -1810,52 +1808,52 @@ class DatabaseManager(PerformancePaginationMixin):
-                         })
-                 else:
-                     cursor = conn.cursor()
-                     cursor.execute("""
-                         SELECT at.name, at.description, at.icon, at.points_value,
-                                ua.unlocked_at, ua.progress_value
-                         FROM achievement_types at
-                         LEFT JOIN user_achievements ua ON at.id = ua.achievement_id
-                         WHERE at.is_active = 1
-                         ORDER BY ua.unlocked_at DESC
-                         LIMIT ?
-                     """, (limit,))
-                     
-                     for row in cursor.fetchall():
-                         achievements.append({
-                             "name": row[0],
-                             "description": row[1],
-                             "icon": row[2] or "🏆",
-                             "points": row[3],
-                             "unlocked": row[4] is not None,
-                             "unlocked_at": row[4],
-                             "progress": row[5]
-                         })
-         
-         except Exception as e:
--            print(f"Error getting achievements: {e}")
--        
-+            logger.error(f"Error getting achievements: {e}", exc_info=True)
-+
-         return achievements
-     
-     def _calculate_current_streak(self) -> int:
-         """Calculate current task completion streak."""
-         try:
-             with self.get_connection("framework") as conn:
-                 if SQLALCHEMY_AVAILABLE:
-                     result = conn.execute(text("""
-                         SELECT current_streak FROM user_streaks
-                         WHERE user_id = 1 AND streak_type = 'daily_tasks'
-                         ORDER BY updated_at DESC LIMIT 1
-                     """))
-                     row = result.fetchone()
-                     return row[0] if row else 0
-                 else:
-                     cursor = conn.cursor()
-                     cursor.execute("""
-                         SELECT current_streak FROM user_streaks
-                         WHERE user_id = 1 AND streak_type = 'daily_tasks'
-                         ORDER BY updated_at DESC LIMIT 1
-                     """)
-                     row = cursor.fetchone()
-                     return row[0] if row else 0
-         except Exception:
-             return 0
-@@ -1911,51 +1909,51 @@ class DatabaseManager(PerformancePaginationMixin):
-                          estimate_minutes, status, created_at, updated_at)
-                         VALUES (:title, :description, :epic_id, :tdd_phase, 
-                                :priority, :estimate_minutes, 'todo', 
-                                datetime('now'), datetime('now'))
-                     """), {
-                         "title": title,
-                         "description": description,
-                         "epic_id": epic_id,
-                         "tdd_phase": tdd_phase,
-                         "priority": priority,
-                         "estimate_minutes": estimate_minutes
-                     })
-                     conn.commit()
-                     return result.lastrowid
-                 else:
-                     cursor = conn.cursor()
-                     cursor.execute("""
-                         INSERT INTO framework_tasks 
-                         (title, description, epic_id, tdd_phase, priority, 
-                          estimate_minutes, status, created_at, updated_at)
-                         VALUES (?, ?, ?, ?, ?, ?, 'todo', datetime('now'), datetime('now'))
-                     """, (title, description, epic_id, tdd_phase, priority, estimate_minutes))
-                     conn.commit()
-                     return cursor.lastrowid
-         except Exception as e:
--            print(f"Error creating task: {e}")
-+            logger.error(f"Error creating task: {e}", exc_info=True)
-             return None
-     
-     def update_task(
-         self,
-         task_id: int,
-         title: Optional[str] = None,
-         description: Optional[str] = None,
-         tdd_phase: Optional[str] = None,
-         priority: Optional[int] = None,
-         estimate_minutes: Optional[int] = None,
-     ) -> bool:
-         """Update task details.
-         
-         Args:
-             task_id: ID of the task to update
-             title: New title (optional)
-             description: New description (optional)
-             tdd_phase: New TDD phase (optional)
-             priority: New priority (optional)
-             estimate_minutes: New estimate (optional)
+     def classify_exception(self, exception: Exception, context: Optional[Dict[str, Any]] = None) -> Tuple[str, str]:
+@@ -312,63 +313,59 @@ class GlobalExceptionHandler:
              
-         Returns:
-             True if successful, False otherwise
-         """
-         try:
-@@ -1990,183 +1988,183 @@ class DatabaseManager(PerformancePaginationMixin):
-             # Security: Column names are hardcoded in this function, safe from SQL injection
-             query = f"UPDATE framework_tasks SET {', '.join(updates)} WHERE id = :task_id"  # nosec B608
+             return error
              
-             with self.get_connection("framework") as conn:
-                 if SQLALCHEMY_AVAILABLE:
-                     conn.execute(text(query), params)
-                     conn.commit()
-                 else:
-                     # Convert to positional parameters for sqlite3
-                     positional_params = []
-                     positional_query = query.replace(":title", "?").replace(":description", "?")
-                     positional_query = positional_query.replace(":tdd_phase", "?").replace(":priority", "?")
-                     positional_query = positional_query.replace(":estimate_minutes", "?").replace(":task_id", "?")
-                     
-                     for key in ["title", "description", "tdd_phase", "priority", "estimate_minutes"]:
-                         if key in params:
-                             positional_params.append(params[key])
-                     positional_params.append(task_id)
-                     
-                     cursor = conn.cursor()
-                     cursor.execute(positional_query, positional_params)
-                     conn.commit()
-                 
-                 return True
          except Exception as e:
--            print(f"Error updating task {task_id}: {e}")
-+            logger.error(f"Error updating task {task_id}: {e}", exc_info=True)
-             return False
-     
-     def delete_task(self, task_id: int, soft_delete: bool = True) -> bool:
-         """Delete a task (soft delete by default).
-         
-         Args:
-             task_id: ID of the task to delete
-             soft_delete: If True, mark as deleted; if False, actually delete
+             # Fallback error handling to prevent recursive errors
+             self.logger.error(f"Exception in exception handler: {e}")
+             if STREAMLIT_AVAILABLE:
+                 st.error("🚨 A critical error occurred. Please refresh the page.")
              
-         Returns:
-             True if successful, False otherwise
-         """
-         try:
-             with self.get_connection("framework") as conn:
-                 if soft_delete:
-                     # Soft delete: mark as deleted
-                     if SQLALCHEMY_AVAILABLE:
-                         conn.execute(text("""
-                             UPDATE framework_tasks 
-                             SET deleted_at = datetime('now'), updated_at = datetime('now')
-                             WHERE id = :task_id
-                         """), {"task_id": task_id})
-                         conn.commit()
-                     else:
-                         cursor = conn.cursor()
-                         cursor.execute("""
-                             UPDATE framework_tasks 
-                             SET deleted_at = datetime('now'), updated_at = datetime('now')
-                             WHERE id = ?
-                         """, (task_id,))
-                         conn.commit()
-                 else:
-                     # Hard delete: use transaction wrapper for consistency and safety
-                     # Tasks are leaf nodes but still benefit from transaction protection
-                     with self.transaction(isolation_level="READ_COMMITTED") as trans_conn:
-                         if SQLALCHEMY_AVAILABLE:
-                             trans_conn.execute(text("DELETE FROM framework_tasks WHERE id = :task_id"), 
-                                            {"task_id": task_id})
-                         else:
-                             trans_conn.execute("DELETE FROM framework_tasks WHERE id = ?", (task_id,))
-                 
-                 return True
-         except Exception as e:
--            print(f"Error deleting task {task_id}: {e}")
-+            logger.error(f"Error deleting task {task_id}: {e}", exc_info=True)
-             return False
+             # Return minimal error object
+             return StreamlitError(exception=exception)
      
-     @cache_database_query("get_kanban_tasks", ttl=60) if CACHE_AVAILABLE else lambda f: f
-     def get_kanban_tasks(self) -> Dict[str, List[Dict[str, Any]]]:
-         """Get tasks optimized for Kanban board display (grouped by status)."""
-         try:
-             with self.get_connection("framework") as conn:
-                 query = """
-                     SELECT t.id, t.epic_id, t.title, t.description, t.status,
-                            t.estimate_minutes, t.tdd_phase, t.priority,
-                            t.created_at, t.updated_at, t.completed_at,
-                            e.name as epic_name, e.epic_key
-                     FROM framework_tasks t
-                     LEFT JOIN framework_epics e ON t.epic_id = e.id
-                     WHERE t.deleted_at IS NULL
-                     ORDER BY t.status ASC, t.priority ASC, t.created_at DESC
-                 """
-                 
-                 if SQLALCHEMY_AVAILABLE:
-                     result = conn.execute(text(query))
-                     tasks = [dict(row._mapping) for row in result]
-                 else:
-                     cursor = conn.cursor()
-                     cursor.execute(query)
-                     tasks = [dict(zip([col[0] for col in cursor.description], row)) 
-                            for row in cursor.fetchall()]
-                 
-                 # Group by status for Kanban display
-                 grouped = {"todo": [], "in_progress": [], "completed": []}
-                 for task in tasks:
-                     status = task.get("status", "todo")
-                     if status in grouped:
-                         grouped[status].append(task)
-                     else:
-                         grouped["todo"].append(task)  # Default fallback
-                 
-                 return grouped
-                 
-         except Exception as e:
--            print(f"Error loading kanban tasks: {e}")
-+            logger.error(f"Error loading kanban tasks: {e}", exc_info=True)
-             return {"todo": [], "in_progress": [], "completed": []}
-     
-     def get_task_statistics(self) -> Dict[str, int]:
-         """Get quick statistics for tasks (used by dashboard widgets)."""
-         try:
-             with self.get_connection("framework") as conn:
-                 if SQLALCHEMY_AVAILABLE:
-                     result = conn.execute(text("""
-                         SELECT status, COUNT(*) as count
-                         FROM framework_tasks
-                         WHERE deleted_at IS NULL
-                         GROUP BY status
-                     """))
-                     
-                     stats = {"todo": 0, "in_progress": 0, "completed": 0, "total": 0}
-                     total = 0
-                     for row in result:
-                         status = row[0] or "todo"
-                         count = row[1]
-                         if status in stats:
-                             stats[status] = count
-                         total += count
-                     stats["total"] = total
-                     
-                     return stats
-                 else:
-                     cursor = conn.cursor()
-                     cursor.execute("""
-                         SELECT status, COUNT(*) as count
-                         FROM framework_tasks
-                         WHERE deleted_at IS NULL
-                         GROUP BY status
-                     """)
-                     
-                     stats = {"todo": 0, "in_progress": 0, "completed": 0, "total": 0}
-                     total = 0
-                     for row in cursor.fetchall():
-                         status = row[0] or "todo"
-                         count = row[1]
-                         if status in stats:
-                             stats[status] = count
-                         total += count
-                     stats["total"] = total
-                     
-                     return stats
-                     
-         except Exception as e:
--            print(f"Error getting task statistics: {e}")
-+            logger.error(f"Error getting task statistics: {e}", exc_info=True)
-             return {"todo": 0, "in_progress": 0, "completed": 0, "total": 0}
-     
-     # ==================================================================================
-     # DURATION SYSTEM EXTENSION METHODS (FASE 2.3)
-     # ==================================================================================
-     
-     @cache_database_query("calculate_epic_duration", ttl=300) if CACHE_AVAILABLE else lambda f: f
-     def calculate_epic_duration(self, epic_id: int) -> float:
-         """Calculate total duration for an epic based on task dates.
-         
-         Args:
-             epic_id: ID of the epic to calculate duration for
+     def _update_error_stats(self, error: StreamlitError):
+         """Update error statistics."""
+         with self._stats_lock:
+             self.error_stats["total_errors"] += 1
              
-         Returns:
-             Duration in days (float), or 0.0 if calculation fails
-         """
-         if not DURATION_SYSTEM_AVAILABLE:
-             logger.warning("Duration system not available - install duration_system package")
-             return 0.0
+             # Update category stats
+             category_stats = self.error_stats["errors_by_category"]
+             category_stats[error.category] = category_stats.get(error.category, 0) + 1
+             
+             # Update severity stats
+             severity_stats = self.error_stats["errors_by_severity"]
+             severity_stats[error.severity] = severity_stats.get(error.severity, 0) + 1
+             
+-            # Add to recent errors (keep last 10)
+-            recent = self.error_stats["recent_errors"]
++            # Add to recent errors (deque handles max size)
++            recent: Deque[Dict[str, Any]] = self.error_stats["recent_errors"]
+             recent.append({
+                 "error_id": error.error_id,
+                 "category": error.category,
+                 "severity": error.severity,
+                 "timestamp": error.timestamp.isoformat(),
+                 "message": str(error.exception)[:100]
+             })
+-            
+-            # Keep only last 10 errors
+-            if len(recent) > 10:
+-                recent.pop(0)
+     
+     def _log_error(self, error: StreamlitError):
+         """Log error with appropriate level."""
+         safe_context = error.get_safe_context()
          
+         # Create log message
+         log_data = {
+             "error_id": error.error_id,
+             "category": error.category,
+             "severity": error.severity,
+             "exception_type": type(error.exception).__name__,
+             "message": str(error.exception)[:500],  # Truncate long messages
+             "context": safe_context
+         }
+         
+         # Log with appropriate level based on severity
+         if error.severity == ErrorSeverity.CRITICAL:
+             if LOG_SANITIZATION_AVAILABLE:
+                 self.logger.critical(sanitize_log_message(f"Critical error: {log_data}", 'CRITICAL'))
+             else:
+                 self.logger.critical(f"Critical error: {log_data}")
+         elif error.severity == ErrorSeverity.HIGH:
+             if LOG_SANITIZATION_AVAILABLE:
+                 self.logger.error(sanitize_log_message(f"High severity error: {log_data}", 'ERROR'))
+             else:
+diff --git a/streamlit_extension/utils/security.py b/streamlit_extension/utils/security.py
+index f2dceda9f102f859e695beefe3bacd7ea97a962c..07d42c5bbb232f3bae8a7f4036d4b26f0f388f60 100644
+--- a/streamlit_extension/utils/security.py
++++ b/streamlit_extension/utils/security.py
+@@ -430,64 +430,64 @@ class StreamlitSecurityManager:
          try:
-             with self.get_connection("framework") as conn:
-                 # Get epic with date fields
-                 if SQLALCHEMY_AVAILABLE:
-                     result = conn.execute(text("""
-@@ -2332,51 +2330,51 @@ class DatabaseManager(PerformancePaginationMixin):
-                     "validation": validation,
-                     "duration_info": {
-                         "calculated_days": epic_data.get('calculated_duration_days', 0),
-                         "description": epic_data.get('duration_description', ''),
-                         "formatted": formatter.format(epic_data.get('calculated_duration_days', 0)) if epic_data.get('calculated_duration_days') else '',
-                     },
-                     "dates": {
-                         "planned_start": epic_data.get('planned_start_date'),
-                         "planned_end": epic_data.get('planned_end_date'),
-                         "actual_start": epic_data.get('actual_start_date'),
-                         "actual_end": epic_data.get('actual_end_date'),
-                     },
-                     "status_info": {
-                         "status": epic_data.get('status', 'unknown'),
-                         "is_completed": epic_data.get('status') == 'completed',
-                         "completion_date": epic_data.get('completed_at'),
-                     }
-                 }
-                 
-                 # Add task timeline if needed
-                 timeline_data["tasks"] = self._get_epic_task_timeline(epic_id)
-                 
-                 return timeline_data
-                 
+             return self.rate_limiter.get_stats()
          except Exception as e:
--            print(f"Error getting epic timeline for {epic_id}: {e}")
-+            logger.error(f"Error getting epic timeline for {epic_id}: {e}", exc_info=True)
              return {"error": str(e)}
      
-     def validate_date_consistency(self, epic_id: int) -> bool:
-         """Validate date consistency for an epic.
+     def reset_rate_limits(self, 
+                          operation_type: str,
+                          user_id: Optional[str] = None,
+                          ip_address: Optional[str] = None):
+         """Reset rate limits for specific user/operation."""
+         if not RATE_LIMITING_AVAILABLE or not self.rate_limiter:
+             return
+         
+         try:
+             self.rate_limiter.reset_entity(
+                 limit_type=operation_type,
+                 user_id=user_id,
+                 ip_address=ip_address
+             )
+         except Exception as e:
+             if LOG_SANITIZATION_AVAILABLE:
+                 self.logger.error(sanitize_log_message(f"Failed to reset rate limits: {e}", 'ERROR'))
+             else:
+                 self.logger.error(f"Failed to reset rate limits: {str(e)[:100]}")
+     
+-    def _get_streamlit_session_id(self) -> Optional[str]:
+-        """Extract session ID from Streamlit context."""
++    def _get_streamlit_session_id(self) -> str:
++        """Obtém ID único da sessão Streamlit de forma segura."""
+         try:
+             import streamlit as st
+             if hasattr(st, 'session_state') and hasattr(st.session_state, 'session_id'):
+-                return st.session_state.session_id
+-            # Fallback: use runtime ID if available
++                return str(st.session_state.session_id)
+             from streamlit.runtime.scriptrunner import get_script_run_ctx
+             ctx = get_script_run_ctx()
+             if ctx and hasattr(ctx, 'session_id'):
+-                return ctx.session_id
+-        except:
++                return str(ctx.session_id)
++        except Exception:
+             pass
+-        return None
++        import uuid
++        return str(uuid.uuid4())
+     
+     def is_security_enabled(self) -> bool:
+         """Check if advanced security features are available."""
+         return SECURITY_AVAILABLE and self.validator is not None
+     
+     def is_rate_limiting_enabled(self) -> bool:
+         """Check if rate limiting is available."""
+         return RATE_LIMITING_AVAILABLE and self.rate_limiter is not None
+     
+     def create_request_context(self, 
+                               endpoint: str = "unknown",
+                               request_size: int = 0,
+                               user_id: Optional[str] = None) -> Optional[Any]:
+         """Create RequestContext for DoS protection from Streamlit session."""
+         if not DOS_PROTECTION_AVAILABLE or not RequestContext:
+             return None
+         
+         try:
+             import streamlit as st
+             
+             # Extract session information
+             session_id = self._get_streamlit_session_id()
+             
+             # Get IP address (best effort - may not be available in all deployments)
+             ip_address = self._get_client_ip() or "127.0.0.1"
+@@ -674,52 +674,52 @@ class StreamlitSecurityManager:
+             timestamp = str(int(time.time()))
+             random_bytes = secrets.token_hex(16)
+             
+             # Create token payload
+             token_data = f"{session_id}:{form_id}:{timestamp}:{random_bytes}"
+             
+             # Generate secure hash
+             token_hash = hashlib.sha256(token_data.encode()).hexdigest()
+             
+             # Create final token (timestamp:hash for validation)
+             csrf_token = f"{timestamp}:{token_hash}"
+             
+             # Store in session state for validation
+             if hasattr(st, 'session_state'):
+                 csrf_key = f"csrf_token_{form_id}"
+                 st.session_state[csrf_key] = csrf_token
+                 st.session_state[f"{csrf_key}_created"] = time.time()
+             
+             return csrf_token
+             
+         except Exception as e:
+             if LOG_SANITIZATION_AVAILABLE:
+                 self.logger.error(sanitize_log_message(f"Failed to generate CSRF token: {e}", 'ERROR'))
+             else:
+                 self.logger.error(f"Failed to generate CSRF token: {str(e)[:100]}")
+-            # Fallback token
+-            return hashlib.sha256(f"{form_id}:{time.time()}:{secrets.token_hex(8)}".encode()).hexdigest()[:16]
++            # Fallback robusto: manter alta entropia (~256 bits)
++            return secrets.token_urlsafe(32)
+     
+     def validate_csrf_token(self, form_id: str, provided_token: str, max_age_seconds: int = 3600) -> bool:
+         """
+         Validate a CSRF token for a form.
          
          Args:
-             epic_id: ID of the epic to validate
+             form_id: Unique identifier for the form
+             provided_token: Token provided with form submission
+             max_age_seconds: Maximum age of token in seconds (default 1 hour)
              
          Returns:
-             True if dates are consistent, False otherwise
+             True if token is valid, False otherwise
          """
-         if not DURATION_SYSTEM_AVAILABLE:
-             return False
-         
          try:
-             with self.get_connection("framework") as conn:
-                 if SQLALCHEMY_AVAILABLE:
-                     result = conn.execute(text("""
-                         SELECT planned_start_date, planned_end_date,
-                                actual_start_date, actual_end_date,
-                                calculated_duration_days
-                         FROM framework_epics 
-                         WHERE id = :epic_id AND deleted_at IS NULL
-                     """), {"epic_id": epic_id})
-                     row = result.fetchone()
-@@ -2384,51 +2382,51 @@ class DatabaseManager(PerformancePaginationMixin):
-                     cursor = conn.cursor()
-                     cursor.execute("""
-                         SELECT planned_start_date, planned_end_date,
-                                actual_start_date, actual_end_date,
-                                calculated_duration_days
-                         FROM framework_epics 
-                         WHERE id = ? AND deleted_at IS NULL
-                     """, (epic_id,))
-                     row = cursor.fetchone()
-                 
-                 if not row:
-                     return False
-                 
-                 calculator = DurationCalculator()
-                 validation = calculator.validate_date_consistency(
-                     planned_start=row[0],
-                     planned_end=row[1],
-                     actual_start=row[2],
-                     actual_end=row[3],
-                     duration_days=row[4]
-                 )
-                 
-                 return validation["is_valid"]
-                 
-         except Exception as e:
--            print(f"Error validating date consistency for epic {epic_id}: {e}")
-+            logger.error(f"Error validating date consistency for epic {epic_id}: {e}", exc_info=True)
-             return False
-     
-     # Helper methods for duration system
-     
-     def _calculate_epic_duration_from_tasks(self, epic_id: int) -> float:
-         """Calculate epic duration by summing task durations."""
-         try:
-             with self.get_connection("framework") as conn:
-                 if SQLALCHEMY_AVAILABLE:
-                     result = conn.execute(text("""
-                         SELECT SUM(estimate_minutes) 
-                         FROM framework_tasks 
-                         WHERE epic_id = :epic_id AND deleted_at IS NULL
-                     """), {"epic_id": epic_id})
-                     total_minutes = result.scalar() or 0
-                 else:
-                     cursor = conn.cursor()
-                     cursor.execute("""
-                         SELECT SUM(estimate_minutes)
-                         FROM framework_tasks
-                         WHERE epic_id = ? AND deleted_at IS NULL
-                     """, (epic_id,))
-                     row = cursor.fetchone()
-                     total_minutes = row[0] if row and row[0] is not None else 0
+             import streamlit as st
+             
+             if not provided_token:
+                 return False
+             
+             # Get stored token from session
+             if hasattr(st, 'session_state'):
+                 csrf_key = f"csrf_token_{form_id}"
+                 stored_token = st.session_state.get(csrf_key)
+                 token_created = st.session_state.get(f"{csrf_key}_created", 0)
                  
  
 EOF

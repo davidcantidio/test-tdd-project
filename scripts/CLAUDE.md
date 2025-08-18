@@ -1058,3 +1058,71 @@ python scripts/[script].py --help  # teste versão atual
 ---
 
 *This comprehensive script toolkit provides enterprise-grade utilities for all aspects of system management, from development through production deployment and ongoing maintenance.*
+
+---
+
+## 📋 **FILE TRACKING PROTOCOL - SCRIPTS MODULE**
+
+### **🎯 TRACKING OBRIGATÓRIO PARA SCRIPTS**
+
+**Sempre que modificar scripts, use este template pós-execução:**
+
+```
+📊 **SCRIPTS - ARQUIVOS MODIFICADOS:**
+
+**Maintenance Scripts:**
+- scripts/maintenance/[arquivo].py - [mudança específica e impacto]
+
+**Analysis Scripts:**
+- scripts/analysis/[arquivo].py - [mudança específica e impacto]
+
+**Testing Scripts:**
+- scripts/testing/[arquivo].py - [mudança específica e impacto]
+
+**Migration Scripts:**
+- scripts/migration/[arquivo].py - [mudança específica e impacto]
+
+**Setup Scripts:**
+- scripts/setup/[arquivo].py - [mudança específica e impacto]
+
+**Root Utilities:**
+- scripts/[arquivo].py - [mudança específica e impacto]
+
+**Status:** Pronto para revisão manual
+**Validation:** [Descrição dos testes executados]
+**Impact:** [Impacto nos workflows existentes]
+```
+
+### **🔧 CHECKLIST PRÉ-MODIFICAÇÃO SCRIPTS**
+- [ ] Backup de scripts críticos
+- [ ] Teste --help em scripts existentes
+- [ ] Verificação de dependências
+- [ ] Validação de argumentos de linha de comando
+
+### **✅ CHECKLIST PÓS-MODIFICAÇÃO SCRIPTS**
+- [ ] Lista completa de scripts modificados gerada
+- [ ] Teste de sintaxe (py_compile) executado
+- [ ] Teste --help funcional
+- [ ] Teste --dry-run (se aplicável)
+- [ ] Validação de integração com sistema
+- [ ] Documentação atualizada conforme necessário
+- [ ] Aprovação para próxima etapa
+
+### **🚨 VALIDAÇÃO ESPECÍFICA POR CATEGORIA**
+
+#### **Testing Scripts**
+- [ ] Todos os testes passam
+- [ ] Performance não degradou
+- [ ] Relatórios gerados corretamente
+
+#### **Migration Scripts**  
+- [ ] Dry-run obrigatório executado
+- [ ] Rollback testado
+- [ ] Backup validado
+
+#### **Maintenance Scripts**
+- [ ] Sem efeitos colaterais em dry-run
+- [ ] Health checks passam
+- [ ] Monitoring não afetado
+
+**Regra Absoluta:** Nunca commitar scripts sem completar checklist e gerar lista de arquivos modificados.

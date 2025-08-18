@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
 🚨 TDD Error Handler - Standardized Error Management
+Patch: safer logging setup, wraps for decorators
 
 This module provides centralized error handling, logging, and custom exceptions
 for the TDD project template. Ensures consistent error messages and logging
@@ -23,6 +24,7 @@ from typing import Dict, List, Optional, Any, Union
 from enum import Enum
 from dataclasses import dataclass
 import traceback
+from functools import wraps
 
 
 class ErrorSeverity(Enum):
@@ -171,34 +173,32 @@ class TDDErrorHandler:
         """Configure structured logging."""
         # Create logs directory if it doesn't exist
         self.log_file.parent.mkdir(exist_ok=True)
-        
-        # Clear any existing handlers
-        logging.getLogger().handlers.clear()
-        
+
         # Create formatter
         formatter = logging.Formatter(
             '%(asctime)s | %(levelname)-8s | %(name)-20s | %(funcName)-15s | %(message)s',
             datefmt='%Y-%m-%d %H:%M:%S'
         )
-        
-        # Console handler
-        console_handler = logging.StreamHandler(sys.stdout)
-        console_handler.setLevel(self.console_level)
-        console_handler.setFormatter(formatter)
-        
-        # File handler
-        file_handler = logging.FileHandler(self.log_file, encoding='utf-8')
-        file_handler.setLevel(self.file_level)
-        file_handler.setFormatter(formatter)
-        
-        # Configure root logger
-        root_logger = logging.getLogger()
-        root_logger.setLevel(logging.DEBUG)
-        root_logger.addHandler(console_handler)
-        root_logger.addHandler(file_handler)
-        
-        # Create TDD-specific logger
+
+        # Create TDD-specific logger (avoid mutating root)
         self.logger = logging.getLogger("TDD_TEMPLATE")
+        self.logger.setLevel(logging.DEBUG)
+        self.logger.propagate = False  # keep logs local to this logger
+
+        # Prevent duplicate handlers on re-init
+        existing_handlers = {type(h) for h in self.logger.handlers}
+
+        if logging.StreamHandler not in existing_handlers:
+            console_handler = logging.StreamHandler(sys.stdout)
+            console_handler.setLevel(self.console_level)
+            console_handler.setFormatter(formatter)
+            self.logger.addHandler(console_handler)
+
+        if logging.FileHandler not in existing_handlers:
+            file_handler = logging.FileHandler(self.log_file, encoding='utf-8')
+            file_handler.setLevel(self.file_level)
+            file_handler.setFormatter(formatter)
+            self.logger.addHandler(file_handler)
     
     def handle_exception(
         self,
@@ -490,6 +490,7 @@ def with_error_handling(
 ):
     """Decorator for automatic error handling."""
     def decorator(func):
+        @wraps(func)
         def wrapper(*args, **kwargs):
             try:
                 return func(*args, **kwargs)

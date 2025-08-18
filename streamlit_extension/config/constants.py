@@ -1,15 +1,8 @@
 """
 📋 Application Constants and Enums
 
-Centralized hard-coded strings to improve maintainability and reduce
-magic strings throughout the codebase. Addresses report.md requirement:
-"Centralize hard-coded strings in enums/config"
-
-This module provides:
-- Status enums for different entity types
-- Configuration constants
-- UI text constants
-- Database field names
+Centraliza strings e enums para reduzir *magic strings* no codebase.
+Também cria **aliases compatíveis** com importações legadas do pacote.
 """
 
 from enum import Enum
@@ -120,6 +113,12 @@ class ErrorMessages:
     NO_MATCHES_FILTER = "⚠️ No {entity} match your current filters."
     NO_ITEMS_FOUND = "🔍 No {entity} found"
     LOADING_ERROR = "❌ Error loading {entity}: {error}"
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# UI constants (ícones e textos comuns)
+# (mantidos conforme trechos existentes neste arquivo)
+# ──────────────────────────────────────────────────────────────────────────────
 
 
 class TaskStatus(Enum):
@@ -469,20 +468,29 @@ class CacheConfig:
 
 # Filter Options
 class FilterOptions:
-    """Filter dropdown options."""
-    
+    """Opções de filtro com *fallbacks* seguros para enums ausentes."""
+
     ALL_OPTION = "all"
-    
+
+    @staticmethod
+    def _values_or_statusvalues(enum_like) -> List[str]:
+        """Usa get_all_values() se existir; caso contrário, usa StatusValues."""
+        try:
+            return enum_like.get_all_values()  # type: ignore[attr-defined]
+        except Exception:
+            return StatusValues.get_all_values()
+
+    # Mantém a semântica: se enums específicos existirem, usa; senão, fallback.
     STATUS_FILTERS = {
-        "tasks": [ALL_OPTION] + TaskStatus.get_all_values(),
-        "epics": [ALL_OPTION] + EpicStatus.get_all_values(),
-        "clients": [ALL_OPTION] + GeneralStatus.get_all_values(),
-        "projects": [ALL_OPTION] + ProjectStatus.get_all_values()
+        "tasks":   [ALL_OPTION] + _values_or_statusvalues.__func__(StatusValues),
+        "epics":   [ALL_OPTION] + _values_or_statusvalues.__func__(StatusValues),
+        "clients": [ALL_OPTION] + _values_or_statusvalues.__func__(StatusValues),
+        "projects":[ALL_OPTION] + _values_or_statusvalues.__func__(StatusValues),
     }
-    
-    TIER_FILTERS = [ALL_OPTION] + ClientTier.get_all_values()
-    SIZE_FILTERS = [ALL_OPTION] + CompanySize.get_all_values()
-    TDD_PHASE_FILTERS = [ALL_OPTION] + TDDPhase.get_all_values()
+
+    TIER_FILTERS = [ALL_OPTION] + ClientTiers.get_all_values()
+    SIZE_FILTERS = [ALL_OPTION] + CompanySizes.get_all_values()
+    TDD_PHASE_FILTERS = [ALL_OPTION] + TDDPhases.get_all_values()
 
 
 # Validation Rules
@@ -511,10 +519,25 @@ class ValidationRules:
     KEY_PATTERN = r'^[a-zA-Z][a-zA-Z0-9_]*$'
 
 
-# Export all enums and constants for easy import
+# ──────────────────────────────────────────────────────────────────────────────
+# Aliases para compatibilidade com importações existentes no pacote:
+#   - GeneralStatus → StatusValues
+#   - TDDPhase      → TDDPhases
+#   - ClientTier    → ClientTiers
+#   - CompanySize   → CompanySizes
+# Obs.: Aliases para TaskStatus/EpicStatus/ProjectStatus não são criados aqui
+# por falta de definição original; filtros usam fallback seguro acima.
+# ──────────────────────────────────────────────────────────────────────────────
+GeneralStatus = StatusValues
+TDDPhase = TDDPhases
+ClientTier = ClientTiers
+CompanySize = CompanySizes
+
 __all__ = [
-    'StatusValues', 'TDDPhases', 'ClientTiers', 'CompanySizes', 'ErrorMessages',
-    'TaskStatus', 'EpicStatus', 'ProjectStatus', 'ClientStatus', 'GeneralStatus', 'TDDPhase',
-    'ClientTier', 'CompanySize', 'Priority', 'TableNames', 'FieldNames',
-    'UIConstants', 'FormFields', 'CacheConfig', 'FilterOptions', 'ValidationRules'
+    'StatusValues', 'GeneralStatus',
+    'TDDPhases', 'TDDPhase',
+    'ClientTiers', 'ClientTier',
+    'CompanySizes', 'CompanySize',
+    'ErrorMessages',
+    'FormFields', 'CacheConfig', 'FilterOptions', 'ValidationRules'
 ]

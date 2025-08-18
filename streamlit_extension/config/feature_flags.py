@@ -38,3 +38,20 @@ class FeatureFlagManager:
     def override_flag(self, flag: FeatureFlag, value: bool) -> None:
         self.flags[flag] = value
 
+    # Conveniências para testes/CLI
+    def enable(self, flag: FeatureFlag) -> None:
+        self.override_flag(flag, True)
+
+    def disable(self, flag: FeatureFlag) -> None:
+        self.override_flag(flag, False)
+
+    @classmethod
+    def from_env_dict(cls, env: Dict[str, str]) -> "FeatureFlagManager":
+        """Cria um manager a partir de um dict de env (útil para testes)."""
+        mgr = cls()
+        for flag in FeatureFlag:
+            key = f"FF_{flag.value}"
+            if key in env:
+                mgr.flags[flag] = env[key].lower() in {"1", "true", "yes", "on"}
+        return mgr
+

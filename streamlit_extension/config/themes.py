@@ -493,25 +493,25 @@ class ThemeManager:
         """Load custom themes from file."""
         if not self.themes_file.exists():
             return {}
-        
         try:
             with open(self.themes_file, 'r') as f:
-                themes_data = json.load(f)
-            
-            custom_themes = {}
-            for name, theme_dict in themes_data.items():
-                # Reconstruct ColorScheme
-                colors_dict = theme_dict.pop("colors", {})
+                data = json.load(f)
+            custom_themes: Dict[str, Theme] = {}
+            for name, theme_dict in data.items():
+                mode_value = theme_dict.get("mode", "light")
+                theme_dict["mode"] = ThemeMode(mode_value)
+                colors_dict = theme_dict.get("colors", {})
                 colors = ColorScheme(**colors_dict)
-                
-                # Reconstruct Theme
+
                 theme_dict["colors"] = colors
                 custom_themes[name] = Theme(**theme_dict)
-            
+
             return custom_themes
-            
         except (json.JSONDecodeError, KeyError, TypeError):
             return {}
+
+    # Observação: evitar CSS com classes internas do Streamlit (frágeis).
+    # Mantido por compatibilidade; preferir seletores estáveis quando possível.
     
     def _save_custom_themes(self) -> None:
         """Save custom themes to file."""

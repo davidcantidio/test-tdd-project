@@ -443,3 +443,52 @@ Enterprise Streamlit app com segurança, desempenho e mantenibilidade em primeir
 - **Production Monitoring**: Comprehensive metrics and health checks
 
 *Module Status: **ENTERPRISE PRODUCTION READY** with **PERFORMANCE OPTIMIZATIONS** ⚡*
+
+---
+
+## 📋 **FILE TRACKING PROTOCOL - STREAMLIT EXTENSION**
+
+### **🎯 TRACKING OBRIGATÓRIO PARA MÓDULO STREAMLIT**
+
+**Sempre que modificar arquivos neste módulo, use este template:**
+
+```
+📊 **STREAMLIT EXTENSION - ARQUIVOS MODIFICADOS:**
+
+**Database Layer:**
+- streamlit_extension/database/[arquivo] - [mudança específica]
+
+**Services Layer:**  
+- streamlit_extension/services/[arquivo] - [mudança específica]
+
+**UI Components:**
+- streamlit_extension/components/[arquivo] - [mudança específica]
+- streamlit_extension/pages/[arquivo] - [mudança específica]
+
+**Utils & Config:**
+- streamlit_extension/utils/[arquivo] - [mudança específica]
+- streamlit_extension/config/[arquivo] - [mudança específica]
+
+**Security & Auth:**
+- streamlit_extension/auth/[arquivo] - [mudança específica]
+- streamlit_extension/middleware/[arquivo] - [mudança específica]
+
+**Status:** Pronto para revisão manual
+**Impact:** [Descrever impacto na funcionalidade/performance/segurança]
+```
+
+### **🔧 CHECKLIST PRÉ-MODIFICAÇÃO**
+- [ ] Backup dos arquivos críticos
+- [ ] Validação de dependências
+- [ ] Teste de impacto na performance
+- [ ] Verificação de breaking changes
+
+### **✅ CHECKLIST PÓS-MODIFICAÇÃO**
+- [ ] Lista completa de arquivos modificados gerada
+- [ ] Descrição do propósito de cada mudança
+- [ ] Validação manual de cada arquivo
+- [ ] Testes funcionais executados
+- [ ] Performance validada (se aplicável)
+- [ ] Aprovação para próxima etapa
+
+**Regra:** Nunca prosseguir sem completar checklist e gerar lista de arquivos.

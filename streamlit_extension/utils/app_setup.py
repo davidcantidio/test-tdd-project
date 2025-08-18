@@ -16,6 +16,7 @@ Compatível com:
 
 from __future__ import annotations
 
+import atexit
 import logging
 from dataclasses import dataclass
 from pathlib import Path
@@ -317,6 +318,40 @@ def cleanup_application() -> None:
         _logger.info("Cleanup concluído.")
     except Exception as e:  # pragma: no cover
         _logger.error("Erro no cleanup: %s", e, exc_info=True)
+
+
+def cleanup_resources() -> None:
+    """Limpa recursos ao encerrar a aplicação."""
+    try:
+        closed_any = False
+        try:
+            from streamlit_extension.database.queries import _DBM_INSTANCE as _Q_DBM  # type: ignore
+            if _Q_DBM is not None and hasattr(_Q_DBM, "close"):
+                _Q_DBM.close()
+                closed_any = True
+        except Exception:
+            pass
+        try:
+            from streamlit_extension.database.schema import _DBM_INSTANCE as _S_DBM  # type: ignore
+            if _S_DBM is not None and hasattr(_S_DBM, "close"):
+                _S_DBM.close()
+                closed_any = True
+        except Exception:
+            pass
+        try:
+            from streamlit_extension.database.connection import _DBM_INSTANCE as _C_DBM  # type: ignore
+            if _C_DBM is not None and hasattr(_C_DBM, "close"):
+                _C_DBM.close()
+                closed_any = True
+        except Exception:
+            pass
+        if closed_any:
+            _logger.info("Database resources cleaned up")
+    except Exception as e:
+        _logger.error(f"Error during cleanup: {e}")
+
+
+atexit.register(cleanup_resources)
 
 # --------------------------------------------------------------------------------------
 # Setup “one-shot” do app

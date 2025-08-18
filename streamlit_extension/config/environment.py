@@ -57,6 +57,12 @@ class ConfigLoader:
 
         return resolve(config)
 
+    # Utilitário público (reuso externo quando necessário)
+    @staticmethod
+    def resolve_env_placeholders(obj: Any) -> Any:
+        loader = ConfigLoader()
+        return loader.apply_environment_overrides(obj)
+
 
 class EnvironmentManager:
     """High level manager for environment configurations."""
