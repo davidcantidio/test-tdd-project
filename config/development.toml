@@ -59,10 +59,11 @@ log_file_path = ""  # Console logging only
 
 [google_oauth]
 # These will be overridden by environment variables in production
-# Development values (these are example/test values)
-client_id = "dev-client-id"
-client_secret = "dev-client-secret"
+# Development values (configure actual values in .streamlit/secrets.toml)
+client_id = "${GOOGLE_CLIENT_ID}"  # Set via environment variable or secrets.toml
+client_secret = "${GOOGLE_CLIENT_SECRET}"  # Set via environment variable or secrets.toml
 redirect_uri = "http://localhost:8501"
+enabled = true  # Enable Google OAuth for development
 scopes = [
     "https://www.googleapis.com/auth/userinfo.email",
     "https://www.googleapis.com/auth/userinfo.profile"

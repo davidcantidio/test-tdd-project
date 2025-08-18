@@ -40,7 +40,7 @@ BASE_FIELDS = """
 """
 
 class RepoError(TaskModelError):
-    """Exception específica para erros de repository"""
+    """Erro de repositório padronizado para Tasks e Dependências"""
     pass
 
 class TasksRepo:
@@ -103,7 +103,7 @@ class TasksRepo:
                     # PATCH 3: task_key seguro em parse errors
                     row_dict = dict(row)
                     task_key = row_dict.get('task_key', 'unknown')
-                    logger.warning(f"Parse error tarefa {task_key}: {e}")
+                    logger.warning(f"Parse error tarefa {task_key}: {e}", exc_info=True)
                     
                     parse_errors += 1
                     if len(error_examples) < 3:  # Até 3 exemplos para debugging
@@ -203,7 +203,7 @@ class TasksRepo:
                             # PATCH 3: task_key seguro em parse errors
                             row_dict = dict(row)
                             task_key = row_dict.get('task_key', 'unknown')
-                            logger.warning(f"Parse error tarefa {task_key}: {e}")
+                            logger.warning(f"Parse error tarefa {task_key}: {e}", exc_info=True)
                             
                             parse_errors += 1
                             if len(error_examples) < 3:
@@ -255,7 +255,7 @@ class TasksRepo:
                     # PATCH 3: task_key seguro em parse errors
                     row_dict = dict(row)
                     task_key = row_dict.get('task_key', 'unknown')
-                    logger.warning(f"Parse error tarefa TDD {task_key}: {e}")
+                    logger.warning(f"Parse error tarefa TDD {task_key}: {e}", exc_info=True)
                     
                     parse_errors += 1
                     if len(error_examples) < 3:

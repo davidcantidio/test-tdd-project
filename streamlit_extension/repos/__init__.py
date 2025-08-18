@@ -8,8 +8,4 @@ performance optimization and production-ready patterns.
 from .tasks_repo import TasksRepo, RepoError
 from .deps_repo import DepsRepo
 
-__all__ = [
-    'TasksRepo',
-    'DepsRepo', 
-    'RepoError'
-]
+__all__ = ["TasksRepo", "DepsRepo", "RepoError"]

@@ -61,9 +61,10 @@ log_file_path = "/app/logs/tdd_framework.log"
 [google_oauth]
 # SECURITY: These MUST be set via environment variables
 # NEVER store actual secrets in config files
-client_id = ""  # MUST be set via GOOGLE_CLIENT_ID
-client_secret = ""  # MUST be set via GOOGLE_CLIENT_SECRET
+client_id = ""  # MUST be set via GOOGLE_CLIENT_ID environment variable
+client_secret = ""  # MUST be set via GOOGLE_CLIENT_SECRET environment variable
 redirect_uri = "https://app.tdd-framework.com"
+enabled = true  # Enable Google OAuth for production
 scopes = [
     "https://www.googleapis.com/auth/userinfo.email",
     "https://www.googleapis.com/auth/userinfo.profile"

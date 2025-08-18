@@ -6,7 +6,7 @@ Repository pattern para acesso a dados de dependências entre tarefas.
 Implementação limpa seguindo os mesmos padrões do tasks_repo.py.
 
 Usage:
-    from streamlit_extension.repos.deps_repo import DepsRepo, RepoError
+    from streamlit_extension.repos import DepsRepo, RepoError
     
     repo = DepsRepo(connection)
     deps = repo.list_by_epic(epic_id=1)
@@ -23,8 +23,9 @@ from __future__ import annotations
 from typing import List, Optional, Dict, Any
 import logging
 
-from ..models.task_models import TaskDependency, TaskModelError
+from ..models.task_models import TaskDependency
 from ..utils.db import dict_rows
+from .tasks_repo import RepoError
 
 logger = logging.getLogger(__name__)
 
@@ -35,10 +36,6 @@ DEPS_BASE_FIELDS = """
     td.created_at, td.updated_at,
     ft.task_key as dependent_task_key
 """
-
-class RepoError(TaskModelError):
-    """Exception específica para erros de repository"""
-    pass
 
 class DepsRepo:
     """Repository para operações CRUD de dependências entre tarefas"""
@@ -107,7 +104,7 @@ class DepsRepo:
                     row_dict = dict(row)
                     dep_id = row_dict.get('id', 'unknown')
                     depends_on = row_dict.get('depends_on_task_key', 'unknown')
-                    logger.warning(f"Parse error dependência {dep_id} ({depends_on}): {e}")
+                    logger.warning(f"Parse error dependência {dep_id} ({depends_on}): {e}", exc_info=True)
                     
                     parse_errors += 1
                     if len(error_examples) < 3:
@@ -160,7 +157,7 @@ class DepsRepo:
                 except Exception as e:
                     row_dict = dict(row)
                     dep_id = row_dict.get('id', 'unknown')
-                    logger.warning(f"Parse error dependência {dep_id}: {e}")
+                    logger.warning(f"Parse error dependência {dep_id}: {e}", exc_info=True)
                     parse_errors += 1
             
             if parse_errors > 0:
@@ -208,7 +205,7 @@ class DepsRepo:
                 except Exception as e:
                     row_dict = dict(row)
                     dep_id = row_dict.get('id', 'unknown')
-                    logger.warning(f"Parse error dependência {dep_id}: {e}")
+                    logger.warning(f"Parse error dependência {dep_id}: {e}", exc_info=True)
                     parse_errors += 1
             
             if parse_errors > 0:
