@@ -19,20 +19,26 @@ except ImportError:
     STREAMLIT_AVAILABLE = False
     st = None
 
-# Ensure logs directory exists
+# Evita configurar logging global no import (side effects)
 os.makedirs('logs', exist_ok=True)
-
-# Configure logging
-logging.basicConfig(
-    level=logging.ERROR,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler('logs/application_errors.log'),
-        logging.StreamHandler()
-    ]
-)
-
 logger = logging.getLogger(__name__)
+if not logger.handlers:
+    try:
+        from .log_formatter import JSONFormatter, CorrelationFilter
+        fh = logging.FileHandler('logs/application_errors.log')
+        sh = logging.StreamHandler()
+        fmt = JSONFormatter()
+        fh.setFormatter(fmt)
+        sh.setFormatter(fmt)
+        # filtro que injeta correlation_id quando existir
+        sh.addFilter(CorrelationFilter())
+        fh.addFilter(CorrelationFilter())
+        logger.addHandler(fh)
+        logger.addHandler(sh)
+        logger.setLevel(logging.ERROR)
+    except Exception:
+        # fallback mínimo
+        logging.basicConfig(level=logging.ERROR)
 
 class ExceptionCategory:
     """Exception categories for user-friendly messages"""
@@ -228,9 +234,12 @@ global_handler = GlobalExceptionHandler()
 
 def setup_streamlit_exception_handling():
     """Setup global exception handling for Streamlit"""
-    
+
     if not STREAMLIT_AVAILABLE or not st:
         return
-    
+
     # Enable debug mode with query parameter
     try:
+        pass
+    except Exception:
+        pass

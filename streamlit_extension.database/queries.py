@@ -46,7 +46,7 @@ def get_epics(manager, page: int=1, page_size: int=50, status_filter: Optional[U
                 data = [dict(row) for row in cursor.fetchall()]
             return {'data': data, 'total': total, 'page': page, 'page_size': page_size, 'total_pages': total_pages}
     except Exception as e:
-        print(f'Error loading epics: {e}')
+        logger.error(f'Error loading epics: {e}', exc_info=True)
         return {'data': [], 'total': 0, 'page': page, 'page_size': page_size, 'total_pages': 0}
 
 def get_all_epics(manager) -> List[Dict[str, Any]]:
@@ -106,7 +106,7 @@ def get_tasks(manager, epic_id: Optional[int]=None, page: int=1, page_size: int=
         logger.error(f'Error loading tasks: {e}')
         if STREAMLIT_AVAILABLE and st:
             st.error(f'❌ Error loading tasks: {e}')
-        print(f'Error loading tasks: {e}')
+        logger.error(f'Error loading tasks: {e}', exc_info=True)
         return {'data': [], 'total': 0, 'page': page, 'page_size': page_size, 'total_pages': 0}
 
 def get_all_tasks(manager, epic_id: Optional[int]=None) -> List[Dict[str, Any]]:
@@ -129,7 +129,7 @@ def get_timer_sessions(manager, days: int=30) -> List[Dict[str, Any]]:
                 cursor.execute(query, [f'-{days}'])
                 return [dict(row) for row in cursor.fetchall()]
     except Exception as e:
-        print(f'Error loading timer sessions: {e}')
+        logger.error(f'Error loading timer sessions: {e}', exc_info=True)
         return []
 
 def get_user_stats(manager, user_id: int=1) -> Dict[str, Any]:
@@ -157,7 +157,7 @@ def get_user_stats(manager, user_id: int=1) -> Dict[str, Any]:
                 stats['active_streaks'] = row[0] if row and row[0] is not None else 0
             return stats
     except Exception as e:
-        print(f'Error loading user stats: {e}')
+        logger.error(f'Error loading user stats: {e}', exc_info=True)
         return {'completed_tasks': 0, 'total_points': 0, 'active_streaks': 0}
 
 def get_achievements(manager, user_id: int=1) -> List[Dict[str, Any]]:
@@ -173,7 +173,7 @@ def get_achievements(manager, user_id: int=1) -> List[Dict[str, Any]]:
                 cursor.execute(query, [user_id])
                 return [dict(row) for row in cursor.fetchall()]
     except Exception as e:
-        print(f'Error loading achievements: {e}')
+        logger.error(f'Error loading achievements: {e}', exc_info=True)
         return []
 
 def get_epics_with_hierarchy(manager, project_id: Optional[int]=None, client_id: Optional[int]=None, page: int=1, page_size: int=25, status_filter: str='') -> Dict[str, Any]:

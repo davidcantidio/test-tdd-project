@@ -25,8 +25,7 @@ def check_database_health(manager) -> Dict[str, Any]:
                 conn.execute('SELECT 1')
             health['framework_db_connected'] = True
     except Exception as e:
-        import logging
-        logging.getLogger(__name__).debug(f'Framework DB connection failed: {e}')
+        logging.getLogger(__name__).debug('Framework DB connection failed: %s', e, exc_info=False)
         health['framework_db_connected'] = False
     if manager.timer_db_path.exists():
         try:
@@ -37,8 +36,7 @@ def check_database_health(manager) -> Dict[str, Any]:
                     conn.execute('SELECT 1')
                 health['timer_db_connected'] = True
         except Exception as e:
-            import logging
-            logging.getLogger(__name__).debug(f'Timer DB connection failed: {e}')
+            logging.getLogger(__name__).debug('Timer DB connection failed: %s', e, exc_info=False)
             health['timer_db_connected'] = False
     return health
 

@@ -65,13 +65,20 @@ class GraphAlgorithms:
         if not adjacency:
             return []
         
-        # Calcular in-degree com validação de tipos
+        # inclui também nós que só aparecem como vizinhos
         in_degree = {node: 0 for node in adjacency}
-        for node in adjacency:
+        for node, neighbors in adjacency.items():
+            if not isinstance(neighbors, (set, list, tuple)):
+                raise TypeError(f"neighbors de {node} deve ser set/list/tuple, recebido: {type(neighbors)}")
+            for neighbor in neighbors:
+                if neighbor not in in_degree:
+                    in_degree[neighbor] = 0
+        # computa in-degree
+        for node, neighbors in adjacency.items():
             neighbors = adjacency[node]
             if not isinstance(neighbors, (set, list, tuple)):
                 raise TypeError(f"neighbors de {node} deve ser set/list/tuple, recebido: {type(neighbors)}")
-            
+
             for neighbor in neighbors:
                 if neighbor in in_degree:
                     in_degree[neighbor] += 1
@@ -521,8 +528,8 @@ def longest_path_weighted(adjacency: Dict[str, Set[str]], weights: Dict[str, int
     """Função de conveniência para caminho crítico ponderado"""
     return GraphAlgorithms.longest_path_weighted(adjacency, weights)
 
-def detect_cycles(adjacency: Dict[str, Set[str]]) -> Tuple[bool, Optional[List[str]]]:
-    """Função de conveniência para detecção de ciclos"""
+def detect_cycles(adjacency: Dict[str, Set[str]]):
+    """Alias para detect_cycles_dfs para compatibilidade externa."""
     return GraphAlgorithms.detect_cycles_dfs(adjacency)
 
 def find_strongly_connected_components(adjacency: Dict[str, Set[str]]) -> List[List[str]]:

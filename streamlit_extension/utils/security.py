@@ -214,20 +214,24 @@ class StreamlitSecurityManager:
         if not value or not isinstance(value, str):
             return value
         
-        if not SECURITY_AVAILABLE:
-            # Fallback basic sanitization if security module unavailable
-            return self._basic_html_escape(value)
-        
-        # Use advanced sanitization from JSON security module
-        try:
-            sanitized = self.validator._sanitize_string(value)
-            return sanitized
-        except Exception as e:
-            # Fallback to basic sanitization on error
-            if LOG_SANITIZATION_AVAILABLE:
-                self.logger.warning(sanitize_log_message(f"Advanced sanitization failed for field: {e}", 'WARNING'))
-            else:
-                self.logger.warning(f"Advanced sanitization failed for field: {str(e)[:100]}")
+        # Preferir API pública quando disponível
+        if SECURITY_AVAILABLE and self.validator:
+            try:
+                # Supondo que a lib possua um método público 'sanitize_string'
+                sanitize_fn = getattr(self.validator, "sanitize_string", None)
+                if callable(sanitize_fn):
+                    return sanitize_fn(value)
+                # fallback para validação + escape controlado
+                ok, _ = self.validate_form_data({"field": value})
+                return value if ok else self._basic_html_escape(value)
+            except Exception as e:
+                # Fallback para escape básico em caso de erro
+                if LOG_SANITIZATION_AVAILABLE and sanitize_log_message:
+                    self.logger.warning(sanitize_log_message(f"Advanced sanitization failed for field: {e}", 'WARNING'))
+                else:
+                    self.logger.warning("Advanced sanitization failed for field: %s", str(e)[:100])
+                return self._basic_html_escape(value)
+        else:
             return self._basic_html_escape(value)
     
     def validate_form_data(self, data: Dict[str, Any]) -> Tuple[bool, List[str]]:
@@ -276,7 +280,14 @@ class StreamlitSecurityManager:
             text = text[:max_length] + "..."
         
         if SECURITY_AVAILABLE and self.validator:
-            return self.validator._sanitize_string(text)
+            try:
+                sanitize_fn = getattr(self.validator, "sanitize_string", None)
+                if callable(sanitize_fn):
+                    return sanitize_fn(text)
+                ok, _ = self.validate_form_data({"field": text})
+                return text if ok else self._basic_html_escape(text)
+            except Exception:
+                return self._basic_html_escape(text)
         else:
             return self._basic_html_escape(text)
     

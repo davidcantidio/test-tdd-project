@@ -24,7 +24,22 @@ from ..services import (
     shutdown_service_container,
     ServiceError
 )
-from .exception_handler import safe_streamlit_operation
+# ATENÇÃO: havia import de .exception_handler, mas o módulo real é global_exception_handler
+# e a função importada anteriormente era usada como um "wrapper" simples.
+# Para manter compatibilidade com os usos atuais (chamando como função),
+# definimos um helper local idempotente que captura exceções e mostra erro no Streamlit.
+def safe_streamlit_operation(func, default_return=None, operation_name: str = "operation"):
+    try:
+        return func()
+    except Exception as e:
+        logger = logging.getLogger(__name__)
+        logger.error("safe_streamlit_operation(%s) failed: %s", operation_name, e, exc_info=True)
+        if STREAMLIT_AVAILABLE and st:
+            try:
+                st.error(f"❌ Falha em {operation_name}: {e}")
+            except Exception:
+                pass
+        return default_return
 
 # Global variables for caching
 _db_manager: Optional[DatabaseManager] = None

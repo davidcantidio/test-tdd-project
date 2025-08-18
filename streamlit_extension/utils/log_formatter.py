@@ -16,6 +16,7 @@ class JSONFormatter(logging.Formatter):
 
         # Start with basic log record
         log_entry = {
+            "event": "log",
             "timestamp": datetime.fromtimestamp(record.created).isoformat() + "Z",
             "level": record.levelname,
             "logger": record.name,
@@ -24,6 +25,11 @@ class JSONFormatter(logging.Formatter):
             "line": record.lineno,
             "message": record.getMessage(),
         }
+
+        # Normalize correlation id if passed via extra / filter
+        corr_id = getattr(record, "correlation_id", None)
+        if corr_id:
+            log_entry["correlation_id"] = corr_id
 
         # Add exception info if present
         if record.exc_info:
@@ -34,6 +40,9 @@ class JSONFormatter(logging.Formatter):
             if key not in [
                 "name",
                 "msg",
+                "message",  # avoid duplicating the message
+                "sinfo",
+                "exc_info", "exc_text", "stack_info",
                 "args",
                 "levelname",
                 "levelno",
@@ -49,9 +58,8 @@ class JSONFormatter(logging.Formatter):
                 "threadName",
                 "processName",
                 "process",
-                "exc_info",
-                "exc_text",
-                "stack_info",
+                # commonly added by handlers/filters:
+                "asctime",
             ]:
                 log_entry[key] = value
 

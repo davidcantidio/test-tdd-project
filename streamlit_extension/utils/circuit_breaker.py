@@ -174,8 +174,30 @@ class CircuitBreaker:
         if self.config.max_retry_attempts == 1 and last_exception:
             raise last_exception
         raise MaxRetriesExceededError(
-            f"Circuit {self.name} failed after {self.config.max_retry_attempts} attempts"
+            f"Max retries exceeded for circuit {self.name}"
         ) from last_exception
+
+    # --- Novas utilidades para observabilidade/integração ---
+    def get_state(self) -> Dict[str, Any]:
+        with self._lock:
+            return {
+                "name": self.name,
+                "state": self.state.value,
+                "stats": {
+                    "total_requests": self.stats.total_requests,
+                    "successful_requests": self.stats.successful_requests,
+                    "failed_requests": self.stats.failed_requests,
+                    "circuit_opened_count": self.stats.circuit_opened_count,
+                    "success_rate": self.stats.success_rate,
+                    "failure_rate": self.stats.failure_rate,
+                }
+            }
+
+    def reset(self) -> None:
+        with self._lock:
+            self.state = CircuitState.CLOSED
+            self.stats = CircuitStats()
+            self._last_failure_time = None
 
     def _calculate_delay(self, attempt: int) -> float:
         """Calculate delay with exponential backoff and jitter."""
@@ -209,14 +231,6 @@ class CircuitBreaker:
                 logger.warning("Circuit %s transitioning to OPEN", self.name)
                 self.state = CircuitState.OPEN
                 self.stats.circuit_opened_count += 1
-
-    def reset(self) -> None:
-        """Reset circuit breaker to initial state."""
-        with self._lock:
-            self.state = CircuitState.CLOSED
-            self.stats = CircuitStats()
-            self._last_failure_time = None
-            logger.info("Circuit %s reset", self.name)
 
     def force_open(self) -> None:
         """Force circuit to OPEN state."""
