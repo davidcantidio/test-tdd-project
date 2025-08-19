@@ -5,6 +5,7 @@ Enhanced authentication middleware that integrates with the DRY form components
 and provides comprehensive page protection with role-based access control.
 """
 
+import os
 from functools import wraps
 from typing import Callable, Optional
 import streamlit as st
@@ -125,7 +126,58 @@ def init_protected_page(page_title: str, required_roles: Optional[list[UserRole]
     Returns:
         Current user if authenticated and authorized, None otherwise
     """
-    st.set_page_config(page_title=page_title, layout="wide")
+    # TEMPORARY DEV BYPASS - Remove this for production
+    environment = os.getenv('TDD_ENVIRONMENT', '').lower()
+    if environment in ['development', 'dev', 'testing', 'test']:
+        try:
+            from .user_model import User, UserRole
+            mock_user = User(
+                id=1,
+                username="dev_user",
+                email="dev@example.com",
+                role=UserRole.ADMIN,
+                is_active=True
+            )
+            st.session_state.current_user = mock_user
+            
+            # Show development notice
+            with st.sidebar:
+                st.warning("🧪 Development Mode - Authentication Bypassed")
+            
+            return mock_user
+        except Exception as e:
+            st.error(f"Dev bypass error: {e}")
+    
+    # Check for development mode bypass
+    try:
+        from ..config import get_config
+        config = get_config()
+        is_dev_mode = getattr(config, 'debug_mode', False) or getattr(config, 'testing_mode', False)
+        
+        # Allow bypass in development/testing mode
+        if is_dev_mode:
+            # Create mock user for development
+            from .user_model import User, UserRole
+            mock_user = User(
+                id=1,
+                username="dev_user",
+                email="dev@example.com",
+                role=UserRole.ADMIN,
+                is_active=True
+            )
+            st.session_state.current_user = mock_user
+            
+            # Show development notice
+            with st.sidebar:
+                st.warning("🧪 Development Mode - Authentication Bypassed")
+            
+            return mock_user
+    except Exception as e:
+        # If config fails, continue with normal auth flow
+        pass
+    
+    # Don't call st.set_page_config here since main app already calls it
+    # st.set_page_config(page_title=page_title, layout="wide")
     
     # Run authentication middleware
     user = auth_middleware()

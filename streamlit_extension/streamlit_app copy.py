@@ -506,16 +506,22 @@ def render_current_page(user: Dict[str, Any]):
     """Render the current page based on session state navigation."""
     current_page = st.session_state.get("current_page", "Dashboard")
     
+    # DEBUG: Show current navigation state
+    st.sidebar.write(f"🔍 DEBUG: Current page = {current_page}")
+    st.sidebar.write(f"🔍 DEBUG: PAGES_AVAILABLE = {PAGES_AVAILABLE}")
     
     if current_page == "Dashboard":
         # Render default dashboard
+        st.sidebar.write("🔍 DEBUG: Rendering Dashboard")
         render_dashboard_content(user)
     elif PAGES_AVAILABLE:
         # Use the pages system for CRUD pages
         page_id = current_page.lower()  # Convert "Clients" -> "clients"
+        st.sidebar.write(f"🔍 DEBUG: Attempting to render page_id = {page_id}")
         
         with streamlit_error_boundary(f"render_page_{page_id}"):
             page_result = render_page(page_id)
+            st.sidebar.write(f"🔍 DEBUG: Page result = {page_result}")
             
             if isinstance(page_result, dict) and "error" in page_result:
                 st.error(f"❌ Error loading {current_page}: {page_result['error']}")
@@ -525,6 +531,7 @@ def render_current_page(user: Dict[str, Any]):
                     st.rerun()
     else:
         # Fallback for unknown pages
+        st.sidebar.write("🔍 DEBUG: Pages not available, showing fallback")
         st.error(f"❌ Page '{current_page}' is not available")
         st.info("Available pages: Dashboard")
         if st.button("🏠 Return to Dashboard"):
@@ -574,9 +581,9 @@ def main():
 
     user = safe_streamlit_operation(get_authenticated_user, default_return={}) if AUTH_AVAILABLE else {"name": "Dev"}
 
-    # Sidebar with navigation - get state as specified in prompt
+    # Sidebar with navigation
     with streamlit_error_boundary("sidebar"):
-        sidebar_state = safe_streamlit_operation(render_sidebar, default_return={}, operation_name="render_sidebar")  # type: ignore
+        safe_streamlit_operation(render_sidebar, default_return=None, operation_name="render_sidebar")  # type: ignore
 
     # Topbar + indicadores
     with streamlit_error_boundary("topbar"):
