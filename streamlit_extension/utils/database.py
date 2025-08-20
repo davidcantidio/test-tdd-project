@@ -102,6 +102,8 @@ from .constants import (
 
 logger = logging.getLogger(__name__)
 
+# Auth imports
+
 # Security: Whitelist of allowed table names to prevent SQL injection
 ALLOWED_TABLES = {
     "framework_clients",
@@ -171,6 +173,184 @@ class PerformancePaginationMixin:
                     sanitized[key] = value
         return sanitized
 
+    def _validate_pagination_params(
+        self, 
+        table_name: str, 
+        sort_by: Optional[str], 
+        sort_order: str, 
+        per_page: int
+    ) -> Tuple[str, int]:
+        """Validate and sanitize pagination parameters.
+        
+        Returns:
+            Tuple of (validated_sort_order, validated_per_page)
+        """
+        # Security validation
+        if not self._validate_table_name(table_name):
+            raise ValueError(f"Invalid table name: {table_name}")
+        
+        if sort_by and not self._validate_sort_column(sort_by):
+            raise ValueError(f"Invalid sort column: {sort_by}")
+        
+        # Sanitize parameters
+        validated_per_page = min(per_page, 100)
+        validated_sort_order = sort_order.upper() if sort_order.upper() in ["ASC", "DESC"] else "ASC"
+        
+        return validated_sort_order, validated_per_page
+
+    def _build_sqlalchemy_pagination_query(
+        self, 
+        table_name: str, 
+        filters: Dict[str, Any], 
+        sort_column: str, 
+        sort_order: str, 
+        pagination_type: PaginationType, 
+        cursor: Optional[str], 
+        page: int, 
+        per_page: int
+    ) -> Tuple[str, str, Dict[str, Any]]:
+        """Build SQLAlchemy pagination query.
+        
+        Returns:
+            Tuple of (count_query, data_query, params)
+        """
+        # Build WHERE clause
+        where_clause = " AND ".join([f"{k} = :{k}" for k in filters])
+        if where_clause:
+            where_clause = "WHERE " + where_clause
+        
+        # Build ORDER BY clause
+        order_clause = ""
+        if sort_column:
+            validated_column = _validate_column_name(sort_column, table_name)
+            validated_order = 'ASC' if sort_order.upper() == 'ASC' else 'DESC'
+            order_clause = f"ORDER BY {validated_column} {validated_order}"
+        
+        # Count query
+        validated_table = _validate_table_name(table_name)
+        if not where_clause:
+            count_query = f"SELECT COUNT(*) FROM {validated_table}"
+        else:
+            count_query = f"SELECT COUNT(*) FROM {validated_table} {where_clause}"
+        
+        # Build data query based on pagination type
+        if pagination_type == PaginationType.CURSOR_BASED and cursor is not None:
+            validated_column = _validate_column_name(sort_column, table_name)
+            cursor_cond = f"{validated_column} > :cursor" if sort_order.upper() == "ASC" else f"{validated_column} < :cursor"
+            where_clause_cursor = f"{where_clause} AND {cursor_cond}" if where_clause else f"WHERE {cursor_cond}"
+            data_query = f"SELECT * FROM {validated_table} {where_clause_cursor} {order_clause} LIMIT :limit"
+            params = {**filters, "cursor": cursor, "limit": per_page}
+        elif pagination_type == PaginationType.KEYSET and cursor is not None:
+            cursor_cond = f"({sort_column}) > :cursor"
+            where_clause_cursor = f"{where_clause} AND {cursor_cond}" if where_clause else f"WHERE {cursor_cond}"
+            data_query = f"SELECT * FROM {validated_table} {where_clause_cursor} {order_clause} LIMIT :limit"
+            params = {**filters, "cursor": cursor, "limit": per_page}
+        else:
+            offset = (page - 1) * per_page
+            data_query = f"SELECT * FROM {validated_table}"
+            if where_clause:
+                data_query += f" {where_clause}"
+            if order_clause:
+                data_query += f" {order_clause}"
+            data_query += " LIMIT :limit OFFSET :offset"
+            params = {**filters, "limit": per_page, "offset": offset}
+        
+        return count_query, data_query, params
+    
+    def _build_sqlite_pagination_query(
+        self, 
+        table_name: str, 
+        filters: Dict[str, Any], 
+        sort_column: str, 
+        sort_order: str, 
+        pagination_type: PaginationType, 
+        cursor: Optional[str], 
+        page: int, 
+        per_page: int
+    ) -> Tuple[str, List[Any], str, List[Any]]:
+        """Build SQLite pagination query.
+        
+        Returns:
+            Tuple of (count_query, count_params, data_query, data_params)
+        """
+        # Build WHERE clause and parameters
+        where_conditions = []
+        where_params = []
+        
+        for k, v in filters.items():
+            where_conditions.append(f"{k} = ?")
+            where_params.append(v)
+        
+        where_clause = "WHERE " + " AND ".join(where_conditions) if where_conditions else ""
+        
+        # Build ORDER BY clause
+        validated_column = _validate_column_name(sort_column, table_name)
+        validated_order = 'ASC' if sort_order.upper() == 'ASC' else 'DESC'
+        order_clause = f"ORDER BY {validated_column} {validated_order}"
+        
+        # Count query
+        validated_table = _validate_table_name(table_name)
+        count_query = f"SELECT COUNT(*) FROM {validated_table} {where_clause}"
+        
+        # Build data query based on pagination type
+        if pagination_type == PaginationType.CURSOR_BASED and cursor is not None:
+            cursor_cond = f"{sort_column} > ?" if sort_order.upper() == "ASC" else f"{sort_column} < ?"
+            where_clause_cursor = f"{where_clause} AND {cursor_cond}" if where_clause else f"WHERE {cursor_cond}"
+            data_query = f"SELECT * FROM {validated_table} {where_clause_cursor} {order_clause} LIMIT ?"
+            data_params = where_params + [cursor, per_page]
+        elif pagination_type == PaginationType.KEYSET and cursor is not None:
+            cursor_cond = f"{sort_column} > ?"
+            where_clause_cursor = f"{where_clause} AND {cursor_cond}" if where_clause else f"WHERE {cursor_cond}"
+            data_query = f"SELECT * FROM {validated_table} {where_clause_cursor} {order_clause} LIMIT ?"
+            data_params = where_params + [cursor, per_page]
+        else:
+            offset = (page - 1) * per_page
+            data_query = f"SELECT * FROM {_validate_table_name(table_name)} {where_clause} {order_clause} LIMIT ? OFFSET ?"
+            data_params = where_params + [per_page, offset]
+        
+        return count_query, where_params, data_query, data_params
+
+    def _calculate_pagination_metadata(
+        self, 
+        total: int, 
+        page: int, 
+        per_page: int, 
+        pagination_type: PaginationType, 
+        cursor: Optional[str],
+        items: List[Dict[str, Any]]
+    ) -> Tuple[int, bool, bool]:
+        """Calculate pagination metadata.
+        
+        Returns:
+            Tuple of (total_pages, has_next, has_prev)
+        """
+        total_pages = (total + per_page - 1) // per_page if total > 0 else 0
+        
+        if pagination_type == PaginationType.OFFSET_LIMIT:
+            has_next = page < total_pages
+            has_prev = page > 1
+        else:
+            has_next = bool(items)
+            has_prev = bool(cursor)
+        
+        return total_pages, has_next, has_prev
+
+    def _generate_pagination_cursors(
+        self, 
+        items: List[Dict[str, Any]], 
+        sort_column: str
+    ) -> Tuple[Optional[str], Optional[str]]:
+        """Generate next and previous cursors for cursor-based pagination."""
+        next_cursor = None
+        prev_cursor = None
+        
+        if items and sort_column in items[-1]:
+            next_cursor = str(items[-1][sort_column])
+        if items and sort_column in items[0]:
+            prev_cursor = str(items[0][sort_column])
+        
+        return next_cursor, prev_cursor
+
     def get_paginated_results(
         self,
         table_name: str,
@@ -182,127 +362,67 @@ class PerformancePaginationMixin:
         pagination_type: PaginationType = PaginationType.OFFSET_LIMIT,
         cursor: Optional[str] = None,
     ) -> PaginationResult:
-        """Get paginated results with performance optimization and security."""
+        """Get paginated results with performance optimization and security.
         
-        # Security validation
-        if not self._validate_table_name(table_name):
-            raise ValueError(f"Invalid table name: {table_name}")
+        Refactored to eliminate God Method anti-pattern by using focused helper methods.
+        """
+        # Validate and sanitize parameters
+        validated_sort_order, validated_per_page = self._validate_pagination_params(
+            table_name, sort_by, sort_order, per_page
+        )
         
-        if sort_by and not self._validate_sort_column(sort_by):
-            raise ValueError(f"Invalid sort column: {sort_by}")
-        
-        if per_page > 100:
-            per_page = 100
-        
-        if sort_order.upper() not in ["ASC", "DESC"]:
-            sort_order = "ASC"
-
         filters = self._sanitize_filters(filters or {})
         sort_column = sort_by or "id"
 
         start = time.time()
+        
         with self.get_connection("framework") as conn:
             if SQLALCHEMY_AVAILABLE:
-                # SQLAlchemy path with named parameters
-                where_clause = " AND ".join([f"{k} = :{k}" for k in filters])
-                if where_clause:
-                    where_clause = "WHERE " + where_clause
+                # Build SQLAlchemy queries using helper method
+                count_query, data_query, params = self._build_sqlalchemy_pagination_query(
+                    table_name, filters, sort_column, validated_sort_order,
+                    pagination_type, cursor, page, validated_per_page
+                )
                 
-                order_clause = f"ORDER BY {sort_column} {sort_order}" if sort_column else ""
+                # Execute count query
+                total = conn.execute(text(count_query), filters).scalar()
                 
-                # Count total
-                count_query = text(f"SELECT COUNT(*) FROM {table_name}") if not where_clause else text(f"SELECT COUNT(*) FROM {table_name} {where_clause}")
-                total = conn.execute(count_query, filters).scalar()
-                
-                # Build data query
-                if pagination_type == PaginationType.CURSOR_BASED and cursor is not None:
-                    cursor_cond = f"{sort_column} > :cursor" if sort_order.upper() == "ASC" else f"{sort_column} < :cursor"
-                    where_clause_cursor = (
-                        f"{where_clause} AND {cursor_cond}" if where_clause else f"WHERE {cursor_cond}"
-                    )
-                    data_sql = f"SELECT * FROM {table_name} {where_clause_cursor} {order_clause} LIMIT :limit"
-                    params = {**filters, "cursor": cursor, "limit": per_page}
-                elif pagination_type == PaginationType.KEYSET and cursor is not None:
-                    cursor_cond = f"({sort_column}) > :cursor"
-                    where_clause_cursor = (
-                        f"{where_clause} AND {cursor_cond}" if where_clause else f"WHERE {cursor_cond}"
-                    )
-                    data_sql = f"SELECT * FROM {table_name} {where_clause_cursor} {order_clause} LIMIT :limit"
-                    params = {**filters, "cursor": cursor, "limit": per_page}
-                else:
-                    offset = (page - 1) * per_page
-                    data_sql = f"SELECT * FROM {table_name}"
-                    if where_clause:
-                        data_sql += f" {where_clause}"
-                    if order_clause:
-                        data_sql += f" {order_clause}"
-                    data_sql += " LIMIT :limit OFFSET :offset"
-                    params = {**filters, "limit": per_page, "offset": offset}
-                
-                result = conn.execute(text(data_sql), params)
+                # Execute data query
+                result = conn.execute(text(data_query), params)
                 items = [dict(row._mapping) for row in result]
             else:
-                # SQLite path with ? placeholders
-                where_conditions = []
-                where_params = []
+                # Build SQLite queries using helper method
+                count_query, count_params, data_query, data_params = self._build_sqlite_pagination_query(
+                    table_name, filters, sort_column, validated_sort_order,
+                    pagination_type, cursor, page, validated_per_page
+                )
                 
-                for k, v in filters.items():
-                    where_conditions.append(f"{k} = ?")
-                    where_params.append(v)
-                
-                where_clause = "WHERE " + " AND ".join(where_conditions) if where_conditions else ""
-                order_clause = f"ORDER BY {sort_column} {sort_order}"
-                
-                # Count total
-                count_sql = f"SELECT COUNT(*) FROM {table_name} {where_clause}"
-                cur = conn.cursor()
-                cur.execute(count_sql, where_params)
-                result = cur.fetchone()
-                total = result[0] if result else 0
-                
-                # Build data query
-                if pagination_type == PaginationType.CURSOR_BASED and cursor is not None:
-                    cursor_cond = f"{sort_column} > ?" if sort_order.upper() == "ASC" else f"{sort_column} < ?"
-                    where_clause_cursor = (
-                        f"{where_clause} AND {cursor_cond}" if where_clause else f"WHERE {cursor_cond}"
-                    )
-                    data_sql = f"SELECT * FROM {table_name} {where_clause_cursor} {order_clause} LIMIT ?"
-                    data_params = where_params + [cursor, per_page]
-                elif pagination_type == PaginationType.KEYSET and cursor is not None:
-                    cursor_cond = f"{sort_column} > ?"
-                    where_clause_cursor = (
-                        f"{where_clause} AND {cursor_cond}" if where_clause else f"WHERE {cursor_cond}"
-                    )
-                    data_sql = f"SELECT * FROM {table_name} {where_clause_cursor} {order_clause} LIMIT ?"
-                    data_params = where_params + [cursor, per_page]
-                else:
-                    offset = (page - 1) * per_page
-                    data_sql = f"SELECT * FROM {table_name} {where_clause} {order_clause} LIMIT ? OFFSET ?"
-                    data_params = where_params + [per_page, offset]
-                
-                cur.execute(data_sql, data_params)
-                columns = [col[0] for col in cur.description]
-                items = [dict(zip(columns, row)) for row in cur.fetchall()]
+                # Execute count query with context manager to prevent resource leak
+                with conn.cursor() as cur:
+                    cur.execute(count_query, count_params)
+                    result = cur.fetchone()
+                    total = result[0] if result else 0
+                    
+                    # Execute data query
+                    cur.execute(data_query, data_params)
+                    columns = [col[0] for col in cur.description]
+                    items = [dict(zip(columns, row)) for row in cur.fetchall()]
 
         duration = (time.time() - start) * 1000
 
-        total_pages = (total + per_page - 1) // per_page if total > 0 else 0
-        has_next = page < total_pages if pagination_type == PaginationType.OFFSET_LIMIT else bool(items)
-        has_prev = page > 1 if pagination_type == PaginationType.OFFSET_LIMIT else bool(cursor)
+        # Calculate pagination metadata using helper method
+        total_pages, has_next, has_prev = self._calculate_pagination_metadata(
+            total, page, validated_per_page, pagination_type, cursor, items
+        )
         
-        # Safe cursor generation
-        next_cursor = None
-        prev_cursor = None
-        if items and sort_column in items[-1]:
-            next_cursor = str(items[-1][sort_column])
-        if items and sort_column in items[0]:
-            prev_cursor = str(items[0][sort_column])
+        # Generate cursors using helper method
+        next_cursor, prev_cursor = self._generate_pagination_cursors(items, sort_column)
 
         return PaginationResult(
             items,
             total,
             page,
-            per_page,
+            validated_per_page,
             total_pages,
             has_next,
             has_prev,
@@ -704,7 +824,7 @@ class DatabaseManager(PerformancePaginationMixin):
         
         # Add primary table delete
         delete_ops.append((
-            f"DELETE FROM {table_name} WHERE id = :record_id",
+            f"DELETE FROM {_validate_table_name(table_name)} WHERE id = :record_id",  # SECURITY FIX
             {"record_id": record_id}
         ))
         
@@ -734,9 +854,9 @@ class DatabaseManager(PerformancePaginationMixin):
         with self.get_connection(database_name) as conn:
             if SQLALCHEMY_AVAILABLE:
                 return conn.execute(text(query), params)
-            cursor = conn.cursor()
-            cursor.execute(query, params)
-            return [dict(row) for row in cursor.fetchall()]
+            with conn.cursor() as cursor:
+                cursor.execute(query, params)
+                return [dict(row) for row in cursor.fetchall()]
     
     @cache_database_query("get_epics", ttl=300) if CACHE_AVAILABLE else lambda f: f
     def get_epics(
@@ -782,9 +902,9 @@ class DatabaseManager(PerformancePaginationMixin):
                     count_result = conn.execute(text(count_query), params)
                     total = count_result.scalar()
                 else:
-                    cursor = conn.cursor()
-                    cursor.execute(count_query, params)
-                    total = cursor.fetchone()[0]
+                    with conn.cursor() as cursor:
+                        cursor.execute(count_query, params)
+                        total = cursor.fetchone()[0]
                 
                 # Calculate pagination
                 total_pages = (total + page_size - 1) // page_size
@@ -890,9 +1010,9 @@ class DatabaseManager(PerformancePaginationMixin):
                     count_result = conn.execute(text(count_query), params)
                     total = count_result.scalar()
                 else:
-                    cursor = conn.cursor()
-                    cursor.execute(count_query, list(params.values()))
-                    total = cursor.fetchone()[0]
+                    with conn.cursor() as cursor:
+                        cursor.execute(count_query, list(params.values()))
+                        total = cursor.fetchone()[0]
                 
                 # Calculate pagination
                 total_pages = (total + page_size - 1) // page_size
@@ -2543,9 +2663,9 @@ class DatabaseManager(PerformancePaginationMixin):
                     count_result = conn.execute(text(count_query), params)
                     total = count_result.scalar()
                 else:
-                    cursor = conn.cursor()
-                    cursor.execute(count_query, params)
-                    total = cursor.fetchone()[0]
+                    with conn.cursor() as cursor:
+                        cursor.execute(count_query, params)
+                        total = cursor.fetchone()[0]
                 
                 # Calculate pagination
                 total_pages = (total + page_size - 1) // page_size
@@ -2704,9 +2824,9 @@ class DatabaseManager(PerformancePaginationMixin):
                     count_result = conn.execute(text(count_query), params)
                     total = count_result.scalar()
                 else:
-                    cursor = conn.cursor()
-                    cursor.execute(count_query, list(params.values()))
-                    total = cursor.fetchone()[0]
+                    with conn.cursor() as cursor:
+                        cursor.execute(count_query, list(params.values()))
+                        total = cursor.fetchone()[0]
                 
                 # Calculate pagination
                 total_pages = (total + page_size - 1) // page_size
@@ -2814,9 +2934,9 @@ class DatabaseManager(PerformancePaginationMixin):
                     count_result = conn.execute(text(count_query), params)
                     total = count_result.scalar()
                 else:
-                    cursor = conn.cursor()
-                    cursor.execute(count_query, list(params.values()))
-                    total = cursor.fetchone()[0]
+                    with conn.cursor() as cursor:
+                        cursor.execute(count_query, list(params.values()))
+                        total = cursor.fetchone()[0]
                 
                 # Calculate pagination
                 total_pages = (total + page_size - 1) // page_size

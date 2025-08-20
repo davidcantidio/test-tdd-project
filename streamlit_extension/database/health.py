@@ -39,19 +39,8 @@ def get_database_manager() -> DatabaseManager:
     return _db()
 
 
-def _db() -> DatabaseManager:
-    """
-    Thread-safe singleton pattern para DatabaseManager (double-checked locking).
-    """
-    global _DBM_INSTANCE
-    if _DBM_INSTANCE is not None:
-        return _DBM_INSTANCE
-
-    with _DBM_LOCK:
-        if _DBM_INSTANCE is None:
-            logger.debug("Creating default DatabaseManager singleton")
-            _DBM_INSTANCE = DatabaseManager()
-        return _DBM_INSTANCE
+# SEMANTIC DEDUPLICATION: Use centralized singleton instead of duplicate implementation
+from .database_singleton import get_database_manager as _db
 
 
 # ============================================================================

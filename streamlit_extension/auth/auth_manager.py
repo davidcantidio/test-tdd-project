@@ -9,7 +9,6 @@ lockouts and session validation.
 Example:
     Basic login flow::
 
-        from streamlit_extension.auth.auth_manager import AuthManager
 
         auth = AuthManager("framework.db")
         result = auth.register_user("alice", "alice@example.com", "s3cret")

@@ -22,30 +22,67 @@ from enum import Enum
 import tempfile
 import zipfile
 
-# Graceful imports
-try:
-    import streamlit as st
-    STREAMLIT_AVAILABLE = True
-except ImportError:
-    st = None
-    STREAMLIT_AVAILABLE = False
+# IMPORT HELL ELIMINATION: Using centralized dependency management
+from ..utils.dependencies import (
+    safe_import_streamlit,
+    streamlit_available,
+    get_dependency_manager,
+)
 
-try:
-    from .streamlit_config import StreamlitConfig, get_config
-    CONFIG_AVAILABLE = True
-except ImportError:
-    StreamlitConfig = get_config = None
-    CONFIG_AVAILABLE = False
+# Safe imports using dependency manager
+st = safe_import_streamlit()
+STREAMLIT_AVAILABLE = streamlit_available()
 
-try:
-    from .themes import ThemeManager, get_theme_manager
-    THEMES_AVAILABLE = True
-except ImportError:
+# Local configuration imports - now using clean dependency management
+from .streamlit_config import StreamlitConfig, get_config
+
+# Get themes dependency through dependency manager
+dependency_manager = get_dependency_manager()
+themes_available = dependency_manager.is_available("themes")
+if themes_available:
+    try:
+        from .themes import ThemeManager, get_theme_manager
+        THEMES_AVAILABLE = True
+    except ImportError:
+        ThemeManager = get_theme_manager = None
+        THEMES_AVAILABLE = False
+else:
     ThemeManager = get_theme_manager = None
     THEMES_AVAILABLE = False
 
 
 logger = logging.getLogger(__name__)
+
+
+# Custom exceptions for proper error handling
+class BackupError(Exception):
+    """Base exception for backup/restore operations."""
+    pass
+
+
+class BackupCreationError(BackupError):
+    """Raised when backup creation fails."""
+    pass
+
+
+class BackupRestoreError(BackupError):
+    """Raised when backup restore fails."""
+    pass
+
+
+class ConfigurationError(BackupError):
+    """Raised when configuration operations fail."""
+    pass
+
+
+class FileOperationError(BackupError):
+    """Raised when file operations fail."""
+    pass
+
+
+class BackupIndexError(BackupError):
+    """Raised when backup index operations fail."""
+    pass
 
 
 class BackupType(Enum):
@@ -194,11 +231,30 @@ class ConfigurationBackupManager:
 
             return backup_info
 
-        except Exception as e:
-            logger.exception("Failed to create backup %s", backup_name)
+        except (OSError, PermissionError) as e:
+            logger.error(f"File operation failed during backup creation {backup_name}: {e}")
             if backup_file.exists():
-                backup_file.unlink()
-            return None
+                try:
+                    backup_file.unlink()
+                except (OSError, PermissionError):
+                    logger.warning(f"Failed to cleanup failed backup file: {backup_file}")
+            raise BackupCreationError(f"Failed to create backup due to file operation error: {e}") from e
+        except (json.JSONEncodeError, TypeError) as e:
+            logger.error(f"Data serialization failed during backup creation {backup_name}: {e}")
+            if backup_file.exists():
+                try:
+                    backup_file.unlink()
+                except (OSError, PermissionError):
+                    logger.warning(f"Failed to cleanup failed backup file: {backup_file}")
+            raise BackupCreationError(f"Failed to create backup due to data serialization error: {e}") from e
+        except Exception as e:
+            logger.exception("Unexpected error during backup creation %s", backup_name)
+            if backup_file.exists():
+                try:
+                    backup_file.unlink()
+                except (OSError, PermissionError):
+                    logger.warning(f"Failed to cleanup failed backup file: {backup_file}")
+            raise BackupCreationError(f"Unexpected error during backup creation: {e}") from e
     
     def restore_backup(self, backup_name: str, components: List[str] = None) -> bool:
         """Restore configuration from backup."""
@@ -244,7 +300,9 @@ class ConfigurationBackupManager:
                         with open(cache_dir / "settings.json", 'wb') as f:
                             f.write(cache_settings)
                     except KeyError:
-                        pass
+                        logger.debug("Cache settings not found in backup, skipping")
+                    except (OSError, PermissionError) as e:
+                        logger.warning(f"Failed to restore cache settings: {e}")
                 
                 # Restore database config
                 if "database_config" in components and backup_info.includes_database_config:
@@ -264,9 +322,18 @@ class ConfigurationBackupManager:
                 
                 return True
                 
+        except (zipfile.BadZipFile, zipfile.LargeZipFile) as e:
+            logger.error(f"Corrupted backup file {backup_name}: {e}")
+            raise BackupRestoreError(f"Backup file is corrupted or too large: {e}") from e
+        except (OSError, PermissionError) as e:
+            logger.error(f"File operation failed during restore {backup_name}: {e}")
+            raise BackupRestoreError(f"Failed to restore backup due to file operation error: {e}") from e
+        except (json.JSONDecodeError, KeyError) as e:
+            logger.error(f"Data corruption in backup {backup_name}: {e}")
+            raise BackupRestoreError(f"Backup data is corrupted or invalid: {e}") from e
         except Exception as e:
-            logger.exception("Failed to restore backup %s", backup_name)
-            return False
+            logger.exception("Unexpected error during restore %s", backup_name)
+            raise BackupRestoreError(f"Unexpected error during backup restore: {e}") from e
     
     def export_configuration(self, export_path: Path, include_sensitive: bool = False) -> bool:
         """Export configuration to external file."""
@@ -308,9 +375,15 @@ class ConfigurationBackupManager:
             
             return True
             
+        except (OSError, PermissionError) as e:
+            logger.error(f"File operation failed during export to {export_path}: {e}")
+            raise ConfigurationError(f"Failed to export configuration due to file operation error: {e}") from e
+        except (json.JSONEncodeError, TypeError) as e:
+            logger.error(f"Data serialization failed during export to {export_path}: {e}")
+            raise ConfigurationError(f"Failed to export configuration due to data serialization error: {e}") from e
         except Exception as e:
-            logger.exception("Failed to export configuration to %s", export_path)
-            return False
+            logger.exception("Unexpected error during export to %s", export_path)
+            raise ConfigurationError(f"Unexpected error during configuration export: {e}") from e
     
     def import_configuration(self, import_path: Path, components: List[str] = None) -> bool:
         """Import configuration from external file."""
@@ -335,9 +408,18 @@ class ConfigurationBackupManager:
             
             return True
             
-        except (json.JSONDecodeError, KeyError, Exception) as e:
-            logger.exception("Failed to import configuration from %s", import_path)
-            return False
+        except json.JSONDecodeError as e:
+            logger.error(f"Invalid JSON in configuration file {import_path}: {e}")
+            raise ConfigurationError(f"Configuration file contains invalid JSON: {e}") from e
+        except KeyError as e:
+            logger.error(f"Missing required configuration data in {import_path}: {e}")
+            raise ConfigurationError(f"Configuration file is missing required data: {e}") from e
+        except (OSError, PermissionError) as e:
+            logger.error(f"File operation failed during import from {import_path}: {e}")
+            raise ConfigurationError(f"Failed to import configuration due to file operation error: {e}") from e
+        except Exception as e:
+            logger.exception("Unexpected error during import from %s", import_path)
+            raise ConfigurationError(f"Unexpected error during configuration import: {e}") from e
     
     def get_backup_list(self) -> List[BackupInfo]:
         """Get list of all backups sorted by creation date."""
@@ -356,8 +438,9 @@ class ConfigurationBackupManager:
         try:
             if backup_info.file_path.exists():
                 backup_info.file_path.unlink()
-        except OSError:
-            pass
+        except (OSError, PermissionError) as e:
+            logger.warning(f"Failed to delete backup file {backup_info.file_path}: {e}")
+            # Continue with index removal even if file deletion fails
         
         # Remove from index
         del self._backup_index[backup_name]
@@ -448,7 +531,14 @@ class ConfigurationBackupManager:
             
             return backup_index
             
-        except (json.JSONDecodeError, KeyError, ValueError):
+        except json.JSONDecodeError as e:
+            logger.warning(f"Corrupted backup index file {self.index_file}: {e}")
+            return {}
+        except (KeyError, ValueError) as e:
+            logger.warning(f"Invalid backup index data in {self.index_file}: {e}")
+            return {}
+        except (OSError, PermissionError) as e:
+            logger.warning(f"Failed to read backup index file {self.index_file}: {e}")
             return {}
     
     def _save_backup_index(self) -> None:
@@ -466,11 +556,15 @@ class ConfigurationBackupManager:
             with open(self.index_file, 'w') as f:
                 json.dump(index_data, f, indent=2)
                 
+        except (OSError, PermissionError) as e:
+            logger.error(f"File operation failed saving backup index to {self.index_file}: {e}")
+            raise BackupIndexError(f"Failed to save backup index due to file operation error: {e}") from e
+        except (json.JSONEncodeError, TypeError) as e:
+            logger.error(f"Data serialization failed saving backup index to {self.index_file}: {e}")
+            raise BackupIndexError(f"Failed to save backup index due to data serialization error: {e}") from e
         except Exception as e:
-            # Log backup index save failure - this is important for backup integrity
-            import logging
-            logging.getLogger(__name__).error(f"Failed to save backup index: {e}")
-            # Don't raise, as this is a background operation
+            logger.exception("Unexpected error saving backup index to %s", self.index_file)
+            raise BackupIndexError(f"Unexpected error saving backup index: {e}") from e
 
 
 # Global backup manager instance
@@ -716,11 +810,10 @@ def render_backup_restore_ui() -> None:
                 # Cleanup temp file
                 try:
                     tmp_path.unlink()
-                except Exception as e:
+                except (OSError, PermissionError) as e:
                     # Log temp file cleanup failure but don't fail the operation
-                    import logging
-                    logging.getLogger(__name__).debug(f"Failed to cleanup temp file {tmp_path}: {e}")
-                    # Temp file cleanup failure is not critical
+                    logger.debug(f"Failed to cleanup temp file {tmp_path}: {e}")
+                    # Temp file cleanup failure is not critical for operation success
 
 
 # Export for convenience

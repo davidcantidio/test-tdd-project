@@ -360,6 +360,7 @@ class PerformanceMonitor:
         self.monitoring_active = False
         self.monitor_thread: Optional[threading.Thread] = None
         self.metrics_history: List[Dict[str, Any]] = []
+        self._metrics_lock = threading.Lock()  # Thread safety fix
         
     def start_monitoring(self, interval_seconds: int = 5):
         """Start real-time performance monitoring."""
@@ -385,11 +386,14 @@ class PerformanceMonitor:
         """Main monitoring loop."""
         while self.monitoring_active:
             metrics = self._collect_system_metrics()
-            self.metrics_history.append(metrics)
             
-            # Keep only last 1000 entries
-            if len(self.metrics_history) > 1000:
-                self.metrics_history.pop(0)
+            # Thread-safe access to metrics_history
+            with self._metrics_lock:
+                self.metrics_history.append(metrics)
+                
+                # Keep only last 1000 entries
+                if len(self.metrics_history) > 1000:
+                    self.metrics_history.pop(0)
             
             time.sleep(interval)
     
@@ -413,9 +417,11 @@ class PerformanceMonitor:
     
     def get_metrics_history(self, last_n: Optional[int] = None) -> List[Dict[str, Any]]:
         """Get metrics history."""
-        if last_n:
-            return self.metrics_history[-last_n:]
-        return self.metrics_history.copy()
+        # Thread-safe access to metrics_history
+        with self._metrics_lock:
+            if last_n:
+                return self.metrics_history[-last_n:]
+            return self.metrics_history.copy()
 
 
 class PerformanceReporter:

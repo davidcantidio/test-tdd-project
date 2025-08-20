@@ -17,42 +17,37 @@ from datetime import datetime
 # Add parent directory to path
 sys.path.append(str(Path(__file__).parent.parent.parent))
 
-# Graceful imports
-try:
-    import streamlit as st
-    STREAMLIT_AVAILABLE = True
-except ImportError:
-    STREAMLIT_AVAILABLE = False
-    st = None
+# Clean dependency management - eliminates import hell pattern
+from streamlit_extension.utils.dependencies import require_dependency, get_dependency_manager
 
-# Local imports
-try:
-    from streamlit_extension.utils.database import DatabaseManager
-    from streamlit_extension.utils.validators import validate_client_data, validate_email_uniqueness, validate_client_key_uniqueness
-    from streamlit_extension.utils.security import (
-        create_safe_client, sanitize_display, validate_form, check_rate_limit,
-        security_manager
-    )
-    from streamlit_extension.config import load_config
-    from streamlit_extension.config.constants import (
-        StatusValues, ClientTiers, CompanySizes, ErrorMessages, UIConstants, FormFields
-    )
-    # Import authentication middleware
-    from streamlit_extension.auth.middleware import init_protected_page
-    DATABASE_UTILS_AVAILABLE = True
-except ImportError:
-    DATABASE_UTILS_AVAILABLE = False
-    DatabaseManager = validate_client_data = load_config = None
-    create_safe_client = sanitize_display = validate_form = None
-    StatusValues = ClientTiers = CompanySizes = ErrorMessages = UIConstants = FormFields = None
-    init_protected_page = None
-
+# Required dependencies - fail fast if not available
+import streamlit as st
+from streamlit_extension.utils.database import DatabaseManager
+from streamlit_extension.utils.validators import validate_client_data, validate_email_uniqueness, validate_client_key_uniqueness
+from streamlit_extension.utils.security import (
+    create_safe_client, sanitize_display, validate_form, check_rate_limit,
+    security_manager
+)
+from streamlit_extension.config import load_config
+from streamlit_extension.config.constants import (
+    StatusValues, ClientTiers, CompanySizes, ErrorMessages, UIConstants, FormFields
+)
 from streamlit_extension.utils.exception_handler import (
     handle_streamlit_exceptions,
     streamlit_error_boundary,
     safe_streamlit_operation,
     get_error_statistics,
 )
+
+# Optional dependencies with clean fallback
+dependency_manager = get_dependency_manager()
+try:
+    from streamlit_extension.components.form_components import render_entity_filters
+except ImportError:
+    # Clean fallback without global state pollution
+    def render_entity_filters(*args, **kwargs):
+        st.warning("🔧 Form components not available - using basic fallback")
+        return {}
 
 
 def render_client_card(client: Dict[str, Any], db_manager: DatabaseManager):
@@ -521,16 +516,9 @@ def render_clients_page():
 
 def _initialize_clients_page():
     """Initialize page, check dependencies and authentication."""
-    if not STREAMLIT_AVAILABLE:
-        return {"error": "Streamlit not available"}
+    # Streamlit is now a required dependency - no availability check needed
     
-    if not DATABASE_UTILS_AVAILABLE:
-        st.error(
-            ErrorMessages.LOADING_ERROR.format(
-                entity="database utilities", error="not available"
-            )
-        )
-        return {"error": "Database utilities not available"}
+    # Database utilities are now required dependencies - no availability check needed
     
     # TEMPORARY BYPASS FOR TESTING - Remove in production
     # Initialize protected page with authentication
@@ -539,7 +527,6 @@ def _initialize_clients_page():
     #     return {"error": "Authentication required"}
     
     # Temporary mock user for testing
-    from streamlit_extension.auth.user_model import User, UserRole
     current_user = User(
         id=1,
         username="test_user",
@@ -597,38 +584,60 @@ def _setup_database_connection():
 
 
 def _render_client_filters():
-    """Render filter controls and return filter values."""
-    col1, col2, col3 = st.columns([2, 1, 1])
-    
-    with col1:
-        search_name = st.text_input(
-            f"{UIConstants.ICON_SEARCH} Search by name",
-            placeholder="Type client name...",
+    """Render filter controls and return filter values using DRY component."""
+    if render_entity_filters:  # Clean check without global state
+        # Use DRY entity filters component
+        status_options = ["all"] + (StatusValues.get_all_values() if StatusValues else ["active", "inactive"])
+        tier_options = ["all"] + (ClientTiers.get_all_values() if ClientTiers else ["basic", "standard", "premium", "enterprise"])
+        
+        filters = render_entity_filters(
+            entity_name="clients",
+            search_placeholder="Type client name...",
+            status_options=status_options,
+            secondary_filter_name="Tier Filter",
+            secondary_options=tier_options,
+            form_id="client_filters"
         )
-    
-    with col2:
-        status_filter_options = ["all"] + StatusValues.get_all_values()
-        status_filter = st.selectbox(
-            "Status Filter",
-            options=status_filter_options,
-            index=0,
-        )
-    
-    with col3:
-        if ClientTiers:
-            tier_filter_options = ["all"] + ClientTiers.get_all_values()
-        else:
-            tier_filter_options = ["all", "basic", "standard", "premium", "enterprise"]
-        tier_filter = st.selectbox("Tier Filter",
-            options=tier_filter_options,
-            index=0
-        )
-    
-    return {
-        "search_name": search_name,
-        "status_filter": status_filter,
-        "tier_filter": tier_filter
-    }
+        
+        # Map to expected format for backward compatibility
+        return {
+            "search_name": filters["search_text"],
+            "status_filter": filters["status_filter"],
+            "tier_filter": filters["secondary_filter"]
+        }
+    else:
+        # Fallback: Original inline filters
+        col1, col2, col3 = st.columns([2, 1, 1])
+        
+        with col1:
+            search_name = st.text_input(
+                f"{UIConstants.ICON_SEARCH if UIConstants else '🔍'} Search by name",
+                placeholder="Type client name...",
+            )
+        
+        with col2:
+            status_filter_options = ["all"] + (StatusValues.get_all_values() if StatusValues else ["active", "inactive"])
+            status_filter = st.selectbox(
+                "Status Filter",
+                options=status_filter_options,
+                index=0,
+            )
+        
+        with col3:
+            if ClientTiers:
+                tier_filter_options = ["all"] + ClientTiers.get_all_values()
+            else:
+                tier_filter_options = ["all", "basic", "standard", "premium", "enterprise"]
+            tier_filter = st.selectbox("Tier Filter",
+                options=tier_filter_options,
+                index=0
+            )
+        
+        return {
+            "search_name": search_name,
+            "status_filter": status_filter,
+            "tier_filter": tier_filter
+        }
 
 
 def _load_and_display_clients(db_manager, filter_values):

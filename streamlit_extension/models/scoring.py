@@ -25,6 +25,10 @@ from typing import Dict, Set, Optional
 from dataclasses import dataclass
 
 from .task_models import Task, TaskPriorityScore
+# Auth imports
+from streamlit_extension.auth.middleware import require_auth, require_admin
+from streamlit_extension.auth.user_model import UserRole
+
 
 # 🎛️ PESOS CONFIGURÁVEIS (tunable via environment/config)
 W_PRIORITY = 10.0      # Prioridade explícita da tarefa (1=crítico, 5=backlog)

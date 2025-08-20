@@ -28,6 +28,10 @@ import logging
 
 from ..models.task_models import Task, TaskModelError
 from ..utils.db import dict_rows
+# Auth imports
+from streamlit_extension.auth.middleware import require_auth, require_admin
+from streamlit_extension.auth.user_model import UserRole
+
 
 logger = logging.getLogger(__name__)
 

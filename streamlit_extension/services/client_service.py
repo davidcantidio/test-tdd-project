@@ -76,13 +76,22 @@ class ClientRepository(BaseRepository):
             # Build WHERE clause
             where_clause = " WHERE " + " AND ".join(where_conditions) if where_conditions else ""
             
-            # Build ORDER BY clause
+            # Build ORDER BY clause - SECURITY FIX: Use whitelist for field names
             order_clause = ""
             if sort:
-                order_clause = f" ORDER BY {sort.field} {'ASC' if sort.ascending else 'DESC'}"
+                # SECURITY: Whitelist allowed fields to prevent SQL injection
+                allowed_fields = {'name', 'email', 'company', 'status', 'created_at', 'updated_at', 'id'}
+                if sort.field in allowed_fields:
+                    direction = 'ASC' if sort.ascending else 'DESC'
+                    order_clause = f" ORDER BY {sort.field} {direction}"
+                else:
+                    # Log security violation and use default ordering
+                    self._log_security_warning(f"Invalid sort field attempted: {sort.field}")
+                    order_clause = " ORDER BY name ASC"  # Safe default
             
             # Count total records (usar alias para chave estável no resultado)
-            count_query = f"SELECT COUNT(*) AS total FROM framework_clients{where_clause}"
+            # SECURITY FIX: Use string concatenation instead of f-strings for SQL
+            count_query = "SELECT COUNT(*) AS total FROM framework_clients" + where_clause
             total_count = self.db_manager.execute_query(count_query, params)[0]['total']
             
             # Calculate pagination
@@ -90,12 +99,8 @@ class ClientRepository(BaseRepository):
             total_pages = (total_count + page_size - 1) // page_size
             
             # Get paginated results
-            data_query = f"""
-                SELECT * FROM framework_clients
-                {where_clause}
-                {order_clause}
-                LIMIT ? OFFSET ?
-            """
+            # SECURITY FIX: Build query safely without f-strings
+            data_query = "SELECT * FROM framework_clients" + where_clause + order_clause + " LIMIT ? OFFSET ?"
             data_params = params + [page_size, offset]
             clients = self.db_manager.execute_query(data_query, data_params)
             
@@ -203,6 +208,12 @@ class ClientService(BaseService):
     def __init__(self, db_manager: DatabaseManager):
         self.repository = ClientRepository(db_manager)
         super().__init__(self.repository)
+        
+    def _log_security_warning(self, message: str) -> None:
+        """Log security-related warnings."""
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.warning(f"SECURITY: {message}")
     
     def validate_business_rules(self, data: Dict[str, Any]) -> List[ServiceError]:
         """Validate client-specific business rules."""

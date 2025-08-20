@@ -17,44 +17,59 @@ from dataclasses import dataclass
 
 # Evite mexer em sys.path; prefira imports relativos e flags de disponibilidade
 
-# Graceful imports
-try:
-    import streamlit as st
-    STREAMLIT_AVAILABLE = True
-except ImportError:
-    STREAMLIT_AVAILABLE = False
-    st = None
+# IMPORT HELL ELIMINATION: Using centralized dependency management
+from .dependencies import (
+    get_dependency_manager,
+    safe_import_streamlit,
+    safe_import_pandas,
+    safe_import_plotly,
+    streamlit_available,
+    pandas_available,
+    plotly_available,
+    analytics_engine_available,
+)
 
-try:
-    from tdah_tools.analytics_engine import AnalyticsEngine
-    ANALYTICS_ENGINE_AVAILABLE = True
-except ImportError:
-    AnalyticsEngine = None
-    ANALYTICS_ENGINE_AVAILABLE = False
+# Safe imports using dependency manager
+st = safe_import_streamlit()
+pd = safe_import_pandas()
+plotly_modules = safe_import_plotly()
+px = plotly_modules.express if plotly_modules else None
+go = plotly_modules.graph_objects if plotly_modules else None
 
-try:
-    import pandas as pd
-    PANDAS_AVAILABLE = True
-except ImportError:
-    PANDAS_AVAILABLE = False
-    pd = None
+# Backward compatibility flags
+STREAMLIT_AVAILABLE = streamlit_available()
+PANDAS_AVAILABLE = pandas_available()
+PLOTLY_AVAILABLE = plotly_available()
+ANALYTICS_ENGINE_AVAILABLE = analytics_engine_available()
 
-try:
-    import plotly.express as px
-    import plotly.graph_objects as go
-    PLOTLY_AVAILABLE = True
-except ImportError:
-    PLOTLY_AVAILABLE = False
-    px = go = None
+# Local imports - now using clean dependency management
+from .database import DatabaseManager
+from .cache import streamlit_cached, cache_database_query
 
-# Local imports
-try:
-    from .database import DatabaseManager
-    from .cache import streamlit_cached, cache_database_query
-    DATABASE_UTILS_AVAILABLE = True
-except ImportError:
-    DatabaseManager = streamlit_cached = cache_database_query = None
-    DATABASE_UTILS_AVAILABLE = False
+# Get AnalyticsEngine if available
+dependency_manager = get_dependency_manager()
+AnalyticsEngine = dependency_manager.get_module("analytics_engine")
+
+
+# Custom exceptions for proper error handling
+class AnalyticsEngineError(Exception):
+    """Base exception for analytics engine operations."""
+    pass
+
+
+class DataNotAvailableError(AnalyticsEngineError):
+    """Raised when required data is not available."""
+    pass
+
+
+class ChartGenerationError(AnalyticsEngineError):
+    """Raised when chart generation fails."""
+    pass
+
+
+class DatabaseAnalyticsError(AnalyticsEngineError):
+    """Raised when database analytics operations fail."""
+    pass
 
 
 @dataclass
@@ -126,10 +141,19 @@ class StreamlitAnalyticsEngine:
         if not self.db_manager:
             return {"error": "Database manager not available"}
         
-        # Get data
-        timer_sessions = self.db_manager.get_timer_sessions(days)
-        tasks = self.db_manager.get_tasks()
-        epics = self.db_manager.get_epics()
+        # OPTIMIZED: Get data using combined query instead of 3 separate queries
+        try:
+            analytics_data = self._get_combined_analytics_data(days)
+            timer_sessions = analytics_data["timer_sessions"]
+            tasks = analytics_data["tasks"] 
+            epics = analytics_data["epics"]
+        except DatabaseAnalyticsError as e:
+            if self.db_manager:
+                self.db_manager.logger.warning(f"Combined analytics query failed, falling back to separate queries: {e}")
+            # Fallback to original pattern if combined query fails
+            timer_sessions = self.db_manager.get_timer_sessions(days)
+            tasks = self.db_manager.get_tasks()
+            epics = self.db_manager.get_epics()
         
         # Calculate comprehensive metrics
         metrics = {
@@ -211,9 +235,18 @@ class StreamlitAnalyticsEngine:
         
         charts = {}
         
-        # Get data
-        productivity_metrics = self.get_productivity_metrics(days)
-        focus_trends = self.get_focus_trends(days)
+        # OPTIMIZED: Get data using combined analytics data to avoid multiple queries
+        try:
+            analytics_data = self._get_combined_analytics_data(days)
+            # Use the combined data for chart generation
+            productivity_metrics = self.get_productivity_metrics(days)  # This now uses cached combined data
+            focus_trends = self.get_focus_trends(days)
+        except DatabaseAnalyticsError as e:
+            if self.db_manager:
+                self.db_manager.logger.warning(f"Chart data optimization failed, using fallback: {e}")
+            # Fallback to original pattern
+            productivity_metrics = self.get_productivity_metrics(days)
+            focus_trends = self.get_focus_trends(days)
         
         # Focus trend chart
         if focus_trends.get("daily_focus"):
@@ -269,11 +302,14 @@ class StreamlitAnalyticsEngine:
                 generated_at=datetime.now()
             )
         
-        # Get data from database
-        timer_sessions = self.db_manager.get_timer_sessions(days)
-        tasks = self.db_manager.get_tasks()
-        epics = self.db_manager.get_epics()
-        user_stats = self.db_manager.get_user_stats()
+        # Get data from database - OPTIMIZED: Single combined query instead of 4 separate queries
+        analytics_data = self._get_combined_analytics_data(days)
+        
+        # Extract data from optimized combined query
+        timer_sessions = analytics_data["timer_sessions"]
+        tasks = analytics_data["tasks"]
+        epics = analytics_data["epics"]
+        user_stats = analytics_data["user_stats"]
         
         # Calculate metrics
         total_sessions = len(timer_sessions)
@@ -591,6 +627,113 @@ class StreamlitAnalyticsEngine:
             insight["priority"] = "high"
         
         return insight
+    
+    def _get_combined_analytics_data(self, days: int) -> Dict[str, Any]:
+        """Get all analytics data in a single optimized query to fix N+1 problem.
+        
+        Args:
+            days: Number of days to look back
+            
+        Returns:
+            Combined data dictionary with timer_sessions, tasks, epics, user_stats
+            
+        Raises:
+            DatabaseOperationError: If database operation fails
+        """
+        try:
+            from datetime import datetime, timedelta
+            date_filter = datetime.now() - timedelta(days=days)
+            
+            # Single optimized query combining all needed data
+            combined_query = """
+                SELECT 
+                    -- Timer sessions data
+                    ws.id as session_id,
+                    ws.start_time,
+                    ws.end_time,
+                    ws.planned_duration_minutes,
+                    ws.focus_rating,
+                    ws.energy_level,
+                    ws.mood_rating,
+                    ws.status as session_status,
+                    ws.session_type,
+                    
+                    -- Task data
+                    t.id as task_id,
+                    t.title as task_title,
+                    t.status as task_status,
+                    
+                    -- Epic data
+                    e.id as epic_id,
+                    e.title as epic_title,
+                    e.status as epic_status
+                    
+                FROM work_sessions ws
+                LEFT JOIN framework_tasks t ON ws.task_id = t.id
+                LEFT JOIN framework_epics e ON t.epic_id = e.id
+                WHERE ws.start_time >= ?
+                ORDER BY ws.start_time DESC
+            """
+            
+            # Execute optimized query
+            raw_data = self.db_manager.execute_query(combined_query, (date_filter,))
+            
+            # Separate data into logical groups
+            timer_sessions = []
+            tasks_dict = {}
+            epics_dict = {}
+            
+            for row in raw_data:
+                # Timer session data
+                session = {
+                    "id": row.get("session_id"),
+                    "start_time": row.get("start_time"),
+                    "end_time": row.get("end_time"),
+                    "planned_duration_minutes": row.get("planned_duration_minutes"),
+                    "focus_rating": row.get("focus_rating"),
+                    "energy_level": row.get("energy_level"),
+                    "mood_rating": row.get("mood_rating"),
+                    "status": row.get("session_status"),
+                    "session_type": row.get("session_type")
+                }
+                timer_sessions.append(session)
+                
+                # Task data (deduplicate)
+                if row.get("task_id") and row.get("task_id") not in tasks_dict:
+                    tasks_dict[row.get("task_id")] = {
+                        "id": row.get("task_id"),
+                        "title": row.get("task_title"),
+                        "status": row.get("task_status")
+                    }
+                
+                # Epic data (deduplicate)
+                if row.get("epic_id") and row.get("epic_id") not in epics_dict:
+                    epics_dict[row.get("epic_id")] = {
+                        "id": row.get("epic_id"),
+                        "title": row.get("epic_title"),
+                        "status": row.get("epic_status")
+                    }
+            
+            # Get user stats separately (small query)
+            user_stats_query = "SELECT total_points FROM user_stats ORDER BY id DESC LIMIT 1"
+            user_stats_result = self.db_manager.execute_query(user_stats_query)
+            user_stats = {"total_points": user_stats_result[0].get("total_points", 0) if user_stats_result else 0}
+            
+            return {
+                "timer_sessions": timer_sessions,
+                "tasks": list(tasks_dict.values()),
+                "epics": list(epics_dict.values()),
+                "user_stats": user_stats
+            }
+            
+        except (AttributeError, TypeError) as e:
+            if self.db_manager:
+                self.db_manager.logger.error(f"Database manager error in combined analytics query: {e}")
+            raise DatabaseAnalyticsError(f"Database operation failed: {e}") from e
+        except Exception as e:
+            if self.db_manager:
+                self.db_manager.logger.error(f"Unexpected error in combined analytics query: {e}")
+            raise DatabaseAnalyticsError(f"Unexpected database error: {e}") from e
 
 
 # Factory function for easy instantiation

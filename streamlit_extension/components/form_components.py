@@ -11,7 +11,7 @@ Simplified form architecture providing:
 - Security Integration: CSRF protection and input sanitization
 """
 
-from typing import Dict, List, Callable, Any, Optional
+from typing import Dict, Callable, Any, Optional
 from contextlib import contextmanager
 
 # Graceful imports
@@ -36,7 +36,7 @@ class StandardForm:
         self.title = title
         self.st = st_module or st
         self.form_data: Dict[str, Any] = {}
-        self.errors: List[str] = []
+        self.errors: list[str] = []
         self.submitted: bool = False
 
     def _required_hint(self, label: str, required: bool) -> str:
@@ -76,7 +76,7 @@ class StandardForm:
         self.form_data[key] = value
         return value
 
-    def render_select_box(self, label: str, key: str, options: List, 
+    def render_select_box(self, label: str, key: str, options: list, 
                          required: bool = False, help_text: str = "") -> Any:
         """Render selectbox with enhanced options."""
         if not self.st:
@@ -167,7 +167,7 @@ class StandardForm:
         """Get collected form data."""
         return dict(self.form_data)
 
-    def validate_and_submit(self, form_data: Dict, validation_func: Callable[[Dict], List[str]]):
+    def validate_and_submit(self, form_data: Dict, validation_func: Callable[[Dict], list[str]]):
         """Validate form data and handle submission."""
         errors = validation_func(form_data)
         if errors:
@@ -175,7 +175,7 @@ class StandardForm:
             return False, errors
         return True, []
 
-    def display_errors(self, errors: List[str]):
+    def display_errors(self, errors: list[str]):
         """Display validation errors."""
         if not self.st:
             self.errors.extend(errors)
@@ -238,7 +238,7 @@ class ClientForm(StandardForm):
             
             return self.render_submit_button("Save Client")
 
-    def validate_client_data(self, data: Dict) -> List[str]:
+    def validate_client_data(self, data: Dict) -> list[str]:
         """Validate client-specific data using centralized validation."""
         from streamlit_extension.utils.form_validation import (
             validate_required_fields,
@@ -250,7 +250,7 @@ class ClientForm(StandardForm):
 
         # Sanitize inputs first
         data = sanitize_form_inputs(data)
-        errors: List[str] = []
+        errors: list[str] = []
         
         # Required field validation
         errors.extend(validate_required_fields(
@@ -276,7 +276,7 @@ class ClientForm(StandardForm):
 class ProjectForm(StandardForm):
     """Form component for creating and editing projects."""
 
-    def render_project_fields(self, client_options: List, project_data: Optional[Dict] = None):
+    def render_project_fields(self, client_options: list, project_data: Optional[Dict] = None):
         """Render complete project form with all fields."""
         if not self.st:
             return True
@@ -326,7 +326,7 @@ class ProjectForm(StandardForm):
             
             return self.render_submit_button("Save Project")
 
-    def validate_project_data(self, data: Dict) -> List[str]:
+    def validate_project_data(self, data: Dict) -> list[str]:
         """Validate project-specific data using centralized validation."""
         from streamlit_extension.utils.form_validation import (
             validate_required_fields,
@@ -336,7 +336,7 @@ class ProjectForm(StandardForm):
 
         # Sanitize inputs first
         data = sanitize_form_inputs(data)
-        errors: List[str] = []
+        errors: list[str] = []
         
         # Required field validation
         errors.extend(validate_required_fields(
@@ -372,11 +372,180 @@ def render_success_message(message: str, icon: str = "✅"):
         st.success(f"{icon} {message}")
 
 
-def render_error_messages(errors: List[str], icon: str = "❌"):
+def render_error_messages(errors: list[str], icon: str = "❌"):
     """Render standardized error messages."""
     if st and errors:
         for error in errors:
             st.error(f"{icon} {error}")
+
+
+# ------------------------------------------------------------------
+# Small Form Components (DRY patterns for quick forms and configs)
+def render_timer_config(current_config: Optional[Dict[str, Any]] = None, 
+                       form_id: str = "timer_config") -> Optional[Dict[str, Any]]:
+    """
+    Render timer configuration form with sliders and checkboxes.
+    
+    Args:
+        current_config: Current timer configuration values
+        form_id: Unique form identifier
+        
+    Returns:
+        Dictionary with updated config values if submitted, None otherwise
+    """
+    if not st:
+        return None
+        
+    config = current_config or {
+        "focus_duration_min": 25,
+        "short_break_min": 5, 
+        "long_break_min": 15,
+        "sessions_until_long_break": 4,
+        "auto_start_breaks": False,
+        "auto_start_focus": False,
+    }
+    
+    def _safe_int(x, default=0):
+        try:
+            return int(x)
+        except Exception:
+            return default
+    
+    with st.expander("⚙️ Timer Settings"):
+        fmin = st.slider(
+            "Focus (min)", 10, 90, 
+            value=_safe_int(config.get("focus_duration_min", 25)), 
+            step=5
+        )
+        smin = st.slider(
+            "Short break (min)", 3, 20,
+            value=_safe_int(config.get("short_break_min", 5)), 
+            step=1
+        )
+        lmin = st.slider(
+            "Long break (min)", 10, 60,
+            value=_safe_int(config.get("long_break_min", 15)), 
+            step=5
+        )
+        every = st.slider(
+            "Long break every N focus", 2, 8,
+            value=_safe_int(config.get("sessions_until_long_break", 4)), 
+            step=1
+        )
+        auto_b = st.checkbox(
+            "Auto-start breaks", 
+            value=bool(config.get("auto_start_breaks", False))
+        )
+        auto_f = st.checkbox(
+            "Auto-start next focus", 
+            value=bool(config.get("auto_start_focus", False))
+        )
+        
+        if st.button("💾 Save Settings", key=f"{form_id}_save"):
+            return {
+                "focus_duration_min": fmin,
+                "short_break_min": smin,
+                "long_break_min": lmin,
+                "sessions_until_long_break": every,
+                "auto_start_breaks": auto_b,
+                "auto_start_focus": auto_f,
+            }
+    
+    return None
+
+
+def render_entity_filters(entity_name: str = "items",
+                         search_placeholder: str = "Search...",
+                         status_options: Optional[list[str]] = None,
+                         secondary_filter_name: str = "Category",
+                         secondary_options: Optional[list[str]] = None,
+                         form_id: str = "entity_filters") -> Dict[str, Any]:
+    """
+    Render generic entity filter form with search and two dropdown filters.
+    
+    Args:
+        entity_name: Name of entities being filtered (e.g., "clients", "projects")
+        search_placeholder: Placeholder text for search input
+        status_options: Options for status filter (defaults to common statuses)
+        secondary_filter_name: Label for second filter dropdown
+        secondary_options: Options for second filter
+        form_id: Unique form identifier
+        
+    Returns:
+        Dictionary with filter values: {search_text, status_filter, secondary_filter}
+    """
+    if not st:
+        return {"search_text": "", "status_filter": "all", "secondary_filter": "all"}
+    
+    # Default options
+    if status_options is None:
+        status_options = ["all", "active", "inactive", "suspended", "archived"]
+    if secondary_options is None:
+        secondary_options = ["all", "basic", "standard", "premium", "enterprise"]
+    
+    col1, col2, col3 = st.columns([2, 1, 1])
+    
+    with col1:
+        search_text = st.text_input(
+            f"🔍 Search {entity_name} by name",
+            placeholder=search_placeholder,
+            key=f"{form_id}_search"
+        )
+    
+    with col2:
+        status_filter = st.selectbox(
+            "Status Filter",
+            options=status_options,
+            index=0,
+            key=f"{form_id}_status"
+        )
+    
+    with col3:
+        secondary_filter = st.selectbox(
+            secondary_filter_name,
+            options=secondary_options, 
+            index=0,
+            key=f"{form_id}_secondary"
+        )
+    
+    return {
+        "search_text": search_text,
+        "status_filter": status_filter,
+        "secondary_filter": secondary_filter
+    }
+
+
+def render_selection_widget(label: str, 
+                           options: list[Any],
+                           current_value: Optional[Any] = None,
+                           key_suffix: str = "selection") -> Any:
+    """
+    Render simple selection widget (selectbox) with proper key management.
+    
+    Args:
+        label: Label for the selectbox
+        options: List of options to choose from
+        current_value: Currently selected value
+        key_suffix: Suffix for unique key generation
+        
+    Returns:
+        Selected value
+    """
+    if not st:
+        return options[0] if options else None
+    
+    # Find current index
+    try:
+        current_index = options.index(current_value) if current_value in options else 0
+    except (ValueError, TypeError):
+        current_index = 0
+    
+    return st.selectbox(
+        label,
+        options=options,
+        index=current_index,
+        key=f"selection_{key_suffix}"
+    )
 
 
 # ------------------------------------------------------------------
@@ -388,7 +557,10 @@ __all__ = [
     "create_client_form",
     "create_project_form",
     "render_success_message",
-    "render_error_messages"
+    "render_error_messages",
+    "render_timer_config",
+    "render_entity_filters", 
+    "render_selection_widget"
 ]
 
 

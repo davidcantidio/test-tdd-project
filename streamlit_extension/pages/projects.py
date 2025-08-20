@@ -17,43 +17,28 @@ from datetime import datetime, date
 # Add parent directory to path
 sys.path.append(str(Path(__file__).parent.parent.parent))
 
-# Graceful imports
-try:
-    import streamlit as st
-    STREAMLIT_AVAILABLE = True
-except ImportError:
-    STREAMLIT_AVAILABLE = False
-    st = None
+# Clean dependency management - eliminates import hell pattern
+from streamlit_extension.utils.dependencies import require_dependency, get_dependency_manager
 
-# Local imports
-try:
-    from streamlit_extension.utils.database import DatabaseManager
-    from streamlit_extension.utils.validators import validate_project_data, validate_project_key_uniqueness
-    from streamlit_extension.utils.security import (
-        create_safe_project, sanitize_display, validate_form, check_rate_limit,
-        security_manager
-    )
-    from streamlit_extension.utils.exception_handler import (
-        handle_streamlit_exceptions, streamlit_error_boundary, safe_streamlit_operation
-    )
-    from streamlit_extension.config import load_config
-    from streamlit_extension.config.constants import StatusValues, ErrorMessages, UIConstants
-    # Import authentication middleware
-    from streamlit_extension.auth.middleware import init_protected_page
-    DATABASE_UTILS_AVAILABLE = True
-except ImportError:
-    DATABASE_UTILS_AVAILABLE = False
-    DatabaseManager = validate_project_data = load_config = None
-    create_safe_project = sanitize_display = validate_form = None
-    handle_streamlit_exceptions = streamlit_error_boundary = safe_streamlit_operation = None
-    StatusValues = ErrorMessages = UIConstants = init_protected_page = None
+# Required dependencies - fail fast if not available
+import streamlit as st
+from streamlit_extension.utils.database import DatabaseManager
+from streamlit_extension.utils.validators import validate_project_data, validate_project_key_uniqueness
+from streamlit_extension.utils.security import (
+    create_safe_project, sanitize_display, validate_form, check_rate_limit,
+    security_manager
+)
+from streamlit_extension.utils.exception_handler import (
+    handle_streamlit_exceptions, streamlit_error_boundary, safe_streamlit_operation
+)
+from streamlit_extension.config import load_config
+from streamlit_extension.config.constants import StatusValues, ErrorMessages, UIConstants
 
 
 
 def render_project_card(project: Dict[str, Any], db_manager: DatabaseManager, clients_map: Dict[int, str]):
     """Render an individual project card."""
-    if not STREAMLIT_AVAILABLE:
-        return
+    # Streamlit is now a required dependency - no check needed
     
     with st.container():
         # Card header with status indicator
@@ -158,8 +143,7 @@ def render_project_card(project: Dict[str, Any], db_manager: DatabaseManager, cl
 
 def render_edit_project_modal(project: Dict[str, Any], db_manager: DatabaseManager, clients_map: Dict[int, str]):
     """Render the edit project modal."""
-    if not STREAMLIT_AVAILABLE:
-        return
+    # Streamlit is now a required dependency - no check needed
     
     with st.modal(f"Edit Project: {project['name']}", width="large"):
         with st.form(f"edit_project_form_{project['id']}"):
@@ -338,8 +322,7 @@ def render_edit_project_modal(project: Dict[str, Any], db_manager: DatabaseManag
 
 def render_delete_project_modal(project: Dict[str, Any], db_manager: DatabaseManager, clients_map: Dict[int, str]):
     """Render the delete project confirmation modal."""
-    if not STREAMLIT_AVAILABLE:
-        return
+    # Streamlit is now a required dependency - no check needed
     
     # Apply XSS sanitization to modal content
     safe_project_name = sanitize_display(project['name']) if sanitize_display else project['name']
@@ -383,8 +366,7 @@ def render_delete_project_modal(project: Dict[str, Any], db_manager: DatabaseMan
 
 def render_create_project_form(db_manager: DatabaseManager, clients_map: Dict[int, str]):
     """Render the create new project form."""
-    if not STREAMLIT_AVAILABLE:
-        return
+    # Streamlit is now a required dependency - no check needed
     
     with st.expander("➕ Create New Project", expanded=False):
         with st.form("create_project_form"):
@@ -550,8 +532,7 @@ def render_create_project_form(db_manager: DatabaseManager, clients_map: Dict[in
 @handle_streamlit_exceptions(show_error=True, attempt_recovery=True)
 def render_projects_page():
     """Render the main projects management page."""
-    if not STREAMLIT_AVAILABLE:
-        return {"error": "Streamlit not available"}
+    # Streamlit is now a required dependency - no check needed {"error": "Streamlit not available"}
     
     if not DATABASE_UTILS_AVAILABLE:
         st.error(
@@ -568,7 +549,6 @@ def render_projects_page():
     #     return {"error": "Authentication required"}
     
     # Temporary mock user for testing
-    from streamlit_extension.auth.user_model import User, UserRole
     current_user = User(
         id=1,
         username="test_user",

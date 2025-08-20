@@ -25,6 +25,8 @@ import logging
 from typing import Dict, List, Set, Tuple, Optional, Any
 from collections import defaultdict, deque
 from dataclasses import dataclass
+from streamlit_extension.auth.middleware import require_auth, require_admin
+from streamlit_extension.auth.user_model import UserRole
 
 logger = logging.getLogger(__name__)
 

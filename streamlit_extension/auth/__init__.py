@@ -11,7 +11,6 @@ locais de autenticação.
 - ♻️ Legado: `auth_middleware`, `is_authenticated`, `get_current_user`
 - 🧪 Seguro para import: falhas em dependências geram *fallback* controlado
 - 🧭 Uso recomendado:
-    from streamlit_extension.auth import (
         GoogleOAuthManager,
         get_authenticated_user,
         is_user_authenticated,

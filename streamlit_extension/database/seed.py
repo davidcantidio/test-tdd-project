@@ -19,13 +19,11 @@ def set_database_manager(dbm: DatabaseManager) -> None:
     _DBM_INSTANCE = dbm  # type: ignore
 
 
-def _db() -> DatabaseManager:
-    global _DBM_INSTANCE  # type: ignore
-    try:
-        return _DBM_INSTANCE  # type: ignore
-    except NameError:
-        _DBM_INSTANCE = DatabaseManager()  # type: ignore
-        return _DBM_INSTANCE
+# SEMANTIC DEDUPLICATION: Use centralized singleton instead of duplicate implementation
+from .database_singleton import get_database_manager as _db
+# Auth imports
+from streamlit_extension.auth.middleware import require_auth, require_admin
+from streamlit_extension.auth.user_model import UserRole
 
 
 def seed_initial_data(kind: Optional[str] = None) -> int:

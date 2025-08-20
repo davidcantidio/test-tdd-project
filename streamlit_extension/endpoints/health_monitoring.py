@@ -57,11 +57,10 @@ class DatabaseHealthChecker:
         start_time = time.time()
         
         try:
-            conn = sqlite3.connect(self.db_path, timeout=5.0)
-            cursor = conn.cursor()
-            cursor.execute("SELECT 1")
-            result = cursor.fetchone()
-            conn.close()
+            with sqlite3.connect(self.db_path, timeout=5.0) as conn:
+                with conn.cursor() as cursor:
+                    cursor.execute("SELECT 1")
+                    result = cursor.fetchone()
             
             duration_ms = (time.time() - start_time) * 1000
             

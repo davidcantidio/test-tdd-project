@@ -275,8 +275,6 @@ class StreamlitConfig:
         with open(file_path, 'r') as f:
             config_dict = json.load(f)
         return cls(**config_dict)
-
-
 def load_config(env_file: Optional[str] = None) -> StreamlitConfig:
     """
     Load configuration from environment variables and .env file.
@@ -394,8 +392,6 @@ def load_config(env_file: Optional[str] = None) -> StreamlitConfig:
 
 
 _CONFIG_SINGLETON: Optional[StreamlitConfig] = None
-
-
 def get_config(env_file: Optional[str] = None) -> StreamlitConfig:
     """Singleton de configuração com carregamento preguiçoso."""
     global _CONFIG_SINGLETON
@@ -403,8 +399,6 @@ def get_config(env_file: Optional[str] = None) -> StreamlitConfig:
         _CONFIG_SINGLETON = load_config(env_file)
         _CONFIG_SINGLETON.config_loaded_at = datetime.utcnow().isoformat()
     return _CONFIG_SINGLETON
-
-
 def create_streamlit_config_file(output_dir: Optional[Path] = None) -> Path:
     """
     Gera `.streamlit/config.toml` a partir de `get_streamlit_config_dict()`.
@@ -435,8 +429,6 @@ def create_streamlit_config_file(output_dir: Optional[Path] = None) -> Path:
     out_path = out_dir / "config.toml"
     out_path.write_text(toml_content, encoding="utf-8")
     return out_path
-
-
 def reload_config(env_file: Optional[str] = None) -> StreamlitConfig:
     """Reload configuration from environment."""
     global _CONFIG_SINGLETON

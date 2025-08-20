@@ -14,6 +14,10 @@ from datetime import datetime
 from functools import wraps
 import sqlite3
 import random
+# Auth imports
+from streamlit_extension.auth.middleware import require_auth, require_admin
+from streamlit_extension.auth.user_model import UserRole
+
 
 logger = logging.getLogger(__name__)
 

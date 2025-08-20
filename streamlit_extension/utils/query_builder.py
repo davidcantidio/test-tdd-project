@@ -14,6 +14,8 @@ from __future__ import annotations
 
 from typing import Any, Dict, Iterable, List, Sequence, Tuple
 import re
+from streamlit_extension.auth.middleware import require_auth, require_admin
+from streamlit_extension.auth.user_model import UserRole
 
 
 class QueryBuilder:

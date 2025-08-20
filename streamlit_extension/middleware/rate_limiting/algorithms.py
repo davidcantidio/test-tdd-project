@@ -5,6 +5,9 @@ from __future__ import annotations
 import time
 from collections import deque
 from typing import Deque, Any
+# Auth imports
+from streamlit_extension.auth.middleware import require_auth, require_admin
+from streamlit_extension.auth.user_model import UserRole
 
 
 class TokenBucketRateLimiter:

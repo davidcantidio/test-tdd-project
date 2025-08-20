@@ -19,6 +19,10 @@ from dataclasses import dataclass, field
 from typing import Optional, List, Dict, Any, Set
 from enum import Enum
 from datetime import datetime, date
+# Auth imports
+from streamlit_extension.auth.middleware import require_auth, require_admin
+from streamlit_extension.auth.user_model import UserRole
+
 
 class TaskStatus(Enum):
     """Status da tarefa"""

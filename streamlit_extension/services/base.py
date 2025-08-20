@@ -11,6 +11,8 @@ from dataclasses import dataclass
 from enum import Enum
 import logging
 from contextlib import contextmanager
+from streamlit_extension.auth.middleware import require_auth, require_admin
+from streamlit_extension.auth.user_model import UserRole
 
 # Type variable for generic result types
 T = TypeVar('T')
@@ -260,11 +262,11 @@ class SortCriteria:
 
 
 # Utility functions for service layer
+@require_auth()
 def create_success_result(data: T) -> ServiceResult[T]:
     """Utility function to create successful result."""
     return ServiceResult.ok(data)
-
-
+@require_auth()
 def create_error_result(error_type: ServiceErrorType, message: str, **kwargs) -> ServiceResult[Any]:
     """Utility function to create error result."""
     error = ServiceError(error_type=error_type, message=message, **kwargs)

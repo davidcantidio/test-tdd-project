@@ -31,6 +31,10 @@ from .queries import (
 )
 from .schema import create_schema_if_needed
 from .seed import seed_initial_data
+# Auth imports
+from streamlit_extension.auth.middleware import require_auth, require_admin
+from streamlit_extension.auth.user_model import UserRole
+
 
 __all__ = [
     "get_connection",

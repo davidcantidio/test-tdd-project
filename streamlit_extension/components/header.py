@@ -8,6 +8,10 @@ Optimized for compatibility and clarity.
 import streamlit as st
 from datetime import datetime
 from typing import Optional
+# Auth imports
+from streamlit_extension.auth.middleware import require_auth, require_admin
+from streamlit_extension.auth.user_model import UserRole
+
 
 def _greeting(now: datetime) -> str:
     h = now.hour

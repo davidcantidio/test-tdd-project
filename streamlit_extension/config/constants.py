@@ -7,6 +7,9 @@ Também cria **aliases compatíveis** com importações legadas do pacote.
 
 from enum import Enum
 from typing import List, Dict, Any
+# Auth imports
+from streamlit_extension.auth.middleware import require_auth, require_admin
+from streamlit_extension.auth.user_model import UserRole
 
 
 class StatusValues(Enum):

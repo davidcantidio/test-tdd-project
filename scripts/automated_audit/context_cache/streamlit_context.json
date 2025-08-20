@@ -1,0 +1,25 @@
+{
+  "context_type": "streamlit_extension_module",
+  "extraction_timestamp": "2025-08-19 23:05:02",
+  "module_overview": {},
+  "architecture_patterns": {},
+  "authentication_system": {},
+  "component_architecture": {},
+  "database_layer": {},
+  "api_endpoints": {},
+  "service_layer": {},
+  "utilities_framework": {},
+  "middleware_stack": {},
+  "configuration_system": {},
+  "extracted_files": [
+    {
+      "file": "/home/david/Documentos/canimport/test-tdd-project/streamlit_extension/CLAUDE.md",
+      "content_key": "main_module_documentation",
+      "size": 14527,
+      "description": "Primary streamlit extension documentation",
+      "status": "extracted"
+    }
+  ],
+  "module_statistics": {},
+  "dependency_analysis": {}
+}

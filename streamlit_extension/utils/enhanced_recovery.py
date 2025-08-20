@@ -11,6 +11,10 @@ from dataclasses import dataclass
 from typing import Any, List, Optional, Protocol
 
 from ..middleware.context_manager import UserContext
+# Auth imports
+from streamlit_extension.auth.middleware import require_auth, require_admin
+from streamlit_extension.auth.user_model import UserRole
+
 
 # Custom exception types used in recovery strategies
 class OperationalError(Exception):

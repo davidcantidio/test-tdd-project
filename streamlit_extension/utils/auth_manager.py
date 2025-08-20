@@ -392,13 +392,27 @@ def init_default_admin():
             break
     
     if not existing_admin:
+        # SECURITY FIX: Use environment variable for admin password
+        import os
+        admin_password = os.environ.get("TDD_ADMIN_PASSWORD")
+        if not admin_password:
+            # Generate a secure random password if not set
+            import secrets
+            import string
+            admin_password = ''.join(secrets.choice(string.ascii_letters + string.digits + "!@#$%") for _ in range(16))
+            st.warning(f"⚠️ Auto-generated admin password: {admin_password}")
+            st.info("💡 Set TDD_ADMIN_PASSWORD environment variable to use a custom password")
+        
         admin_user = auth_manager.create_user(
             username="admin",
             email="admin@localhost",
-            password="admin123",  # Should be changed in production
+            password=admin_password,  # SECURITY: No longer hardcoded
             roles=["admin"]
         )
-        st.info("🔧 Default admin user created: admin/admin123 (Please change password!)")
+        if os.environ.get("TDD_ADMIN_PASSWORD"):
+            st.success("🔧 Admin user created with environment password")
+        else:
+            st.warning("🔧 Admin user created with auto-generated password (see above)")
 
 
 # Streamlit decorators for easy usage

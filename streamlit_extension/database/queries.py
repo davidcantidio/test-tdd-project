@@ -10,18 +10,11 @@ _DBM_INSTANCE: DatabaseManager | None = None  # type: ignore
 _DBM_LOCK = threading.Lock()
 
 
-def _db() -> DatabaseManager:
-    """
-    Singleton thread-safe do DatabaseManager (double-checked locking).
-    """
-    global _DBM_INSTANCE
-    if _DBM_INSTANCE is not None:
-        return _DBM_INSTANCE
-
-    with _DBM_LOCK:
-        if _DBM_INSTANCE is None:
-            _DBM_INSTANCE = DatabaseManager()
-        return _DBM_INSTANCE
+# SEMANTIC DEDUPLICATION: Use centralized singleton instead of duplicate implementation
+from .database_singleton import get_database_manager as _db
+# Auth imports
+from streamlit_extension.auth.middleware import require_auth, require_admin
+from streamlit_extension.auth.user_model import UserRole
 
 
 # =============================================================================

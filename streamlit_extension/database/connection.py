@@ -34,6 +34,8 @@ def _resolve_db_path() -> str:
     return os.path.join(os.getcwd(), DEFAULT_DB_FILENAME)
 
 
+@require_admin
+@require_auth()
 def _configure_sqlite_connection(conn: sqlite3.Connection) -> None:
     """
     Configura a conexão para melhor concorrência e ergonomia.
@@ -49,6 +51,7 @@ def _configure_sqlite_connection(conn: sqlite3.Connection) -> None:
     conn.execute("PRAGMA foreign_keys = ON;")
 
 
+@require_admin
 def _new_sqlite_connection() -> sqlite3.Connection:
     """
     Cria uma nova conexão SQLite com configurações padrão do módulo.
@@ -73,25 +76,24 @@ def set_database_manager(dbm: DatabaseManager) -> None:
     _DBM_INSTANCE = dbm  # type: ignore
 
 
-def _db() -> DatabaseManager:
-    """
-    Thread-safe singleton para DatabaseManager (double-checked locking).
-    """
-    global _DBM_INSTANCE
-    if _DBM_INSTANCE is not None:
-        return _DBM_INSTANCE
+# SEMANTIC DEDUPLICATION: Use centralized singleton instead of duplicate implementation
+from .database_singleton import get_database_manager as _db
+# Auth imports
+from streamlit_extension.auth.middleware import require_auth, require_admin
+from streamlit_extension.auth.user_model import UserRole
 
-    with _DBM_LOCK:
-        if _DBM_INSTANCE is None:
-            _DBM_INSTANCE = DatabaseManager()
-        return _DBM_INSTANCE
+from streamlit_extension.auth.middleware import require_auth, require_admin
+from streamlit_extension.auth.user_model import UserRole
 
-
+# Keep old function for backward compatibility but delegate to centralized implementation  
+# def _db() -> DatabaseManager:
+#     """DEPRECATED: Use database_singleton.get_database_manager() instead"""
+#     return get_database_manager()
+@require_admin
 def get_connection() -> Any:
     """Obtém uma conexão do manager atual."""
     return _db().get_connection()
-
-
+@require_admin
 def release_connection(conn: Any) -> None:
     """Libera uma conexão obtida via ``get_connection()``."""
     _db().release_connection(conn)
@@ -392,6 +394,7 @@ _optimized_pool = OptimizedConnectionPool()
 
 # =============================================================================
 # Facade Helpers
+@require_admin
 # =============================================================================
 
 def get_optimized_connection() -> Iterator[sqlite3.Connection]:
@@ -411,8 +414,7 @@ def execute_cached_query(
 def invalidate_cache() -> None:
     """Invalida todo o cache de consultas."""
     _optimized_pool.clear_cache()
-
-
+@require_admin
 def get_connection_metrics() -> Dict[str, Any]:
     """Retorna métricas de performance do pool e cache."""
     return _optimized_pool.get_performance_metrics()

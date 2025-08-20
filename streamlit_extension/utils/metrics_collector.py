@@ -13,6 +13,9 @@ import math
 import statistics
 import time
 from typing import Dict, List, Optional
+# Auth imports
+from streamlit_extension.auth.middleware import require_auth, require_admin
+from streamlit_extension.auth.user_model import UserRole
 
 
 def _percentile(values: List[float], percent: float) -> float:

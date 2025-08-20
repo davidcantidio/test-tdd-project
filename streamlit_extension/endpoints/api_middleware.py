@@ -22,6 +22,8 @@ import hmac
 
 from ..auth.middleware import is_authenticated, get_current_user
 from ..utils.security import check_rate_limit
+from streamlit_extension.auth.middleware import require_auth, require_admin
+from streamlit_extension.auth.user_model import UserRole
 
 logger = logging.getLogger(__name__)
 
@@ -247,6 +249,7 @@ def generate_request_id(user_id: Optional[str], api_endpoint: str) -> str:
     
     return f"req_{timestamp}_{hash_value}"
 
+@require_auth()
 def create_api_error_response(error_message: str, error_code: str, 
                             details: Optional[Any] = None) -> Dict[str, Any]:
     """
@@ -271,6 +274,7 @@ def create_api_error_response(error_message: str, error_code: str,
     
     return response
 
+@require_auth()
 def create_api_success_response(data: Any, metadata: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     """
     Create standardized API success response.

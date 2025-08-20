@@ -1,0 +1,79 @@
+{
+  "refactor_summary": {
+    "plans_created": 12,
+    "functions_refactored": 0,
+    "files_modified": 0,
+    "extracted_functions_created": 0,
+    "success_rate": 0.0
+  },
+  "successful_refactors": [],
+  "failed_refactors": [
+    {
+      "function": "__init__",
+      "file": "streamlit_extension/utils/cached_database.py",
+      "reason": "See console output for details"
+    },
+    {
+      "function": "_calculate_daily_focus_trends",
+      "file": "streamlit_extension/utils/analytics_integration.py",
+      "reason": "See console output for details"
+    },
+    {
+      "function": "_calculate_daily_metrics",
+      "file": "streamlit_extension/utils/analytics_integration.py",
+      "reason": "See console output for details"
+    },
+    {
+      "function": "_calculate_elapsed_time",
+      "file": "streamlit_extension/services/timer_service.py",
+      "reason": "See console output for details"
+    },
+    {
+      "function": "_calculate_hourly_focus_trends",
+      "file": "streamlit_extension/utils/analytics_integration.py",
+      "reason": "See console output for details"
+    },
+    {
+      "function": "_call",
+      "file": "streamlit_extension/streamlit_app copy.py",
+      "reason": "See console output for details"
+    },
+    {
+      "function": "_cleanup_old_backups",
+      "file": "streamlit_extension/config/backup_restore.py",
+      "reason": "See console output for details"
+    },
+    {
+      "function": "_configure_streamlit_dos_protection",
+      "file": "streamlit_extension/utils/security.py",
+      "reason": "See console output for details"
+    },
+    {
+      "function": "_create_backup",
+      "file": "streamlit_extension/config/backup_restore.py",
+      "reason": "See console output for details"
+    },
+    {
+      "function": "_create_log_entry",
+      "file": "streamlit_extension/utils/structured_logger.py",
+      "reason": "See console output for details"
+    },
+    {
+      "function": "_create_service",
+      "file": "streamlit_extension/services/service_container.py",
+      "reason": "See console output for details"
+    },
+    {
+      "function": "_delete_from_disk",
+      "file": "streamlit_extension/utils/cache.py",
+      "reason": "See console output for details"
+    }
+  ],
+  "files_modified": [],
+  "next_steps": [
+    "Review and test refactored functions",
+    "Implement TODO placeholders with actual logic",
+    "Run comprehensive tests to ensure functionality",
+    "Update documentation for new function architecture"
+  ]
+}

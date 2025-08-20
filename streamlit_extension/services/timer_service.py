@@ -17,6 +17,20 @@ from .base import (
 from ..utils.database import DatabaseManager
 
 
+# Timer-specific exceptions
+class TimerServiceError(Exception):
+    """Base exception for timer service operations."""
+    pass
+
+class SessionNotFoundError(TimerServiceError):
+    """Raised when a session cannot be found."""
+    pass
+
+class DatabaseOperationError(TimerServiceError):
+    """Raised when database operations fail."""
+    pass
+
+
 class SessionStatus(Enum):
     """Work session status enumeration."""
     ACTIVE = "active"
@@ -41,41 +55,72 @@ class TimerRepository(BaseRepository):
     def __init__(self, db_manager: DatabaseManager):
         super().__init__(db_manager)
     
+    def _build_session_query_with_joins(self, where_clause: str) -> str:
+        """Build session query with task and epic joins.
+        
+        Args:
+            where_clause: WHERE clause without 'WHERE' keyword
+            
+        Returns:
+            Complete SQL query with joins
+        """
+        return f"""
+            SELECT ws.*, t.title as task_title, t.task_key, 
+                   e.title as epic_title, e.epic_key
+            FROM work_sessions ws
+            LEFT JOIN framework_tasks t ON ws.task_id = t.id
+            LEFT JOIN framework_epics e ON t.epic_id = e.id
+            WHERE {where_clause}
+        """
+    
     def find_session_by_id(self, session_id: int) -> Optional[Dict[str, Any]]:
-        """Find work session by ID."""
+        """Find work session by ID.
+        
+        Args:
+            session_id: ID of the session to find
+            
+        Returns:
+            Session data or None if not found
+            
+        Raises:
+            DatabaseOperationError: If database operation fails
+            ValueError: If session_id is invalid
+        """
+        if not isinstance(session_id, int) or session_id <= 0:
+            raise ValueError(f"Invalid session_id: {session_id}")
+            
         try:
-            query = """
-                SELECT ws.*, t.title as task_title, t.task_key, 
-                       e.title as epic_title, e.epic_key
-                FROM work_sessions ws
-                LEFT JOIN framework_tasks t ON ws.task_id = t.id
-                LEFT JOIN framework_epics e ON t.epic_id = e.id
-                WHERE ws.id = ?
-            """
+            query = self._build_session_query_with_joins("ws.id = ?")
             result = self.db_manager.execute_query(query, (session_id,))
             return result[0] if result else None
+        except (AttributeError, TypeError) as e:
+            self.db_manager.logger.error(f"Database manager error for session {session_id}: {e}")
+            raise DatabaseOperationError(f"Database operation failed: {e}") from e
         except Exception as e:
-            self.db_manager.logger.error(f"Error finding session by ID {session_id}: {e}")
-            return None
+            self.db_manager.logger.error(f"Unexpected error finding session {session_id}: {e}")
+            raise DatabaseOperationError(f"Unexpected database error: {e}") from e
     
     def find_active_session(self) -> Optional[Dict[str, Any]]:
-        """Find currently active work session."""
+        """Find currently active work session.
+        
+        Returns:
+            Active session data or None if no active session found
+            
+        Raises:
+            DatabaseOperationError: If database operation fails
+        """
         try:
-            query = """
-                SELECT ws.*, t.title as task_title, t.task_key,
-                       e.title as epic_title, e.epic_key
-                FROM work_sessions ws
-                LEFT JOIN framework_tasks t ON ws.task_id = t.id
-                LEFT JOIN framework_epics e ON t.epic_id = e.id
-                WHERE ws.status = 'active'
-                ORDER BY ws.start_time DESC
-                LIMIT 1
-            """
+            query = self._build_session_query_with_joins(
+                "ws.status = 'active' ORDER BY ws.start_time DESC LIMIT 1"
+            )
             result = self.db_manager.execute_query(query)
             return result[0] if result else None
+        except (AttributeError, TypeError) as e:
+            self.db_manager.logger.error(f"Database manager error finding active session: {e}")
+            raise DatabaseOperationError(f"Database operation failed: {e}") from e
         except Exception as e:
-            self.db_manager.logger.error(f"Error finding active session: {e}")
-            return None
+            self.db_manager.logger.error(f"Unexpected error finding active session: {e}")
+            raise DatabaseOperationError(f"Unexpected database error: {e}") from e
     
     def find_sessions_by_task(self, task_id: int, limit: Optional[int] = None) -> List[Dict[str, Any]]:
         """Find all work sessions for a specific task."""
@@ -312,29 +357,71 @@ class TimerRepository(BaseRepository):
                 'type_distribution': type_results
             }
             
+        except (AttributeError, TypeError) as e:
+            self.db_manager.logger.error(f"Database manager error getting productivity patterns: {e}")
+            raise DatabaseOperationError(f"Database operation failed: {e}") from e
         except Exception as e:
-            self.db_manager.logger.error(f"Error getting productivity patterns: {e}")
-            return {}
+            self.db_manager.logger.error(f"Unexpected error getting productivity patterns: {e}")
+            raise DatabaseOperationError(f"Unexpected database error: {e}") from e
+    
+    def _entity_exists(self, entity_id: int, table_name: str, entity_type: str) -> bool:
+        """Generic method to check if entity exists in database.
+        
+        Args:
+            entity_id: ID of the entity to check
+            table_name: Name of the database table
+            entity_type: Type of entity for error messages
+            
+        Returns:
+            True if entity exists, False otherwise
+            
+        Raises:
+            DatabaseOperationError: If database operation fails
+            ValueError: If entity_id is invalid
+        """
+        if not isinstance(entity_id, int) or entity_id <= 0:
+            raise ValueError(f"Invalid {entity_type}_id: {entity_id}")
+            
+        try:
+            query = f"SELECT id FROM {table_name} WHERE id = ?"
+            result = self.db_manager.execute_query(query, (entity_id,))
+            return len(result) > 0
+        except (AttributeError, TypeError) as e:
+            self.db_manager.logger.error(f"Database manager error checking {entity_type} {entity_id}: {e}")
+            raise DatabaseOperationError(f"Database operation failed: {e}") from e
+        except Exception as e:
+            self.db_manager.logger.error(f"Unexpected error checking {entity_type} {entity_id}: {e}")
+            raise DatabaseOperationError(f"Unexpected database error: {e}") from e
     
     def task_exists(self, task_id: int) -> bool:
-        """Check if task exists."""
-        try:
-            query = "SELECT id FROM framework_tasks WHERE id = ?"
-            result = self.db_manager.execute_query(query, (task_id,))
-            return len(result) > 0
-        except Exception as e:
-            self.db_manager.logger.error(f"Error checking task existence {task_id}: {e}")
-            return False
+        """Check if task exists.
+        
+        Args:
+            task_id: ID of the task to check
+            
+        Returns:
+            True if task exists, False otherwise
+            
+        Raises:
+            DatabaseOperationError: If database operation fails
+            ValueError: If task_id is invalid
+        """
+        return self._entity_exists(task_id, "framework_tasks", "task")
     
     def epic_exists(self, epic_id: int) -> bool:
-        """Check if epic exists."""
-        try:
-            query = "SELECT id FROM framework_epics WHERE id = ?"
-            result = self.db_manager.execute_query(query, (epic_id,))
-            return len(result) > 0
-        except Exception as e:
-            self.db_manager.logger.error(f"Error checking epic existence {epic_id}: {e}")
-            return False
+        """Check if epic exists.
+        
+        Args:
+            epic_id: ID of the epic to check
+            
+        Returns:
+            True if epic exists, False otherwise
+            
+        Raises:
+            DatabaseOperationError: If database operation fails
+            ValueError: If epic_id is invalid
+        """
+        return self._entity_exists(epic_id, "framework_epics", "epic")
 
 
 class TimerService(BaseService):
@@ -344,11 +431,9 @@ class TimerService(BaseService):
         self.repository = TimerRepository(db_manager)
         super().__init__(self.repository)
     
-    def validate_business_rules(self, data: Dict[str, Any]) -> List[ServiceError]:
-        """Validate timer-specific business rules."""
+    def _validate_duration(self, data: Dict[str, Any]) -> List[ServiceError]:
+        """Validate planned duration field."""
         errors = []
-        
-        # Planned duration validation
         if 'planned_duration_minutes' in data and data['planned_duration_minutes'] is not None:
             try:
                 duration = int(data['planned_duration_minutes'])
@@ -370,8 +455,11 @@ class TimerService(BaseService):
                     message="Planned duration must be a valid number of minutes",
                     field="planned_duration_minutes"
                 ))
-        
-        # Rating validations (1-10 scale)
+        return errors
+    
+    def _validate_ratings(self, data: Dict[str, Any]) -> List[ServiceError]:
+        """Validate rating fields (1-10 scale)."""
+        errors = []
         rating_fields = ['focus_rating', 'energy_level', 'mood_rating']
         for field in rating_fields:
             if field in data and data[field] is not None:
@@ -389,8 +477,11 @@ class TimerService(BaseService):
                         message=f"{field.replace('_', ' ').title()} must be a valid number",
                         field=field
                     ))
-        
-        # Interruption count validation
+        return errors
+    
+    def _validate_interruption_count(self, data: Dict[str, Any]) -> List[ServiceError]:
+        """Validate interruption count field."""
+        errors = []
         if 'interruption_count' in data and data['interruption_count'] is not None:
             try:
                 count = int(data['interruption_count'])
@@ -412,6 +503,11 @@ class TimerService(BaseService):
                     message="Interruption count must be a valid number",
                     field="interruption_count"
                 ))
+        return errors
+    
+    def _validate_session_and_status(self, data: Dict[str, Any]) -> List[ServiceError]:
+        """Validate session type and status fields."""
+        errors = []
         
         # Session type validation
         if 'session_type' in data and data['session_type']:
@@ -433,7 +529,11 @@ class TimerService(BaseService):
                     field="status"
                 ))
         
-        # Time consistency validation
+        return errors
+    
+    def _validate_time_consistency(self, data: Dict[str, Any]) -> List[ServiceError]:
+        """Validate time consistency (start_time < end_time)."""
+        errors = []
         if 'start_time' in data and 'end_time' in data:
             start_time = data['start_time']
             end_time = data['end_time']
@@ -450,6 +550,23 @@ class TimerService(BaseService):
                         message="End time must be after start time",
                         field="end_time"
                     ))
+        
+        return errors
+
+    def validate_business_rules(self, data: Dict[str, Any]) -> List[ServiceError]:
+        """Validate timer-specific business rules.
+        
+        Orchestrates validation by delegating to specific validation methods.
+        Each method handles a single validation concern for better maintainability.
+        """
+        errors = []
+        
+        # Delegate to specific validation methods
+        errors.extend(self._validate_duration(data))
+        errors.extend(self._validate_ratings(data))
+        errors.extend(self._validate_interruption_count(data))
+        errors.extend(self._validate_session_and_status(data))
+        errors.extend(self._validate_time_consistency(data))
         
         return errors
     

@@ -8,6 +8,9 @@ Analyzes timer sessions to determine current streak status.
 from typing import List, Dict, Any, Tuple
 from datetime import datetime, timedelta
 from collections import defaultdict
+# Auth imports
+from streamlit_extension.auth.middleware import require_auth, require_admin
+from streamlit_extension.auth.user_model import UserRole
 
 
 def calculate_streaks(timer_sessions: List[Dict[str, Any]]) -> Tuple[int, str]:

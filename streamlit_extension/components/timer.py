@@ -42,6 +42,14 @@ except Exception:
     def list_timer_sessions(days: int = 30):  # type: ignore
         return []
 
+# Import DRY form components
+try:
+    from .form_components import render_timer_config
+    FORM_COMPONENTS_AVAILABLE = True
+except ImportError:
+    FORM_COMPONENTS_AVAILABLE = False
+    render_timer_config = None
+
 # ---------------------------------------------------------------------------
 # Datamodel
 # ---------------------------------------------------------------------------
@@ -249,28 +257,36 @@ class TimerComponent:
                     self._action_stop(ts, cfg, save=False)  # não salva pausas
                     st.rerun()
 
-        # Configurações
-        with st.expander("⚙️ Timer Settings"):
-            fmin = st.slider("Focus (min)", 10, 90, value=_safe_int(cfg.get("focus_duration_min", 25)), step=5)
-            smin = st.slider("Short break (min)", 3, 20, value=_safe_int(cfg.get("short_break_min", 5)), step=1)
-            lmin = st.slider("Long break (min)", 10, 60, value=_safe_int(cfg.get("long_break_min", 15)), step=5)
-            every = st.slider("Long break every N focus", 2, 8,
-                              value=_safe_int(cfg.get("sessions_until_long_break", 4)), step=1)
-            auto_b = st.checkbox("Auto-start breaks", value=bool(cfg.get("auto_start_breaks", False)))
-            auto_f = st.checkbox("Auto-start next focus", value=bool(cfg.get("auto_start_focus", False)))
-
-            if st.button("💾 Save Settings"):
-                cfg.update({
-                    "focus_duration_min": fmin,
-                    "short_break_min": smin,
-                    "long_break_min": lmin,
-                    "sessions_until_long_break": every,
-                    "auto_start_breaks": auto_b,
-                    "auto_start_focus": auto_f,
-                })
-                st.session_state[SK_CFG] = cfg
+        # Configurações - Using DRY component
+        if FORM_COMPONENTS_AVAILABLE and render_timer_config:
+            updated_config = render_timer_config(current_config=cfg, form_id="timer_config")
+            if updated_config:
+                st.session_state[SK_CFG] = updated_config
                 st.success("Settings saved.")
                 st.rerun()
+        else:
+            # Fallback: Original inline settings
+            with st.expander("⚙️ Timer Settings"):
+                fmin = st.slider("Focus (min)", 10, 90, value=_safe_int(cfg.get("focus_duration_min", 25)), step=5)
+                smin = st.slider("Short break (min)", 3, 20, value=_safe_int(cfg.get("short_break_min", 5)), step=1)
+                lmin = st.slider("Long break (min)", 10, 60, value=_safe_int(cfg.get("long_break_min", 15)), step=5)
+                every = st.slider("Long break every N focus", 2, 8,
+                                  value=_safe_int(cfg.get("sessions_until_long_break", 4)), step=1)
+                auto_b = st.checkbox("Auto-start breaks", value=bool(cfg.get("auto_start_breaks", False)))
+                auto_f = st.checkbox("Auto-start next focus", value=bool(cfg.get("auto_start_focus", False)))
+
+                if st.button("💾 Save Settings"):
+                    cfg.update({
+                        "focus_duration_min": fmin,
+                        "short_break_min": smin,
+                        "long_break_min": lmin,
+                        "sessions_until_long_break": every,
+                        "auto_start_breaks": auto_b,
+                        "auto_start_focus": auto_f,
+                    })
+                    st.session_state[SK_CFG] = cfg
+                    st.success("Settings saved.")
+                    st.rerun()
 
         # Resumo de hoje (simples; pode ser enriquecido com list_timer_sessions)
         focus_done = _safe_int(st.session_state.get(SK_CYCLES), 0)
