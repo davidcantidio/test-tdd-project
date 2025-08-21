@@ -1,0 +1,38 @@
+{
+  "mcpServers": {
+    "ref-tools": {
+      "type": "http",
+      "url": "https://api.ref.tools/mcp",
+      "headers": {
+        "x-ref-api-key": "${REF_API_KEY}"
+      },
+      "description": "Ref Tools - Token-efficient documentation search and URL reading"
+    }
+  },
+  "environment": {
+    "REF_API_KEY": "CONFIGURE_YOUR_API_KEY_HERE"
+  },
+  "usage_examples": {
+    "search_documentation": {
+      "tool": "ref_search_documentation",
+      "examples": [
+        "Python fastapi cors middleware setup",
+        "streamlit multiselect widget examples",
+        "pytest fixture scope session database",
+        "pydantic v2 migration breaking changes",
+        "SQLite connection pooling best practices"
+      ]
+    },
+    "read_url": {
+      "tool": "ref_read_url", 
+      "description": "Use URLs from search results to read detailed content",
+      "example": "https://docs.pydantic.dev/latest/migration/"
+    }
+  },
+  "integration_notes": {
+    "token_efficiency": "Ref filters content to ~5k most relevant tokens",
+    "session_tracking": "Avoids duplicate results in same session",
+    "context_aware": "Returns content relevant to search history",
+    "hallucination_prevention": "Uses real documentation, not model knowledge"
+  }
+}

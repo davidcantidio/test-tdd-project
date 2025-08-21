@@ -231,7 +231,8 @@ class CircuitBreaker:
             self.stats.current_consecutive_successes = 0
             self.stats.current_consecutive_failures += 1
             self._last_failure_time = time.time()
-            if self.state in (CircuitState.CLOSED, CircuitState.HALF_OPEN) and self.stats.current_consecutive_failures >= self.config.failure_threshold:
+            if self.state in (CircuitState.CLOSED, CircuitState.HALF_OPEN) and \
+                self.stats.current_consecutive_failures >= self.config.failure_threshold:
                 logger.warning("Circuit %s transitioning to OPEN", self.name)
                 self.state = CircuitState.OPEN
                 self.stats.circuit_opened_count += 1

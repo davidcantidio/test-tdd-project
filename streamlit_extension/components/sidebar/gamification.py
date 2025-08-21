@@ -57,7 +57,7 @@ def get_gamification_data(user_id: int = 1) -> Dict[str, Any]:
         }
         
     except Exception as e:
-        print(f"Error loading gamification data: {e}")
+        logging.info(f"Error loading gamification data: {e}")
         return get_fallback_gamification_data()
 
 

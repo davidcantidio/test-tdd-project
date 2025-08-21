@@ -49,7 +49,7 @@ def render_project_card(project: Dict[str, Any], db_manager: DatabaseManager, cl
     render_project_card_validation()
     render_project_card_networking()
     render_project_card_formatting()
-    pass  # TODO: Integrate extracted method results
+    pass  # TODO: Integrate extracted method results # Tracked: 2025-08-21
 
 
 def render_edit_project_modal(project: Dict[str, Any], db_manager: DatabaseManager, clients_map: Dict[int, str]):
@@ -250,7 +250,7 @@ def render_delete_project_modal(project: Dict[str, Any], db_manager: DatabaseMan
             project_epics = [e for e in epics if e.get('project_id') == project['id']]
             if project_epics:
                 st.error(f"⚠️ This project has {len(project_epics)} epic(s). Deleting the project will affect these epics.")
-        except:
+        except Exception:
             pass
         
         col1, col2 = st.columns(2)
@@ -645,7 +645,7 @@ def render_project_card_data_access():
     Extracted method handling data_access operations.
     Original responsibility: Data Access operations
     """
-    # TODO: Extract specific logic from lines [143]
+    # TODO: Extract specific logic from lines [143] # Tracked: 2025-08-21
     pass
 
 def render_project_card_ui_interaction():
@@ -653,7 +653,7 @@ def render_project_card_ui_interaction():
     Extracted method handling ui_interaction operations.
     Original responsibility: Ui Interaction operations
     """
-    # TODO: Extract specific logic from lines [45, 46, 47, 49, 62, 71, 72, 75, 76, 77, 80, 81, 82, 85, 90, 95, 98, 102, 107, 113, 117, 118, 124, 127, 137, 140, 141, 144, 145, 147]
+    # TODO: Extract specific logic from lines [45, 46, 47, 49, 62, 71, 72, 75, 76, 77, 80, 81, 82, 85, 90, 95, 98, 102, 107, 113, 117, 118, 124, 127, 137, 140, 141, 144, 145, 147] # Tracked: 2025-08-21
     pass
 
 def render_project_card_validation():
@@ -661,7 +661,7 @@ def render_project_card_validation():
     Extracted method handling validation operations.
     Original responsibility: Validation operations
     """
-    # TODO: Extract specific logic from lines [105, 111]
+    # TODO: Extract specific logic from lines [105, 111] # Tracked: 2025-08-21
     pass
 
 def render_project_card_networking():
@@ -669,7 +669,7 @@ def render_project_card_networking():
     Extracted method handling networking operations.
     Original responsibility: Networking operations
     """
-    # TODO: Extract specific logic from lines [58, 59, 65, 69, 88, 93, 96, 103, 109, 116, 122, 123, 126, 135, 136, 140, 144]
+    # TODO: Extract specific logic from lines [58, 59, 65, 69, 88, 93, 96, 103, 109, 116, 122, 123, 126, 135, 136, 140, 144] # Tracked: 2025-08-21
     pass
 
 def render_project_card_formatting():
@@ -677,5 +677,5 @@ def render_project_card_formatting():
     Extracted method handling formatting operations.
     Original responsibility: Formatting operations
     """
-    # TODO: Extract specific logic from lines [71, 72, 75, 76, 80, 81, 90, 95, 98, 107, 113, 118, 124, 127, 137, 140, 144]
+    # TODO: Extract specific logic from lines [71, 72, 75, 76, 80, 81, 90, 95, 98, 107, 113, 118, 124, 127, 137, 140, 144] # Tracked: 2025-08-21
     pass

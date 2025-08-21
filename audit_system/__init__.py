@@ -1,66 +1,58 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-🛡️ Audit System - Enterprise Code Analysis and Intelligent Refactoring
+🤖 Audit System - Agno-Based Intelligent Code Analysis
 
-Sistema completo de auditoria de código com agentes de IA especializados para:
-- Análise semântica avançada de código
-- Detecção e refatoração de god codes
-- Otimizações inteligentes de performance
-- Coordenação segura de modificações em arquivos
-- Workflow TDD com recursos TDAH
+Sistema simplificado de auditoria usando apenas agentes Agno:
+- Análise semântica real com LLM
+- Refatoração inteligente baseada em contexto
+- Detecção e eliminação de god codes
+- Workflow TDD otimizado para TDAH
 
-Arquitetura:
-- agents/: Agentes especializados de análise e refatoração
-- coordination/: Meta-agente e coordenação de arquivos
-- core/: Sistema base de auditoria
-- cli/: Interface de linha de comando
-- utils/: Utilitários compartilhados
+Arquitetura Agno-Only:
+- agents/: Agentes inteligentes Agno-compatible
+- context/: Contexto do projeto para análise semântica
+- core/: Rate limiting e backends LLM
+- utils/: Utilitários básicos
 
-Uso:
-    from audit_system.coordination.meta_agent import MetaAgent
-    from audit_system.agents.god_code_refactoring_agent import GodCodeRefactoringAgent
+Uso Direto:
+    from audit_system.agents.intelligent_code_agent import IntelligentCodeAgent
+    from audit_system.agents.intelligent_refactoring_engine import IntelligentRefactoringEngine
 """
 
-__version__ = "1.0.0"
-__author__ = "Claude + David"
+__version__ = "2.0.0-agno"
+__author__ = "Claude + David (Agno-based)"
 
-# Main exports for easy access
+# Agno-only exports
 try:
-    from audit_system.coordination.meta_agent import (
-        MetaAgent,
-        TaskType,
-        run_meta_agent_analysis,
-    )
     from audit_system.agents.intelligent_code_agent import (
         IntelligentCodeAgent,
         AnalysisDepth,
         SemanticMode,
     )
+    from audit_system.agents.intelligent_refactoring_engine import (
+        IntelligentRefactoringEngine,
+    )
     from audit_system.agents.god_code_refactoring_agent import (
         GodCodeRefactoringAgent,
         run_god_code_analysis,
     )
-    from audit_system.coordination.file_coordination_manager import (
-        FileCoordinationManager,
-        get_coordination_manager,
+    from audit_system.agents.tdd_intelligent_workflow_agent import (
+        TDDIntelligentWorkflowAgent,
     )
-except Exception as e:  # pragma: no cover - optional deps may be missing
-    # Keep module importable even if optional dependencies (e.g., streamlit) are absent
-    MetaAgent = TaskType = run_meta_agent_analysis = None
+except Exception as e:  # pragma: no cover - graceful degradation
+    # Keep module importable even with missing dependencies
     IntelligentCodeAgent = AnalysisDepth = SemanticMode = None
+    IntelligentRefactoringEngine = None
     GodCodeRefactoringAgent = run_god_code_analysis = None
-    FileCoordinationManager = get_coordination_manager = None
+    TDDIntelligentWorkflowAgent = None
 
 __all__ = [
-    "MetaAgent",
-    "TaskType", 
-    "run_meta_agent_analysis",
     "IntelligentCodeAgent",
     "AnalysisDepth",
     "SemanticMode", 
+    "IntelligentRefactoringEngine",
     "GodCodeRefactoringAgent",
     "run_god_code_analysis",
-    "FileCoordinationManager",
-    "get_coordination_manager"
+    "TDDIntelligentWorkflowAgent",
 ]

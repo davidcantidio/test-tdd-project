@@ -1,0 +1,22 @@
+{
+  "backup_id": "20250821_200809",
+  "created_at": "2025-08-21T23:08:09Z",
+  "audit_input": ".audit_intelligent",
+  "project_root": ".",
+  "script_version": "1.0.0",
+  "files_backed_up": [
+    "deep_architecture_audit.py",
+    "final_validation_script.py",
+    "migration/bidirectional_sync.py",
+    "migration/json_enrichment.py",
+    "migration/query_builder.py",
+    "migration/schema_migration_v7.py",
+    "mixed_responsibilities_analyzer.py",
+    "quinta_camada_audit.py",
+    "syntax_error_fixer.py",
+    "systematic_access_control_fix.py",
+    "systematic_srp_refactor.py",
+    "ultra_deep_audit.py"
+  ],
+  "optimizations_applied": []
+}

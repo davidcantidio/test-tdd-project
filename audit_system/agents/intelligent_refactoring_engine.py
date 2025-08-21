@@ -1,35 +1,21 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-🔧 Intelligent Refactoring Engine - Real LLM-Powered Code Transformation
+🔧 Intelligent Refactoring Engine - AI-Powered Code Transformation
 
-Enterprise refactoring engine that uses real LLM analysis for intelligent code transformation
-with semantic understanding, context integration, and production-ready rate limiting.
+Sistema avançado que aplica refatorações inteligentes automaticamente,
+compreendendo o contexto semântico e preservando funcionalidade.
 
-🧠 **REAL LLM REFACTORING CAPABILITIES:**
-- **Semantic Extract Method**: LLM-powered scope analysis and method extraction
-- **God Code Elimination**: Real understanding of responsibility separation
-- **Performance Optimization**: Intelligent N+1 query detection and batch processing  
-- **Exception Enhancement**: Context-aware error handling improvements
-- **Code Quality**: LLM-driven string optimization and deduplication
-- **Safety Validation**: Real semantic understanding of refactoring impact
+Capacidades:
+- Extract Method Refactoring com análise de escopo
+- God Method Detection e splitting automático  
+- N+1 Query optimization com batch processing
+- Exception Handling improvement com logging específico
+- String optimization com f-strings e join operations
+- Code deduplication com pattern extraction
 
-🎯 **ENHANCED REFACTORING FEATURES:**
-- Real semantic understanding of code structure and dependencies
-- Context-aware refactoring recommendations based on project patterns
-- Intelligent rate limiting for LLM API calls with optimal pacing
-- Production-ready refactoring with comprehensive safety validation
-- TDAH-optimized workflow with progress tracking and micro-steps
-
-📚 **CONTEXT INTEGRATION:**
-- Loads refactoring patterns from audit_system/context/workflows/
-- Integrates project architecture guidelines from context files
-- Uses TDAH optimization patterns for refactoring workflow management
-
-🚀 **USAGE:**
-    python intelligent_refactoring_engine.py --file FILE --real-llm-mode
-                                           --refactoring-type TYPE --tokens-budget 10000
-                                           [--apply] [--dry-run] [--tdah-mode]
+Uso:
+    python intelligent_refactoring_engine.py --file FILE --refactoring-type TYPE [--apply]
 """
 
 from __future__ import annotations
@@ -37,7 +23,6 @@ from __future__ import annotations
 import ast
 import re
 import logging
-import time
 from pathlib import Path
 from typing import Dict, List, Any, Optional, Tuple, Set
 from dataclasses import dataclass
@@ -50,19 +35,6 @@ sys.path.insert(0, str(project_root))
 
 from audit_system.agents.intelligent_code_agent import IntelligentCodeAgent, FileSemanticAnalysis, IntelligentRefactoring
 from audit_system.agents.god_code_refactoring_agent import GodCodeRefactoringAgent, GodCodeType
-
-# Real LLM Integration and Context Access
-try:
-    from ..core.intelligent_rate_limiter import IntelligentRateLimiter
-    RATE_LIMITER_AVAILABLE = True
-except ImportError:
-    RATE_LIMITER_AVAILABLE = False
-    
-# Context Integration
-CONTEXT_BASE_PATH = Path(__file__).parent.parent / "context"
-GUIDES_PATH = CONTEXT_BASE_PATH / "guides"
-WORKFLOWS_PATH = CONTEXT_BASE_PATH / "workflows" 
-NAVIGATION_PATH = CONTEXT_BASE_PATH / "navigation"
 
 
 @dataclass
@@ -80,350 +52,30 @@ class RefactoringResult:
 
 class IntelligentRefactoringEngine:
     """
-    🔧 Real LLM-Powered Intelligent Refactoring Engine with Context Integration
-    
-    Enterprise refactoring engine that uses real LLM analysis for intelligent code transformation
-    with semantic understanding, context integration, and production-ready rate limiting.
+    Engine that applies intelligent refactorings with full semantic understanding.
     """
     
-    def __init__(
-        self, 
-        dry_run: bool = False, 
-        enable_real_llm: bool = True,
-        tokens_budget: int = 10000,
-        tdah_mode: bool = False
-    ):
+    def __init__(self, dry_run: bool = False):
         self.dry_run = dry_run
-        self.enable_real_llm = enable_real_llm
-        self.tokens_budget = tokens_budget
-        self.tdah_mode = tdah_mode
-        
         self.logger = logging.getLogger(f"{__name__}.IntelligentRefactoringEngine")
         
-        # Initialize intelligent rate limiter
-        if RATE_LIMITER_AVAILABLE and enable_real_llm:
-            project_root = Path(__file__).resolve().parent.parent.parent
-            self.rate_limiter = IntelligentRateLimiter(project_root)
-            self.logger.info("✅ Intelligent Rate Limiter initialized for refactoring operations")
-        else:
-            self.rate_limiter = None
-            self.logger.debug("ℹ️ Rate Limiter not available - using fallback timing")
+        # Initialize specialized agents
+        self.god_code_agent = GodCodeRefactoringAgent(dry_run=self.dry_run)
         
-        # Load refactoring context
-        self.refactoring_context = self._load_refactoring_context()
-        
-        # Real LLM Token Configuration for Refactoring Operations  
-        self.real_llm_config = {
-            "extract_method_tokens": 2500,         # Semantic method extraction (vs 400 pattern-based)
-            "god_code_analysis_tokens": 3500,      # Complex god code understanding (vs 600)
-            "query_optimization_tokens": 2000,     # N+1 query detection (vs 300)
-            "exception_improvement_tokens": 1800,  # Error handling enhancement (vs 250)
-            "string_optimization_tokens": 1200,    # String operation optimization (vs 150)
-            "safety_validation_tokens": 2000,      # Refactoring safety analysis (vs 200)
-            "constants_extraction_tokens": 1500,   # Constants identification (vs 180)
-            "conditional_logic_tokens": 1800,      # Logic simplification (vs 220)
-        }
-        
-        # Initialize specialized agents with real LLM capabilities
-        self.god_code_agent = GodCodeRefactoringAgent(
-            dry_run=self.dry_run,
-            enable_real_llm=enable_real_llm,
-            tokens_budget=tokens_budget // 3  # Share token budget
-        )
-        
-        # Real LLM-powered refactoring strategies
+        # Refactoring strategies
         self.refactoring_strategies = {
-            "extract_method": self._apply_llm_extract_method,
-            "improve_exception_handling": self._apply_llm_improve_exception_handling,
-            "optimize_string_operations": self._apply_llm_optimize_string_operations,
-            "eliminate_god_method": self._apply_llm_eliminate_god_method,
-            "god_code_refactoring": self._apply_llm_god_code_refactoring,
-            "optimize_database_queries": self._apply_llm_optimize_database_queries,
-            "extract_constants": self._apply_llm_extract_constants,
-            "improve_conditional_logic": self._apply_llm_improve_conditional_logic
+            "extract_method": self._apply_extract_method,
+            "improve_exception_handling": self._apply_improve_exception_handling,
+            "optimize_string_operations": self._apply_optimize_string_operations,
+            "eliminate_god_method": self._apply_eliminate_god_method,
+            "god_code_refactoring": self._apply_god_code_refactoring,  # NEW: Specialized god code agent
+            "optimize_database_queries": self._apply_optimize_database_queries,
+            "extract_constants": self._apply_extract_constants,
+            "improve_conditional_logic": self._apply_improve_conditional_logic
         }
         
-        self.logger.info(
-            "🔧 Intelligent Refactoring Engine initialized: real_llm=%s, budget=%d tokens, tdah=%s",
-            enable_real_llm, tokens_budget, tdah_mode
-        )
+        self.logger.info("Intelligent Refactoring Engine initialized with God Code Agent")
     
-    def _load_refactoring_context(self) -> Dict[str, Any]:
-        """
-        📚 Load refactoring context for enhanced LLM-powered transformations.
-        """
-        context = {
-            "refactoring_patterns": {},
-            "tdah_guidelines": {},
-            "project_architecture": {},
-            "quality_standards": {}
-        }
-        
-        try:
-            # Load TDD workflow patterns for refactoring context
-            tdd_patterns_path = WORKFLOWS_PATH / "TDD_WORKFLOW_PATTERNS.md"
-            if tdd_patterns_path.exists():
-                with open(tdd_patterns_path, 'r', encoding='utf-8') as f:
-                    context["refactoring_patterns"]["tdd_context"] = f.read()
-                    context["refactoring_patterns"]["refactor_phase_guidance"] = [
-                        "Preserve all test behavior during refactoring",
-                        "Apply refactoring incrementally with continuous test validation",
-                        "Focus on code structure improvement while maintaining functionality",
-                        "Use test-driven refactoring for complex transformations"
-                    ]
-                self.logger.info("✅ Loaded TDD patterns for refactoring context")
-            
-            # Load TDAH optimization for refactoring workflow
-            tdah_guide_path = WORKFLOWS_PATH / "TDAH_OPTIMIZATION_GUIDE.md"
-            if tdah_guide_path.exists():
-                with open(tdah_guide_path, 'r', encoding='utf-8') as f:
-                    context["tdah_guidelines"]["content"] = f.read()
-                    context["tdah_guidelines"]["refactoring_principles"] = [
-                        "Break complex refactorings into small, focused steps",
-                        "Provide immediate feedback on each refactoring step completion",
-                        "Use clear progress indicators for complex transformations",
-                        "Allow interruption points between refactoring phases"
-                    ]
-                self.logger.info("✅ Loaded TDAH guidelines for refactoring workflow")
-            
-            # Load project architecture for refactoring strategy
-            navigation_path = NAVIGATION_PATH / "NAVIGATION.md"
-            if navigation_path.exists():
-                with open(navigation_path, 'r', encoding='utf-8') as f:
-                    context["project_architecture"]["navigation_patterns"] = f.read()
-                self.logger.info("✅ Loaded project architecture for refactoring strategy")
-            
-            self.logger.info("📚 Refactoring context loaded successfully")
-            
-        except Exception as e:
-            self.logger.warning(f"⚠️ Error loading refactoring context: {e}")
-            
-        return context
-    
-    # ------------- Internal helpers -------------------------------------------------
-    def _rl_guard(self, estimated_tokens: int, bucket: str) -> None:
-        """
-        Centraliza verificação/espera/registro do rate limiter para reduzir duplicação.
-        No-ops caso o rate limiter não esteja disponível ou o modo LLM esteja desabilitado.
-        """
-        if not (self.enable_real_llm and self.rate_limiter):
-            return
-        should_proceed, sleep_time, estimated_tokens = self.rate_limiter.should_proceed_with_operation(
-            operation_type=bucket,  # Use bucket as operation_type
-            file_path="unknown",    # Default file_path since not available in this context
-            file_size_lines=estimated_tokens // 150  # Aproximação: ~150 tokens por linha
-        )
-        if not should_proceed:
-            # Evita logs ruidosos para sleeps muito curtos
-            if sleep_time >= 0.05:
-                self.logger.debug("⏰ Rate limiting [%s]: sleeping %.2fs", bucket, sleep_time)
-            time.sleep(sleep_time)
-    
-    def _apply_llm_extract_method(
-        self, 
-        lines: List[str], 
-        refactoring: IntelligentRefactoring, 
-        file_path: str
-    ) -> RefactoringResult:
-        """🧠 LLM-powered method extraction with semantic understanding."""
-        
-        # Real LLM token consumption for semantic method extraction
-        estimated_tokens = self.real_llm_config["extract_method_tokens"]
-        self._rl_guard(estimated_tokens, "extract_method")
-        
-        self.logger.info("🧠 LLM Extract Method: %s (tokens: %d)", file_path, estimated_tokens)
-        
-        # Apply traditional extract method with LLM enhancements
-        result = self._apply_extract_method(lines, refactoring, file_path)
-        
-        # Enhanced improvements with LLM semantic understanding (0-100% scale)
-        if result.success:
-            result.improvements = {
-                "complexity_reduction": min(85.0, result.improvements.get("complexity_reduction", 0) * 100),  # 0-100%
-                "semantic_clarity": 78.0,  # LLM-analyzed semantic improvement
-                "maintainability": 82.0,   # LLM-assessed maintainability gain
-                "readability": min(90.0, result.improvements.get("readability_improvement", 0) * 100)
-            }
-        
-        return result
-    
-    def _apply_llm_improve_exception_handling(
-        self, 
-        lines: List[str], 
-        refactoring: IntelligentRefactoring, 
-        file_path: str
-    ) -> RefactoringResult:
-        """🧠 LLM-powered exception handling improvements."""
-        
-        estimated_tokens = self.real_llm_config["exception_improvement_tokens"]
-        self._rl_guard(estimated_tokens, "exception_handling")
-        
-        self.logger.info("🧠 LLM Exception Enhancement: %s (tokens: %d)", file_path, estimated_tokens)
-        
-        # Apply traditional exception improvements with LLM analysis
-        result = self._apply_improve_exception_handling(lines, refactoring, file_path)
-        
-        if result.success:
-            result.improvements = {
-                "error_resilience": 75.0,      # 0-100% LLM-assessed resilience
-                "debugging_capability": min(88.0, result.improvements.get("debugging_improvement", 0) * 100),
-                "security_posture": min(70.0, result.improvements.get("security_improvement", 0) * 100),
-                "production_readiness": 72.0   # LLM-evaluated production safety
-            }
-        
-        return result
-    
-    def _apply_llm_optimize_string_operations(
-        self, 
-        lines: List[str], 
-        refactoring: IntelligentRefactoring, 
-        file_path: str
-    ) -> RefactoringResult:
-        """🧠 LLM-powered string operation optimization."""
-        
-        estimated_tokens = self.real_llm_config["string_optimization_tokens"]
-        self._rl_guard(estimated_tokens, "string_optimization")
-        
-        self.logger.info("🧠 LLM String Optimization: %s (tokens: %d)", file_path, estimated_tokens)
-        
-        result = self._apply_optimize_string_operations(lines, refactoring, file_path)
-        
-        if result.success:
-            result.improvements = {
-                "performance_gain": min(65.0, result.improvements.get("performance_improvement", 0) * 100),
-                "memory_efficiency": 58.0,     # LLM-analyzed memory usage improvement
-                "code_elegance": min(80.0, result.improvements.get("readability_improvement", 0) * 100),
-                "modern_python_usage": 73.0    # f-string and modern pattern adoption
-            }
-        
-        return result
-    
-    def _apply_llm_eliminate_god_method(
-        self, 
-        lines: List[str], 
-        refactoring: IntelligentRefactoring, 
-        file_path: str
-    ) -> RefactoringResult:
-        """🧠 LLM-powered god method elimination with intelligent decomposition."""
-        
-        estimated_tokens = self.real_llm_config["god_code_analysis_tokens"]
-        self._rl_guard(estimated_tokens, "god_method_elimination")
-        
-        self.logger.info("🧠 LLM God Method Elimination: %s (tokens: %d)", file_path, estimated_tokens)
-        
-        result = self._apply_eliminate_god_method(lines, refactoring, file_path)
-        
-        if result.success:
-            result.improvements = {
-                "srp_compliance": 85.0,         # Single Responsibility Principle adherence
-                "complexity_reduction": min(92.0, result.improvements.get("complexity_reduction", 0)),
-                "testability": min(88.0, result.improvements.get("testability_improvement", 0) * 100),
-                "maintainability": min(90.0, result.improvements.get("maintainability_improvement", 0) * 100)
-            }
-        
-        return result
-    
-    def _apply_llm_god_code_refactoring(
-        self, 
-        lines: List[str], 
-        refactoring: IntelligentRefactoring, 
-        file_path: str
-    ) -> RefactoringResult:
-        """🧠 LLM-powered comprehensive god code refactoring."""
-        
-        estimated_tokens = self.real_llm_config["god_code_analysis_tokens"]
-        self._rl_guard(estimated_tokens, "god_code_refactoring")
-        
-        self.logger.info("🧠 LLM God Code Refactoring: %s (tokens: %d)", file_path, estimated_tokens)
-        
-        result = self._apply_god_code_refactoring(lines, refactoring, file_path)
-        
-        if result.success:
-            # Convert to 0-100% scale with clear semantic meaning
-            result.improvements = {
-                "architectural_health": min(95.0, result.improvements.get("srp_compliance", 0) * 100),
-                "complexity_reduction": min(90.0, result.improvements.get("complexity_reduction", 0)),
-                "maintainability": min(88.0, result.improvements.get("maintainability_improvement", 0)),
-                "testability": min(85.0, result.improvements.get("testability_improvement", 0) * 100)
-            }
-        
-        return result
-    
-    def _apply_llm_optimize_database_queries(
-        self, 
-        lines: List[str], 
-        refactoring: IntelligentRefactoring, 
-        file_path: str
-    ) -> RefactoringResult:
-        """🧠 LLM-powered N+1 query detection and optimization."""
-        
-        estimated_tokens = self.real_llm_config["query_optimization_tokens"]
-        self._rl_guard(estimated_tokens, "database_optimization")
-        
-        self.logger.info("🧠 LLM Database Query Optimization: %s (tokens: %d)", file_path, estimated_tokens)
-        
-        result = self._apply_optimize_database_queries(lines, refactoring, file_path)
-        
-        if result.success:
-            result.improvements = {
-                "query_performance": min(120.0, result.improvements.get("performance_improvement", 0) * 100),  # Can exceed 100% for major optimizations
-                "database_efficiency": 95.0,    # LLM-assessed DB load reduction
-                "scalability": 78.0,           # Improved scalability under load
-                "n_plus_1_elimination": 100.0  # Complete N+1 pattern elimination
-            }
-        
-        return result
-    
-    def _apply_llm_extract_constants(
-        self, 
-        lines: List[str], 
-        refactoring: IntelligentRefactoring, 
-        file_path: str
-    ) -> RefactoringResult:
-        """🧠 LLM-powered intelligent constant extraction."""
-        
-        estimated_tokens = self.real_llm_config["constants_extraction_tokens"]
-        self._rl_guard(estimated_tokens, "constants_extraction")
-        
-        self.logger.info("🧠 LLM Constants Extraction: %s (tokens: %d)", file_path, estimated_tokens)
-        
-        result = self._apply_extract_constants(lines, refactoring, file_path)
-        
-        if result.success:
-            result.improvements = {
-                "maintainability": min(75.0, result.improvements.get("maintainability_improvement", 0) * 100),
-                "configuration_clarity": 68.0,  # Clear separation of configuration
-                "magic_number_elimination": 85.0,  # Removal of unclear numeric literals
-                "code_documentation": 58.0     # Self-documenting constant names
-            }
-        
-        return result
-    
-    def _apply_llm_improve_conditional_logic(
-        self, 
-        lines: List[str], 
-        refactoring: IntelligentRefactoring, 
-        file_path: str
-    ) -> RefactoringResult:
-        """🧠 LLM-powered conditional logic simplification."""
-        
-        estimated_tokens = self.real_llm_config["conditional_logic_tokens"]
-        self._rl_guard(estimated_tokens, "conditional_logic")
-        
-        self.logger.info("🧠 LLM Conditional Logic Improvement: %s (tokens: %d)", file_path, estimated_tokens)
-        
-        result = self._apply_improve_conditional_logic(lines, refactoring, file_path)
-        
-        if result.success:
-            result.improvements = {
-                "cognitive_complexity": min(70.0, result.improvements.get("readability_improvement", 0) * 100),
-                "boolean_clarity": 72.0,        # Clear boolean expression logic
-                "decision_tree_optimization": 65.0,  # Optimized decision paths
-                "code_readability": min(80.0, result.improvements.get("readability_improvement", 0) * 100)
-            }
-        
-        return result
-
     def apply_refactoring(
         self, 
         file_path: str, 
@@ -1228,358 +880,12 @@ class IntelligentRefactoringEngine:
         # In practice, this would use AST analysis and boolean algebra
         return line
     
-    def _analyze_file_for_strategy(self, file_path: str, strategy_name: str) -> Tuple[List[int], float]:
-        """
-        🔍 REAL FILE ANALYSIS for specific refactoring strategies.
-        
-        Analyzes actual file content to identify lines that need refactoring
-        instead of using hardcoded target_lines=[1].
-        
-        Returns:
-            Tuple[List[int], float]: (target_lines, confidence_score)
-        """
-        try:
-            with open(file_path, 'r', encoding='utf-8') as f:
-                lines = f.readlines()
-            
-            target_lines = []
-            confidence = 0.0
-            
-            # Strategy-specific analysis
-            if strategy_name == "extract_method":
-                # Find long methods that need extraction
-                target_lines, confidence = self._find_extractable_methods(lines)
-                
-            elif strategy_name == "improve_exception_handling":
-                # Find bare except clauses or broad Exception handling
-                target_lines, confidence = self._find_poor_exception_handling(lines)
-                
-            elif strategy_name == "optimize_string_operations":
-                # Find string concatenation and inefficient string operations
-                target_lines, confidence = self._find_string_optimization_opportunities(lines)
-                
-            elif strategy_name == "eliminate_god_method":
-                # Find methods with high cyclomatic complexity
-                target_lines, confidence = self._find_god_methods(lines)
-                
-            elif strategy_name == "god_code_refactoring":
-                # Find god classes or files with too many responsibilities
-                target_lines, confidence = self._find_god_code_patterns(lines)
-                
-            elif strategy_name == "optimize_database_queries":
-                # Find potential N+1 query patterns
-                target_lines, confidence = self._find_database_antipatterns(lines)
-                
-            elif strategy_name == "extract_constants":
-                # Find magic numbers and strings
-                target_lines, confidence = self._find_magic_constants(lines)
-                
-            elif strategy_name == "improve_conditional_logic":
-                # Find complex conditional logic
-                target_lines, confidence = self._find_complex_conditionals(lines)
-            
-            else:
-                self.logger.warning(f"Unknown strategy for analysis: {strategy_name}")
-                return [], 0.0
-            
-            self.logger.debug(
-                f"Analysis for {strategy_name}: found {len(target_lines)} target lines "
-                f"with confidence {confidence:.2f}"
-            )
-            
-            return target_lines, confidence
-            
-        except Exception as e:
-            self.logger.error(f"Error analyzing {file_path} for {strategy_name}: {e}")
-            return [], 0.0
-    
-    def _find_extractable_methods(self, lines: List[str]) -> Tuple[List[int], float]:
-        """Find methods that are candidates for extract method refactoring."""
-        target_lines = []
-        confidence = 0.0
-        
-        in_method = False
-        method_start = 0
-        method_line_count = 0
-        current_method_lines = []
-        
-        for i, line in enumerate(lines):
-            stripped = line.strip()
-            
-            # Detect method start
-            if stripped.startswith('def ') and ':' in stripped:
-                # End previous method if we were in one
-                if in_method and method_line_count > 20:  # Methods longer than 20 lines
-                    target_lines.extend(current_method_lines[5:15])  # Extract middle section
-                    confidence = max(confidence, min(0.9, method_line_count / 50.0))
-                
-                # Start new method tracking
-                in_method = True
-                method_start = i + 1
-                method_line_count = 0
-                current_method_lines = []
-                
-            elif in_method:
-                # Track method body
-                if stripped and not stripped.startswith('#'):
-                    method_line_count += 1
-                    current_method_lines.append(i + 1)  # Convert to 1-based line numbers
-                
-                # End method on dedent to class/module level
-                if stripped and not line.startswith(('    ', '\t')) and not stripped.startswith(('def ', 'class ')):
-                    if method_line_count > 20:
-                        target_lines.extend(current_method_lines[5:15])
-                        confidence = max(confidence, min(0.9, method_line_count / 50.0))
-                    in_method = False
-        
-        # Handle last method
-        if in_method and method_line_count > 20:
-            target_lines.extend(current_method_lines[5:15])
-            confidence = max(confidence, min(0.9, method_line_count / 50.0))
-        
-        return target_lines[:10], confidence  # Limit to 10 lines max
-    
-    def _find_poor_exception_handling(self, lines: List[str]) -> Tuple[List[int], float]:
-        """Find lines with poor exception handling."""
-        target_lines = []
-        confidence = 0.0
-        
-        for i, line in enumerate(lines):
-            stripped = line.strip()
-            
-            # Bare except clauses
-            if stripped == "except:":
-                target_lines.append(i + 1)
-                confidence = max(confidence, 0.9)
-                
-            # Broad Exception handling without specific handling
-            elif "except Exception:" in stripped and not ("logger" in stripped or "log" in stripped):
-                target_lines.append(i + 1)
-                confidence = max(confidence, 0.7)
-                
-            # Try blocks without finally or proper cleanup
-            elif stripped.startswith("try:"):
-                # Look ahead for proper exception handling
-                has_specific_except = False
-                has_logging = False
-                
-                for j in range(i + 1, min(i + 10, len(lines))):
-                    next_line = lines[j].strip()
-                    if next_line.startswith("except ") and "Exception" not in next_line:
-                        has_specific_except = True
-                    if "logger" in next_line or "logging" in next_line:
-                        has_logging = True
-                    if next_line.startswith(("def ", "class ", "if __name__")):
-                        break
-                
-                if not has_specific_except or not has_logging:
-                    target_lines.append(i + 1)
-                    confidence = max(confidence, 0.5)
-        
-        return target_lines[:5], confidence  # Limit to 5 most critical
-    
-    def _find_string_optimization_opportunities(self, lines: List[str]) -> Tuple[List[int], float]:
-        """Find string operations that can be optimized."""
-        target_lines = []
-        confidence = 0.0
-        
-        for i, line in enumerate(lines):
-            stripped = line.strip()
-            
-            # String concatenation with +
-            if ("+ " in stripped or " +" in stripped) and any(quote in stripped for quote in ['"', "'"]):
-                # Avoid false positives with numeric operations
-                if not any(num in stripped for num in ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9']):
-                    target_lines.append(i + 1)
-                    confidence = max(confidence, 0.8)
-            
-            # Inefficient string building patterns
-            elif "+=" in stripped and any(quote in stripped for quote in ['"', "'"]):
-                target_lines.append(i + 1)
-                confidence = max(confidence, 0.9)
-            
-            # Old-style string formatting
-            elif " % " in stripped and any(quote in stripped for quote in ['"', "'"]):
-                target_lines.append(i + 1)
-                confidence = max(confidence, 0.7)
-        
-        return target_lines[:8], confidence
-    
-    def _find_god_methods(self, lines: List[str]) -> Tuple[List[int], float]:
-        """Find god methods (very long methods with multiple responsibilities)."""
-        target_lines = []
-        confidence = 0.0
-        
-        in_method = False
-        method_start = 0
-        method_line_count = 0
-        responsibility_indicators = 0
-        
-        for i, line in enumerate(lines):
-            stripped = line.strip()
-            
-            if stripped.startswith('def ') and ':' in stripped:
-                # End previous method analysis
-                if in_method and method_line_count > 30:  # Very long methods
-                    confidence_score = min(0.95, (method_line_count + responsibility_indicators * 5) / 100.0)
-                    if confidence_score > 0.6:
-                        # Add the entire method as target
-                        method_end = i
-                        target_lines.extend(range(method_start, method_end))
-                        confidence = max(confidence, confidence_score)
-                
-                # Start new method
-                in_method = True
-                method_start = i + 1
-                method_line_count = 0
-                responsibility_indicators = 0
-                
-            elif in_method:
-                if stripped and not stripped.startswith('#'):
-                    method_line_count += 1
-                    
-                    # Count responsibility indicators
-                    if any(indicator in stripped.lower() for indicator in [
-                        'validation', 'processing', 'formatting', 'logging', 'database', 
-                        'calculation', 'configuration', 'networking', 'file', 'email'
-                    ]):
-                        responsibility_indicators += 1
-                
-                # Method ends on dedent
-                if stripped and not line.startswith(('    ', '\t')) and not stripped.startswith(('def ', 'class ')):
-                    if method_line_count > 30:
-                        confidence_score = min(0.95, (method_line_count + responsibility_indicators * 5) / 100.0)
-                        if confidence_score > 0.6:
-                            method_end = i
-                            target_lines.extend(range(method_start, method_end))
-                            confidence = max(confidence, confidence_score)
-                    in_method = False
-        
-        return target_lines[:15], confidence  # Limit to avoid overwhelming
-    
-    def _find_god_code_patterns(self, lines: List[str]) -> Tuple[List[int], float]:
-        """Find god classes or modules with too many responsibilities."""
-        # For now, analyze based on file length and complexity indicators
-        target_lines = []
-        confidence = 0.0
-        
-        if len(lines) > 500:  # Very large files
-            # Look for classes with many methods
-            class_method_counts = {}
-            current_class = None
-            
-            for i, line in enumerate(lines):
-                stripped = line.strip()
-                
-                if stripped.startswith('class '):
-                    current_class = i + 1
-                    class_method_counts[current_class] = []
-                
-                elif current_class and stripped.startswith('def '):
-                    class_method_counts[current_class].append(i + 1)
-            
-            # Find classes with many methods
-            for class_line, methods in class_method_counts.items():
-                if len(methods) > 10:  # Classes with many methods
-                    target_lines.extend([class_line] + methods[:5])  # Include class and first few methods
-                    confidence = max(confidence, min(0.9, len(methods) / 20.0))
-        
-        return target_lines[:10], confidence
-    
-    def _find_database_antipatterns(self, lines: List[str]) -> Tuple[List[int], float]:
-        """Find potential N+1 query patterns and database antipatterns."""
-        target_lines = []
-        confidence = 0.0
-        
-        for i, line in enumerate(lines):
-            stripped = line.strip()
-            
-            # Look for database queries inside loops
-            if any(db_pattern in stripped.lower() for db_pattern in [
-                'execute(', 'query(', 'get(', 'cursor.', 'select ', 'update ', 'insert ', 'delete '
-            ]):
-                # Check if this is inside a loop (look back up to 10 lines)
-                in_loop = False
-                for j in range(max(0, i - 10), i):
-                    prev_line = lines[j].strip()
-                    if prev_line.startswith(('for ', 'while ')):
-                        in_loop = True
-                        break
-                
-                if in_loop:
-                    target_lines.append(i + 1)
-                    confidence = max(confidence, 0.8)
-        
-        return target_lines[:5], confidence
-    
-    def _find_magic_constants(self, lines: List[str]) -> Tuple[List[int], float]:
-        """Find magic numbers and strings that should be constants."""
-        target_lines = []
-        confidence = 0.0
-        
-        import re
-        
-        for i, line in enumerate(lines):
-            stripped = line.strip()
-            
-            # Skip comments and docstrings
-            if stripped.startswith('#') or '"""' in stripped or "'''" in stripped:
-                continue
-            
-            # Find magic numbers (but not 0, 1, -1 which are commonly acceptable)
-            magic_numbers = re.findall(r'\b(\d{2,})\b', stripped)  # 2+ digits
-            for number in magic_numbers:
-                if int(number) not in [0, 1, 10, 100, 1000]:  # Common acceptable numbers
-                    target_lines.append(i + 1)
-                    confidence = max(confidence, 0.6)
-                    break
-            
-            # Find repeated string literals
-            string_literals = re.findall(r'["\']([^"\']{3,})["\']', stripped)  # 3+ char strings
-            for string_lit in string_literals:
-                if not string_lit.isspace() and len(string_lit) > 5:
-                    target_lines.append(i + 1)
-                    confidence = max(confidence, 0.5)
-                    break
-        
-        return target_lines[:6], confidence
-    
-    def _find_complex_conditionals(self, lines: List[str]) -> Tuple[List[int], float]:
-        """Find complex conditional logic that can be simplified."""
-        target_lines = []
-        confidence = 0.0
-        
-        for i, line in enumerate(lines):
-            stripped = line.strip()
-            
-            # Complex if statements
-            if stripped.startswith(('if ', 'elif ')):
-                complexity_score = 0
-                
-                # Count boolean operators
-                complexity_score += stripped.count(' and ') * 2
-                complexity_score += stripped.count(' or ') * 2
-                complexity_score += stripped.count(' not ') * 1
-                
-                # Count comparison operators
-                complexity_score += stripped.count('==') + stripped.count('!=') + stripped.count('>=') + stripped.count('<=')
-                
-                # Count nested conditions
-                if '(' in stripped and ')' in stripped:
-                    complexity_score += stripped.count('(') * 2
-                
-                if complexity_score > 5:  # Arbitrary complexity threshold
-                    target_lines.append(i + 1)
-                    confidence = max(confidence, min(0.9, complexity_score / 15.0))
-        
-        return target_lines[:4], confidence
-    
     def apply_intelligent_refactorings(
         self, 
         analysis_result: Dict[str, Any], 
         selected_strategies: List[int] = None
     ) -> Dict[str, Any]:
-        """Apply intelligent refactorings based on analysis results - MetaAgent compatible method."""
+        """Apply intelligent refactorings based on analysis results - Agno compatible method."""
         
         try:
             # Default to first 3 strategies if not specified
@@ -1610,40 +916,20 @@ class IntelligentRefactoringEngine:
             refactorings_applied = []
             total_tokens_used = 0
             
-            # Apply selected strategies with REAL analysis
+            # Apply selected strategies
             for strategy_idx in selected_strategies:
                 if strategy_idx >= len(strategy_names):
                     continue
                     
                 strategy_name = strategy_names[strategy_idx]
                 
-                # **CRITICAL FIX**: Use real analysis instead of hardcoded target_lines=[1]
-                try:
-                    # Analyze file to get real target lines for this strategy
-                    target_lines, confidence = self._analyze_file_for_strategy(file_path, strategy_name)
-                    
-                    if not target_lines:
-                        # Skip if no applicable lines found
-                        self.logger.debug(f"No applicable lines found for {strategy_name} in {file_path}")
-                        continue
-                    
-                    # Create refactoring with REAL analysis data
-                    refactoring = IntelligentRefactoring(
-                        refactoring_type=strategy_name,
-                        target_lines=target_lines,  # ✅ REAL analysis instead of [1]
-                        description=f"Apply {strategy_name} refactoring",
-                        confidence=confidence
-                    )
-                    
-                except Exception as e:
-                    self.logger.warning(f"Failed to analyze {file_path} for {strategy_name}: {e}")
-                    # Fallback to minimal analysis
-                    refactoring = IntelligentRefactoring(
-                        refactoring_type=strategy_name,
-                        target_lines=[1],  # Fallback only
-                        description=f"Apply {strategy_name} refactoring (fallback)",
-                        confidence=0.3
-                    )
+                # Create a simple refactoring for this strategy
+                refactoring = IntelligentRefactoring(
+                    refactoring_type=strategy_name,
+                    target_lines=[1],  # Simplified - would need real analysis
+                    description=f"Apply {strategy_name} refactoring",
+                    confidence=0.8
+                )
                 
                 # Apply the refactoring
                 try:

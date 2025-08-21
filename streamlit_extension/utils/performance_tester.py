@@ -269,7 +269,7 @@ class LoadTester:
                 try:
                     future.result()
                 except Exception as e:
-                    print(f"Worker failed: {e}")
+                    logging.info(f"Worker failed: {e}")
         
         end_time = time.time()
         
@@ -296,9 +296,9 @@ class LoadTester:
                 time.sleep(0.01)
                 
             except Exception as e:
-                print(f"Operation failed in {worker_id}: {e}")
+                logging.info(f"Operation failed in {worker_id}: {e}")
                 
-        print(f"{worker_id} completed {operation_count} operations")
+        logging.info(f"{worker_id} completed {operation_count} operations")
     
     def _generate_test_data(self, size: int) -> List[Dict]:
         """Generate test data for load testing."""
@@ -529,15 +529,15 @@ def create_performance_test_suite(db_manager) -> Dict[str, Any]:
     
     results = {}
     
-    print("🚀 Starting Performance Test Suite...")
+    logging.info("🚀 Starting Performance Test Suite...")
     
     # 1. Database performance tests
-    print("📊 Running database performance tests...")
+    logging.info("📊 Running database performance tests...")
     results["database_crud"] = db_tester.benchmark_crud_operations(iterations=100)
     results["database_queries"] = db_tester.test_query_performance()
     
     # 2. Load testing
-    print("⚡ Running load tests...")
+    logging.info("⚡ Running load tests...")
     
     def client_creation_test(data):
         return db_manager.create_client(**data)
@@ -546,10 +546,10 @@ def create_performance_test_suite(db_manager) -> Dict[str, Any]:
     results["load_test_heavy"] = load_tester.run_load_test(heavy_load, client_creation_test)
     
     # 3. Generate report
-    print("📋 Generating performance report...")
+    logging.info("📋 Generating performance report...")
     report_file = reporter.generate_performance_report(results, "comprehensive_test")
     
-    print(f"✅ Performance testing complete! Report saved to: {report_file}")
+    logging.info(f"✅ Performance testing complete! Report saved to: {report_file}")
     
     return results
 
@@ -582,5 +582,5 @@ if __name__ == "__main__":
     # Run comprehensive test suite
     results = create_performance_test_suite(db_manager)
     
-    print("Performance testing completed!")
-    print(f"Results: {len(results)} test categories executed")
+    logging.info("Performance testing completed!")
+    logging.info(f"Results: {len(results)} test categories executed")

@@ -61,7 +61,7 @@ except ImportError:
         try:
             return func(*args, **kwargs)
         except Exception as e:
-            print(f"🚨 OPERATION ERROR ({operation_name or 'unknown'}): {e}")
+            logging.info(f"🚨 OPERATION ERROR ({operation_name or 'unknown'}): {e}")
             return default_return
 
 logger = logging.getLogger(__name__)

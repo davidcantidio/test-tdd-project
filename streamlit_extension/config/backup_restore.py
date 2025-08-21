@@ -611,7 +611,7 @@ def get_backup_manager() -> ConfigurationBackupManager:
 def render_backup_restore_ui() -> None:
     """Render backup and restore UI in Streamlit."""
     if not STREAMLIT_AVAILABLE:
-        print("[BACKUP & RESTORE UI]")
+        logging.info("[BACKUP & RESTORE UI]")
         return
     
     backup_manager = get_backup_manager()

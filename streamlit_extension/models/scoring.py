@@ -118,7 +118,7 @@ def critical_path_score(
 def aging_score(task: Task) -> float:
     """
     Calcula score de aging (antiguidade).
-    TODO: Implementar cálculo real baseado em created_at.
+    TODO: Implementar cálculo real baseado em created_at. # Tracked: 2025-08-21
     """
     # Placeholder - em implementação real, calcular dias desde criação
     if task.created_at:

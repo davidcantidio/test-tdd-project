@@ -773,7 +773,7 @@ if __name__ == "__main__":
     with log_user_session("user123", "session456", "192.168.1.50"):
         logger.user_action("user123", "create_client", "client_form", success=True)
     
-    print("Structured logging demo completed!")
-    print("Check demo_logs/ directory for log files")
+    logging.info("Structured logging demo completed!")
+    logging.info("Check demo_logs/ directory for log files")
     if PROMETHEUS_AVAILABLE:
-        print("Prometheus metrics available at http://localhost:8000")
+        logging.info("Prometheus metrics available at http://localhost:8000")

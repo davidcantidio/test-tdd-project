@@ -1,27 +1,15 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-🏗️ Audit System - Core Components
+🏗️ Audit System - Core Components (Agno-Only)
 
-Componentes centrais do sistema de auditoria:
-- EnhancedSystematicFileAuditor: Sistema base de auditoria com sessões empresariais
+Simplified core components for Agno-based intelligent audit system:
+- IntelligentRateLimiter: Smart API throttling for Agno agents
+- LLM backends: OpenAI and Claude backends for Agno
 """
 
-try:
-    from audit_system.core.systematic_file_auditor import (
-        EnhancedSystematicFileAuditor,
-        SetimaDataLoader,
-        EnterpriseSessionManager,
-        SmartTokenBudgetManager,
-    )
-except Exception:
-    EnhancedSystematicFileAuditor = (
-        SetimaDataLoader
-    ) = EnterpriseSessionManager = SmartTokenBudgetManager = None
+from audit_system.core.intelligent_rate_limiter import IntelligentRateLimiter
 
 __all__ = [
-    "EnhancedSystematicFileAuditor",
-    "SetimaDataLoader",
-    "EnterpriseSessionManager",
-    "SmartTokenBudgetManager",
+    "IntelligentRateLimiter",
 ]

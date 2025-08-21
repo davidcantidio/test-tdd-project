@@ -311,7 +311,8 @@ def check_services_health() -> Dict[str, Any]:
                 svc_raw = safe_streamlit_operation(_svc_call, default_return={}, operation_name="service_health") or {}
                 overall = _normalize_status(str(svc_raw.get("overall_health", "")))
                 message = "" if overall == "healthy" else str(svc_raw.get("error", "Service issues detected"))
-                svc_section = HealthSection(status=overall if overall != "unknown" else "healthy", data=svc_raw or None, message=message)
+                svc_section = HealthSection(status=overall if overall != "unknown" else "healthy", data=svc_raw or \
+                    None, message=message)
             else:
                 svc_section = HealthSection(status="healthy", message="Container active (basic check)")
     except Exception as e:  # pragma: no cover
@@ -521,12 +522,12 @@ def reset_services(force: bool = False) -> None:
 # Main (smoke test)
 # ======================================================================================
 if __name__ == "__main__":
-    print("🧪 Quick test - application_setup")
+    logging.info("🧪 Quick test - application_setup")
     ok_db = check_database_connection()
-    print(f"DB ping: {'✅' if ok_db else '❌'}")
+    logging.info(f"DB ping: {'✅' if ok_db else '❌'}")
 
     container = get_app_service_container()
-    print(f"ServiceContainer: {'✅' if container else '❌'}")
+    logging.info(f"ServiceContainer: {'✅' if container else '❌'}")
 
     health = check_services_health()
-    print(f"Overall health: {'✅' if health.get('overall', {}).get('healthy') else '❌'}")
+    logging.info(f"Overall health: {'✅' if health.get('overall', {}).get('healthy') else '❌'}")

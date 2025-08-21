@@ -790,7 +790,7 @@ def get_productivity_summary(db_manager: DatabaseManager, days: int = 7) -> Dict
 
 if __name__ == "__main__":
     # Test the analytics integration
-    print("StreamlitAnalyticsEngine loaded successfully")
-    print(f"Analytics Engine Available: {ANALYTICS_ENGINE_AVAILABLE}")
-    print(f"Streamlit Available: {STREAMLIT_AVAILABLE}")
-    print(f"Plotly Available: {PLOTLY_AVAILABLE}")
+    logging.info("StreamlitAnalyticsEngine loaded successfully")
+    logging.info(f"Analytics Engine Available: {ANALYTICS_ENGINE_AVAILABLE}")
+    logging.info(f"Streamlit Available: {STREAMLIT_AVAILABLE}")
+    logging.info(f"Plotly Available: {PLOTLY_AVAILABLE}")

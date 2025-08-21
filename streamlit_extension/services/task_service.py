@@ -259,7 +259,7 @@ class TaskRepository(BaseRepository):
                 task_data['title'],
                 task_data.get('description'),
                 task_data['epic_id'],
-                task_data.get('status', TaskStatus.TODO.value),
+                task_data.get('status', TaskStatus.TODO.value), # Tracked: 2025-08-21
                 task_data.get('tdd_phase', TDDPhase.RED.value),
                 task_data.get('priority', 3),  # Default medium priority
                 task_data.get('estimated_hours'),
@@ -292,7 +292,7 @@ class TaskRepository(BaseRepository):
                 task_data['title'],
                 task_data.get('description'),
                 task_data['epic_id'],
-                task_data.get('status', TaskStatus.TODO.value),
+                task_data.get('status', TaskStatus.TODO.value), # Tracked: 2025-08-21
                 task_data.get('tdd_phase', TDDPhase.RED.value),
                 task_data.get('priority', 3),
                 task_data.get('estimated_hours'),
@@ -520,10 +520,10 @@ class TaskService(BaseService):
                     field="tdd_phase"
                 ))
             
-            if status == TaskStatus.TODO.value and tdd_phase != TDDPhase.RED.value:
+            if status == TaskStatus.TODO.value and tdd_phase != TDDPhase.RED.value: # Tracked: 2025-08-21
                 errors.append(ServiceError(
                     error_type=ServiceErrorType.BUSINESS_RULE_VIOLATION,
-                    message="TODO tasks should typically start in RED phase",
+                    message="TODO tasks should typically start in RED phase", # Tracked: 2025-08-21
                     field="tdd_phase"
                 ))
         
@@ -619,7 +619,7 @@ class TaskService(BaseService):
                 task_data['tdd_phase'] = TDDPhase.RED.value
             
             if 'status' not in task_data or not task_data['status']:
-                task_data['status'] = TaskStatus.TODO.value
+                task_data['status'] = TaskStatus.TODO.value # Tracked: 2025-08-21
             
             # Create task
             task_id = self.repository.create(task_data)
@@ -943,7 +943,7 @@ class TaskService(BaseService):
             new_phase = phase_progression.get(current_phase, TDDPhase.RED.value)
             
             # Update status based on new phase
-            new_status = task.get('status', TaskStatus.TODO.value)
+            new_status = task.get('status', TaskStatus.TODO.value) # Tracked: 2025-08-21
             if new_phase == TDDPhase.GREEN.value:
                 new_status = TaskStatus.IN_PROGRESS.value
             elif new_phase == TDDPhase.REFACTOR.value:
@@ -1062,7 +1062,7 @@ class TaskService(BaseService):
                 return 80.0
             else:
                 return 30.0
-        elif tdd_phase == TDDPhase.RED.value and status != TaskStatus.TODO.value:
+        elif tdd_phase == TDDPhase.RED.value and status != TaskStatus.TODO.value: # Tracked: 2025-08-21
             return 20.0
         else:
             return 0.0
@@ -1166,8 +1166,8 @@ class TaskService(BaseService):
             result = task_service.plan_epic_execution(epic_id=1, scoring_preset="tdd_workflow")
             if result.success:
                 plan = result.data
-                print(f"Execution order: {plan.execution_order}")
-                print(f"Critical path: {plan.critical_path}")
+                logging.info(f"Execution order: {plan.execution_order}")
+                logging.info(f"Critical path: {plan.critical_path}")
         """
         try:
             self._log_operation_start("plan_epic_execution", {"epic_id": epic_id, "preset": scoring_preset})

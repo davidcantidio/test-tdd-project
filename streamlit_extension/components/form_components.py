@@ -566,27 +566,27 @@ __all__ = [
 
 if __name__ == "__main__":
     # Test simplified form components
-    print("🏗️ Testing DRY Form Components - Simplified")
-    print("=" * 50)
+    logging.info("🏗️ Testing DRY Form Components - Simplified")
+    logging.info("=" * 50)
     
     # Test form creation
     client_form = create_client_form("test_client", "Test Client Form")
     project_form = create_project_form("test_project", "Test Project Form")
     
-    print("✅ Form components created successfully")
-    print(f"   Client Form ID: {client_form.form_id}")
-    print(f"   Client Form Title: {client_form.title}")
-    print(f"   Project Form ID: {project_form.form_id}")
-    print(f"   Project Form Title: {project_form.title}")
+    logging.info("✅ Form components created successfully")
+    logging.info(f"   Client Form ID: {client_form.form_id}")
+    logging.info(f"   Client Form Title: {client_form.title}")
+    logging.info(f"   Project Form ID: {project_form.form_id}")
+    logging.info(f"   Project Form Title: {project_form.title}")
     
     # Test validation
     test_data = {"client_key": "test", "name": "Test Client", "primary_contact_email": "test@example.com"}
     errors = client_form.validate_client_data(test_data)
     
     if not errors:
-        print("✅ Validation working: No errors for valid data")
+        logging.info("✅ Validation working: No errors for valid data")
     
-    print("✅ DRY form components test completed")
-    print("📊 Code reduction: ~76% (577 → 136 lines equivalent)")
-    print("🔧 Enhanced features: Field type extension, hybrid context managers")
-    print("🔒 Security maintained: CSRF protection and input sanitization")
+    logging.info("✅ DRY form components test completed")
+    logging.info("📊 Code reduction: ~76% (577 → 136 lines equivalent)")
+    logging.info("🔧 Enhanced features: Field type extension, hybrid context managers")
+    logging.info("🔒 Security maintained: CSRF protection and input sanitization")

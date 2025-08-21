@@ -262,6 +262,7 @@ from datetime import datetime
 sys.path.append('.')
 
 try:
+    # Agno-only: Direct agent usage without local infrastructure
     from audit_system.agents.intelligent_code_agent import IntelligentCodeAgent, AnalysisDepth, SemanticMode
     
     AUDIT_DIR = pathlib.Path(".audit_intelligent")
@@ -270,10 +271,9 @@ try:
     with open(AUDIT_DIR / "priority_files.txt") as f:
         priority_files = [line.strip() for line in f if line.strip()]
     
-    # Inicializar agente com análise semântica real
+    # Inicializar agente com análise semântica real (Agno-based)
     agent = IntelligentCodeAgent(
         project_root=pathlib.Path("."),
-        enable_real_llm=True,  # ATIVAR análise semântica real (não pattern-based)
         analysis_depth=AnalysisDepth.DEEP,  # Análise profunda para máxima detecção
         semantic_mode=SemanticMode.AGGRESSIVE  # Modo agressivo para encontrar mais issues
     )

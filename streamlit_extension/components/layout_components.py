@@ -65,12 +65,12 @@ class CardContainer:
         """Context manager for rendering content within the card."""
         if not STREAMLIT_AVAILABLE:
             if self.title:
-                print(f"=== {self.title} ===")
+                logging.info(f"=== {self.title} ===")
             if self.subtitle:
-                print(f"--- {self.subtitle} ---")
+                logging.info(f"--- {self.subtitle} ---")
             
             yield
-            print()  # Empty line after card
+            logging.info()  # Empty line after card
             return
         
         # Generate card CSS
@@ -125,10 +125,10 @@ class CardContainer:
         """Render multiple cards in a grid layout."""
         if not STREAMLIT_AVAILABLE:
             for card_data in cards:
-                print(f"=== {card_data.get('title', 'Card')} ===")
+                logging.info(f"=== {card_data.get('title', 'Card')} ===")
                 if 'content' in card_data:
-                    print(card_data['content'])
-                print()
+                    logging.info(card_data['content'])
+                logging.info()
             return
         
         # protege contra columns<1
@@ -173,12 +173,12 @@ class SidebarSection:
         """Context manager for rendering sidebar section content."""
         if not STREAMLIT_AVAILABLE:
             icon_part = f"{self.icon} " if self.icon else ""
-            print(f"[SIDEBAR] {icon_part}{self.title}")
+            logging.info(f"[SIDEBAR] {icon_part}{self.title}")
             if self.help_text:
-                print(f"  Help: {self.help_text}")
+                logging.info(f"  Help: {self.help_text}")
             
             yield
-            print()
+            logging.info()
             return
         
         # Build title with icon
@@ -204,7 +204,7 @@ class SidebarSection:
     def render_divider(text: str = None) -> None:
         """Render a divider in the sidebar."""
         if not STREAMLIT_AVAILABLE:
-            print(f"--- {text or ''} ---")
+            logging.info(f"--- {text or ''} ---")
             return
         
         if text:
@@ -234,12 +234,12 @@ class ExpandableSection:
     def render(self):
         """Context manager for rendering expandable section."""
         if not STREAMLIT_AVAILABLE:
-            print(f"[EXPANDABLE] {self.icon} {self.title}")
+            logging.info(f"[EXPANDABLE] {self.icon} {self.title}")
             if self.help_text:
-                print(f"  Help: {self.help_text}")
+                logging.info(f"  Help: {self.help_text}")
             
             yield
-            print()
+            logging.info()
             return
         
         # Build title with icon
@@ -303,7 +303,7 @@ class TabContainer:
     def render(self):
         """Render tabs e retorna objetos dos tabs (padrão st.tabs)."""
         if not STREAMLIT_AVAILABLE:
-            print(f"[TABS] Available: {', '.join(self.tabs)}")
+            logging.info(f"[TABS] Available: {', '.join(self.tabs)}")
             return self.default_tab
         
         # Build tab labels with icons
@@ -324,7 +324,7 @@ class TabContainer:
             with tab_objects[tab_index]:
                 yield
         else:
-            print(f"[TAB {tab_index}] {self.tabs[tab_index]}")
+            logging.info(f"[TAB {tab_index}] {self.tabs[tab_index]}")
             yield
 
 
@@ -334,9 +334,9 @@ def create_two_column_layout(left_content: Callable[[], None],
                            ratio: List[int] = [1, 1]) -> None:
     """Create a simple two-column layout."""
     if not STREAMLIT_AVAILABLE:
-        print("[LEFT COLUMN]")
+        logging.info("[LEFT COLUMN]")
         left_content()
-        print("[RIGHT COLUMN]")
+        logging.info("[RIGHT COLUMN]")
         right_content()
         return
     
@@ -361,11 +361,11 @@ def create_three_column_layout(left_content: Callable[[], None],
                              ratio: List[int] = [1, 1, 1]) -> None:
     """Create a three-column layout."""
     if not STREAMLIT_AVAILABLE:
-        print("[LEFT COLUMN]")
+        logging.info("[LEFT COLUMN]")
         left_content()
-        print("[CENTER COLUMN]") 
+        logging.info("[CENTER COLUMN]")
         center_content()
-        print("[RIGHT COLUMN]")
+        logging.info("[RIGHT COLUMN]")
         right_content()
         return
     
@@ -386,9 +386,9 @@ def create_sidebar_main_layout(sidebar_content: Callable[[], None],
                              main_content: Callable[[], None]) -> None:
     """Create sidebar + main content layout."""
     if not STREAMLIT_AVAILABLE:
-        print("[SIDEBAR]")
+        logging.info("[SIDEBAR]")
         sidebar_content()
-        print("[MAIN CONTENT]")
+        logging.info("[MAIN CONTENT]")
         main_content()
         return
     

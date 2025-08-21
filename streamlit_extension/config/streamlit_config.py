@@ -130,24 +130,24 @@ class StreamlitConfig:
         """Validate configuration values."""
         # Validate port range
         if not (1024 <= self.streamlit_port <= 65535):
-            print(f"⚠️ Warning: streamlit_port {self.streamlit_port} outside recommended range (1024-65535)")
+            logging.info(f"⚠️ Warning: streamlit_port {self.streamlit_port} outside recommended range (1024-65535)")
         
         # Validate session durations
         if self.focus_session_duration < 5 or self.focus_session_duration > 120:
-            print(f"⚠️ Warning: focus_session_duration {self.focus_session_duration} outside recommended range (5-120 minutes)")
+            logging.info(f"⚠️ Warning: focus_session_duration {self.focus_session_duration} outside recommended range (5-120 minutes)")
         
         # Validate timezone
         if PYTZ_AVAILABLE and self.timezone:
             try:
                 pytz.timezone(self.timezone)
             except pytz.exceptions.UnknownTimeZoneError:
-                print(f"⚠️ Warning: Unknown timezone '{self.timezone}', falling back to UTC")
+                logging.info(f"⚠️ Warning: Unknown timezone '{self.timezone}', falling back to UTC")
                 self.timezone = "UTC"
         
         # Check GitHub configuration completeness
         github_fields = [self.github_token, self.github_repo_owner, self.github_repo_name]
         if any(github_fields) and not all(github_fields):
-            print("⚠️ Warning: Incomplete GitHub configuration. Set all: GITHUB_TOKEN, GITHUB_REPO_OWNER, GITHUB_REPO_NAME")
+            logging.info("⚠️ Warning: Incomplete GitHub configuration. Set all: GITHUB_TOKEN, GITHUB_REPO_OWNER, GITHUB_REPO_NAME")
     
     def is_github_configured(self) -> bool:
         """Check if GitHub integration is properly configured."""
@@ -216,7 +216,7 @@ class StreamlitConfig:
             try:
                 return pytz.timezone(self.timezone)
             except pytz.exceptions.UnknownTimeZoneError:
-                print(f"⚠️ Unknown timezone '{self.timezone}', using UTC")
+                logging.info(f"⚠️ Unknown timezone '{self.timezone}', using UTC")
                 return pytz.UTC
         return None
     
@@ -333,7 +333,7 @@ def load_config(env_file: Optional[str] = None) -> StreamlitConfig:
                     break
     else:
         if env_file or any(Path(p).exists() for p in [".env", "streamlit_extension/.env"]):
-            print("⚠️ Warning: .env file found but python-dotenv not installed. Install with: pip install python-dotenv")
+            logging.info("⚠️ Warning: .env file found but python-dotenv not installed. Install with: pip install python-dotenv")
     
     # Helper function to get environment variable with type conversion
     def get_env(key: str, default: Any, convert_type: type = str) -> Any:
@@ -351,7 +351,7 @@ def load_config(env_file: Optional[str] = None) -> StreamlitConfig:
             else:
                 return value
         except ValueError:
-            print(f"⚠️ Warning: Invalid value for {key}: '{value}', using default: {default}")
+            logging.info(f"⚠️ Warning: Invalid value for {key}: '{value}', using default: {default}")
             return default
     
     # Load all configuration values

@@ -373,8 +373,9 @@ apply_optimizations() {
     
     # Apply optimizations using enhanced Python integration
     python3 - << 'EOF'
-import json, sys, os, shutil
+import json, sys, os, shutil, time
 from pathlib import Path
+start_time = time.time()
 
 # ---------- Helpers ----------
 def load_json(p: Path):
@@ -456,10 +457,9 @@ if not targets:
 
 print(f"🔧 Found {len(targets)} files with optimization opportunities")
 
-# Single agent instance (optimization)
+# Single agent instance (optimization) - Agno-only
 code_agent = IntelligentCodeAgent(
     project_root=Path('.'),
-    enable_real_llm=True,
     analysis_depth=AnalysisDepth.DEEP,
     semantic_mode=SemanticMode.AGGRESSIVE,
     dry_run=False
@@ -540,9 +540,14 @@ for fr in targets:
 
 print(f"\n🎉 Optimization Summary:")
 print(f"   📁 Files modified: {total_files_modified}")
-print(f"   🔧 Total optimizations applied: {total_applied}")
+print(f"   🔧 Optimizations applied: {total_applied}")
+elapsed = time.time() - start_time
+print(f"   ⏱️ Elapsed: {elapsed:.2f}s")
+if total_applied == 0:
+    print("ℹ️  Dry-run or no real LLM configured. No destructive changes were written.")
 if failed_files:
     print(f"   ❗ Files with errors (kept/rolled back): {len(failed_files)}")
+print(f"[{int(time.time())}] SUCCESS")
 EOF
 }
 

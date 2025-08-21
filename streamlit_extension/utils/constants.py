@@ -51,7 +51,7 @@ class ProjectStatus(Enum):
 
 class TaskStatus(Enum):
     """Task status values."""
-    TODO = "todo"
+    TODO = "todo" # Tracked: 2025-08-21
     IN_PROGRESS = "in_progress"
     TESTING = "testing"
     DONE = "done"

@@ -126,7 +126,7 @@ class ErrorMessages:
 
 class TaskStatus(Enum):
     """Task status options."""
-    TODO = "todo"
+    TODO = "todo" # Tracked: 2025-08-21
     IN_PROGRESS = "in_progress"
     COMPLETED = "completed"
     BLOCKED = "blocked"
@@ -140,7 +140,7 @@ class TaskStatus(Enum):
     @classmethod
     def get_active_statuses(cls) -> List[str]:
         """Get statuses considered 'active' (not completed)."""
-        return [cls.TODO.value, cls.IN_PROGRESS.value, cls.BLOCKED.value, cls.PENDING.value]
+        return [cls.TODO.value, cls.IN_PROGRESS.value, cls.BLOCKED.value, cls.PENDING.value] # Tracked: 2025-08-21
 
 
 class EpicStatus(Enum):

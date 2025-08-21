@@ -197,7 +197,7 @@ class StreamlitSecurityManager:
         try:
             from circuit_breaker import CircuitBreakerConfig
         except ImportError:
-            print("CircuitBreakerConfig not available, skipping circuit breaker configuration")
+            logging.info("CircuitBreakerConfig not available, skipping circuit breaker configuration")
             return
         
         # Database circuit breaker - fails fast when DB is overloaded

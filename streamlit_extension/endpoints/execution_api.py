@@ -106,7 +106,7 @@ def handle_execution_planning(query_params: Dict[str, str]) -> Dict[str, Any]:
     handle_execution_planning_networking()
     handle_execution_planning_formatting()
     handle_execution_planning_serialization()
-    pass  # TODO: Integrate extracted method results
+    pass  # TODO: Integrate extracted method results # Tracked: 2025-08-21
 
 def handle_epic_validation(query_params: Dict[str, str]) -> Dict[str, Any]:
     """
@@ -300,7 +300,7 @@ def handle_execution_planning_validation():
     Extracted method handling validation operations.
     Original responsibility: Validation operations
     """
-    # TODO: Extract specific logic from lines [130]
+    # TODO: Extract specific logic from lines [130] # Tracked: 2025-08-21
     pass
 
 def handle_execution_planning_error_handling():
@@ -308,7 +308,7 @@ def handle_execution_planning_error_handling():
     Extracted method handling error_handling operations.
     Original responsibility: Error Handling operations
     """
-    # TODO: Extract specific logic from lines [124, 126, 127, 131, 151]
+    # TODO: Extract specific logic from lines [124, 126, 127, 131, 151] # Tracked: 2025-08-21
     pass
 
 def handle_execution_planning_networking():
@@ -316,7 +316,7 @@ def handle_execution_planning_networking():
     Extracted method handling networking operations.
     Original responsibility: Networking operations
     """
-    # TODO: Extract specific logic from lines [104, 119, 120, 127, 131, 150, 151]
+    # TODO: Extract specific logic from lines [104, 119, 120, 127, 131, 150, 151] # Tracked: 2025-08-21
     pass
 
 def handle_execution_planning_formatting():
@@ -324,7 +324,7 @@ def handle_execution_planning_formatting():
     Extracted method handling formatting operations.
     Original responsibility: Formatting operations
     """
-    # TODO: Extract specific logic from lines [125, 126, 127, 148]
+    # TODO: Extract specific logic from lines [125, 126, 127, 148] # Tracked: 2025-08-21
     pass
 
 def handle_execution_planning_serialization():
@@ -332,5 +332,5 @@ def handle_execution_planning_serialization():
     Extracted method handling serialization operations.
     Original responsibility: Serialization operations
     """
-    # TODO: Extract specific logic from lines [125, 126]
+    # TODO: Extract specific logic from lines [125, 126] # Tracked: 2025-08-21
     pass

@@ -243,7 +243,7 @@ def _render_system_debug() -> None:
             st.write(f"Available: ✅")
             try:
                 st.write(f"Version: {st.__version__}")
-            except:
+            except Exception:
                 st.write("Version: Unknown")
         else:
             st.write("Available: ❌")
@@ -296,7 +296,7 @@ def render_performance_metrics() -> None:
             import sys
             session_size = sys.getsizeof(st.session_state)
             st.metric("Session State Size", f"{session_size} bytes")
-        except:
+        except Exception:
             st.info("Session state size unavailable")
             
     except Exception as e:

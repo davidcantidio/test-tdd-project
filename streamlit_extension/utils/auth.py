@@ -25,7 +25,7 @@ try:
     import requests
     DEPENDENCIES_AVAILABLE = True
 except ImportError as e:
-    print(f"⚠️ Authentication dependencies not available: {e}")
+    logging.info(f"⚠️ Authentication dependencies not available: {e}")
     DEPENDENCIES_AVAILABLE = False
     st = None
 
@@ -302,7 +302,7 @@ def require_authentication(func):
                 st.error("❌ Authentication system not available - dependencies missing")
                 st.stop()
             else:
-                print("❌ Authentication system not available - dependencies missing")
+                logging.info("❌ Authentication system not available - dependencies missing")
                 return {"error": "Authentication dependencies not available"}
         
         try:
@@ -325,7 +325,7 @@ def require_authentication(func):
                 st.error("Please check your configuration and try again.")
                 st.stop()
             else:
-                print(f"❌ Authentication Error: {e}")
+                logging.info(f"❌ Authentication Error: {e}")
                 return {"error": f"Authentication Error: {e}"}
     
     return wrapper
@@ -452,7 +452,7 @@ def get_authenticated_user() -> Optional[Dict[str, Any]]:
     try:
         auth_manager = GoogleOAuthManager()
         return auth_manager.get_current_user()
-    except:
+    except Exception:
         return None
 
 
@@ -464,5 +464,5 @@ def is_user_authenticated() -> bool:
     try:
         auth_manager = GoogleOAuthManager()
         return auth_manager.is_authenticated()
-    except:
+    except Exception:
         return False

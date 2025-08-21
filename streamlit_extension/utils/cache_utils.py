@@ -80,7 +80,7 @@ def clear_all_caches() -> None:
         
         # Show debug message if in debug mode
         if is_debug_mode():
-            print("🧹 caches limpos")
+            logging.info("🧹 caches limpos")
     
     except Exception as e:
         logger.warning(f"Error clearing caches: {e}")

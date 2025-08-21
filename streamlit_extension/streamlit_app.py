@@ -140,12 +140,12 @@ def run_headless_mode() -> None:
         epics = list_epics()
         health = check_health()
         logger.info(f"Headless test - Epics: {len(epics)}, Health: {health.get('status')}")
-        print(f"⚠️ Streamlit não disponível — headless smoke test:")
-        print(f" - list_epics(): {len(epics)}")
-        print(f" - health: {health}")
+        logging.info(f"⚠️ Streamlit não disponível — headless smoke test:")
+        logging.info(f" - list_epics(): {len(epics)}")
+        logging.info(f" - health: {health}")
     except Exception as e:
         logger.error(f"Headless test error: {e}")
-        print(f" - erro DB: {e}")
+        logging.info(f" - erro DB: {e}")
 
 # === MAIN ORCHESTRATOR ========================================================
 
@@ -188,7 +188,7 @@ def main() -> None:
         if is_ui():
             safe_streamlit_error("⚠️ Application temporarily unavailable")
         else:
-            print(f"❌ Application error: {e}")
+            logging.info(f"❌ Application error: {e}")
 
 # === MODULE HEALTH CHECK ======================================================
 

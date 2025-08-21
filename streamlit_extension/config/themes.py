@@ -596,7 +596,7 @@ def apply_current_theme() -> str:
 def render_theme_selector(key: str = "theme_selector") -> None:
     """Render a theme selection widget."""
     if not STREAMLIT_AVAILABLE:
-        print("[THEME SELECTOR]")
+        logging.info("[THEME SELECTOR]")
         return
     
     theme_manager = get_theme_manager()

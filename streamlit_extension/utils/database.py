@@ -939,7 +939,7 @@ class DatabaseManager(PerformancePaginationMixin):
                     "total_pages": total_pages
                 }
         except Exception as e:
-            print(f"Error loading epics: {e}")
+            logging.info(f"Error loading epics: {e}")
             return {
                 "data": [],
                 "total": 0,
@@ -1052,7 +1052,7 @@ class DatabaseManager(PerformancePaginationMixin):
             logger.error(f"Error loading tasks: {e}")
             if STREAMLIT_AVAILABLE and st:
                 st.error(f"❌ Error loading tasks: {e}")
-            print(f"Error loading tasks: {e}")
+            logging.info(f"Error loading tasks: {e}")
             return {
                 "data": [],
                 "total": 0,
@@ -1094,7 +1094,7 @@ class DatabaseManager(PerformancePaginationMixin):
                     cursor.execute(query, [f"-{days}"])
                     return [dict(row) for row in cursor.fetchall()]
         except Exception as e:
-            print(f"Error loading timer sessions: {e}")
+            logging.info(f"Error loading timer sessions: {e}")
             return []
     
     def get_user_stats(self, user_id: int = 1) -> Dict[str, Any]:
@@ -1158,7 +1158,7 @@ class DatabaseManager(PerformancePaginationMixin):
                 return stats
                 
         except Exception as e:
-            print(f"Error loading user stats: {e}")
+            logging.info(f"Error loading user stats: {e}")
             return {
                 "completed_tasks": 0,
                 "total_points": 0,
@@ -1187,7 +1187,7 @@ class DatabaseManager(PerformancePaginationMixin):
                     return [dict(row) for row in cursor.fetchall()]
                     
         except Exception as e:
-            print(f"Error loading achievements: {e}")
+            logging.info(f"Error loading achievements: {e}")
             return []
     
     @invalidate_cache_on_change("db_query:get_tasks:", "db_query:get_epics:") if CACHE_AVAILABLE else lambda f: f
@@ -1232,7 +1232,7 @@ class DatabaseManager(PerformancePaginationMixin):
                 return True
                 
         except Exception as e:
-            print(f"Error updating task status: {e}")
+            logging.info(f"Error updating task status: {e}")
             return False
     
     @invalidate_cache_on_change("db_query:get_timer_sessions:") if CACHE_AVAILABLE else lambda f: f
@@ -1285,7 +1285,7 @@ class DatabaseManager(PerformancePaginationMixin):
                 return True
                 
         except Exception as e:
-            print(f"Error creating timer session: {e}")
+            logging.info(f"Error creating timer session: {e}")
             return False
     
     def get_epic_progress(self, epic_id: int) -> Dict[str, Any]:
@@ -1381,7 +1381,7 @@ class DatabaseManager(PerformancePaginationMixin):
                 return progress_dict
 
         except Exception as e:
-            print(f"Error getting epic progress: {e}")
+            logging.info(f"Error getting epic progress: {e}")
             return self._get_default_progress()
     
     def _get_default_progress(self) -> Dict[str, Any]:
@@ -1532,13 +1532,13 @@ class DatabaseManager(PerformancePaginationMixin):
             >>> db_manager.clear_cache("db_query:get_clients:")
         """
         if not CACHE_AVAILABLE:
-            print("Cache not available")
+            logging.info("Cache not available")
             return False
 
         cache = get_cache()
         pattern = cache_pattern or "db_query:"
         cache.invalidate_pattern(pattern)
-        print("Database cache cleared")
+        logging.info("Database cache cleared")
         return True
     
     def get_cache_stats(self) -> Dict[str, Any]:
@@ -1727,7 +1727,7 @@ class DatabaseManager(PerformancePaginationMixin):
             stats["best_streak"] = self._get_best_streak()
             
         except Exception as e:
-            print(f"Error getting productivity stats: {e}")
+            logging.info(f"Error getting productivity stats: {e}")
         
         return stats
     
@@ -1849,7 +1849,7 @@ class DatabaseManager(PerformancePaginationMixin):
                             summary["focus_time_minutes"] = row[1] or 0
         
         except Exception as e:
-            print(f"Error getting daily summary: {e}")
+            logging.info(f"Error getting daily summary: {e}")
         
         return summary
     
@@ -1896,7 +1896,7 @@ class DatabaseManager(PerformancePaginationMixin):
                         })
         
         except Exception as e:
-            print(f"Error getting notifications: {e}")
+            logging.info(f"Error getting notifications: {e}")
         
         return notifications
     
@@ -1952,7 +1952,7 @@ class DatabaseManager(PerformancePaginationMixin):
                         })
         
         except Exception as e:
-            print(f"Error getting achievements: {e}")
+            logging.info(f"Error getting achievements: {e}")
         
         return achievements
     
@@ -2053,7 +2053,7 @@ class DatabaseManager(PerformancePaginationMixin):
                     conn.commit()
                     return cursor.lastrowid
         except Exception as e:
-            print(f"Error creating task: {e}")
+            logging.info(f"Error creating task: {e}")
             return None
     
     def update_task(
@@ -2132,7 +2132,7 @@ class DatabaseManager(PerformancePaginationMixin):
                 
                 return True
         except Exception as e:
-            print(f"Error updating task {task_id}: {e}")
+            logging.info(f"Error updating task {task_id}: {e}")
             return False
     
     def delete_task(self, task_id: int, soft_delete: bool = True) -> bool:
@@ -2176,7 +2176,7 @@ class DatabaseManager(PerformancePaginationMixin):
                 
                 return True
         except Exception as e:
-            print(f"Error deleting task {task_id}: {e}")
+            logging.info(f"Error deleting task {task_id}: {e}")
             return False
     
     @cache_database_query("get_kanban_tasks", ttl=60) if CACHE_AVAILABLE else lambda f: f
@@ -2216,7 +2216,7 @@ class DatabaseManager(PerformancePaginationMixin):
                 return grouped
                 
         except Exception as e:
-            print(f"Error loading kanban tasks: {e}")
+            logging.info(f"Error loading kanban tasks: {e}")
             return {"todo": [], "in_progress": [], "completed": []}
     
     def get_task_statistics(self) -> Dict[str, int]:
@@ -2264,7 +2264,7 @@ class DatabaseManager(PerformancePaginationMixin):
                     return stats
                     
         except Exception as e:
-            print(f"Error getting task statistics: {e}")
+            logging.info(f"Error getting task statistics: {e}")
             return {"todo": 0, "in_progress": 0, "completed": 0, "total": 0}
     
     # ==================================================================================
@@ -2474,7 +2474,7 @@ class DatabaseManager(PerformancePaginationMixin):
                 return timeline_data
                 
         except Exception as e:
-            print(f"Error getting epic timeline for {epic_id}: {e}")
+            logging.info(f"Error getting epic timeline for {epic_id}: {e}")
             return {"error": str(e)}
     
     def validate_date_consistency(self, epic_id: int) -> bool:
@@ -2526,7 +2526,7 @@ class DatabaseManager(PerformancePaginationMixin):
                 return validation["is_valid"]
                 
         except Exception as e:
-            print(f"Error validating date consistency for epic {epic_id}: {e}")
+            logging.info(f"Error validating date consistency for epic {epic_id}: {e}")
             return False
     
     # Helper methods for duration system

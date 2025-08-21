@@ -93,7 +93,7 @@ class StatusBadge:
     def render(self, text: str = None, show_icon: bool = True, size: str = "normal") -> None:
         """Render the status badge."""
         if not STREAMLIT_AVAILABLE:
-            print(f"[{self.status.upper()}] {text or self.status}")
+            logging.info(f"[{self.status.upper()}] {text or self.status}")
             return
         
         display_text = text or self.status.replace("_", " ").title()
@@ -137,7 +137,7 @@ class StatusBadge:
         if not STREAMLIT_AVAILABLE:
             for i, status in enumerate(statuses):
                 text = texts[i] if texts and i < len(texts) else status
-                print(f"[{status.upper()}] {text}")
+                logging.info(f"[{status.upper()}] {text}")
             return
         
         badges_html = ""
@@ -195,9 +195,9 @@ class ProgressCard:
               height: int = 20) -> None:
         """Render the progress card."""
         if not STREAMLIT_AVAILABLE:
-            print(f"{self.title}: {self.current}/{self.total} ({self.percentage:.1f}%)")
+            logging.info(f"{self.title}: {self.current}/{self.total} ({self.percentage:.1f}%)")
             if self.description:
-                print(f"  {self.description}")
+                logging.info(f"  {self.description}")
             return
         
         # Color schemes
@@ -272,7 +272,7 @@ class ProgressCard:
     def render_mini(self, width: int = 100) -> None:
         """Render a compact version of the progress card."""
         if not STREAMLIT_AVAILABLE:
-            print(f"{self.title}: {self.percentage:.1f}%")
+            logging.info(f"{self.title}: {self.percentage:.1f}%")
             return
         
         progress_html = f"""
@@ -317,9 +317,9 @@ class MetricCard:
               chart_data: Optional[List[Union[int, float]]] = None) -> None:
         """Render the metric card with various layout options."""
         if not STREAMLIT_AVAILABLE:
-            print(f"{self.title}: {self.prefix}{self.value}{self.unit}{self.suffix}")
+            logging.info(f"{self.title}: {self.prefix}{self.value}{self.unit}{self.suffix}")
             if self.delta is not None:
-                print(f"  Delta: {self.delta:+}")
+                logging.info(f"  Delta: {self.delta:+}")
             return
         
         if layout == "compact":

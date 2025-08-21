@@ -109,10 +109,10 @@ def clear_health_cache() -> None:
 
         cfg = st.session_state.get("config") if STREAMLIT_AVAILABLE else None
         if cfg and getattr(cfg, "debug_mode", False):
-            print("🩹 health caches cleared")
+            logging.info("🩹 health caches cleared")
 
     except Exception as e:
-        print(f"⚠️ error clearing health cache: {e}")
+        logging.info(f"⚠️ error clearing health cache: {e}")
         try:
             st.session_state["health"] = fetch_health()
         except Exception:

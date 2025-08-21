@@ -947,7 +947,7 @@ if __name__ == "__main__":
     
     # Test basic operations
     cache.set("test_key", "test_value", 5)
-    print(f"Cache get: {cache.get('test_key')}")
+    logging.info(f"Cache get: {cache.get('test_key')}")
     
     # Test decorator
     @cached(ttl=10)
@@ -965,6 +965,6 @@ if __name__ == "__main__":
     result2 = expensive_function(1, 2)
     time2 = time.time() - start
     
-    print(f"First call: {result1} in {time1:.3f}s")
-    print(f"Second call: {result2} in {time2:.3f}s")
-    print(f"Cache stats: {cache.get_stats()}")
+    logging.info(f"First call: {result1} in {time1:.3f}s")
+    logging.info(f"Second call: {result2} in {time2:.3f}s")
+    logging.info(f"Cache stats: {cache.get_stats()}")

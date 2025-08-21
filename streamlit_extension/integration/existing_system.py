@@ -282,7 +282,7 @@ class ExistingSystemIntegrator:
             # Use existing analytics engine
             return self.analytics.generate_productivity_report(days)
         except Exception as e:
-            print(f"Analytics engine error: {e}")
+            logging.info(f"Analytics engine error: {e}")
             return self._get_fallback_analytics(days)
     
     def _get_fallback_analytics(self, days: int) -> Dict[str, Any]:
@@ -322,7 +322,7 @@ class ExistingSystemIntegrator:
         try:
             return self.gantt.generate_gantt_data()
         except Exception as e:
-            print(f"Gantt tracker error: {e}")
+            logging.info(f"Gantt tracker error: {e}")
             return self._get_fallback_gantt_data()
     
     def _get_fallback_gantt_data(self) -> Dict[str, Any]:
@@ -422,7 +422,7 @@ def quick_sync_epics_json_to_db(project_root: Path = None) -> bool:
     
     success = results.get("synced", 0) > 0 and not results.get("error")
     if not success:
-        print(f"Sync failed: {results.get('error', 'Unknown error')}")
+        logging.info(f"Sync failed: {results.get('error', 'Unknown error')}")
     
     return success
 

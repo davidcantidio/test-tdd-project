@@ -94,6 +94,9 @@ class IntelligentRateLimiter:
         self.session_tokens = 0
         self.session_requests = 0
         self.last_operation_time = 0
+
+        self._token_buckets: Dict[str, List[Tuple[float, int]]] = {}
+        self.window_seconds = 60
         
         # Load historical data
         self._load_usage_history()
@@ -270,13 +273,22 @@ class IntelligentRateLimiter:
         
         # Calculate intelligent delay
         delay = self.calculate_required_delay(estimated_tokens, operation_type, api_provider)
-        
+
         # ALWAYS proceed, just with appropriate timing
         return True, delay, estimated_tokens
-    
+
+    def register_consumption(self, operation_type: str, tokens: int) -> None:
+        """Registra consumo efetivo após a operação (usar em pontos de integração LLM)."""
+        now = time.time()
+        bucket = self._token_buckets.setdefault(operation_type, [])
+        bucket.append((now, max(0, int(tokens))))
+        cutoff = now - self.window_seconds
+        while bucket and bucket[0][0] < cutoff:
+            bucket.pop(0)
+
     def record_actual_usage(
-        self, 
-        operation_type: str, 
+        self,
+        operation_type: str,
         file_path: str,
         tokens_consumed: int, 
         duration: float,

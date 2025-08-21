@@ -1,10 +1,11 @@
 {
-  "total_files": 527,
-  "total_lines": 216178,
-  "total_size_bytes": 8413389,
+  "total_files": 600,
+  "total_lines": 247547,
+  "total_size_bytes": 9607168,
   "modules": {
     "root": [
       "test_complex_god_code.py",
+      "test_gpt5_integration_simple.py",
       "debug_agent_results.py",
       "mixed_responsibilities_analyzer.py",
       "deep_architecture_audit.py",
@@ -13,18 +14,19 @@
       "debug_services.py",
       "focused_validation_script.py",
       "debug_ui_errors.py",
+      "test_real_optimization.py",
       "final_validation_script.py",
       "ultra_deep_audit.py",
       "test_file_BEFORE_optimization.py",
       "focused_ultra_audit.py",
       "test_meta_agent_persistence.py",
-      "timer_service_refactor.py",
       "security_patches_database.py",
       "syntax_error_fixer.py",
       "example_code_to_refactor.py",
       "debug_components.py",
       "systematic_access_control_fix.py",
       "test_file_for_optimization.py",
+      "test_gpt5_integration.py",
       "test_file_for_optimization_ORIGINAL.py",
       "systematic_srp_refactor.py",
       "quinta_camada_audit.py",
@@ -86,23 +88,6 @@
       "scripts/analysis/generate_normalization_plan.py",
       "scripts/analysis/analysis_type_hints.py",
       "scripts/analysis/analyze_temporal_fields.py",
-      "scripts/automated_audit/intelligent_code_agent.py",
-      "scripts/automated_audit/run_meta_agent.py",
-      "scripts/automated_audit/test_god_code_agent.py",
-      "scripts/automated_audit/test_file_coordination.py",
-      "scripts/automated_audit/comprehensive_agents_audit.py",
-      "scripts/automated_audit/file_coordination_manager.py",
-      "scripts/automated_audit/meta_agent.py",
-      "scripts/automated_audit/integration_tester.py",
-      "scripts/automated_audit/rollback_context_changes.py",
-      "scripts/automated_audit/run_god_code_refactoring.py",
-      "scripts/automated_audit/context_validator.py",
-      "scripts/automated_audit/end_to_end_validator.py",
-      "scripts/automated_audit/intelligent_refactoring_engine.py",
-      "scripts/automated_audit/tdd_intelligent_workflow_agent.py",
-      "scripts/automated_audit/god_code_refactoring_agent.py",
-      "scripts/automated_audit/test_meta_agent_integration.py",
-      "scripts/automated_audit/systematic_file_auditor.py",
       "scripts/setup/create_audit_report.py",
       "scripts/setup/create_task_timer_stub.py",
       "scripts/setup/create_realistic_data.py",
@@ -141,30 +126,16 @@
     ],
     "audit_system": [
       "audit_system/__init__.py",
-      "audit_system/coordination/orchestrator.py",
-      "audit_system/coordination/file_coordination_manager.py",
-      "audit_system/coordination/meta_agent.py",
-      "audit_system/coordination/__init__.py",
-      "audit_system/core/container.py",
+      "audit_system/core/llm_backend.py",
       "audit_system/core/intelligent_rate_limiter.py",
       "audit_system/core/__init__.py",
-      "audit_system/core/contracts.py",
-      "audit_system/core/interfaces.py",
-      "audit_system/core/systematic_file_auditor.py",
+      "audit_system/core/openai_backend.py",
       "audit_system/agents/intelligent_code_agent.py",
       "audit_system/agents/__init__.py",
       "audit_system/agents/intelligent_refactoring_engine.py",
-      "audit_system/agents/static_rules_agent.py",
       "audit_system/agents/real_llm_intelligent_agent.py",
       "audit_system/agents/tdd_intelligent_workflow_agent.py",
       "audit_system/agents/god_code_refactoring_agent.py",
-      "audit_system/integration/intelligent_audit_coordinator.py",
-      "audit_system/services/session_sqlite.py",
-      "audit_system/services/__init__.py",
-      "audit_system/services/file_repository.py",
-      "audit_system/services/planner_simple.py",
-      "audit_system/cli/run_meta_agent.py",
-      "audit_system/cli/__init__.py",
       "audit_system/utils/safe_io.py",
       "audit_system/utils/path_security.py",
       "audit_system/utils/__init__.py",
@@ -432,6 +403,30 @@
       ".optimization_backups/files_20250821_145153/systematic_access_control_fix.py",
       ".optimization_backups/files_20250821_145153/systematic_srp_refactor.py",
       ".optimization_backups/files_20250821_145153/quinta_camada_audit.py",
+      ".optimization_backups/files_20250821_163004/mixed_responsibilities_analyzer.py",
+      ".optimization_backups/files_20250821_163004/deep_architecture_audit.py",
+      ".optimization_backups/files_20250821_163004/final_validation_script.py",
+      ".optimization_backups/files_20250821_163004/ultra_deep_audit.py",
+      ".optimization_backups/files_20250821_163004/syntax_error_fixer.py",
+      ".optimization_backups/files_20250821_163004/systematic_access_control_fix.py",
+      ".optimization_backups/files_20250821_163004/systematic_srp_refactor.py",
+      ".optimization_backups/files_20250821_163004/quinta_camada_audit.py",
+      ".optimization_backups/files_20250821_163208/mixed_responsibilities_analyzer.py",
+      ".optimization_backups/files_20250821_163208/deep_architecture_audit.py",
+      ".optimization_backups/files_20250821_163208/final_validation_script.py",
+      ".optimization_backups/files_20250821_163208/ultra_deep_audit.py",
+      ".optimization_backups/files_20250821_163208/syntax_error_fixer.py",
+      ".optimization_backups/files_20250821_163208/systematic_access_control_fix.py",
+      ".optimization_backups/files_20250821_163208/systematic_srp_refactor.py",
+      ".optimization_backups/files_20250821_163208/quinta_camada_audit.py",
+      ".optimization_backups/files_20250821_151147/mixed_responsibilities_analyzer.py",
+      ".optimization_backups/files_20250821_151147/deep_architecture_audit.py",
+      ".optimization_backups/files_20250821_151147/final_validation_script.py",
+      ".optimization_backups/files_20250821_151147/ultra_deep_audit.py",
+      ".optimization_backups/files_20250821_151147/syntax_error_fixer.py",
+      ".optimization_backups/files_20250821_151147/systematic_access_control_fix.py",
+      ".optimization_backups/files_20250821_151147/systematic_srp_refactor.py",
+      ".optimization_backups/files_20250821_151147/quinta_camada_audit.py",
       ".optimization_backups/files_20250821_140929/mixed_responsibilities_analyzer.py",
       ".optimization_backups/files_20250821_140929/deep_architecture_audit.py",
       ".optimization_backups/files_20250821_140929/final_validation_script.py",
@@ -483,6 +478,84 @@
       ".optimization_backups/files_20250821_145153/tests/test_business_calendar.py",
       ".optimization_backups/files_20250821_145153/tests/test_security_fixes.py",
       ".optimization_backups/files_20250821_145153/tests/test_duration_calculator.py",
+      ".optimization_backups/files_20250821_163004/migration/json_enrichment.py",
+      ".optimization_backups/files_20250821_163004/migration/query_builder.py",
+      ".optimization_backups/files_20250821_163004/migration/schema_migration_v7.py",
+      ".optimization_backups/files_20250821_163004/migration/bidirectional_sync.py",
+      ".optimization_backups/files_20250821_163004/migration/data_base_strategy.py",
+      ".optimization_backups/files_20250821_163004/monitoring/health_check.py",
+      ".optimization_backups/files_20250821_163004/monitoring/structured_logging.py",
+      ".optimization_backups/files_20250821_163004/monitoring/graceful_shutdown.py",
+      ".optimization_backups/files_20250821_163004/streamlit_extension.database/queries.py",
+      ".optimization_backups/files_20250821_163004/config/environment.py",
+      ".optimization_backups/files_20250821_163004/tests/test_redis_cache.py",
+      ".optimization_backups/files_20250821_163004/tests/test_exception_handler.py",
+      ".optimization_backups/files_20250821_163004/tests/test_form_components_simplified.py",
+      ".optimization_backups/files_20250821_163004/tests/test_kanban_functionality.py",
+      ".optimization_backups/files_20250821_163004/tests/test_dos_protection_integration.py",
+      ".optimization_backups/files_20250821_163004/tests/conftest.py",
+      ".optimization_backups/files_20250821_163004/tests/test_json_security.py",
+      ".optimization_backups/files_20250821_163004/tests/test_gdpr_compliance.py",
+      ".optimization_backups/files_20250821_163004/tests/test_duration_formatter.py",
+      ".optimization_backups/files_20250821_163004/tests/test_database_transactions.py",
+      ".optimization_backups/files_20250821_163004/tests/test_cache_interrupt_fix.py",
+      ".optimization_backups/files_20250821_163004/tests/test_api_endpoints.py",
+      ".optimization_backups/files_20250821_163004/tests/test_database_manager_duration_extension.py",
+      ".optimization_backups/files_20250821_163004/tests/test_business_calendar.py",
+      ".optimization_backups/files_20250821_163004/tests/test_security_fixes.py",
+      ".optimization_backups/files_20250821_163004/tests/test_duration_calculator.py",
+      ".optimization_backups/files_20250821_163208/migration/json_enrichment.py",
+      ".optimization_backups/files_20250821_163208/migration/query_builder.py",
+      ".optimization_backups/files_20250821_163208/migration/schema_migration_v7.py",
+      ".optimization_backups/files_20250821_163208/migration/bidirectional_sync.py",
+      ".optimization_backups/files_20250821_163208/migration/data_base_strategy.py",
+      ".optimization_backups/files_20250821_163208/monitoring/health_check.py",
+      ".optimization_backups/files_20250821_163208/monitoring/structured_logging.py",
+      ".optimization_backups/files_20250821_163208/monitoring/graceful_shutdown.py",
+      ".optimization_backups/files_20250821_163208/streamlit_extension.database/queries.py",
+      ".optimization_backups/files_20250821_163208/config/environment.py",
+      ".optimization_backups/files_20250821_163208/tests/test_redis_cache.py",
+      ".optimization_backups/files_20250821_163208/tests/test_exception_handler.py",
+      ".optimization_backups/files_20250821_163208/tests/test_form_components_simplified.py",
+      ".optimization_backups/files_20250821_163208/tests/test_kanban_functionality.py",
+      ".optimization_backups/files_20250821_163208/tests/test_dos_protection_integration.py",
+      ".optimization_backups/files_20250821_163208/tests/conftest.py",
+      ".optimization_backups/files_20250821_163208/tests/test_json_security.py",
+      ".optimization_backups/files_20250821_163208/tests/test_gdpr_compliance.py",
+      ".optimization_backups/files_20250821_163208/tests/test_duration_formatter.py",
+      ".optimization_backups/files_20250821_163208/tests/test_database_transactions.py",
+      ".optimization_backups/files_20250821_163208/tests/test_cache_interrupt_fix.py",
+      ".optimization_backups/files_20250821_163208/tests/test_api_endpoints.py",
+      ".optimization_backups/files_20250821_163208/tests/test_database_manager_duration_extension.py",
+      ".optimization_backups/files_20250821_163208/tests/test_business_calendar.py",
+      ".optimization_backups/files_20250821_163208/tests/test_security_fixes.py",
+      ".optimization_backups/files_20250821_163208/tests/test_duration_calculator.py",
+      ".optimization_backups/files_20250821_151147/migration/json_enrichment.py",
+      ".optimization_backups/files_20250821_151147/migration/query_builder.py",
+      ".optimization_backups/files_20250821_151147/migration/schema_migration_v7.py",
+      ".optimization_backups/files_20250821_151147/migration/bidirectional_sync.py",
+      ".optimization_backups/files_20250821_151147/migration/data_base_strategy.py",
+      ".optimization_backups/files_20250821_151147/monitoring/health_check.py",
+      ".optimization_backups/files_20250821_151147/monitoring/structured_logging.py",
+      ".optimization_backups/files_20250821_151147/monitoring/graceful_shutdown.py",
+      ".optimization_backups/files_20250821_151147/streamlit_extension.database/queries.py",
+      ".optimization_backups/files_20250821_151147/config/environment.py",
+      ".optimization_backups/files_20250821_151147/tests/test_redis_cache.py",
+      ".optimization_backups/files_20250821_151147/tests/test_exception_handler.py",
+      ".optimization_backups/files_20250821_151147/tests/test_form_components_simplified.py",
+      ".optimization_backups/files_20250821_151147/tests/test_kanban_functionality.py",
+      ".optimization_backups/files_20250821_151147/tests/test_dos_protection_integration.py",
+      ".optimization_backups/files_20250821_151147/tests/conftest.py",
+      ".optimization_backups/files_20250821_151147/tests/test_json_security.py",
+      ".optimization_backups/files_20250821_151147/tests/test_gdpr_compliance.py",
+      ".optimization_backups/files_20250821_151147/tests/test_duration_formatter.py",
+      ".optimization_backups/files_20250821_151147/tests/test_database_transactions.py",
+      ".optimization_backups/files_20250821_151147/tests/test_cache_interrupt_fix.py",
+      ".optimization_backups/files_20250821_151147/tests/test_api_endpoints.py",
+      ".optimization_backups/files_20250821_151147/tests/test_database_manager_duration_extension.py",
+      ".optimization_backups/files_20250821_151147/tests/test_business_calendar.py",
+      ".optimization_backups/files_20250821_151147/tests/test_security_fixes.py",
+      ".optimization_backups/files_20250821_151147/tests/test_duration_calculator.py",
       ".optimization_backups/files_20250821_140929/migration/json_enrichment.py",
       ".optimization_backups/files_20250821_140929/migration/query_builder.py",
       ".optimization_backups/files_20250821_140929/migration/schema_migration_v7.py",
@@ -567,25 +640,31 @@
     {
       "file": "test_complex_god_code.py",
       "lines": 230,
-      "size": 7405,
+      "size": 7866,
+      "module": "root"
+    },
+    {
+      "file": "test_gpt5_integration_simple.py",
+      "lines": 148,
+      "size": 5116,
       "module": "root"
     },
     {
       "file": "debug_agent_results.py",
       "lines": 138,
-      "size": 5772,
+      "size": 5975,
       "module": "root"
     },
     {
       "file": "mixed_responsibilities_analyzer.py",
-      "lines": 370,
-      "size": 16020,
+      "lines": 401,
+      "size": 18618,
       "module": "root"
     },
     {
       "file": "deep_architecture_audit.py",
-      "lines": 495,
-      "size": 21301,
+      "lines": 514,
+      "size": 23177,
       "module": "root"
     },
     {
@@ -619,15 +698,21 @@
       "module": "root"
     },
     {
+      "file": "test_real_optimization.py",
+      "lines": 41,
+      "size": 956,
+      "module": "root"
+    },
+    {
       "file": "final_validation_script.py",
-      "lines": 342,
-      "size": 11563,
+      "lines": 354,
+      "size": 12079,
       "module": "root"
     },
     {
       "file": "ultra_deep_audit.py",
-      "lines": 635,
-      "size": 29418,
+      "lines": 655,
+      "size": 30832,
       "module": "root"
     },
     {
@@ -649,12 +734,6 @@
       "module": "root"
     },
     {
-      "file": "timer_service_refactor.py",
-      "lines": 54,
-      "size": 2249,
-      "module": "root"
-    },
-    {
       "file": "security_patches_database.py",
       "lines": 213,
       "size": 9266,
@@ -662,8 +741,8 @@
     },
     {
       "file": "syntax_error_fixer.py",
-      "lines": 339,
-      "size": 12984,
+      "lines": 361,
+      "size": 14272,
       "module": "root"
     },
     {
@@ -680,14 +759,20 @@
     },
     {
       "file": "systematic_access_control_fix.py",
-      "lines": 428,
-      "size": 18142,
+      "lines": 450,
+      "size": 19244,
       "module": "root"
     },
     {
       "file": "test_file_for_optimization.py",
       "lines": 253,
       "size": 8955,
+      "module": "root"
+    },
+    {
+      "file": "test_gpt5_integration.py",
+      "lines": 138,
+      "size": 4275,
       "module": "root"
     },
     {
@@ -698,14 +783,14 @@
     },
     {
       "file": "systematic_srp_refactor.py",
-      "lines": 464,
-      "size": 18222,
+      "lines": 496,
+      "size": 19878,
       "module": "root"
     },
     {
       "file": "quinta_camada_audit.py",
-      "lines": 706,
-      "size": 31340,
+      "lines": 728,
+      "size": 32854,
       "module": "root"
     },
     {
@@ -728,14 +813,14 @@
     },
     {
       "file": "migration/json_enrichment.py",
-      "lines": 417,
-      "size": 14835,
+      "lines": 435,
+      "size": 15673,
       "module": "migration"
     },
     {
       "file": "migration/query_builder.py",
-      "lines": 335,
-      "size": 13252,
+      "lines": 352,
+      "size": 14138,
       "module": "migration"
     },
     {
@@ -746,14 +831,14 @@
     },
     {
       "file": "migration/schema_migration_v7.py",
-      "lines": 547,
-      "size": 21544,
+      "lines": 571,
+      "size": 23028,
       "module": "migration"
     },
     {
       "file": "migration/bidirectional_sync.py",
-      "lines": 633,
-      "size": 24804,
+      "lines": 659,
+      "size": 26558,
       "module": "migration"
     },
     {
@@ -764,26 +849,26 @@
     },
     {
       "file": "migration/data_base_strategy.py",
-      "lines": 339,
-      "size": 12368,
+      "lines": 359,
+      "size": 13476,
       "module": "migration"
     },
     {
       "file": "monitoring/health_check.py",
-      "lines": 602,
-      "size": 21431,
+      "lines": 638,
+      "size": 23609,
       "module": "monitoring"
     },
     {
       "file": "monitoring/structured_logging.py",
-      "lines": 640,
-      "size": 21326,
+      "lines": 670,
+      "size": 22834,
       "module": "monitoring"
     },
     {
       "file": "monitoring/graceful_shutdown.py",
-      "lines": 480,
-      "size": 18263,
+      "lines": 508,
+      "size": 19743,
       "module": "monitoring"
     },
     {
@@ -848,32 +933,32 @@
     },
     {
       "file": "streamlit_extension.database/queries.py",
-      "lines": 671,
-      "size": 40407,
+      "lines": 709,
+      "size": 42993,
       "module": "streamlit_extension.database"
     },
     {
       "file": "audit_system/__init__.py",
-      "lines": 66,
-      "size": 2143,
+      "lines": 58,
+      "size": 1863,
       "module": "audit_system"
     },
     {
       "file": "config/feature_flags.py",
-      "lines": 418,
-      "size": 14384,
+      "lines": 422,
+      "size": 14543,
       "module": "config"
     },
     {
       "file": "config/environment.py",
-      "lines": 364,
-      "size": 12686,
+      "lines": 378,
+      "size": 13536,
       "module": "config"
     },
     {
       "file": "tests/test_redis_cache.py",
-      "lines": 524,
-      "size": 18716,
+      "lines": 552,
+      "size": 20408,
       "module": "tests"
     },
     {
@@ -890,14 +975,14 @@
     },
     {
       "file": "tests/test_exception_handler.py",
-      "lines": 457,
-      "size": 17589,
+      "lines": 489,
+      "size": 19585,
       "module": "tests"
     },
     {
       "file": "tests/test_form_components_simplified.py",
-      "lines": 512,
-      "size": 15596,
+      "lines": 544,
+      "size": 17103,
       "module": "tests"
     },
     {
@@ -908,8 +993,8 @@
     },
     {
       "file": "tests/test_kanban_functionality.py",
-      "lines": 509,
-      "size": 17300,
+      "lines": 540,
+      "size": 18764,
       "module": "tests"
     },
     {
@@ -920,8 +1005,8 @@
     },
     {
       "file": "tests/test_dos_protection_integration.py",
-      "lines": 443,
-      "size": 15565,
+      "lines": 479,
+      "size": 17395,
       "module": "tests"
     },
     {
@@ -938,8 +1023,8 @@
     },
     {
       "file": "tests/conftest.py",
-      "lines": 342,
-      "size": 10464,
+      "lines": 358,
+      "size": 11268,
       "module": "tests"
     },
     {
@@ -950,8 +1035,8 @@
     },
     {
       "file": "tests/test_json_security.py",
-      "lines": 571,
-      "size": 19383,
+      "lines": 605,
+      "size": 21357,
       "module": "tests"
     },
     {
@@ -974,8 +1059,8 @@
     },
     {
       "file": "tests/test_gdpr_compliance.py",
-      "lines": 658,
-      "size": 24450,
+      "lines": 703,
+      "size": 26898,
       "module": "tests"
     },
     {
@@ -992,26 +1077,26 @@
     },
     {
       "file": "tests/test_duration_formatter.py",
-      "lines": 599,
-      "size": 23733,
+      "lines": 613,
+      "size": 24429,
       "module": "tests"
     },
     {
       "file": "tests/test_database_transactions.py",
-      "lines": 802,
-      "size": 30753,
+      "lines": 844,
+      "size": 33311,
       "module": "tests"
     },
     {
       "file": "tests/test_cache_interrupt_fix.py",
-      "lines": 435,
-      "size": 15116,
+      "lines": 462,
+      "size": 16892,
       "module": "tests"
     },
     {
       "file": "tests/test_api_endpoints.py",
-      "lines": 401,
-      "size": 15704,
+      "lines": 415,
+      "size": 16445,
       "module": "tests"
     },
     {
@@ -1040,8 +1125,8 @@
     },
     {
       "file": "tests/test_database_manager_duration_extension.py",
-      "lines": 550,
-      "size": 22075,
+      "lines": 582,
+      "size": 23901,
       "module": "tests"
     },
     {
@@ -1052,20 +1137,20 @@
     },
     {
       "file": "tests/test_business_calendar.py",
-      "lines": 525,
-      "size": 21043,
+      "lines": 549,
+      "size": 22261,
       "module": "tests"
     },
     {
       "file": "tests/test_security_fixes.py",
-      "lines": 501,
-      "size": 21571,
+      "lines": 537,
+      "size": 23754,
       "module": "tests"
     },
     {
       "file": "tests/test_duration_calculator.py",
-      "lines": 572,
-      "size": 23765,
+      "lines": 586,
+      "size": 24461,
       "module": "tests"
     },
     {
@@ -1281,13 +1366,13 @@
     {
       "file": "streamlit_extension/streamlit_app copy.py",
       "lines": 601,
-      "size": 22440,
+      "size": 22503,
       "module": "streamlit_extension"
     },
     {
       "file": "streamlit_extension/streamlit_app.py",
       "lines": 214,
-      "size": 7073,
+      "size": 7108,
       "module": "streamlit_extension"
     },
     {
@@ -1549,108 +1634,6 @@
       "module": "scripts"
     },
     {
-      "file": "scripts/automated_audit/intelligent_code_agent.py",
-      "lines": 1685,
-      "size": 71412,
-      "module": "scripts"
-    },
-    {
-      "file": "scripts/automated_audit/run_meta_agent.py",
-      "lines": 410,
-      "size": 15033,
-      "module": "scripts"
-    },
-    {
-      "file": "scripts/automated_audit/test_god_code_agent.py",
-      "lines": 457,
-      "size": 15729,
-      "module": "scripts"
-    },
-    {
-      "file": "scripts/automated_audit/test_file_coordination.py",
-      "lines": 388,
-      "size": 12920,
-      "module": "scripts"
-    },
-    {
-      "file": "scripts/automated_audit/comprehensive_agents_audit.py",
-      "lines": 1359,
-      "size": 58713,
-      "module": "scripts"
-    },
-    {
-      "file": "scripts/automated_audit/file_coordination_manager.py",
-      "lines": 644,
-      "size": 22969,
-      "module": "scripts"
-    },
-    {
-      "file": "scripts/automated_audit/meta_agent.py",
-      "lines": 1829,
-      "size": 78288,
-      "module": "scripts"
-    },
-    {
-      "file": "scripts/automated_audit/integration_tester.py",
-      "lines": 823,
-      "size": 33232,
-      "module": "scripts"
-    },
-    {
-      "file": "scripts/automated_audit/rollback_context_changes.py",
-      "lines": 628,
-      "size": 25626,
-      "module": "scripts"
-    },
-    {
-      "file": "scripts/automated_audit/run_god_code_refactoring.py",
-      "lines": 315,
-      "size": 11119,
-      "module": "scripts"
-    },
-    {
-      "file": "scripts/automated_audit/context_validator.py",
-      "lines": 610,
-      "size": 25034,
-      "module": "scripts"
-    },
-    {
-      "file": "scripts/automated_audit/end_to_end_validator.py",
-      "lines": 660,
-      "size": 25798,
-      "module": "scripts"
-    },
-    {
-      "file": "scripts/automated_audit/intelligent_refactoring_engine.py",
-      "lines": 1086,
-      "size": 42713,
-      "module": "scripts"
-    },
-    {
-      "file": "scripts/automated_audit/tdd_intelligent_workflow_agent.py",
-      "lines": 980,
-      "size": 39060,
-      "module": "scripts"
-    },
-    {
-      "file": "scripts/automated_audit/god_code_refactoring_agent.py",
-      "lines": 883,
-      "size": 36769,
-      "module": "scripts"
-    },
-    {
-      "file": "scripts/automated_audit/test_meta_agent_integration.py",
-      "lines": 289,
-      "size": 9466,
-      "module": "scripts"
-    },
-    {
-      "file": "scripts/automated_audit/systematic_file_auditor.py",
-      "lines": 48,
-      "size": 1693,
-      "module": "scripts"
-    },
-    {
       "file": "scripts/setup/create_audit_report.py",
       "lines": 433,
       "size": 19380,
@@ -1874,6 +1857,150 @@
     },
     {
       "file": ".optimization_backups/files_20250821_145153/quinta_camada_audit.py",
+      "lines": 706,
+      "size": 31340,
+      "module": ".optimization_backups"
+    },
+    {
+      "file": ".optimization_backups/files_20250821_163004/mixed_responsibilities_analyzer.py",
+      "lines": 370,
+      "size": 16020,
+      "module": ".optimization_backups"
+    },
+    {
+      "file": ".optimization_backups/files_20250821_163004/deep_architecture_audit.py",
+      "lines": 495,
+      "size": 21301,
+      "module": ".optimization_backups"
+    },
+    {
+      "file": ".optimization_backups/files_20250821_163004/final_validation_script.py",
+      "lines": 342,
+      "size": 11563,
+      "module": ".optimization_backups"
+    },
+    {
+      "file": ".optimization_backups/files_20250821_163004/ultra_deep_audit.py",
+      "lines": 635,
+      "size": 29418,
+      "module": ".optimization_backups"
+    },
+    {
+      "file": ".optimization_backups/files_20250821_163004/syntax_error_fixer.py",
+      "lines": 339,
+      "size": 12984,
+      "module": ".optimization_backups"
+    },
+    {
+      "file": ".optimization_backups/files_20250821_163004/systematic_access_control_fix.py",
+      "lines": 428,
+      "size": 18142,
+      "module": ".optimization_backups"
+    },
+    {
+      "file": ".optimization_backups/files_20250821_163004/systematic_srp_refactor.py",
+      "lines": 464,
+      "size": 18222,
+      "module": ".optimization_backups"
+    },
+    {
+      "file": ".optimization_backups/files_20250821_163004/quinta_camada_audit.py",
+      "lines": 706,
+      "size": 31340,
+      "module": ".optimization_backups"
+    },
+    {
+      "file": ".optimization_backups/files_20250821_163208/mixed_responsibilities_analyzer.py",
+      "lines": 385,
+      "size": 16883,
+      "module": ".optimization_backups"
+    },
+    {
+      "file": ".optimization_backups/files_20250821_163208/deep_architecture_audit.py",
+      "lines": 504,
+      "size": 21934,
+      "module": ".optimization_backups"
+    },
+    {
+      "file": ".optimization_backups/files_20250821_163208/final_validation_script.py",
+      "lines": 348,
+      "size": 11821,
+      "module": ".optimization_backups"
+    },
+    {
+      "file": ".optimization_backups/files_20250821_163208/ultra_deep_audit.py",
+      "lines": 645,
+      "size": 30125,
+      "module": ".optimization_backups"
+    },
+    {
+      "file": ".optimization_backups/files_20250821_163208/syntax_error_fixer.py",
+      "lines": 350,
+      "size": 13628,
+      "module": ".optimization_backups"
+    },
+    {
+      "file": ".optimization_backups/files_20250821_163208/systematic_access_control_fix.py",
+      "lines": 439,
+      "size": 18693,
+      "module": ".optimization_backups"
+    },
+    {
+      "file": ".optimization_backups/files_20250821_163208/systematic_srp_refactor.py",
+      "lines": 480,
+      "size": 19050,
+      "module": ".optimization_backups"
+    },
+    {
+      "file": ".optimization_backups/files_20250821_163208/quinta_camada_audit.py",
+      "lines": 717,
+      "size": 32097,
+      "module": ".optimization_backups"
+    },
+    {
+      "file": ".optimization_backups/files_20250821_151147/mixed_responsibilities_analyzer.py",
+      "lines": 370,
+      "size": 16020,
+      "module": ".optimization_backups"
+    },
+    {
+      "file": ".optimization_backups/files_20250821_151147/deep_architecture_audit.py",
+      "lines": 495,
+      "size": 21301,
+      "module": ".optimization_backups"
+    },
+    {
+      "file": ".optimization_backups/files_20250821_151147/final_validation_script.py",
+      "lines": 342,
+      "size": 11563,
+      "module": ".optimization_backups"
+    },
+    {
+      "file": ".optimization_backups/files_20250821_151147/ultra_deep_audit.py",
+      "lines": 635,
+      "size": 29418,
+      "module": ".optimization_backups"
+    },
+    {
+      "file": ".optimization_backups/files_20250821_151147/syntax_error_fixer.py",
+      "lines": 339,
+      "size": 12984,
+      "module": ".optimization_backups"
+    },
+    {
+      "file": ".optimization_backups/files_20250821_151147/systematic_access_control_fix.py",
+      "lines": 428,
+      "size": 18142,
+      "module": ".optimization_backups"
+    },
+    {
+      "file": ".optimization_backups/files_20250821_151147/systematic_srp_refactor.py",
+      "lines": 464,
+      "size": 18222,
+      "module": ".optimization_backups"
+    },
+    {
+      "file": ".optimization_backups/files_20250821_151147/quinta_camada_audit.py",
       "lines": 706,
       "size": 31340,
       "module": ".optimization_backups"
@@ -2180,6 +2307,474 @@
     },
     {
       "file": ".optimization_backups/files_20250821_145153/tests/test_duration_calculator.py",
+      "lines": 572,
+      "size": 23765,
+      "module": ".optimization_backups"
+    },
+    {
+      "file": ".optimization_backups/files_20250821_163004/migration/json_enrichment.py",
+      "lines": 417,
+      "size": 14835,
+      "module": ".optimization_backups"
+    },
+    {
+      "file": ".optimization_backups/files_20250821_163004/migration/query_builder.py",
+      "lines": 335,
+      "size": 13252,
+      "module": ".optimization_backups"
+    },
+    {
+      "file": ".optimization_backups/files_20250821_163004/migration/schema_migration_v7.py",
+      "lines": 547,
+      "size": 21544,
+      "module": ".optimization_backups"
+    },
+    {
+      "file": ".optimization_backups/files_20250821_163004/migration/bidirectional_sync.py",
+      "lines": 633,
+      "size": 24804,
+      "module": ".optimization_backups"
+    },
+    {
+      "file": ".optimization_backups/files_20250821_163004/migration/data_base_strategy.py",
+      "lines": 339,
+      "size": 12368,
+      "module": ".optimization_backups"
+    },
+    {
+      "file": ".optimization_backups/files_20250821_163004/monitoring/health_check.py",
+      "lines": 602,
+      "size": 21431,
+      "module": ".optimization_backups"
+    },
+    {
+      "file": ".optimization_backups/files_20250821_163004/monitoring/structured_logging.py",
+      "lines": 640,
+      "size": 21326,
+      "module": ".optimization_backups"
+    },
+    {
+      "file": ".optimization_backups/files_20250821_163004/monitoring/graceful_shutdown.py",
+      "lines": 480,
+      "size": 18263,
+      "module": ".optimization_backups"
+    },
+    {
+      "file": ".optimization_backups/files_20250821_163004/streamlit_extension.database/queries.py",
+      "lines": 671,
+      "size": 40407,
+      "module": ".optimization_backups"
+    },
+    {
+      "file": ".optimization_backups/files_20250821_163004/config/environment.py",
+      "lines": 364,
+      "size": 12686,
+      "module": ".optimization_backups"
+    },
+    {
+      "file": ".optimization_backups/files_20250821_163004/tests/test_redis_cache.py",
+      "lines": 524,
+      "size": 18716,
+      "module": ".optimization_backups"
+    },
+    {
+      "file": ".optimization_backups/files_20250821_163004/tests/test_exception_handler.py",
+      "lines": 457,
+      "size": 17589,
+      "module": ".optimization_backups"
+    },
+    {
+      "file": ".optimization_backups/files_20250821_163004/tests/test_form_components_simplified.py",
+      "lines": 512,
+      "size": 15596,
+      "module": ".optimization_backups"
+    },
+    {
+      "file": ".optimization_backups/files_20250821_163004/tests/test_kanban_functionality.py",
+      "lines": 509,
+      "size": 17300,
+      "module": ".optimization_backups"
+    },
+    {
+      "file": ".optimization_backups/files_20250821_163004/tests/test_dos_protection_integration.py",
+      "lines": 443,
+      "size": 15565,
+      "module": ".optimization_backups"
+    },
+    {
+      "file": ".optimization_backups/files_20250821_163004/tests/conftest.py",
+      "lines": 342,
+      "size": 10464,
+      "module": ".optimization_backups"
+    },
+    {
+      "file": ".optimization_backups/files_20250821_163004/tests/test_json_security.py",
+      "lines": 571,
+      "size": 19383,
+      "module": ".optimization_backups"
+    },
+    {
+      "file": ".optimization_backups/files_20250821_163004/tests/test_gdpr_compliance.py",
+      "lines": 658,
+      "size": 24450,
+      "module": ".optimization_backups"
+    },
+    {
+      "file": ".optimization_backups/files_20250821_163004/tests/test_duration_formatter.py",
+      "lines": 599,
+      "size": 23733,
+      "module": ".optimization_backups"
+    },
+    {
+      "file": ".optimization_backups/files_20250821_163004/tests/test_database_transactions.py",
+      "lines": 802,
+      "size": 30753,
+      "module": ".optimization_backups"
+    },
+    {
+      "file": ".optimization_backups/files_20250821_163004/tests/test_cache_interrupt_fix.py",
+      "lines": 435,
+      "size": 15116,
+      "module": ".optimization_backups"
+    },
+    {
+      "file": ".optimization_backups/files_20250821_163004/tests/test_api_endpoints.py",
+      "lines": 401,
+      "size": 15704,
+      "module": ".optimization_backups"
+    },
+    {
+      "file": ".optimization_backups/files_20250821_163004/tests/test_database_manager_duration_extension.py",
+      "lines": 550,
+      "size": 22075,
+      "module": ".optimization_backups"
+    },
+    {
+      "file": ".optimization_backups/files_20250821_163004/tests/test_business_calendar.py",
+      "lines": 525,
+      "size": 21043,
+      "module": ".optimization_backups"
+    },
+    {
+      "file": ".optimization_backups/files_20250821_163004/tests/test_security_fixes.py",
+      "lines": 501,
+      "size": 21571,
+      "module": ".optimization_backups"
+    },
+    {
+      "file": ".optimization_backups/files_20250821_163004/tests/test_duration_calculator.py",
+      "lines": 572,
+      "size": 23765,
+      "module": ".optimization_backups"
+    },
+    {
+      "file": ".optimization_backups/files_20250821_163208/migration/json_enrichment.py",
+      "lines": 426,
+      "size": 15254,
+      "module": ".optimization_backups"
+    },
+    {
+      "file": ".optimization_backups/files_20250821_163208/migration/query_builder.py",
+      "lines": 342,
+      "size": 13657,
+      "module": ".optimization_backups"
+    },
+    {
+      "file": ".optimization_backups/files_20250821_163208/migration/schema_migration_v7.py",
+      "lines": 559,
+      "size": 22286,
+      "module": ".optimization_backups"
+    },
+    {
+      "file": ".optimization_backups/files_20250821_163208/migration/bidirectional_sync.py",
+      "lines": 646,
+      "size": 25681,
+      "module": ".optimization_backups"
+    },
+    {
+      "file": ".optimization_backups/files_20250821_163208/migration/data_base_strategy.py",
+      "lines": 349,
+      "size": 12922,
+      "module": ".optimization_backups"
+    },
+    {
+      "file": ".optimization_backups/files_20250821_163208/monitoring/health_check.py",
+      "lines": 620,
+      "size": 22520,
+      "module": ".optimization_backups"
+    },
+    {
+      "file": ".optimization_backups/files_20250821_163208/monitoring/structured_logging.py",
+      "lines": 655,
+      "size": 22080,
+      "module": ".optimization_backups"
+    },
+    {
+      "file": ".optimization_backups/files_20250821_163208/monitoring/graceful_shutdown.py",
+      "lines": 494,
+      "size": 19003,
+      "module": ".optimization_backups"
+    },
+    {
+      "file": ".optimization_backups/files_20250821_163208/streamlit_extension.database/queries.py",
+      "lines": 690,
+      "size": 41700,
+      "module": ".optimization_backups"
+    },
+    {
+      "file": ".optimization_backups/files_20250821_163208/config/environment.py",
+      "lines": 371,
+      "size": 13111,
+      "module": ".optimization_backups"
+    },
+    {
+      "file": ".optimization_backups/files_20250821_163208/tests/test_redis_cache.py",
+      "lines": 538,
+      "size": 19562,
+      "module": ".optimization_backups"
+    },
+    {
+      "file": ".optimization_backups/files_20250821_163208/tests/test_exception_handler.py",
+      "lines": 473,
+      "size": 18587,
+      "module": ".optimization_backups"
+    },
+    {
+      "file": ".optimization_backups/files_20250821_163208/tests/test_form_components_simplified.py",
+      "lines": 528,
+      "size": 16319,
+      "module": ".optimization_backups"
+    },
+    {
+      "file": ".optimization_backups/files_20250821_163208/tests/test_kanban_functionality.py",
+      "lines": 523,
+      "size": 17992,
+      "module": ".optimization_backups"
+    },
+    {
+      "file": ".optimization_backups/files_20250821_163208/tests/test_dos_protection_integration.py",
+      "lines": 461,
+      "size": 16480,
+      "module": ".optimization_backups"
+    },
+    {
+      "file": ".optimization_backups/files_20250821_163208/tests/conftest.py",
+      "lines": 350,
+      "size": 10866,
+      "module": ".optimization_backups"
+    },
+    {
+      "file": ".optimization_backups/files_20250821_163208/tests/test_json_security.py",
+      "lines": 588,
+      "size": 20370,
+      "module": ".optimization_backups"
+    },
+    {
+      "file": ".optimization_backups/files_20250821_163208/tests/test_gdpr_compliance.py",
+      "lines": 679,
+      "size": 25644,
+      "module": ".optimization_backups"
+    },
+    {
+      "file": ".optimization_backups/files_20250821_163208/tests/test_duration_formatter.py",
+      "lines": 606,
+      "size": 24081,
+      "module": ".optimization_backups"
+    },
+    {
+      "file": ".optimization_backups/files_20250821_163208/tests/test_database_transactions.py",
+      "lines": 823,
+      "size": 32032,
+      "module": ".optimization_backups"
+    },
+    {
+      "file": ".optimization_backups/files_20250821_163208/tests/test_cache_interrupt_fix.py",
+      "lines": 448,
+      "size": 15969,
+      "module": ".optimization_backups"
+    },
+    {
+      "file": ".optimization_backups/files_20250821_163208/tests/test_api_endpoints.py",
+      "lines": 406,
+      "size": 16042,
+      "module": ".optimization_backups"
+    },
+    {
+      "file": ".optimization_backups/files_20250821_163208/tests/test_database_manager_duration_extension.py",
+      "lines": 566,
+      "size": 22988,
+      "module": ".optimization_backups"
+    },
+    {
+      "file": ".optimization_backups/files_20250821_163208/tests/test_business_calendar.py",
+      "lines": 537,
+      "size": 21652,
+      "module": ".optimization_backups"
+    },
+    {
+      "file": ".optimization_backups/files_20250821_163208/tests/test_security_fixes.py",
+      "lines": 519,
+      "size": 22628,
+      "module": ".optimization_backups"
+    },
+    {
+      "file": ".optimization_backups/files_20250821_163208/tests/test_duration_calculator.py",
+      "lines": 579,
+      "size": 24113,
+      "module": ".optimization_backups"
+    },
+    {
+      "file": ".optimization_backups/files_20250821_151147/migration/json_enrichment.py",
+      "lines": 417,
+      "size": 14835,
+      "module": ".optimization_backups"
+    },
+    {
+      "file": ".optimization_backups/files_20250821_151147/migration/query_builder.py",
+      "lines": 335,
+      "size": 13252,
+      "module": ".optimization_backups"
+    },
+    {
+      "file": ".optimization_backups/files_20250821_151147/migration/schema_migration_v7.py",
+      "lines": 547,
+      "size": 21544,
+      "module": ".optimization_backups"
+    },
+    {
+      "file": ".optimization_backups/files_20250821_151147/migration/bidirectional_sync.py",
+      "lines": 633,
+      "size": 24804,
+      "module": ".optimization_backups"
+    },
+    {
+      "file": ".optimization_backups/files_20250821_151147/migration/data_base_strategy.py",
+      "lines": 339,
+      "size": 12368,
+      "module": ".optimization_backups"
+    },
+    {
+      "file": ".optimization_backups/files_20250821_151147/monitoring/health_check.py",
+      "lines": 602,
+      "size": 21431,
+      "module": ".optimization_backups"
+    },
+    {
+      "file": ".optimization_backups/files_20250821_151147/monitoring/structured_logging.py",
+      "lines": 640,
+      "size": 21326,
+      "module": ".optimization_backups"
+    },
+    {
+      "file": ".optimization_backups/files_20250821_151147/monitoring/graceful_shutdown.py",
+      "lines": 480,
+      "size": 18263,
+      "module": ".optimization_backups"
+    },
+    {
+      "file": ".optimization_backups/files_20250821_151147/streamlit_extension.database/queries.py",
+      "lines": 671,
+      "size": 40407,
+      "module": ".optimization_backups"
+    },
+    {
+      "file": ".optimization_backups/files_20250821_151147/config/environment.py",
+      "lines": 364,
+      "size": 12686,
+      "module": ".optimization_backups"
+    },
+    {
+      "file": ".optimization_backups/files_20250821_151147/tests/test_redis_cache.py",
+      "lines": 524,
+      "size": 18716,
+      "module": ".optimization_backups"
+    },
+    {
+      "file": ".optimization_backups/files_20250821_151147/tests/test_exception_handler.py",
+      "lines": 457,
+      "size": 17589,
+      "module": ".optimization_backups"
+    },
+    {
+      "file": ".optimization_backups/files_20250821_151147/tests/test_form_components_simplified.py",
+      "lines": 512,
+      "size": 15596,
+      "module": ".optimization_backups"
+    },
+    {
+      "file": ".optimization_backups/files_20250821_151147/tests/test_kanban_functionality.py",
+      "lines": 509,
+      "size": 17300,
+      "module": ".optimization_backups"
+    },
+    {
+      "file": ".optimization_backups/files_20250821_151147/tests/test_dos_protection_integration.py",
+      "lines": 443,
+      "size": 15565,
+      "module": ".optimization_backups"
+    },
+    {
+      "file": ".optimization_backups/files_20250821_151147/tests/conftest.py",
+      "lines": 342,
+      "size": 10464,
+      "module": ".optimization_backups"
+    },
+    {
+      "file": ".optimization_backups/files_20250821_151147/tests/test_json_security.py",
+      "lines": 571,
+      "size": 19383,
+      "module": ".optimization_backups"
+    },
+    {
+      "file": ".optimization_backups/files_20250821_151147/tests/test_gdpr_compliance.py",
+      "lines": 658,
+      "size": 24450,
+      "module": ".optimization_backups"
+    },
+    {
+      "file": ".optimization_backups/files_20250821_151147/tests/test_duration_formatter.py",
+      "lines": 599,
+      "size": 23733,
+      "module": ".optimization_backups"
+    },
+    {
+      "file": ".optimization_backups/files_20250821_151147/tests/test_database_transactions.py",
+      "lines": 802,
+      "size": 30753,
+      "module": ".optimization_backups"
+    },
+    {
+      "file": ".optimization_backups/files_20250821_151147/tests/test_cache_interrupt_fix.py",
+      "lines": 435,
+      "size": 15116,
+      "module": ".optimization_backups"
+    },
+    {
+      "file": ".optimization_backups/files_20250821_151147/tests/test_api_endpoints.py",
+      "lines": 401,
+      "size": 15704,
+      "module": ".optimization_backups"
+    },
+    {
+      "file": ".optimization_backups/files_20250821_151147/tests/test_database_manager_duration_extension.py",
+      "lines": 550,
+      "size": 22075,
+      "module": ".optimization_backups"
+    },
+    {
+      "file": ".optimization_backups/files_20250821_151147/tests/test_business_calendar.py",
+      "lines": 525,
+      "size": 21043,
+      "module": ".optimization_backups"
+    },
+    {
+      "file": ".optimization_backups/files_20250821_151147/tests/test_security_fixes.py",
+      "lines": 501,
+      "size": 21571,
+      "module": ".optimization_backups"
+    },
+    {
+      "file": ".optimization_backups/files_20250821_151147/tests/test_duration_calculator.py",
       "lines": 572,
       "size": 23765,
       "module": ".optimization_backups"
@@ -2653,69 +3248,33 @@
       "module": ".optimization_backups"
     },
     {
-      "file": "audit_system/coordination/orchestrator.py",
-      "lines": 59,
-      "size": 2025,
-      "module": "audit_system"
-    },
-    {
-      "file": "audit_system/coordination/file_coordination_manager.py",
-      "lines": 660,
-      "size": 23835,
-      "module": "audit_system"
-    },
-    {
-      "file": "audit_system/coordination/meta_agent.py",
-      "lines": 1848,
-      "size": 79721,
-      "module": "audit_system"
-    },
-    {
-      "file": "audit_system/coordination/__init__.py",
-      "lines": 49,
-      "size": 1107,
-      "module": "audit_system"
-    },
-    {
-      "file": "audit_system/core/container.py",
-      "lines": 27,
-      "size": 1056,
+      "file": "audit_system/core/llm_backend.py",
+      "lines": 60,
+      "size": 2235,
       "module": "audit_system"
     },
     {
       "file": "audit_system/core/intelligent_rate_limiter.py",
-      "lines": 542,
-      "size": 21430,
+      "lines": 554,
+      "size": 21955,
       "module": "audit_system"
     },
     {
       "file": "audit_system/core/__init__.py",
-      "lines": 27,
-      "size": 715,
+      "lines": 15,
+      "size": 413,
       "module": "audit_system"
     },
     {
-      "file": "audit_system/core/contracts.py",
-      "lines": 44,
-      "size": 1170,
-      "module": "audit_system"
-    },
-    {
-      "file": "audit_system/core/interfaces.py",
-      "lines": 34,
-      "size": 852,
-      "module": "audit_system"
-    },
-    {
-      "file": "audit_system/core/systematic_file_auditor.py",
-      "lines": 3570,
-      "size": 162886,
+      "file": "audit_system/core/openai_backend.py",
+      "lines": 237,
+      "size": 8109,
       "module": "audit_system"
     },
     {
       "file": "audit_system/agents/intelligent_code_agent.py",
-      "lines": 2116,
-      "size": 92728,
+      "lines": 1670,
+      "size": 70679,
       "module": "audit_system"
     },
     {
@@ -2726,74 +3285,26 @@
     },
     {
       "file": "audit_system/agents/intelligent_refactoring_engine.py",
-      "lines": 1800,
-      "size": 76403,
-      "module": "audit_system"
-    },
-    {
-      "file": "audit_system/agents/static_rules_agent.py",
-      "lines": 18,
-      "size": 628,
+      "lines": 1086,
+      "size": 42748,
       "module": "audit_system"
     },
     {
       "file": "audit_system/agents/real_llm_intelligent_agent.py",
-      "lines": 771,
-      "size": 32425,
+      "lines": 772,
+      "size": 32435,
       "module": "audit_system"
     },
     {
       "file": "audit_system/agents/tdd_intelligent_workflow_agent.py",
-      "lines": 1191,
-      "size": 50876,
+      "lines": 980,
+      "size": 39095,
       "module": "audit_system"
     },
     {
       "file": "audit_system/agents/god_code_refactoring_agent.py",
-      "lines": 1313,
-      "size": 57895,
-      "module": "audit_system"
-    },
-    {
-      "file": "audit_system/integration/intelligent_audit_coordinator.py",
-      "lines": 379,
-      "size": 15591,
-      "module": "audit_system"
-    },
-    {
-      "file": "audit_system/services/session_sqlite.py",
-      "lines": 87,
-      "size": 2840,
-      "module": "audit_system"
-    },
-    {
-      "file": "audit_system/services/__init__.py",
-      "lines": 1,
-      "size": 54,
-      "module": "audit_system"
-    },
-    {
-      "file": "audit_system/services/file_repository.py",
-      "lines": 29,
-      "size": 973,
-      "module": "audit_system"
-    },
-    {
-      "file": "audit_system/services/planner_simple.py",
-      "lines": 15,
-      "size": 442,
-      "module": "audit_system"
-    },
-    {
-      "file": "audit_system/cli/run_meta_agent.py",
-      "lines": 419,
-      "size": 15433,
-      "module": "audit_system"
-    },
-    {
-      "file": "audit_system/cli/__init__.py",
-      "lines": 14,
-      "size": 373,
+      "lines": 883,
+      "size": 36769,
       "module": "audit_system"
     },
     {
@@ -3069,7 +3580,7 @@
     {
       "file": "streamlit_extension/integration/existing_system.py",
       "lines": 444,
-      "size": 17761,
+      "size": 17782,
       "module": "streamlit_extension"
     },
     {
@@ -3135,7 +3646,7 @@
     {
       "file": "streamlit_extension/services/task_service.py",
       "lines": 1555,
-      "size": 65839,
+      "size": 66007,
       "module": "streamlit_extension"
     },
     {
@@ -3147,7 +3658,7 @@
     {
       "file": "streamlit_extension/components/data_providers.py",
       "lines": 269,
-      "size": 9282,
+      "size": 9289,
       "module": "streamlit_extension"
     },
     {
@@ -3165,7 +3676,7 @@
     {
       "file": "streamlit_extension/components/health_widgets.py",
       "lines": 179,
-      "size": 5727,
+      "size": 5741,
       "module": "streamlit_extension"
     },
     {
@@ -3177,7 +3688,7 @@
     {
       "file": "streamlit_extension/components/status_components.py",
       "lines": 508,
-      "size": 18855,
+      "size": 18904,
       "module": "streamlit_extension"
     },
     {
@@ -3189,7 +3700,7 @@
     {
       "file": "streamlit_extension/components/layout_components.py",
       "lines": 409,
-      "size": 13961,
+      "size": 14114,
       "module": "streamlit_extension"
     },
     {
@@ -3201,13 +3712,13 @@
     {
       "file": "streamlit_extension/components/debug_widgets.py",
       "lines": 426,
-      "size": 14111,
+      "size": 14131,
       "module": "streamlit_extension"
     },
     {
       "file": "streamlit_extension/components/form_components.py",
       "lines": 592,
-      "size": 20903,
+      "size": 20988,
       "module": "streamlit_extension"
     },
     {
@@ -3237,7 +3748,7 @@
     {
       "file": "streamlit_extension/models/scoring.py",
       "lines": 366,
-      "size": 11755,
+      "size": 11777,
       "module": "streamlit_extension"
     },
     {
@@ -3279,7 +3790,7 @@
     {
       "file": "streamlit_extension/config/themes.py",
       "lines": 642,
-      "size": 20603,
+      "size": 20610,
       "module": "streamlit_extension"
     },
     {
@@ -3297,7 +3808,7 @@
     {
       "file": "streamlit_extension/config/streamlit_config.py",
       "lines": 486,
-      "size": 18764,
+      "size": 18813,
       "module": "streamlit_extension"
     },
     {
@@ -3309,7 +3820,7 @@
     {
       "file": "streamlit_extension/config/backup_restore.py",
       "lines": 853,
-      "size": 37343,
+      "size": 37350,
       "module": "streamlit_extension"
     },
     {
@@ -3327,7 +3838,7 @@
     {
       "file": "streamlit_extension/config/constants.py",
       "lines": 546,
-      "size": 16373,
+      "size": 16417,
       "module": "streamlit_extension"
     },
     {
@@ -3357,7 +3868,7 @@
     {
       "file": "streamlit_extension/utils/analytics_integration.py",
       "lines": 796,
-      "size": 33075,
+      "size": 33104,
       "module": "streamlit_extension"
     },
     {
@@ -3381,13 +3892,13 @@
     {
       "file": "streamlit_extension/utils/database.py",
       "lines": 3737,
-      "size": 159267,
+      "size": 159414,
       "module": "streamlit_extension"
     },
     {
       "file": "streamlit_extension/utils/security.py",
       "lines": 897,
-      "size": 35079,
+      "size": 35086,
       "module": "streamlit_extension"
     },
     {
@@ -3399,7 +3910,7 @@
     {
       "file": "streamlit_extension/utils/auth.py",
       "lines": 468,
-      "size": 17333,
+      "size": 17374,
       "module": "streamlit_extension"
     },
     {
@@ -3441,19 +3952,19 @@
     {
       "file": "streamlit_extension/utils/cache.py",
       "lines": 970,
-      "size": 35694,
+      "size": 35723,
       "module": "streamlit_extension"
     },
     {
       "file": "streamlit_extension/utils/validators.py",
       "lines": 733,
-      "size": 26385,
+      "size": 26583,
       "module": "streamlit_extension"
     },
     {
       "file": "streamlit_extension/utils/performance_tester.py",
       "lines": 586,
-      "size": 21604,
+      "size": 21675,
       "module": "streamlit_extension"
     },
     {
@@ -3495,7 +4006,7 @@
     {
       "file": "streamlit_extension/utils/cache_utils.py",
       "lines": 136,
-      "size": 3589,
+      "size": 3596,
       "module": "streamlit_extension"
     },
     {
@@ -3507,7 +4018,7 @@
     {
       "file": "streamlit_extension/utils/structured_logger.py",
       "lines": 779,
-      "size": 27574,
+      "size": 27596,
       "module": "streamlit_extension"
     },
     {
@@ -3524,8 +4035,8 @@
     },
     {
       "file": "streamlit_extension/utils/circuit_breaker.py",
-      "lines": 413,
-      "size": 15594,
+      "lines": 414,
+      "size": 15612,
       "module": "streamlit_extension"
     },
     {
@@ -3537,13 +4048,13 @@
     {
       "file": "streamlit_extension/utils/constants.py",
       "lines": 130,
-      "size": 3446,
+      "size": 3468,
       "module": "streamlit_extension"
     },
     {
       "file": "streamlit_extension/utils/app_setup.py",
-      "lines": 532,
-      "size": 20478,
+      "lines": 533,
+      "size": 20529,
       "module": "streamlit_extension"
     },
     {
@@ -3561,7 +4072,7 @@
     {
       "file": "streamlit_extension/endpoints/execution_api.py",
       "lines": 336,
-      "size": 12096,
+      "size": 12228,
       "module": "streamlit_extension"
     },
     {
@@ -3585,13 +4096,13 @@
     {
       "file": "streamlit_extension/endpoints/api_middleware.py",
       "lines": 337,
-      "size": 10232,
+      "size": 10408,
       "module": "streamlit_extension"
     },
     {
       "file": "streamlit_extension/pages/projects.py",
       "lines": 681,
-      "size": 30779,
+      "size": 30921,
       "module": "streamlit_extension"
     },
     {
@@ -3603,7 +4114,7 @@
     {
       "file": "streamlit_extension/pages/clients.py",
       "lines": 699,
-      "size": 30811,
+      "size": 30965,
       "module": "streamlit_extension"
     },
     {
@@ -3621,13 +4132,13 @@
     {
       "file": "streamlit_extension/auth/middleware.py",
       "lines": 175,
-      "size": 5511,
+      "size": 5665,
       "module": "streamlit_extension"
     },
     {
       "file": "streamlit_extension/auth/login_page.py",
       "lines": 119,
-      "size": 4149,
+      "size": 4281,
       "module": "streamlit_extension"
     },
     {
@@ -3663,7 +4174,7 @@
     {
       "file": "streamlit_extension/components/sidebar/gamification.py",
       "lines": 131,
-      "size": 4417,
+      "size": 4424,
       "module": "streamlit_extension"
     },
     {
@@ -3675,7 +4186,7 @@
     {
       "file": "streamlit_extension/components/sidebar/layout.py",
       "lines": 118,
-      "size": 3694,
+      "size": 3870,
       "module": "streamlit_extension"
     },
     {
@@ -3728,13 +4239,13 @@
     }
   ],
   "module_summary": {
-    "root": 26,
+    "root": 28,
     "migration": 8,
     "monitoring": 3,
     "tools": 3,
-    "scripts": 81,
+    "scripts": 64,
     "streamlit_extension.database": 3,
-    "audit_system": 29,
+    "audit_system": 15,
     "config": 6,
     "tests": 71,
     "duration_system": 18,
@@ -3743,6 +4254,6 @@
     "streamlit_extension": 122,
     "backups": 1,
     "tdd-project-template": 13,
-    ".optimization_backups": 137
+    ".optimization_backups": 239
   }
 }

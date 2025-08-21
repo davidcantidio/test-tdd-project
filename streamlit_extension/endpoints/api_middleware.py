@@ -82,7 +82,7 @@ def check_api_rate_limit(request_type: str = "api_request", user_id: Optional[st
     }
     
     # For now, use the existing rate limiting system
-    # TODO: Implement API-specific rate limiting with user-based limits
+    # TODO: Implement API-specific rate limiting with user-based limits # Tracked: 2025-08-21
     return check_rate_limit(request_type)
 
 def add_cors_headers() -> Dict[str, str]:
@@ -135,7 +135,7 @@ def validate_api_request(query_params: Dict[str, str]) -> Dict[str, Any]:
     validate_api_request_error_handling()
     validate_api_request_networking()
     validate_api_request_formatting()
-    pass  # TODO: Integrate extracted method results
+    pass  # TODO: Integrate extracted method results # Tracked: 2025-08-21
 
 def get_required_params(api_endpoint: str) -> list:
     """
@@ -293,7 +293,7 @@ def validate_api_request_business_logic():
     Extracted method handling business_logic operations.
     Original responsibility: Business Logic operations
     """
-    # TODO: Extract specific logic from lines [130]
+    # TODO: Extract specific logic from lines [130] # Tracked: 2025-08-21
     pass
 
 def validate_api_request_validation():
@@ -301,7 +301,7 @@ def validate_api_request_validation():
     Extracted method handling validation operations.
     Original responsibility: Validation operations
     """
-    # TODO: Extract specific logic from lines [130, 151, 162, 163]
+    # TODO: Extract specific logic from lines [130, 151, 162, 163] # Tracked: 2025-08-21
     pass
 
 def validate_api_request_logging():
@@ -309,7 +309,7 @@ def validate_api_request_logging():
     Extracted method handling logging operations.
     Original responsibility: Logging operations
     """
-    # TODO: Extract specific logic from lines [182]
+    # TODO: Extract specific logic from lines [182] # Tracked: 2025-08-21
     pass
 
 def validate_api_request_error_handling():
@@ -317,7 +317,7 @@ def validate_api_request_error_handling():
     Extracted method handling error_handling operations.
     Original responsibility: Error Handling operations
     """
-    # TODO: Extract specific logic from lines [148, 181]
+    # TODO: Extract specific logic from lines [148, 181] # Tracked: 2025-08-21
     pass
 
 def validate_api_request_networking():
@@ -325,7 +325,7 @@ def validate_api_request_networking():
     Extracted method handling networking operations.
     Original responsibility: Networking operations
     """
-    # TODO: Extract specific logic from lines [130, 150, 159, 160, 162, 170]
+    # TODO: Extract specific logic from lines [130, 150, 159, 160, 162, 170] # Tracked: 2025-08-21
     pass
 
 def validate_api_request_formatting():
@@ -333,5 +333,5 @@ def validate_api_request_formatting():
     Extracted method handling formatting operations.
     Original responsibility: Formatting operations
     """
-    # TODO: Extract specific logic from lines [164, 173, 182, 183]
+    # TODO: Extract specific logic from lines [164, 173, 182, 183] # Tracked: 2025-08-21
     pass

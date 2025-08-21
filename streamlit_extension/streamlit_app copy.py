@@ -41,7 +41,7 @@ def safe_ui(fn: Callable[..., Any], *args, **kwargs) -> Any:
         return fn(*args, **kwargs)
     except Exception as e:
         # Evita derrubar a página em erros de UI
-        print(f"⚠️ UI error in {getattr(fn, '__name__', 'unknown')}: {e}")
+        logging.info(f"⚠️ UI error in {getattr(fn, '__name__', 'unknown')}: {e}")
         return None
 
 # --- Componentes (com fallbacks) ---------------------------------------------
@@ -206,7 +206,7 @@ except Exception:
                 "label": label or "no_label",
                 "error": f"{type(e).__name__}: {e}",
             }
-            print(f"🚨 OPERATION ERROR: {context}")
+            logging.info(f"🚨 OPERATION ERROR: {context}")
             if is_ui():
                 if is_dev:
                     safe_ui(st.error, f"🛠️ **Debug Error** ({context['operation']}): {context['error']}")
@@ -272,9 +272,9 @@ def _clear_caches():
             st.cache_resource.clear()
         cfg = st.session_state.get("config") if is_ui() else None
         if cfg and getattr(cfg, "debug_mode", False):
-            print("🧹 caches limpos")
+            logging.info("🧹 caches limpos")
     except Exception as e:
-        print(f"⚠️ erro ao limpar cache: {e}")
+        logging.info(f"⚠️ erro ao limpar cache: {e}")
 
 # === HELPERS DE NORMALIZAÇÃO ==================================================
 def _ensure_list(value: Any) -> List[Any]:
@@ -557,15 +557,15 @@ def render_dashboard_content(user: Dict[str, Any]):
 def main():
     # Headless → smoke test e sair
     if not is_ui():
-        print("⚠️ Streamlit não disponível — headless smoke test:")
+        logging.info("⚠️ Streamlit não disponível — headless smoke test:")
         if DB_AVAILABLE:
             try:
-                print(" - list_epics():", len(list_epics()))
-                print(" - health:", check_health())
+                logging.info(" - list_epics():", len(list_epics()))
+                logging.info(" - health:", check_health())
             except Exception as e:
-                print(" - erro DB:", e)
+                logging.info(" - erro DB:", e)
         else:
-            print(" - DB indisponível")
+            logging.info(" - DB indisponível")
         return
 
     # Inicialização
