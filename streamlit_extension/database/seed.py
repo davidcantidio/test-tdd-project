@@ -35,4 +35,3 @@ def seed_initial_data(kind: Optional[str] = None) -> int:
         return int(val or 0)
     # fallback previsível
     return 0
-

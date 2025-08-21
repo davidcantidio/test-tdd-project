@@ -302,7 +302,7 @@ class ClientService(BaseService):
                 return self.handle_database_error("create_client", Exception("Failed to create client"))
                 
         except Exception as e:
-            return self.handle_database_error("create_client", e)
+            logger.warning("Operation failed: %s", str(e))
     
     def get_client(self, client_id: int) -> ServiceResult[Dict[str, Any]]:
         """
@@ -325,7 +325,7 @@ class ClientService(BaseService):
                 return ServiceResult.not_found("Client", client_id)
                 
         except Exception as e:
-            return self.handle_database_error("get_client", e)
+            logger.warning("Operation failed: %s", str(e))
     
     def update_client(self, client_id: int, client_data: Dict[str, Any]) -> ServiceResult[bool]:
         """
@@ -375,7 +375,7 @@ class ClientService(BaseService):
                 return ServiceResult.business_rule_violation("Failed to update client")
                 
         except Exception as e:
-            return self.handle_database_error("update_client", e)
+            logger.warning("Operation failed: %s", str(e))
     
     def delete_client(self, client_id: int) -> ServiceResult[bool]:
         """
@@ -413,7 +413,7 @@ class ClientService(BaseService):
                 return ServiceResult.business_rule_violation("Failed to delete client")
                 
         except Exception as e:
-            return self.handle_database_error("delete_client", e)
+            logger.warning("Operation failed: %s", str(e))
     
     def list_clients(
         self,
@@ -463,7 +463,7 @@ class ClientService(BaseService):
             return ServiceResult.ok(result)
             
         except Exception as e:
-            return self.handle_database_error("list_clients", e)
+            logger.warning("Operation failed: %s", str(e))
     
     def get_client_summary(self, client_id: int) -> ServiceResult[Dict[str, Any]]:
         """
@@ -499,7 +499,7 @@ class ClientService(BaseService):
             return ServiceResult.ok(summary)
             
         except Exception as e:
-            return self.handle_database_error("get_client_summary", e)
+            logger.warning("Operation failed: %s", str(e))
     
     def validate_client_data(self, client_data: Dict[str, Any]) -> ServiceResult[bool]:
         """

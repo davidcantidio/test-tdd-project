@@ -1,0 +1,129 @@
+INFO:scripts.automated_audit.intelligent_code_agent.SemanticAnalysisEngine:Semantic Analysis Engine initialized with comprehensive knowledge bases
+INFO:systematic_file_auditor.EnterpriseSessionManager:EnterpriseSessionManager initialized
+INFO:systematic_file_auditor.SmartTokenBudgetManager:SmartTokenBudgetManager initialized: 40000 tokens/hour, 800000 daily budget, intelligent mode: True
+INFO:systematic_file_auditor.SetimaDataLoader:Sétima Camada carregada: 18 arquivos com pontuação de risco
+WARNING:systematic_file_auditor.EnhancedSystematicFileAuditor:⚠️ Intelligent agents not available - using legacy analysis
+INFO:systematic_file_auditor.EnhancedSystematicFileAuditor:Auditor inicializado (Sétima Camada: completa, IA: indisponível)
+INFO:scripts.automated_audit.intelligent_code_agent.IntelligentCodeAgent:Integrated with existing Enhanced Systematic File Auditor
+INFO:scripts.automated_audit.intelligent_code_agent.IntelligentCodeAgent:Intelligent Code Agent initialized: depth=advanced, mode=conservative, dry_run=False
+INFO:god_code_refactoring_agent.GodCodeRefactoringAgent:GodCodeRefactoringAgent initialized: dry_run=False, aggressive=False
+INFO:scripts.automated_audit.intelligent_refactoring_engine.IntelligentRefactoringEngine:Intelligent Refactoring Engine initialized with God Code Agent
+INFO:intelligent_code_agent.SemanticAnalysisEngine:Semantic Analysis Engine initialized with comprehensive knowledge bases
+INFO:intelligent_code_agent.IntelligentCodeAgent:Intelligent Code Agent initialized: depth=advanced, mode=conservative, dry_run=False
+INFO:god_code_refactoring_agent.GodCodeRefactoringAgent:GodCodeRefactoringAgent initialized: dry_run=False, aggressive=False
+INFO:intelligent_refactoring_engine.IntelligentRefactoringEngine:Intelligent Refactoring Engine initialized with God Code Agent
+INFO:scripts.automated_audit.tdd_intelligent_workflow_agent.TDDIntelligentWorkflowAgent:TDD Intelligent Workflow Agent initialized: TDAH=False, focus=25m
+INFO:scripts.automated_audit.god_code_refactoring_agent.GodCodeRefactoringAgent:GodCodeRefactoringAgent initialized: dry_run=False, aggressive=False
+INFO:scripts.automated_audit.meta_agent:Initialized 4 specialized agents
+INFO:scripts.automated_audit.meta_agent:MetaAgent initialized for .
+INFO:scripts.automated_audit.meta_agent:Token budget: 32000, TDAH features: False
+INFO:scripts.automated_audit.meta_agent:Executing plan for streamlit_extension/components/form_components.py
+INFO:scripts.automated_audit.meta_agent:Agents: ['intelligent_code_agent', 'god_code_agent', 'refactoring_engine']
+INFO:scripts.automated_audit.meta_agent:Estimated tokens: 18083
+INFO:scripts.automated_audit.meta_agent:Estimated time: 300.0s
+INFO:scripts.automated_audit.meta_agent:🔒 Acquiring file lock for intelligent_code_agent -> streamlit_extension/components/form_components.py
+INFO:scripts.automated_audit.file_coordination_manager:Created backup: .agent_backups/form_components_intelligent_code_agent_20250820_213411.py.backup
+INFO:scripts.automated_audit.file_coordination_manager:🔒 Lock acquired: intelligent_code_agent -> streamlit_extension/components/form_components.py
+INFO:scripts.automated_audit.intelligent_code_agent.IntelligentCodeAgent:Starting intelligent analysis of streamlit_extension/components/form_components.py
+INFO:scripts.automated_audit.intelligent_code_agent.IntelligentCodeAgent:Analysis complete for streamlit_extension/components/form_components.py: 592 lines, quality=47.9, refactorings=20
+INFO:scripts.automated_audit.file_coordination_manager:📝 Recorded modification: intelligent_code_agent -> streamlit_extension/components/form_components.py (✅)
+INFO:scripts.automated_audit.meta_agent:🔓 Released file lock for intelligent_code_agent -> streamlit_extension/components/form_components.py
+INFO:scripts.automated_audit.file_coordination_manager:🔓 Lock released: intelligent_code_agent -> streamlit_extension/components/form_components.py
+INFO:scripts.automated_audit.meta_agent:🔒 Acquiring file lock for god_code_agent -> streamlit_extension/components/form_components.py
+INFO:scripts.automated_audit.file_coordination_manager:Created backup: .agent_backups/form_components_god_code_agent_20250820_213412.py.backup
+INFO:scripts.automated_audit.file_coordination_manager:🔒 Lock acquired: god_code_agent -> streamlit_extension/components/form_components.py
+INFO:scripts.automated_audit.god_code_refactoring_agent.GodCodeRefactoringAgent:GodCodeRefactoringAgent initialized: dry_run=False, aggressive=False
+INFO:scripts.automated_audit.god_code_refactoring_agent.GodCodeRefactoringAgent:Analyzing god codes in streamlit_extension/components/form_components.py
+INFO:scripts.automated_audit.god_code_refactoring_agent.GodCodeRefactoringAgent:Found 2 god code patterns in streamlit_extension/components/form_components.py
+INFO:scripts.automated_audit.god_code_refactoring_agent.GodCodeRefactoringAgent:Generating refactoring strategy for render_timer_config
+INFO:scripts.automated_audit.god_code_refactoring_agent.GodCodeRefactoringAgent:Generating refactoring strategy for render_client_fields
+INFO:scripts.automated_audit.file_coordination_manager:📝 Recorded modification: god_code_agent -> streamlit_extension/components/form_components.py (✅)
+INFO:scripts.automated_audit.meta_agent:🔓 Released file lock for god_code_agent -> streamlit_extension/components/form_components.py
+INFO:scripts.automated_audit.file_coordination_manager:🔓 Lock released: god_code_agent -> streamlit_extension/components/form_components.py
+INFO:scripts.automated_audit.meta_agent:🔒 Acquiring file lock for refactoring_engine -> streamlit_extension/components/form_components.py
+INFO:scripts.automated_audit.file_coordination_manager:Created backup: .agent_backups/form_components_refactoring_engine_20250820_213412.py.backup
+INFO:scripts.automated_audit.file_coordination_manager:🔒 Lock acquired: refactoring_engine -> streamlit_extension/components/form_components.py
+INFO:scripts.automated_audit.intelligent_refactoring_engine.IntelligentRefactoringEngine:Applying extract_method refactoring to streamlit_extension/components/form_components.py (lines: [1])
+INFO:scripts.automated_audit.intelligent_refactoring_engine.IntelligentRefactoringEngine:Applying eliminate_god_method refactoring to streamlit_extension/components/form_components.py (lines: [1])
+INFO:scripts.automated_audit.file_coordination_manager:📝 Recorded modification: refactoring_engine -> streamlit_extension/components/form_components.py (✅)
+INFO:scripts.automated_audit.meta_agent:🔓 Released file lock for refactoring_engine -> streamlit_extension/components/form_components.py
+INFO:scripts.automated_audit.file_coordination_manager:🔓 Lock released: refactoring_engine -> streamlit_extension/components/form_components.py
+INFO:scripts.automated_audit.meta_agent:Plan execution completed: 3 agents, 0 tokens, 1.7s
+🧠 MetaAgent - Intelligent Agent Coordination
+Automated agent selection and task optimization
+Task: Architecture Review
+Token Budget: 32,000
+Mode: Apply Changes
+
+
+🧠 MetaAgent Analysis: streamlit_extension/components/form_components.py
+------------------------------------------------------------
+🎯 Agent Selection & Planning:
+   📋 Selected agents: god_code_agent, intelligent_code_agent, refactoring_engine
+   🔥 Estimated tokens: 18083
+   ⏱️  Estimated time: 300.0s
+
+🚀 Execution Results:
+   ✅ Intelligent Code Agent
+      ⏱️  Time: 1.63s
+      🔥 Tokens: 0
+
+   ✅ God Code Agent
+      ⏱️  Time: 0.03s
+      🔥 Tokens: 0
+
+   ✅ Refactoring Engine
+      ⏱️  Time: 0.01s
+      🔥 Tokens: 0
+
+📊 Analysis Summary:
+   🎯 Agents executed: 3
+   ✅ Successful: 3
+   ⏱️  Total time: 1.67s
+   🔥 Total tokens: 0
+   📈 Success rate: 100.0%
+
+⏱️  Total analysis time: 1.7s
+
+======================================================================
+🧠 METAAGENT ANALYSIS REPORT
+======================================================================
+
+📈 Overall Summary:
+   📁 Files analyzed: 1
+   ✅ Successful analyses: 1
+   ❌ Failed analyses: 0
+   🤖 Total agents executed: 3
+   🔥 Total tokens consumed: 0
+   ⏱️  Total execution time: 1.7s
+   📊 Average agents per file: 3.0
+   📊 Average tokens per file: 0
+   📊 Average time per file: 1.7s
+
+🤖 Agent Performance Statistics:
+   📋 God Code Agent:
+      🎯 Executions: 1
+      ✅ Success rate: 100.0%
+      🔥 Avg tokens: 0
+      ⏱️  Avg time: 0.03s
+   📋 Intelligent Code Agent:
+      🎯 Executions: 1
+      ✅ Success rate: 100.0%
+      🔥 Avg tokens: 0
+      ⏱️  Avg time: 1.63s
+   📋 Refactoring Engine:
+      🎯 Executions: 1
+      ✅ Success rate: 100.0%
+      🔥 Avg tokens: 0
+      ⏱️  Avg time: 0.01s
+
+📁 File Analysis Results:
+   📄 streamlit_extension/components/form_components.py
+      🤖 Agents: 3 (3 successful)
+      🔥 Tokens: 0
+      ⏱️  Time: 1.67s
+      🎯 Used: Intelligent Code Agent, God Code Agent, Refactoring Engine
+
+💡 MetaAgent Recommendations:
+   ✅ MetaAgent successfully coordinated intelligent analysis
+   🎯 Agent selection appears to be working effectively

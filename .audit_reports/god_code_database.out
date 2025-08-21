@@ -1,0 +1,165 @@
+INFO:scripts.automated_audit.intelligent_code_agent.SemanticAnalysisEngine:Semantic Analysis Engine initialized with comprehensive knowledge bases
+INFO:systematic_file_auditor.EnterpriseSessionManager:EnterpriseSessionManager initialized
+INFO:systematic_file_auditor.SmartTokenBudgetManager:SmartTokenBudgetManager initialized: 40000 tokens/hour, 800000 daily budget, intelligent mode: True
+INFO:systematic_file_auditor.SetimaDataLoader:Sétima Camada carregada: 18 arquivos com pontuação de risco
+WARNING:systematic_file_auditor.EnhancedSystematicFileAuditor:⚠️ Intelligent agents not available - using legacy analysis
+INFO:systematic_file_auditor.EnhancedSystematicFileAuditor:Auditor inicializado (Sétima Camada: completa, IA: indisponível)
+INFO:scripts.automated_audit.intelligent_code_agent.IntelligentCodeAgent:Integrated with existing Enhanced Systematic File Auditor
+INFO:scripts.automated_audit.intelligent_code_agent.IntelligentCodeAgent:Intelligent Code Agent initialized: depth=advanced, mode=conservative, dry_run=False
+INFO:god_code_refactoring_agent.GodCodeRefactoringAgent:GodCodeRefactoringAgent initialized: dry_run=False, aggressive=False
+INFO:scripts.automated_audit.intelligent_refactoring_engine.IntelligentRefactoringEngine:Intelligent Refactoring Engine initialized with God Code Agent
+INFO:intelligent_code_agent.SemanticAnalysisEngine:Semantic Analysis Engine initialized with comprehensive knowledge bases
+INFO:intelligent_code_agent.IntelligentCodeAgent:Intelligent Code Agent initialized: depth=advanced, mode=conservative, dry_run=False
+INFO:god_code_refactoring_agent.GodCodeRefactoringAgent:GodCodeRefactoringAgent initialized: dry_run=False, aggressive=False
+INFO:intelligent_refactoring_engine.IntelligentRefactoringEngine:Intelligent Refactoring Engine initialized with God Code Agent
+INFO:scripts.automated_audit.tdd_intelligent_workflow_agent.TDDIntelligentWorkflowAgent:TDD Intelligent Workflow Agent initialized: TDAH=False, focus=25m
+INFO:scripts.automated_audit.god_code_refactoring_agent.GodCodeRefactoringAgent:GodCodeRefactoringAgent initialized: dry_run=False, aggressive=False
+INFO:scripts.automated_audit.meta_agent:Initialized 4 specialized agents
+INFO:scripts.automated_audit.meta_agent:MetaAgent initialized for .
+INFO:scripts.automated_audit.meta_agent:Token budget: 32000, TDAH features: False
+INFO:scripts.automated_audit.meta_agent:Executing plan for streamlit_extension/utils/database.py
+INFO:scripts.automated_audit.meta_agent:Agents: ['intelligent_code_agent', 'god_code_agent', 'refactoring_engine']
+INFO:scripts.automated_audit.meta_agent:Estimated tokens: 65970
+INFO:scripts.automated_audit.meta_agent:Estimated time: 300.0s
+INFO:scripts.automated_audit.meta_agent:🔒 Acquiring file lock for intelligent_code_agent -> streamlit_extension/utils/database.py
+INFO:scripts.automated_audit.file_coordination_manager:Created backup: .agent_backups/database_intelligent_code_agent_20250820_213242.py.backup
+INFO:scripts.automated_audit.file_coordination_manager:🔒 Lock acquired: intelligent_code_agent -> streamlit_extension/utils/database.py
+INFO:scripts.automated_audit.intelligent_code_agent.IntelligentCodeAgent:Starting intelligent analysis of streamlit_extension/utils/database.py
+INFO:scripts.automated_audit.intelligent_code_agent.IntelligentCodeAgent:Analysis complete for streamlit_extension/utils/database.py: 3737 lines, quality=49.0, refactorings=72
+INFO:scripts.automated_audit.file_coordination_manager:📝 Recorded modification: intelligent_code_agent -> streamlit_extension/utils/database.py (✅)
+INFO:scripts.automated_audit.meta_agent:🔓 Released file lock for intelligent_code_agent -> streamlit_extension/utils/database.py
+INFO:scripts.automated_audit.file_coordination_manager:🔓 Lock released: intelligent_code_agent -> streamlit_extension/utils/database.py
+INFO:scripts.automated_audit.meta_agent:🔒 Acquiring file lock for god_code_agent -> streamlit_extension/utils/database.py
+INFO:scripts.automated_audit.file_coordination_manager:Created backup: .agent_backups/database_god_code_agent_20250820_213342.py.backup
+INFO:scripts.automated_audit.file_coordination_manager:🔒 Lock acquired: god_code_agent -> streamlit_extension/utils/database.py
+INFO:scripts.automated_audit.god_code_refactoring_agent.GodCodeRefactoringAgent:GodCodeRefactoringAgent initialized: dry_run=False, aggressive=False
+INFO:scripts.automated_audit.god_code_refactoring_agent.GodCodeRefactoringAgent:Analyzing god codes in streamlit_extension/utils/database.py
+INFO:scripts.automated_audit.god_code_refactoring_agent.GodCodeRefactoringAgent:Found 28 god code patterns in streamlit_extension/utils/database.py
+INFO:scripts.automated_audit.god_code_refactoring_agent.GodCodeRefactoringAgent:Generating refactoring strategy for PerformancePaginationMixin
+INFO:scripts.automated_audit.god_code_refactoring_agent.GodCodeRefactoringAgent:Generating refactoring strategy for DatabaseManager
+INFO:scripts.automated_audit.god_code_refactoring_agent.GodCodeRefactoringAgent:Generating refactoring strategy for _build_sqlalchemy_pagination_query
+INFO:scripts.automated_audit.god_code_refactoring_agent.GodCodeRefactoringAgent:Generating refactoring strategy for transaction
+INFO:scripts.automated_audit.god_code_refactoring_agent.GodCodeRefactoringAgent:Generating refactoring strategy for delete_cascade_safe
+INFO:scripts.automated_audit.god_code_refactoring_agent.GodCodeRefactoringAgent:Generating refactoring strategy for get_epics
+INFO:scripts.automated_audit.god_code_refactoring_agent.GodCodeRefactoringAgent:Generating refactoring strategy for get_tasks
+INFO:scripts.automated_audit.god_code_refactoring_agent.GodCodeRefactoringAgent:Generating refactoring strategy for get_user_stats
+INFO:scripts.automated_audit.god_code_refactoring_agent.GodCodeRefactoringAgent:Generating refactoring strategy for create_timer_session
+INFO:scripts.automated_audit.god_code_refactoring_agent.GodCodeRefactoringAgent:Generating refactoring strategy for get_epic_progress
+INFO:scripts.automated_audit.god_code_refactoring_agent.GodCodeRefactoringAgent:Generating refactoring strategy for check_database_health
+INFO:scripts.automated_audit.god_code_refactoring_agent.GodCodeRefactoringAgent:Generating refactoring strategy for get_productivity_stats
+INFO:scripts.automated_audit.god_code_refactoring_agent.GodCodeRefactoringAgent:Generating refactoring strategy for get_daily_summary
+INFO:scripts.automated_audit.god_code_refactoring_agent.GodCodeRefactoringAgent:Generating refactoring strategy for get_user_achievements
+INFO:scripts.automated_audit.god_code_refactoring_agent.GodCodeRefactoringAgent:Generating refactoring strategy for update_task
+INFO:scripts.automated_audit.god_code_refactoring_agent.GodCodeRefactoringAgent:Generating refactoring strategy for calculate_epic_duration
+INFO:scripts.automated_audit.god_code_refactoring_agent.GodCodeRefactoringAgent:Generating refactoring strategy for update_duration_description
+INFO:scripts.automated_audit.god_code_refactoring_agent.GodCodeRefactoringAgent:Generating refactoring strategy for get_epic_timeline
+INFO:scripts.automated_audit.god_code_refactoring_agent.GodCodeRefactoringAgent:Generating refactoring strategy for validate_date_consistency
+INFO:scripts.automated_audit.god_code_refactoring_agent.GodCodeRefactoringAgent:Generating refactoring strategy for get_clients
+INFO:scripts.automated_audit.god_code_refactoring_agent.GodCodeRefactoringAgent:Generating refactoring strategy for get_client
+INFO:scripts.automated_audit.god_code_refactoring_agent.GodCodeRefactoringAgent:Generating refactoring strategy for get_projects
+INFO:scripts.automated_audit.god_code_refactoring_agent.GodCodeRefactoringAgent:Generating refactoring strategy for get_epics_with_hierarchy
+INFO:scripts.automated_audit.god_code_refactoring_agent.GodCodeRefactoringAgent:Generating refactoring strategy for create_client
+INFO:scripts.automated_audit.god_code_refactoring_agent.GodCodeRefactoringAgent:Generating refactoring strategy for create_project
+INFO:scripts.automated_audit.god_code_refactoring_agent.GodCodeRefactoringAgent:Generating refactoring strategy for update_client
+INFO:scripts.automated_audit.god_code_refactoring_agent.GodCodeRefactoringAgent:Generating refactoring strategy for delete_client
+INFO:scripts.automated_audit.god_code_refactoring_agent.GodCodeRefactoringAgent:Generating refactoring strategy for update_project
+INFO:scripts.automated_audit.file_coordination_manager:📝 Recorded modification: god_code_agent -> streamlit_extension/utils/database.py (✅)
+INFO:scripts.automated_audit.meta_agent:🔓 Released file lock for god_code_agent -> streamlit_extension/utils/database.py
+INFO:scripts.automated_audit.file_coordination_manager:🔓 Lock released: god_code_agent -> streamlit_extension/utils/database.py
+INFO:scripts.automated_audit.meta_agent:🔒 Acquiring file lock for refactoring_engine -> streamlit_extension/utils/database.py
+INFO:scripts.automated_audit.file_coordination_manager:Created backup: .agent_backups/database_refactoring_engine_20250820_213343.py.backup
+INFO:scripts.automated_audit.file_coordination_manager:🔒 Lock acquired: refactoring_engine -> streamlit_extension/utils/database.py
+INFO:scripts.automated_audit.intelligent_refactoring_engine.IntelligentRefactoringEngine:Applying extract_method refactoring to streamlit_extension/utils/database.py (lines: [1])
+INFO:scripts.automated_audit.intelligent_refactoring_engine.IntelligentRefactoringEngine:Applying eliminate_god_method refactoring to streamlit_extension/utils/database.py (lines: [1])
+INFO:scripts.automated_audit.intelligent_refactoring_engine.IntelligentRefactoringEngine:Applying god_code_refactoring refactoring to streamlit_extension/utils/database.py (lines: [1])
+INFO:scripts.automated_audit.intelligent_refactoring_engine.IntelligentRefactoringEngine:Applying god code refactoring using specialized agent
+INFO:god_code_refactoring_agent.GodCodeRefactoringAgent:Analyzing god codes in streamlit_extension/utils/database.py
+INFO:god_code_refactoring_agent.GodCodeRefactoringAgent:Found 28 god code patterns in streamlit_extension/utils/database.py
+INFO:scripts.automated_audit.intelligent_refactoring_engine.IntelligentRefactoringEngine:Applying optimize_string_operations refactoring to streamlit_extension/utils/database.py (lines: [1])
+INFO:scripts.automated_audit.intelligent_refactoring_engine.IntelligentRefactoringEngine:Refactoring applied successfully. Backup: streamlit_extension/utils/database.py.backup
+INFO:scripts.automated_audit.intelligent_refactoring_engine.IntelligentRefactoringEngine:Applying god_code_refactoring refactoring to streamlit_extension/utils/database.py (lines: [1])
+INFO:scripts.automated_audit.intelligent_refactoring_engine.IntelligentRefactoringEngine:Applying god code refactoring using specialized agent
+INFO:god_code_refactoring_agent.GodCodeRefactoringAgent:Analyzing god codes in streamlit_extension/utils/database.py
+INFO:god_code_refactoring_agent.GodCodeRefactoringAgent:Found 28 god code patterns in streamlit_extension/utils/database.py
+INFO:scripts.automated_audit.file_coordination_manager:📝 Recorded modification: refactoring_engine -> streamlit_extension/utils/database.py (✅)
+INFO:scripts.automated_audit.meta_agent:🔓 Released file lock for refactoring_engine -> streamlit_extension/utils/database.py
+INFO:scripts.automated_audit.file_coordination_manager:🔓 Lock released: refactoring_engine -> streamlit_extension/utils/database.py
+INFO:scripts.automated_audit.meta_agent:Plan execution completed: 3 agents, 150 tokens, 61.1s
+🧠 MetaAgent - Intelligent Agent Coordination
+Automated agent selection and task optimization
+Task: Code Refactoring
+Token Budget: 32,000
+Mode: Apply Changes
+
+
+🧠 MetaAgent Analysis: streamlit_extension/utils/database.py
+------------------------------------------------------------
+🎯 Agent Selection & Planning:
+   📋 Selected agents: intelligent_code_agent, god_code_agent, refactoring_engine
+   🔥 Estimated tokens: 65970
+   ⏱️  Estimated time: 300.0s
+
+🚀 Execution Results:
+   ✅ Intelligent Code Agent
+      ⏱️  Time: 59.88s
+      🔥 Tokens: 0
+
+   ✅ God Code Agent
+      ⏱️  Time: 0.45s
+      🔥 Tokens: 0
+
+   ✅ Refactoring Engine
+      ⏱️  Time: 0.79s
+      🔥 Tokens: 150
+
+📊 Analysis Summary:
+   🎯 Agents executed: 3
+   ✅ Successful: 3
+   ⏱️  Total time: 61.12s
+   🔥 Total tokens: 150
+   📈 Success rate: 100.0%
+
+⏱️  Total analysis time: 61.2s
+
+======================================================================
+🧠 METAAGENT ANALYSIS REPORT
+======================================================================
+
+📈 Overall Summary:
+   📁 Files analyzed: 1
+   ✅ Successful analyses: 1
+   ❌ Failed analyses: 0
+   🤖 Total agents executed: 3
+   🔥 Total tokens consumed: 150
+   ⏱️  Total execution time: 61.1s
+   📊 Average agents per file: 3.0
+   📊 Average tokens per file: 150
+   📊 Average time per file: 61.1s
+
+🤖 Agent Performance Statistics:
+   📋 God Code Agent:
+      🎯 Executions: 1
+      ✅ Success rate: 100.0%
+      🔥 Avg tokens: 0
+      ⏱️  Avg time: 0.45s
+   📋 Intelligent Code Agent:
+      🎯 Executions: 1
+      ✅ Success rate: 100.0%
+      🔥 Avg tokens: 0
+      ⏱️  Avg time: 59.88s
+   📋 Refactoring Engine:
+      🎯 Executions: 1
+      ✅ Success rate: 100.0%
+      🔥 Avg tokens: 150
+      ⏱️  Avg time: 0.79s
+
+📁 File Analysis Results:
+   📄 streamlit_extension/utils/database.py
+      🤖 Agents: 3 (3 successful)
+      🔥 Tokens: 150
+      ⏱️  Time: 61.12s
+      🎯 Used: Intelligent Code Agent, God Code Agent, Refactoring Engine
+
+💡 MetaAgent Recommendations:
+   ✅ MetaAgent successfully coordinated intelligent analysis
+   🎯 Agent selection appears to be working effectively

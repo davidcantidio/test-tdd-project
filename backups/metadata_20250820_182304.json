@@ -1,0 +1,332 @@
+{
+  "timestamp": "20250820_182304",
+  "system_settings": [
+    {
+      "category": "gamification",
+      "setting_key": "points_per_story_point",
+      "setting_value": "10",
+      "setting_type": "integer",
+      "description": "Points awarded per story point"
+    },
+    {
+      "category": "gamification",
+      "setting_key": "streak_bonus_multiplier",
+      "setting_value": "1.5",
+      "setting_type": "decimal",
+      "description": "Multiplier for streak bonuses"
+    },
+    {
+      "category": "gamification",
+      "setting_key": "perfectionist_bonus",
+      "setting_value": "25",
+      "setting_type": "integer",
+      "description": "Extra points for completing without bugs"
+    },
+    {
+      "category": "github",
+      "setting_key": "sync_enabled",
+      "setting_value": "true",
+      "setting_type": "boolean",
+      "description": "Enable GitHub synchronization"
+    },
+    {
+      "category": "github",
+      "setting_key": "auto_sync_interval_hours",
+      "setting_value": "24",
+      "setting_type": "integer",
+      "description": "Hours between automatic syncs"
+    },
+    {
+      "category": "performance",
+      "setting_key": "max_work_session_minutes",
+      "setting_value": "480",
+      "setting_type": "integer",
+      "description": "Maximum work session duration"
+    },
+    {
+      "category": "performance",
+      "setting_key": "focus_score_threshold",
+      "setting_value": "7",
+      "setting_type": "integer",
+      "description": "Minimum focus score for quality bonus"
+    },
+    {
+      "category": "epic_metadata",
+      "setting_key": "epic_1",
+      "setting_value": "{\"source_file\": \"mobile_opt_epic.json\", \"goals\": [\"Interface responsiva funcionando em todos os dispositivos\", \"Performance mobile otimizada (< 3s load time)\", \"Touch interactions implementadas corretamente\"], \"definition_of_done\": [\"Layout responsivo funcionando em tablet e smartphone\", \"Performance targets atingidos em 4G\", \"Testes em dispositivos reais passando\"], \"labels\": [\"mobile\", \"responsive\", \"performance\"], \"automation_hooks\": {}, \"performance_constraints\": {}, \"quality_gates\": {}, \"methodology\": null, \"tdd_enabled\": true}",
+      "setting_type": "json",
+      "description": "Metadata for epic MOBILE_OPT"
+    },
+    {
+      "category": "task_metadata",
+      "setting_key": "task_1",
+      "setting_value": "{\"source_file\": \"mobile_opt_epic.json\", \"acceptance_criteria\": [\"Layout funciona em telas de 320px+\", \"Elementos são touch-friendly\", \"Navegação mobile intuitiva\"], \"deliverables\": [], \"dependencies\": [], \"test_plan\": [], \"test_specs\": [], \"risk\": null, \"mitigation\": null, \"tdd_skip_reason\": null, \"files_touched\": [], \"branch\": null}",
+      "setting_type": "json",
+      "description": "Metadata for task MO.1"
+    },
+    {
+      "category": "task_metadata",
+      "setting_key": "task_2",
+      "setting_value": "{\"source_file\": \"mobile_opt_epic.json\", \"acceptance_criteria\": [\"Load time < 3s em 4G\", \"Imagens otimizadas automaticamente\", \"Cache funcionando corretamente\"], \"deliverables\": [], \"dependencies\": [], \"test_plan\": [], \"test_specs\": [], \"risk\": null, \"mitigation\": null, \"tdd_skip_reason\": null, \"files_touched\": [], \"branch\": null}",
+      "setting_type": "json",
+      "description": "Metadata for task MO.2"
+    },
+    {
+      "category": "epic_metadata",
+      "setting_key": "epic_2",
+      "setting_value": "{\"source_file\": \"streamlit_framework_epic.json\", \"goals\": [\"Implementar dashboard Streamlit funcional com visualizações interativas\", \"Integrar sistema de gamificação com pontos, achievements e streaks\", \"Configurar sincronização automática com GitHub Projects V2\", \"Implementar sistema multi-user com autenticação e permissões\", \"Criar sistema de time tracking integrado com TDAH-friendly metrics\"], \"definition_of_done\": [\"Dashboard Streamlit funcionando com todas as visualizações\", \"Sistema de gamificação totalmente implementado e testado\", \"Integração GitHub Projects V2 sincronizando corretamente\", \"Multi-user support com controle de acesso funcional\", \"Time tracking integrado e funcionando com métricas TDAH\", \"Testes de integração passando 100%\", \"Performance atendendo targets (< 2s load time)\", \"Documentação completa e deploy realizado\"], \"labels\": [\"streamlit\", \"framework\", \"gamification\", \"github\", \"multi-user\"], \"automation_hooks\": {\"create_labels\": [\"streamlit\", \"framework\", \"gamification\", \"github\", \"multi-user\"], \"project_board\": {\"name\": \"Streamlit Framework Development\", \"columns\": [\"Backlog\", \"In Progress\", \"Review\", \"Done\"]}, \"default_branch\": \"main\", \"milestone\": \"Streamlit Framework V1.0\"}, \"performance_constraints\": {\"dashboard_load_time\": \"2s\", \"api_response_time\": \"500ms\", \"concurrent_users\": 10}, \"quality_gates\": {\"test_coverage\": \"90%\", \"performance_score\": \"85+\", \"accessibility_score\": \"AA\"}, \"methodology\": \"Test-Driven Development\", \"tdd_enabled\": true}",
+      "setting_type": "json",
+      "description": "Metadata for epic STREAMLIT_FRAMEWORK"
+    },
+    {
+      "category": "task_metadata",
+      "setting_key": "task_3",
+      "setting_value": "{\"source_file\": \"streamlit_framework_epic.json\", \"acceptance_criteria\": [\"Dashboard carrega em menos de 2 segundos\", \"Todas as visualizações são interativas\", \"Dados são atualizados em tempo real\"], \"deliverables\": [\"streamlit_app.py\", \"pages/dashboard.py\", \"components/metrics_widgets.py\"], \"dependencies\": [], \"test_plan\": [], \"test_specs\": [], \"risk\": \"Performance pode ser lenta com muitos dados\", \"mitigation\": \"Implementar cache e paginação\", \"tdd_skip_reason\": null, \"files_touched\": [], \"branch\": null}",
+      "setting_type": "json",
+      "description": "Metadata for task SF.1"
+    },
+    {
+      "category": "task_metadata",
+      "setting_key": "task_4",
+      "setting_value": "{\"source_file\": \"streamlit_framework_epic.json\", \"acceptance_criteria\": [\"Pontos calculados automaticamente por task\", \"Achievements desbloqueados baseado em ações\", \"Streaks mantidos corretamente\"], \"deliverables\": [\"gamification/achievements_engine.py\", \"gamification/points_calculator.py\", \"pages/leaderboard.py\"], \"dependencies\": [\"SF.1\"], \"test_plan\": [], \"test_specs\": [], \"risk\": \"Complexidade das regras de gamificação\", \"mitigation\": \"Começar com regras simples e iterar\", \"tdd_skip_reason\": null, \"files_touched\": [], \"branch\": null}",
+      "setting_type": "json",
+      "description": "Metadata for task SF.2"
+    },
+    {
+      "category": "task_metadata",
+      "setting_key": "task_5",
+      "setting_value": "{\"source_file\": \"streamlit_framework_epic.json\", \"acceptance_criteria\": [\"Sincronização automática de issues e milestones\", \"Webhooks configurados e funcionando\", \"Conflict resolution implementado\"], \"deliverables\": [\"github_integration/sync_engine.py\", \"github_integration/webhook_handler.py\", \"config/github_settings.py\"], \"dependencies\": [\"SF.1\", \"SF.2\"], \"test_plan\": [], \"test_specs\": [], \"risk\": \"Rate limits da API do GitHub\", \"mitigation\": \"Implementar cache inteligente e throttling\", \"tdd_skip_reason\": null, \"files_touched\": [], \"branch\": null}",
+      "setting_type": "json",
+      "description": "Metadata for task SF.3"
+    },
+    {
+      "category": "task_metadata",
+      "setting_key": "task_6",
+      "setting_value": "{\"source_file\": \"streamlit_framework_epic.json\", \"acceptance_criteria\": [\"Login/logout funcionando\", \"Controle de acesso por role\", \"Perfis personalizáveis\"], \"deliverables\": [\"auth/user_manager.py\", \"auth/permissions.py\", \"pages/profile.py\"], \"dependencies\": [\"SF.1\"], \"test_plan\": [], \"test_specs\": [], \"risk\": \"Complexidade de autenticação Streamlit\", \"mitigation\": \"Usar streamlit-authenticator como base\", \"tdd_skip_reason\": null, \"files_touched\": [], \"branch\": null}",
+      "setting_type": "json",
+      "description": "Metadata for task SF.4"
+    },
+    {
+      "category": "task_metadata",
+      "setting_key": "task_7",
+      "setting_value": "{\"source_file\": \"streamlit_framework_epic.json\", \"acceptance_criteria\": [\"Timer integrado com interface amigável\", \"Métricas TDAH coletadas automaticamente\", \"Relatórios de produtividade disponíveis\"], \"deliverables\": [\"time_tracking/timer_widget.py\", \"time_tracking/tdah_metrics.py\", \"pages/time_analytics.py\"], \"dependencies\": [\"SF.1\", \"SF.4\"], \"test_plan\": [], \"test_specs\": [], \"risk\": \"Métricas TDAH podem ser invasivas\", \"mitigation\": \"Fazer coleta opcional e transparente\", \"tdd_skip_reason\": null, \"files_touched\": [], \"branch\": null}",
+      "setting_type": "json",
+      "description": "Metadata for task SF.5"
+    },
+    {
+      "category": "epic_metadata",
+      "setting_key": "epic_3",
+      "setting_value": "{\"source_file\": \"analytics_epic.json\", \"goals\": [\"Dashboards analíticos com métricas detalhadas\", \"Relatórios exportáveis em múltiplos formatos\", \"Insights de produtividade e tendências\"], \"definition_of_done\": [\"Pelo menos 5 dashboards analíticos funcionais\", \"Export para PDF, Excel e CSV funcionando\", \"Sistema de alertas implementado\"], \"labels\": [\"analytics\", \"reporting\", \"insights\"], \"automation_hooks\": {}, \"performance_constraints\": {}, \"quality_gates\": {}, \"methodology\": null, \"tdd_enabled\": true}",
+      "setting_type": "json",
+      "description": "Metadata for epic ANALYTICS"
+    },
+    {
+      "category": "task_metadata",
+      "setting_key": "task_8",
+      "setting_value": "{\"source_file\": \"analytics_epic.json\", \"acceptance_criteria\": [\"Métricas calculadas corretamente\", \"Gráficos interativos funcionando\", \"Filtros por período e usuário\"], \"deliverables\": [], \"dependencies\": [], \"test_plan\": [], \"test_specs\": [], \"risk\": null, \"mitigation\": null, \"tdd_skip_reason\": null, \"files_touched\": [], \"branch\": null}",
+      "setting_type": "json",
+      "description": "Metadata for task AN.1"
+    }
+  ],
+  "achievement_types": [
+    {
+      "code": "first_task",
+      "name": "First Steps",
+      "description": "Complete your first task",
+      "category": "productivity",
+      "points_reward": 50,
+      "rarity": "common"
+    },
+    {
+      "code": "tdd_master",
+      "name": "TDD Master",
+      "description": "Complete 10 tasks following TDD cycle",
+      "category": "quality",
+      "points_reward": 200,
+      "rarity": "rare"
+    },
+    {
+      "code": "streak_warrior",
+      "name": "Streak Warrior",
+      "description": "Maintain a 7-day completion streak",
+      "category": "consistency",
+      "points_reward": 300,
+      "rarity": "epic"
+    },
+    {
+      "code": "focus_expert",
+      "name": "Focus Expert",
+      "description": "Complete 5 high-focus work sessions",
+      "category": "productivity",
+      "points_reward": 150,
+      "rarity": "rare"
+    },
+    {
+      "code": "github_ninja",
+      "name": "GitHub Ninja",
+      "description": "Complete 20 tasks with GitHub integration",
+      "category": "social",
+      "points_reward": 250,
+      "rarity": "epic"
+    },
+    {
+      "code": "early_bird",
+      "name": "Early Bird",
+      "description": "Complete tasks before 9 AM for 5 days",
+      "category": "consistency",
+      "points_reward": 100,
+      "rarity": "rare"
+    },
+    {
+      "code": "night_owl",
+      "name": "Night Owl",
+      "description": "Complete tasks after 10 PM for 5 days",
+      "category": "consistency",
+      "points_reward": 100,
+      "rarity": "rare"
+    },
+    {
+      "code": "perfectionist",
+      "name": "Perfectionist",
+      "description": "Complete 10 tasks without any bugs",
+      "category": "quality",
+      "points_reward": 400,
+      "rarity": "legendary"
+    },
+    {
+      "code": "marathon_runner",
+      "name": "Marathon Runner",
+      "description": "Work for 6+ hours in a single day",
+      "category": "productivity",
+      "points_reward": 200,
+      "rarity": "epic"
+    },
+    {
+      "code": "team_player",
+      "name": "Team Player",
+      "description": "Review 10 other people's tasks",
+      "category": "social",
+      "points_reward": 150,
+      "rarity": "rare"
+    }
+  ],
+  "epic_metadata": [
+    {
+      "epic_key": "TEST_EPIC_1",
+      "name": "Test Epic 1",
+      "metadata": {
+        "source_file": "mobile_opt_epic.json",
+        "goals": [
+          "Interface responsiva funcionando em todos os dispositivos",
+          "Performance mobile otimizada (< 3s load time)",
+          "Touch interactions implementadas corretamente"
+        ],
+        "definition_of_done": [
+          "Layout responsivo funcionando em tablet e smartphone",
+          "Performance targets atingidos em 4G",
+          "Testes em dispositivos reais passando"
+        ],
+        "labels": [
+          "mobile",
+          "responsive",
+          "performance"
+        ],
+        "automation_hooks": {},
+        "performance_constraints": {},
+        "quality_gates": {},
+        "methodology": null,
+        "tdd_enabled": true
+      }
+    },
+    {
+      "epic_key": "TEST_EPIC_2",
+      "name": "Test Epic 2",
+      "metadata": {
+        "source_file": "streamlit_framework_epic.json",
+        "goals": [
+          "Implementar dashboard Streamlit funcional com visualizações interativas",
+          "Integrar sistema de gamificação com pontos, achievements e streaks",
+          "Configurar sincronização automática com GitHub Projects V2",
+          "Implementar sistema multi-user com autenticação e permissões",
+          "Criar sistema de time tracking integrado com TDAH-friendly metrics"
+        ],
+        "definition_of_done": [
+          "Dashboard Streamlit funcionando com todas as visualizações",
+          "Sistema de gamificação totalmente implementado e testado",
+          "Integração GitHub Projects V2 sincronizando corretamente",
+          "Multi-user support com controle de acesso funcional",
+          "Time tracking integrado e funcionando com métricas TDAH",
+          "Testes de integração passando 100%",
+          "Performance atendendo targets (< 2s load time)",
+          "Documentação completa e deploy realizado"
+        ],
+        "labels": [
+          "streamlit",
+          "framework",
+          "gamification",
+          "github",
+          "multi-user"
+        ],
+        "automation_hooks": {
+          "create_labels": [
+            "streamlit",
+            "framework",
+            "gamification",
+            "github",
+            "multi-user"
+          ],
+          "project_board": {
+            "name": "Streamlit Framework Development",
+            "columns": [
+              "Backlog",
+              "In Progress",
+              "Review",
+              "Done"
+            ]
+          },
+          "default_branch": "main",
+          "milestone": "Streamlit Framework V1.0"
+        },
+        "performance_constraints": {
+          "dashboard_load_time": "2s",
+          "api_response_time": "500ms",
+          "concurrent_users": 10
+        },
+        "quality_gates": {
+          "test_coverage": "90%",
+          "performance_score": "85+",
+          "accessibility_score": "AA"
+        },
+        "methodology": "Test-Driven Development",
+        "tdd_enabled": true
+      }
+    },
+    {
+      "epic_key": "TEST_EPIC_3",
+      "name": "Test Epic 3",
+      "metadata": {
+        "source_file": "analytics_epic.json",
+        "goals": [
+          "Dashboards analíticos com métricas detalhadas",
+          "Relatórios exportáveis em múltiplos formatos",
+          "Insights de produtividade e tendências"
+        ],
+        "definition_of_done": [
+          "Pelo menos 5 dashboards analíticos funcionais",
+          "Export para PDF, Excel e CSV funcionando",
+          "Sistema de alertas implementado"
+        ],
+        "labels": [
+          "analytics",
+          "reporting",
+          "insights"
+        ],
+        "automation_hooks": {},
+        "performance_constraints": {},
+        "quality_gates": {},
+        "methodology": null,
+        "tdd_enabled": true
+      }
+    }
+  ]
+}

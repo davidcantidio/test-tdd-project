@@ -57,4 +57,3 @@ class FeatureFlagManager:
             if key in env:
                 mgr.flags[flag] = env[key].lower() in {"1", "true", "yes", "on"}
         return mgr
-

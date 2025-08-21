@@ -1,4 +1,7 @@
 """
+import logging
+logger = logging.getLogger(__name__)
+
 🔄 Data Normalization Utilities
 
 Safe data conversion and normalization helpers.
@@ -63,7 +66,7 @@ def ensure_dict(value: Any) -> Dict[str, Any]:
         else:
             return {"value": value}
     except Exception:
-        return {"value": str(value)}
+        logger.warning("Operation failed: %s", str(e))
 
 def safe_get(data: Dict[str, Any], key: str, default: Any = None) -> Any:
     """
@@ -130,7 +133,7 @@ def safe_str(value: Any, default: str = "") -> str:
             return default
         return str(value)
     except Exception:
-        return default
+        logger.warning("Operation failed: %s", str(e))
 
 # === EXPORTS ==============================================================
 

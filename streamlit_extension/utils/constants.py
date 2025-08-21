@@ -128,4 +128,3 @@ __all__: List[str] = [
     "EpicStatus", "TDDPhase", "Priority", "Complexity", "UIConstants",
     "ValidationRules", "TimeConstants",
 ]
-

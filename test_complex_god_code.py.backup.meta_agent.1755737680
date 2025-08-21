@@ -1,0 +1,302 @@
+#!/usr/bin/env python3
+"""
+Complex god code file designed to trigger multiple refactoring agents.
+This file intentionally contains various code smells and god patterns.
+"""
+
+import sqlite3
+import logging
+import json
+import hashlib
+import os
+import sys
+from typing import Dict, List, Any
+
+def massive_god_method(user_data: Dict[str, Any], database_path: str, config: Dict[str, Any]) -> Dict[str, Any]:
+    """This is an intentionally massive god method that does everything."""
+    
+    # Step 1: Database connection and validation
+    if not os.path.exists(database_path):
+        raise FileNotFoundError(f"Database not found: {database_path}")
+    
+    conn = sqlite3.connect(database_path)
+    cursor = conn.cursor()
+    
+    # Step 2: User validation with complex logic
+    if not user_data:
+        cursor.close()
+        conn.close()
+        return {"error": "No user data provided"}
+    
+    if "username" not in user_data:
+        cursor.close()
+        conn.close()
+        return {"error": "Username required"}
+    
+    if "email" not in user_data:
+        cursor.close()
+        conn.close()
+        return {"error": "Email required"}
+    
+    # Step 3: Password hashing (security critical)
+    if "password" in user_data:
+        password_hash = hashlib.md5(user_data["password"].encode()).hexdigest()  # Bad practice - MD5
+        user_data["password_hash"] = password_hash
+        del user_data["password"]
+    
+    # Step 4: Email validation with regex
+    import re
+    email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+    if not re.match(email_pattern, user_data["email"]):
+        cursor.close()
+        conn.close()
+        return {"error": "Invalid email format"}
+    
+    # Step 5: Check if user already exists
+    cursor.execute("SELECT id FROM users WHERE username = ? OR email = ?", 
+                   (user_data["username"], user_data["email"]))
+    existing_user = cursor.fetchone()
+    
+    if existing_user:
+        cursor.close()
+        conn.close()
+        return {"error": "User already exists"}
+    
+    # Step 6: Process user preferences
+    preferences = user_data.get("preferences", {})
+    if "theme" not in preferences:
+        preferences["theme"] = "dark"
+    if "language" not in preferences:
+        preferences["language"] = "en"
+    if "notifications" not in preferences:
+        preferences["notifications"] = True
+    
+    # Step 7: Calculate user score based on complex criteria
+    user_score = 0
+    if len(user_data["username"]) > 5:
+        user_score += 10
+    if "@gmail.com" in user_data["email"]:
+        user_score += 5
+    elif "@company.com" in user_data["email"]:
+        user_score += 15
+    
+    if "bio" in user_data and len(user_data["bio"]) > 50:
+        user_score += 20
+    
+    # Step 8: Database insertion with complex transaction
+    try:
+        cursor.execute("""
+            INSERT INTO users (username, email, password_hash, preferences, score, created_at)
+            VALUES (?, ?, ?, ?, ?, datetime('now'))
+        """, (
+            user_data["username"], 
+            user_data["email"], 
+            user_data.get("password_hash", ""),
+            json.dumps(preferences),
+            user_score
+        ))
+        
+        user_id = cursor.lastrowid
+        
+        # Step 9: Create user profile
+        cursor.execute("""
+            INSERT INTO user_profiles (user_id, bio, avatar_url, status)
+            VALUES (?, ?, ?, 'active')
+        """, (
+            user_id,
+            user_data.get("bio", ""),
+            user_data.get("avatar_url", "")
+        ))
+        
+        # Step 10: Initialize user settings
+        default_settings = {
+            "email_notifications": True,
+            "sms_notifications": False,
+            "privacy_level": "normal",
+            "data_sharing": False
+        }
+        
+        cursor.execute("""
+            INSERT INTO user_settings (user_id, settings)
+            VALUES (?, ?)
+        """, (user_id, json.dumps(default_settings)))
+        
+        # Step 11: Log user creation
+        log_entry = {
+            "action": "user_created",
+            "user_id": user_id,
+            "username": user_data["username"],
+            "timestamp": "now",
+            "ip_address": "unknown",
+            "user_agent": "unknown"
+        }
+        
+        cursor.execute("""
+            INSERT INTO audit_log (user_id, action, details, timestamp)
+            VALUES (?, ?, ?, datetime('now'))
+        """, (user_id, "user_created", json.dumps(log_entry)))
+        
+        # Step 12: Commit transaction
+        conn.commit()
+        
+        # Step 13: Send welcome email (mock)
+        logging.info(f"Welcome email would be sent to {user_data['email']}")
+        
+        # Step 14: Update statistics
+        cursor.execute("UPDATE system_stats SET user_count = user_count + 1")
+        conn.commit()
+        
+        # Step 15: Cleanup and return success
+        cursor.close()
+        conn.close()
+        
+        return {
+            "success": True,
+            "user_id": user_id,
+            "username": user_data["username"],
+            "score": user_score,
+            "message": "User created successfully"
+        }
+        
+    except Exception as e:
+        # Step 16: Error handling and rollback
+        conn.rollback()
+        cursor.close()
+        conn.close()
+        
+        logging.error(f"Error creating user: {str(e)}")
+        return {
+            "error": f"Failed to create user: {str(e)}"
+        }
+
+class GodClass:
+    """This class does way too many things."""
+    
+    def __init__(self, db_path: str, config_path: str, log_path: str):
+        self.db_path = db_path
+        self.config_path = config_path
+        self.log_path = log_path
+        self.connection = None
+        self.config = {}
+        self.logger = None
+        self.cache = {}
+        self.stats = {}
+        
+    def initialize_everything(self):
+        """Initializes everything - database, logging, config, etc."""
+        # Database setup
+        self.connection = sqlite3.connect(self.db_path)
+        
+        # Logging setup
+        logging.basicConfig(
+            filename=self.log_path,
+            level=logging.INFO,
+            format='%(asctime)s - %(levelname)s - %(message)s'
+        )
+        self.logger = logging.getLogger(__name__)
+        
+        # Config loading
+        with open(self.config_path, 'r') as f:
+            self.config = json.load(f)
+        
+        # Cache initialization
+        self.cache = {}
+        
+        # Stats initialization
+        self.stats = {"operations": 0, "errors": 0, "cache_hits": 0}
+    
+    def process_user_data(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Processes user data - validation, transformation, storage."""
+        self.stats["operations"] += 1
+        
+        # Input validation
+        if not isinstance(data, dict):
+            self.stats["errors"] += 1
+            return {"error": "Invalid data format"}
+        
+        # Data transformation
+        processed_data = {}
+        for key, value in data.items():
+            if isinstance(value, str):
+                processed_data[key] = value.strip().lower()
+            else:
+                processed_data[key] = value
+        
+        # Database storage
+        cursor = self.connection.cursor()
+        try:
+            cursor.execute("INSERT INTO processed_data (data) VALUES (?)", 
+                         (json.dumps(processed_data),))
+            self.connection.commit()
+            return {"success": True, "id": cursor.lastrowid}
+        except Exception as e:
+            self.stats["errors"] += 1
+            return {"error": str(e)}
+    
+    def manage_cache(self, key: str, value: Any = None) -> Any:
+        """Manages cache operations - get, set, delete."""
+        if value is None:
+            # Get operation
+            if key in self.cache:
+                self.stats["cache_hits"] += 1
+                return self.cache[key]
+            return None
+        else:
+            # Set operation
+            self.cache[key] = value
+            
+            # Cache size management
+            if len(self.cache) > 1000:
+                # Remove oldest entries (simple FIFO)
+                keys_to_remove = list(self.cache.keys())[:100]
+                for k in keys_to_remove:
+                    del self.cache[k]
+    
+    def generate_reports(self) -> Dict[str, Any]:
+        """Generates various system reports."""
+        cursor = self.connection.cursor()
+        
+        # User statistics
+        cursor.execute("SELECT COUNT(*) FROM users")
+        user_count = cursor.fetchone()[0]
+        
+        cursor.execute("SELECT AVG(score) FROM users")
+        avg_score = cursor.fetchone()[0] or 0
+        
+        # System statistics
+        system_stats = self.stats.copy()
+        
+        # Cache statistics
+        cache_stats = {
+            "size": len(self.cache),
+            "hit_rate": self.stats["cache_hits"] / max(self.stats["operations"], 1)
+        }
+        
+        return {
+            "user_stats": {"count": user_count, "avg_score": avg_score},
+            "system_stats": system_stats,
+            "cache_stats": cache_stats,
+            "timestamp": "now"
+        }
+
+if __name__ == "__main__":
+    # Test the god code
+    test_user = {
+        "username": "testuser",
+        "email": "test@example.com",
+        "password": "password123",
+        "bio": "This is a test user bio that is long enough to get points"
+    }
+    
+    result = massive_god_method(test_user, "test.db", {})
+    print(f"Result: {result}")
+    
+    # Test the god class
+    god_obj = GodClass("test.db", "config.json", "app.log")
+    god_obj.initialize_everything()
+    
+    processed = god_obj.process_user_data({"name": "TEST", "value": 123})
+    print(f"Processed: {processed}")
+    
+    reports = god_obj.generate_reports()
+    print(f"Reports: {reports}")

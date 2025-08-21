@@ -23,31 +23,31 @@ from typing import Dict, Any, Optional
 # === MODULE IMPORTS ===========================================================
 
 # Centralized imports - NO DUPLICATIONS, NO FALLBACKS
-from .utils.streamlit_helpers import (
+from streamlit_extension.utils.streamlit_helpers import (
     is_ui, is_headless, set_page_config_once, safe_streamlit_error,
     add_project_to_path
 )
 
-from .utils.session_manager import initialize_session_state
-from .utils.exception_handler import handle_streamlit_exceptions
+from streamlit_extension.utils.session_manager import initialize_session_state
+from streamlit_extension.utils.exception_handler import handle_streamlit_exceptions
 
 # Components - centralized imports
-from .components.sidebar import render_sidebar
-from .components.layout_renderers import render_topbar  
-from .components.page_manager import render_current_page
-from .components.debug_widgets import render_debug_panel
+from streamlit_extension.components.sidebar import render_sidebar
+from streamlit_extension.components.layout_renderers import render_topbar  
+from streamlit_extension.components.page_manager import render_current_page
+from streamlit_extension.components.debug_widgets import render_debug_panel
 
 # Authentication
-from .utils.auth import (
+from streamlit_extension.utils.auth import (
     render_login_page, get_authenticated_user, is_user_authenticated
 )
 
 # Database queries (for headless mode)  
-from .database.queries import list_epics
-from .database.health import check_health
+from streamlit_extension.database.queries import list_epics
+from streamlit_extension.database.health import check_health
 
 # Session manager for debug mode
-from .utils.session_manager import is_debug_mode
+from streamlit_extension.utils.session_manager import is_debug_mode
 # Auth imports
 from streamlit_extension.auth.middleware import require_auth, require_admin
 from streamlit_extension.auth.user_model import UserRole

@@ -12,6 +12,9 @@ from typing import Any, Dict, Iterable, Iterator, Optional, Tuple
 # Ajuste o import conforme a localização real do DatabaseManager
 from streamlit_extension.utils.database import DatabaseManager  # type: ignore
 
+# Auth decorators
+from streamlit_extension.auth.middleware import require_auth, require_admin
+
 # =============================================================================
 # Config & Utils
 # =============================================================================

@@ -1,0 +1,89 @@
+[info] Smoke: duração
+[1m============================= test session starts ==============================[0m
+platform linux -- Python 3.12.3, pytest-7.4.4, pluggy-1.6.0
+rootdir: /home/david/Documentos/canimport/test-tdd-project
+configfile: pytest.ini
+plugins: asyncio-0.21.2, mock-3.14.1, timeout-2.4.0, cov-4.1.0, anyio-4.10.0, xdist-3.8.0
+asyncio: mode=Mode.STRICT
+timeout: 300.0s
+timeout method: thread
+timeout func_only: False
+collected 56 items
+
+tests/test_duration_calculator.py::TestDurationCalculator::test_calculate_duration_days_basic [32mPASSED[0m[32m [  1%][0m
+tests/test_duration_calculator.py::TestDurationCalculator::test_calculate_duration_days_same_date [32mPASSED[0m[32m [  3%][0m
+tests/test_duration_calculator.py::TestDurationCalculator::test_calculate_duration_days_string_input [32mPASSED[0m[32m [  5%][0m
+tests/test_duration_calculator.py::TestDurationCalculator::test_calculate_duration_days_datetime_input [32mPASSED[0m[32m [  7%][0m
+tests/test_duration_calculator.py::TestDurationCalculator::test_calculate_duration_days_invalid_order [32mPASSED[0m[32m [  8%][0m
+tests/test_duration_calculator.py::TestDurationCalculator::test_calculate_duration_days_invalid_date_format [32mPASSED[0m[32m [ 10%][0m
+tests/test_duration_calculator.py::TestDurationCalculator::test_calculate_duration_business_days [32mPASSED[0m[32m [ 12%][0m
+tests/test_duration_calculator.py::TestDurationCalculator::test_calculate_duration_business_days_with_weekend [32mPASSED[0m[32m [ 14%][0m
+tests/test_duration_calculator.py::TestDurationCalculator::test_calculate_end_date_basic [32mPASSED[0m[32m [ 16%][0m
+tests/test_duration_calculator.py::TestDurationCalculator::test_calculate_end_date_fractional_duration [32mPASSED[0m[32m [ 17%][0m
+tests/test_duration_calculator.py::TestDurationCalculator::test_calculate_end_date_zero_duration [32mPASSED[0m[32m [ 19%][0m
+tests/test_duration_calculator.py::TestDurationCalculator::test_calculate_end_date_negative_duration [32mPASSED[0m[32m [ 21%][0m
+tests/test_duration_calculator.py::TestDurationCalculator::test_calculate_end_date_business_days [32mPASSED[0m[32m [ 23%][0m
+tests/test_duration_calculator.py::TestDurationCalculator::test_calculate_end_date_string_input [32mPASSED[0m[32m [ 25%][0m
+tests/test_duration_calculator.py::TestDurationCalculator::test_parse_duration_string_days_singular [32mPASSED[0m[32m [ 26%][0m
+tests/test_duration_calculator.py::TestDurationCalculator::test_parse_duration_string_days_plural [32mPASSED[0m[32m [ 28%][0m
+tests/test_duration_calculator.py::TestDurationCalculator::test_parse_duration_string_fractional_days [32mPASSED[0m[32m [ 30%][0m
+tests/test_duration_calculator.py::TestDurationCalculator::test_parse_duration_string_weeks_singular [32mPASSED[0m[32m [ 32%][0m
+tests/test_duration_calculator.py::TestDurationCalculator::test_parse_duration_string_weeks_plural [32mPASSED[0m[32m [ 33%][0m
+tests/test_duration_calculator.py::TestDurationCalculator::test_parse_duration_string_case_insensitive [32mPASSED[0m[32m [ 35%][0m
+tests/test_duration_calculator.py::TestDurationCalculator::test_parse_duration_string_extra_whitespace [32mPASSED[0m[32m [ 37%][0m
+tests/test_duration_calculator.py::TestDurationCalculator::test_parse_duration_string_invalid_format [32mPASSED[0m[32m [ 39%][0m
+tests/test_duration_calculator.py::TestDurationCalculator::test_parse_duration_string_unsupported_unit [32mPASSED[0m[32m [ 41%][0m
+tests/test_duration_calculator.py::TestDurationCalculator::test_duration_to_days_days_unit [32mPASSED[0m[32m [ 42%][0m
+tests/test_duration_calculator.py::TestDurationCalculator::test_duration_to_days_weeks_unit [32mPASSED[0m[32m [ 44%][0m
+tests/test_duration_calculator.py::TestDurationCalculator::test_duration_to_days_months_unit [32mPASSED[0m[32m [ 46%][0m
+tests/test_duration_calculator.py::TestDurationCalculator::test_parse_and_convert_to_days_real_epic_formats [32mPASSED[0m[32m [ 48%][0m
+tests/test_duration_calculator.py::TestDurationCalculator::test_validate_date_consistency_valid_planned_dates [32mPASSED[0m[32m [ 50%][0m
+tests/test_duration_calculator.py::TestDurationCalculator::test_validate_date_consistency_invalid_planned_order [32mPASSED[0m[32m [ 51%][0m
+tests/test_duration_calculator.py::TestDurationCalculator::test_validate_date_consistency_duration_mismatch [32mPASSED[0m[32m [ 53%][0m
+tests/test_duration_calculator.py::TestDurationCalculator::test_validate_date_consistency_actual_dates [32mPASSED[0m[32m [ 55%][0m
+tests/test_duration_calculator.py::TestDurationCalculator::test_validate_date_consistency_invalid_actual_order [32mPASSED[0m[32m [ 57%][0m
+tests/test_duration_calculator.py::TestDurationCalculator::test_validate_date_consistency_early_start [32mPASSED[0m[32m [ 58%][0m
+tests/test_duration_calculator.py::TestDurationCalculator::test_validate_date_consistency_overrun [32mPASSED[0m[32m [ 60%][0m
+tests/test_duration_calculator.py::TestDurationCalculator::test_validate_date_consistency_invalid_date_format [32mPASSED[0m[32m [ 62%][0m
+tests/test_duration_calculator.py::TestDurationCalculator::test_normalize_date_date_object [32mPASSED[0m[32m [ 64%][0m
+tests/test_duration_calculator.py::TestDurationCalculator::test_normalize_date_datetime_object [32mPASSED[0m[32m [ 66%][0m
+tests/test_duration_calculator.py::TestDurationCalculator::test_normalize_date_string_formats [32mPASSED[0m[32m [ 67%][0m
+tests/test_duration_calculator.py::TestDurationCalculator::test_normalize_date_invalid_string [32mPASSED[0m[32m [ 69%][0m
+tests/test_duration_calculator.py::TestDurationCalculator::test_normalize_date_invalid_type [32mPASSED[0m[32m [ 71%][0m
+tests/test_duration_calculator.py::TestDurationCalculator::test_calculate_business_days_weekend_span [32mPASSED[0m[32m [ 73%][0m
+tests/test_duration_calculator.py::TestDurationCalculator::test_add_business_days_skip_weekend [32mPASSED[0m[32m [ 75%][0m
+tests/test_duration_calculator.py::TestConvenienceFunctions::test_calculate_epic_duration [32mPASSED[0m[32m [ 76%][0m
+tests/test_duration_calculator.py::TestConvenienceFunctions::test_parse_epic_duration [32mPASSED[0m[32m [ 78%][0m
+tests/test_duration_calculator.py::TestConvenienceFunctions::test_validate_epic_dates [32mPASSED[0m[32m [ 80%][0m
+tests/test_duration_calculator.py::TestRealEpicDataIntegration::test_epic_5_duration_pattern [32mPASSED[0m[32m [ 82%][0m
+tests/test_duration_calculator.py::TestRealEpicDataIntegration::test_epic_3_duration_pattern [32mPASSED[0m[32m [ 83%][0m
+tests/test_duration_calculator.py::TestRealEpicDataIntegration::test_epic_duration_patterns_comprehensive [32mPASSED[0m[32m [ 85%][0m
+tests/test_duration_calculator.py::TestRealEpicDataIntegration::test_epic_timeline_simulation [32mPASSED[0m[32m [ 87%][0m
+tests/test_duration_calculator.py::TestErrorHandlingAndEdgeCases::test_empty_duration_string [32mPASSED[0m[32m [ 89%][0m
+tests/test_duration_calculator.py::TestErrorHandlingAndEdgeCases::test_none_date_input [32mPASSED[0m[32m [ 91%][0m
+tests/test_duration_calculator.py::TestErrorHandlingAndEdgeCases::test_very_large_duration [32mPASSED[0m[32m [ 92%][0m
+tests/test_duration_calculator.py::TestErrorHandlingAndEdgeCases::test_zero_value_duration_string [32mPASSED[0m[32m [ 94%][0m
+tests/test_duration_calculator.py::TestErrorHandlingAndEdgeCases::test_validation_with_all_none_values [32mPASSED[0m[32m [ 96%][0m
+tests/test_duration_calculator.py::TestPerformance::test_duration_calculation_performance [32mPASSED[0m[32m [ 98%][0m
+tests/test_duration_calculator.py::TestPerformance::test_duration_parsing_performance [32mPASSED[0m[32m [100%][0m
+
+============================= slowest 10 durations =============================
+
+(10 durations < 0.005s hidden.  Use -vv to show these durations.)
+[32m============================== [32m[1m56 passed[0m[32m in 0.10s[0m[32m ==============================[0m
+[ok] Smoke: duração concluído
+[info] Smoke: segurança
+ERROR: file or directory not found: tests/test_*security*.py
+
+[1m============================= test session starts ==============================[0m
+platform linux -- Python 3.12.3, pytest-7.4.4, pluggy-1.6.0
+rootdir: /home/david/Documentos/canimport/test-tdd-project
+configfile: pytest.ini
+plugins: asyncio-0.21.2, mock-3.14.1, timeout-2.4.0, cov-4.1.0, anyio-4.10.0, xdist-3.8.0
+asyncio: mode=Mode.STRICT
+timeout: 300.0s
+timeout method: thread
+timeout func_only: False
+collected 0 items
+
+[33m============================ [33mno tests ran[0m[33m in 0.02s[0m[33m =============================[0m

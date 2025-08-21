@@ -1,0 +1,125 @@
+{
+  "timestamp": "2025-08-12 02:30:00",
+  "analysis_summary": {
+    "total_json_files": 6,
+    "structure_types": {
+      "epic_template.json": "nested",
+      "example_epic_0.json": "nested",
+      "mobile_opt_epic.json": "nested",
+      "streamlit_framework_epic.json": "nested",
+      "analytics_epic.json": "nested",
+      "template_epic.json": "nested"
+    },
+    "total_json_fields": 82,
+    "total_schema_fields": 326,
+    "field_coverage_percentage": 25.609756097560975,
+    "placeholders_found": 289,
+    "unmapped_fields_count": 66
+  },
+  "critical_gaps": {
+    "gap_1_field_mapping": {
+      "severity": "CRITICAL",
+      "description": "Schema não mapeia sistematicamente os campos JSON",
+      "evidence": "Apenas 21 de 82 campos mapeados (25.6%)",
+      "unmapped_fields": [
+        "tasks[].files_touched",
+        "tdd_guidelines.green_phase_rules",
+        "tasks",
+        "quality_gates.performance_benchmarks.no_regression_tolerance",
+        "quality_gates.environment_reliability.config_validation_accuracy",
+        "definition_of_done",
+        "tasks[].branch",
+        "quality_gates.environment_reliability.default_safety_compliance",
+        "tasks[].test_specs",
+        "tasks[].mitigation",
+        "automation_hooks",
+        "quality_gates",
+        "tasks[].tdd_skip_reason",
+        "methodology",
+        "performance_constraints.environment_management.matrix_generation_max_time",
+        "performance_constraints.environment_management",
+        "labels",
+        "performance_constraints.api_constraints.max_api_calls_maintenance",
+        "performance_constraints.production_safety",
+        "performance_constraints.environment_management.config_loading_max_time"
+      ]
+    },
+    "gap_2_data_migration": {
+      "severity": "CRITICAL",
+      "description": "Dados JSON reais não foram migrados",
+      "evidence": "DB: 3 épicos, JSON: 6 épicos",
+      "migration_ratio": 50.0
+    },
+    "gap_3_placeholders": {
+      "severity": "HIGH",
+      "description": "Placeholders identificados não foram tratados",
+      "evidence": "289 placeholders encontrados",
+      "sample_placeholders": [
+        {
+          "file": "epic_template.json",
+          "path": "id",
+          "value": "[EPIC-ID]"
+        },
+        {
+          "file": "epic_template.json",
+          "path": "summary",
+          "value": "[Summary focused on testable behaviors and business value]"
+        },
+        {
+          "file": "epic_template.json",
+          "path": "methodology",
+          "value": "Test-Driven Development"
+        },
+        {
+          "file": "epic_template.json",
+          "path": "goals[0]",
+          "value": "[Goal 1: Specific verifiable behavior via test]"
+        },
+        {
+          "file": "epic_template.json",
+          "path": "definition_of_done[0]",
+          "value": "All tests written before implementation"
+        },
+        {
+          "file": "epic_template.json",
+          "path": "definition_of_done[1]",
+          "value": "100% test coverage on new modules"
+        },
+        {
+          "file": "epic_template.json",
+          "path": "tasks[0].id",
+          "value": "[EPIC-ID].1"
+        },
+        {
+          "file": "epic_template.json",
+          "path": "tasks[0].title",
+          "value": "TEST: [specific behavior]"
+        },
+        {
+          "file": "epic_template.json",
+          "path": "tasks[0].description",
+          "value": "Write test that verifies: [specific behavior]"
+        },
+        {
+          "file": "epic_template.json",
+          "path": "tasks[0].acceptance_criteria[0]",
+          "value": "Test fails with correct and informative assertion"
+        }
+      ]
+    },
+    "gap_4_structure_inconsistency": {
+      "severity": "HIGH",
+      "description": "Estruturas nested vs flat não foram resolvidas",
+      "evidence": "Estruturas encontradas: {'epic_template.json': 'nested', 'example_epic_0.json': 'nested', 'mobile_opt_epic.json': 'nested', 'streamlit_framework_epic.json': 'nested', 'analytics_epic.json': 'nested', 'template_epic.json': 'nested'}",
+      "impact": "Migração pode falhar em arquivos flat"
+    }
+  },
+  "recommended_actions": [
+    "Expandir schema para cobrir campos ausentes",
+    "Implementar migração real dos dados JSON",
+    "Criar script para tratar placeholders",
+    "Normalizar estruturas nested/flat",
+    "Preservar campos array com colunas JSON",
+    "Re-validar com dados reais"
+  ]
+}

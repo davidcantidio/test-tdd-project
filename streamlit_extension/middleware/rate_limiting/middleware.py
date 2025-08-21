@@ -83,4 +83,3 @@ class RateLimitingMiddleware:
             return MiddlewareResponse(False, 429, f"Rate limit exceeded ({result.reason})", headers=headers)
         headers = self._build_headers(info, None)
         return MiddlewareResponse(True, headers=headers)
-

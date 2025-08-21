@@ -1,0 +1,131 @@
+[0;36m[info][0m Suite completa
+[1m============================= test session starts ==============================[0m
+platform linux -- Python 3.12.3, pytest-7.4.4, pluggy-1.6.0 -- /home/david/Documentos/canimport/test-tdd-project/.venv/bin/python3
+cachedir: .pytest_cache
+rootdir: /home/david/Documentos/canimport/test-tdd-project
+configfile: pytest.ini
+plugins: asyncio-0.21.2, mock-3.14.1, timeout-2.4.0, cov-4.1.0, anyio-4.10.0, xdist-3.8.0
+asyncio: mode=Mode.STRICT
+timeout: 300.0s
+timeout method: thread
+timeout func_only: False
+[1mcollecting ... [0m
+[1m----------------------------- live log collection ------------------------------[0m
+2025-08-20 21:32:37 [[32m    INFO[0m] security.rate_limiter: Rate limit configured: api_requests - 100 requests/60s
+2025-08-20 21:32:37 [[32m    INFO[0m] security.rate_limiter: Rate limit configured: db_queries - 50 requests/60s
+2025-08-20 21:32:37 [[32m    INFO[0m] security.rate_limiter: Rate limit configured: auth_attempts - 5 requests/300s
+2025-08-20 21:32:37 [[32m    INFO[0m] security.rate_limiter: Rate limit configured: db_read - 100 requests/60s
+2025-08-20 21:32:37 [[32m    INFO[0m] security.rate_limiter: Rate limit configured: db_write - 20 requests/60s
+2025-08-20 21:32:37 [[32m    INFO[0m] security.rate_limiter: Rate limit configured: form_submit - 10 requests/60s
+2025-08-20 21:32:37 [[32m    INFO[0m] security.rate_limiter: Rate limit configured: page_load - 200 requests/60s
+2025-08-20 21:32:37 [[32m    INFO[0m] security.rate_limiter: Rate limit configured: search - 50 requests/60s
+2025-08-20 21:32:37 [[32m    INFO[0m] security.rate_limiter: Rate limit configured: auth_attempts - 5 requests/300s
+2025-08-20 21:32:37 [[32m    INFO[0m] security.rate_limiter: Rate limit configured: api_requests - 100 requests/60s
+2025-08-20 21:32:37 [[32m    INFO[0m] security.rate_limiter: Rate limit configured: database_queries - 50 requests/60s
+2025-08-20 21:32:37 [[32m    INFO[0m] security.rate_limiter: Rate limit configured: auth_attempts - 5 requests/300s
+2025-08-20 21:32:37 [[32m    INFO[0m] security.rate_limiter: Rate limit configured: file_uploads - 10 requests/300s
+2025-08-20 21:32:37 [[32m    INFO[0m] security.dos_protection: DoS Protection system initialized
+2025-08-20 21:32:37 [[32m    INFO[0m] security.circuit_breaker: Circuit breaker 'database_operations' initialized
+2025-08-20 21:32:37 [[32m    INFO[0m] security.dos_protection: Circuit breaker added for: database_operations
+2025-08-20 21:32:37 [[32m    INFO[0m] security.circuit_breaker: Circuit breaker 'authentication' initialized
+2025-08-20 21:32:37 [[32m    INFO[0m] security.dos_protection: Circuit breaker added for: authentication
+2025-08-20 21:32:37 [[32m    INFO[0m] security.circuit_breaker: Circuit breaker 'file_operations' initialized
+2025-08-20 21:32:37 [[32m    INFO[0m] security.dos_protection: Circuit breaker added for: file_operations
+2025-08-20 21:32:37 [[33m WARNING[0m] streamlit_exceptions: Medium severity error: {'error_id': '3e728230c869', 'category': 'UNKNOWN', 'severity': 'MEDIUM', 'exception_type': 'ModuleNotFoundError', 'message': "No module named '[[TOKEN_REDACTED]]'", 'context': {'function': 'import_module', 'operation': 'import_analytics', 'args_count': 1, 'kwargs_keys': []}}
+2025-08-20 21:32:37 [[33m WARNING[0m] streamlit_exceptions: Medium severity error: {'error_id': '127c022b9e71', 'category': 'UNKNOWN', 'severity': 'MEDIUM', 'exception_type': 'ModuleNotFoundError', 'message': "No module named '[[TOKEN_REDACTED]]'", 'context': {'function': 'import_module', 'operation': 'import_kanban', 'args_count': 1, 'kwargs_keys': []}}
+2025-08-20 21:32:37 [[33m WARNING[0m] streamlit_exceptions: Medium severity error: {'error_id': '488165fb690f', 'category': 'UNKNOWN', 'severity': 'MEDIUM', 'exception_type': 'ModuleNotFoundError', 'message': "No module named '[[TOKEN_REDACTED]]'", 'context': {'function': 'import_module', 'operation': 'import_gantt', 'args_count': 1, 'kwargs_keys': []}}
+2025-08-20 21:32:37 [[33m WARNING[0m] streamlit_exceptions: Medium severity error: {'error_id': 'd551fe0a55ab', 'category': 'UNKNOWN', 'severity': 'MEDIUM', 'exception_type': 'ModuleNotFoundError', 'message': "No module named '[[TOKEN_REDACTED]]'", 'context': {'function': 'import_module', 'operation': 'import_timer', 'args_count': 1, 'kwargs_keys': []}}
+2025-08-20 21:32:37 [[33m WARNING[0m] streamlit_exceptions: Medium severity error: {'error_id': '5712a9775bf2', 'category': 'UNKNOWN', 'severity': 'MEDIUM', 'exception_type': 'ModuleNotFoundError', 'message': "No module named '[[TOKEN_REDACTED]]'", 'context': {'function': 'import_module', 'operation': 'import_settings', 'args_count': 1, 'kwargs_keys': []}}
+2025-08-20 21:32:37 [[32m    INFO[0m] streamlit_extension.utils.dependencies: Dependency 'redis' is not available. Fallback: True
+2025-08-20 21:32:37 [[1m[31m   ERROR[0m] streamlit_exceptions: High severity error: {'error_id': '814b4ea07386', 'category': 'SYSTEM', 'severity': 'HIGH', 'exception_type': 'ImportError', 'message': "cannot import name '[TOKEN_REDACTED]' from '[[TOKEN_REDACTED]]' ([HOME_DIR_REDACTED][PATH_REDACTED][PATH_REDACTED]/app_setup.py)", 'context': {'function': 'import_module', 'operation': 'import_projects', 'args_count': 1, 'kwargs_keys': []}}
+2025-08-20 21:32:37 [[33m WARNING[0m] streamlit_exceptions: Medium severity error: {'error_id': '485b9b5d70f7', 'category': 'UNKNOWN', 'severity': 'MEDIUM', 'exception_type': 'ModuleNotFoundError', 'message': "No module named '[[TOKEN_REDACTED]]'", 'context': {'function': 'import_module', 'operation': 'import_health', 'args_count': 1, 'kwargs_keys': []}}
+collected 746 items / 1 error / 1 skipped
+
+==================================== ERRORS ====================================
+[31m[1m____________ ERROR collecting tests/test_epic_summary_formatting.py ____________[0m
+[31mImportError while importing test module '/home/david/Documentos/canimport/test-tdd-project/tests/test_epic_summary_formatting.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/lib/python3.12/importlib/__init__.py:90: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+tests/test_epic_summary_formatting.py:6: in <module>
+    from streamlit_extension.streamlit_app import format_epic_summary
+E   ImportError: cannot import name 'format_epic_summary' from 'streamlit_extension.streamlit_app' (/home/david/Documentos/canimport/test-tdd-project/streamlit_extension/streamlit_app.py)[0m
+[36m[1m=========================== short test summary info ============================[0m
+[31mERROR[0m tests/test_epic_summary_formatting.py
+!!!!!!!!!!!!!!!!!!!! Interrupted: 1 error during collection !!!!!!!!!!!!!!!!!!!!
+[31m========================= [33m1 skipped[0m, [31m[1m1 error[0m[31m in 2.51s[0m[31m ==========================[0m
+--- Logging error ---
+Traceback (most recent call last):
+  File "/usr/lib/python3.12/logging/__init__.py", line 1163, in emit
+    stream.write(msg + self.terminator)
+ValueError: I/O operation on closed file.
+Call stack:
+  File "/home/david/Documentos/canimport/test-tdd-project/streamlit_extension/utils/app_setup.py", line 437, in _atexit_handler
+    cleanup_application()
+  File "/home/david/Documentos/canimport/test-tdd-project/streamlit_extension/utils/app_setup.py", line 398, in cleanup_application
+    if key in st.session_state:
+  File "<frozen _collections_abc>", line 813, in __contains__
+  File "/home/david/Documentos/canimport/test-tdd-project/.venv/lib/python3.12/site-packages/streamlit/runtime/state/session_state_proxy.py", line 101, in __getitem__
+    return get_session_state()[key]
+  File "/home/david/Documentos/canimport/test-tdd-project/.venv/lib/python3.12/site-packages/streamlit/runtime/state/session_state_proxy.py", line 48, in get_session_state
+    ctx = get_script_run_ctx()
+  File "/home/david/Documentos/canimport/test-tdd-project/.venv/lib/python3.12/site-packages/streamlit/runtime/scriptrunner_utils/script_run_context.py", line 278, in get_script_run_ctx
+    _LOGGER.warning(
+Message: "Thread '%s': missing ScriptRunContext! This warning can be ignored when running in bare mode."
+Arguments: ('MainThread',)
+--- Logging error ---
+Traceback (most recent call last):
+  File "/usr/lib/python3.12/logging/__init__.py", line 1163, in emit
+    stream.write(msg + self.terminator)
+ValueError: I/O operation on closed file.
+Call stack:
+  File "/home/david/Documentos/canimport/test-tdd-project/streamlit_extension/utils/app_setup.py", line 437, in _atexit_handler
+    cleanup_application()
+  File "/home/david/Documentos/canimport/test-tdd-project/streamlit_extension/utils/app_setup.py", line 398, in cleanup_application
+    if key in st.session_state:
+  File "<frozen _collections_abc>", line 813, in __contains__
+  File "/home/david/Documentos/canimport/test-tdd-project/.venv/lib/python3.12/site-packages/streamlit/runtime/state/session_state_proxy.py", line 101, in __getitem__
+    return get_session_state()[key]
+  File "/home/david/Documentos/canimport/test-tdd-project/.venv/lib/python3.12/site-packages/streamlit/runtime/state/session_state_proxy.py", line 56, in get_session_state
+    _LOGGER.warning(
+Message: 'Session state does not function when running a script without `streamlit run`'
+Arguments: ()
+--- Logging error ---
+Traceback (most recent call last):
+  File "/usr/lib/python3.12/logging/__init__.py", line 1163, in emit
+    stream.write(msg + self.terminator)
+ValueError: I/O operation on closed file.
+Call stack:
+  File "/home/david/Documentos/canimport/test-tdd-project/streamlit_extension/utils/app_setup.py", line 437, in _atexit_handler
+    cleanup_application()
+  File "/home/david/Documentos/canimport/test-tdd-project/streamlit_extension/utils/app_setup.py", line 398, in cleanup_application
+    if key in st.session_state:
+  File "<frozen _collections_abc>", line 813, in __contains__
+  File "/home/david/Documentos/canimport/test-tdd-project/.venv/lib/python3.12/site-packages/streamlit/runtime/state/session_state_proxy.py", line 101, in __getitem__
+    return get_session_state()[key]
+  File "/home/david/Documentos/canimport/test-tdd-project/.venv/lib/python3.12/site-packages/streamlit/runtime/state/session_state_proxy.py", line 48, in get_session_state
+    ctx = get_script_run_ctx()
+  File "/home/david/Documentos/canimport/test-tdd-project/.venv/lib/python3.12/site-packages/streamlit/runtime/scriptrunner_utils/script_run_context.py", line 278, in get_script_run_ctx
+    _LOGGER.warning(
+Message: "Thread '%s': missing ScriptRunContext! This warning can be ignored when running in bare mode."
+Arguments: ('MainThread',)
+--- Logging error ---
+Traceback (most recent call last):
+  File "/usr/lib/python3.12/logging/__init__.py", line 1163, in emit
+    stream.write(msg + self.terminator)
+ValueError: I/O operation on closed file.
+Call stack:
+  File "/home/david/Documentos/canimport/test-tdd-project/streamlit_extension/utils/app_setup.py", line 437, in _atexit_handler
+    cleanup_application()
+  File "/home/david/Documentos/canimport/test-tdd-project/streamlit_extension/utils/app_setup.py", line 398, in cleanup_application
+    if key in st.session_state:
+  File "<frozen _collections_abc>", line 813, in __contains__
+  File "/home/david/Documentos/canimport/test-tdd-project/.venv/lib/python3.12/site-packages/streamlit/runtime/state/session_state_proxy.py", line 101, in __getitem__
+    return get_session_state()[key]
+  File "/home/david/Documentos/canimport/test-tdd-project/.venv/lib/python3.12/site-packages/streamlit/runtime/state/session_state_proxy.py", line 48, in get_session_state
+    ctx = get_script_run_ctx()
+  File "/home/david/Documentos/canimport/test-tdd-project/.venv/lib/python3.12/site-packages/streamlit/runtime/scriptrunner_utils/script_run_context.py", line 278, in get_script_run_ctx
+    _LOGGER.warning(
+Message: "Thread '%s': missing ScriptRunContext! This warning can be ignored when running in bare mode."
+Arguments: ('MainThread',)

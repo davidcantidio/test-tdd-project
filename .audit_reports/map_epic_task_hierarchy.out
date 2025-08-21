@@ -1,0 +1,114 @@
+[0;36m[info][0m Executando map_epic_task_hierarchy.py
+📋 MAPEANDO HIERARQUIA ÉPICO→TASK - TAREFA 1.1.1.5
+============================================================
+
+📄 Analisando hierarquia em epic_template.json...
+   ✅ Épico ID: [EPIC-ID] | Tasks: 3 | Dependências: True
+
+📄 Analisando hierarquia em example_epic_0.json...
+   ✅ Épico ID: 0 | Tasks: 39 | Dependências: False
+
+📄 Analisando hierarquia em main_template_epic.json...
+   ✅ Épico ID: X.Y | Tasks: 3 | Dependências: True
+
+📄 Analisando hierarquia em epic_1.json...
+   ✅ Épico ID: 1 | Tasks: 10 | Dependências: False
+
+📄 Analisando hierarquia em template_template_epic.json...
+   ✅ Épico ID: X | Tasks: 1 | Dependências: False
+
+================================================================================
+🏗️  RELATÓRIO DE HIERARQUIA ÉPICO→TASK
+================================================================================
+
+📁 epic_template.json
+--------------------------------------------------
+🎯 Épico: [EPIC-ID] - [Epic Name]
+📊 Estrutura: nested
+📋 Tasks: 3
+🔢 Padrão de IDs: str | Hierárquico: True
+🧪 Fases TDD: {'red': 1, 'green': 1, 'refactor': 1}
+🔗 Dependências: 2/3 tasks
+⚡ Relacionamentos: IDs sequenciais: False, Progressão TDD: True
+
+📁 example_epic_0.json
+--------------------------------------------------
+🎯 Épico: 0 - Environment & Production Safety
+📊 Estrutura: nested
+📋 Tasks: 39
+🔢 Padrão de IDs: str | Hierárquico: True
+🧪 Fases TDD: {'unknown': 4, 'red': 17, 'green': 17, 'refactor': 1}
+🔗 Dependências: 0/39 tasks
+⚡ Relacionamentos: IDs sequenciais: False, Progressão TDD: False
+
+📁 main_template_epic.json
+--------------------------------------------------
+🎯 Épico: X.Y - [Nome do Épico]
+📊 Estrutura: nested
+📋 Tasks: 3
+🔢 Padrão de IDs: str | Hierárquico: True
+🧪 Fases TDD: {'red': 1, 'green': 1, 'refactor': 1}
+🔗 Dependências: 2/3 tasks
+⚡ Relacionamentos: IDs sequenciais: False, Progressão TDD: True
+
+📁 epic_1.json
+--------------------------------------------------
+🎯 Épico: 1 - User Authentication System
+📊 Estrutura: flat
+📋 Tasks: 10
+🔢 Padrão de IDs: str | Hierárquico: True
+🧪 Fases TDD: {'analysis': 1, 'red': 3, 'green': 3, 'refactor': 3}
+🔗 Dependências: 0/10 tasks
+⚡ Relacionamentos: IDs sequenciais: False, Progressão TDD: False
+
+📁 template_template_epic.json
+--------------------------------------------------
+🎯 Épico: X - Epic Title Here
+📊 Estrutura: flat
+📋 Tasks: 1
+🔢 Padrão de IDs: str | Hierárquico: True
+🧪 Fases TDD: {'analysis|red|green|refactor': 1}
+🔗 Dependências: 0/1 tasks
+⚡ Relacionamentos: IDs sequenciais: False, Progressão TDD: False
+
+================================================================================
+📊 ANÁLISE CONSOLIDADA
+================================================================================
+🏗️  Tipos de estrutura encontrados:
+   • nested: 3 arquivos
+   • flat: 2 arquivos
+
+🔢 Padrões de ID:
+   • Hierárquicos: 5/5 arquivos
+   • Flat: 0/5 arquivos
+
+🔗 Análise de dependências:
+   • Arquivos com dependências: 2/5
+   • Total de dependências: 4
+   • Média de dependências por task: 0.07
+
+🧪 Distribuição geral de fases TDD:
+   • red: 22 tasks (39.3%)
+   • green: 22 tasks (39.3%)
+   • refactor: 6 tasks (10.7%)
+   • unknown: 4 tasks (7.1%)
+   • analysis: 1 tasks (1.8%)
+   • analysis|red|green|refactor: 1 tasks (1.8%)
+
+================================================================================
+💡 RECOMENDAÇÕES PARA MIGRAÇÃO
+================================================================================
+1. 🔄 Normalização de estrutura:
+   ⚠️  Estruturas mistas encontradas - unificar para um padrão
+
+2. 🔢 Padronização de IDs:
+   ✅ IDs já seguem padrão hierárquico
+
+3. 🔗 Mapeamento de relacionamentos:
+   ✅ Sistema já usa dependências - mapear para foreign keys
+
+4. 🧪 Integridade TDD:
+   ⚠️  Padronizar fases TDD (red/green/refactor)
+
+✅ Mapeamento de hierarquia completo!
+[0;32m[ok][0m Executando map_epic_task_hierarchy.py concluído

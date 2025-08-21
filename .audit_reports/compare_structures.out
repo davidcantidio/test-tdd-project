@@ -1,0 +1,331 @@
+[0;36m[info][0m Executando compare_structures.py
+🔍 COMPARANDO ESTRUTURAS ENTRE ARQUIVOS - TAREFA 1.1.1.7
+============================================================
+
+📄 Processando epic_template.json...
+   ✅ Esquema extraído | Campos: 51 | Profundidade: 5
+
+📄 Processando example_epic_0.json...
+   ✅ Esquema extraído | Campos: 61 | Profundidade: 5
+
+📄 Processando main_template_epic.json...
+   ✅ Esquema extraído | Campos: 51 | Profundidade: 5
+
+📄 Processando epic_1.json...
+   ✅ Esquema extraído | Campos: 40 | Profundidade: 3
+
+📄 Processando template_template_epic.json...
+   ✅ Esquema extraído | Campos: 40 | Profundidade: 3
+
+================================================================================
+📊 ANÁLISE DE PADRÕES ESTRUTURAIS
+================================================================================
+
+🏗️  Grupos por Estrutura:
+   • object_2_fields: 2 arquivo(s)
+     - epic_template.json
+     - main_template_epic.json
+   • object_1_fields: 1 arquivo(s)
+     - example_epic_0.json
+   • object_21_fields: 2 arquivo(s)
+     - epic_1.json
+     - template_template_epic.json
+
+📈 Métricas de Complexidade:
+   • epic_template.json:
+     - Total de campos: 51
+     - Profundidade máxima: 5
+     - Objetos aninhados: 7
+     - Arrays: 18
+   • example_epic_0.json:
+     - Total de campos: 61
+     - Profundidade máxima: 5
+     - Objetos aninhados: 11
+     - Arrays: 14
+   • main_template_epic.json:
+     - Total de campos: 51
+     - Profundidade máxima: 5
+     - Objetos aninhados: 7
+     - Arrays: 18
+   • epic_1.json:
+     - Total de campos: 40
+     - Profundidade máxima: 3
+     - Objetos aninhados: 4
+     - Arrays: 7
+   • template_template_epic.json:
+     - Total de campos: 40
+     - Profundidade máxima: 3
+     - Objetos aninhados: 4
+     - Arrays: 7
+
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+🔄 MATRIZ DE DIFERENÇAS ESTRUTURAIS
+================================================================================
+
+     epic_templ  example_ep  main_templ      epic_1  template_t
+  epic_templ          --           8          --           2           2
+  example_ep           8          --           8           2           2
+  main_templ          --           8          --           2           2
+      epic_1           2           2           2          --           2
+  template_t           2           2           2           2          --
+
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+🔍 COMPARAÇÕES DETALHADAS CRÍTICAS
+================================================================================
+
+📋 Comparação: Nested (epic_template.json) vs Flat (epic_1.json)
+   • fields_only_in_first em root
+     Campos: epic, _metadata
+   • fields_only_in_second em root
+     Campos: dependencies, notes, estimated_hours, tags, epic_id
+
+⚠️  CAMPOS COM TIPOS INCONSISTENTES:
+
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+=
+💡 RECOMENDAÇÕES PARA NORMALIZAÇÃO
+================================================================================
+1. 🔄 Unificar estrutura: escolher entre nested (com wrapper 'epic') ou flat (direto na raiz)
+2. ⚠️  Alta variação estrutural detectada - criar esquema unificado obrigatório
+3. 📊 Normalizar estrutura de arrays para consistência
+4. 🔑 Padronizar formato de IDs (epic_id, task_id) para chaves primárias
+5. ⏰ Adicionar campos de auditoria padrão (created_at, updated_at)
+
+✅ Comparação estrutural completa!
+[0;32m[ok][0m Executando compare_structures.py concluído

@@ -1,0 +1,18 @@
+{
+  "god_codes_found": 52,
+  "god_codes_fixed": 0,
+  "security_issues": 0,
+  "security_fixed": 3,
+  "performance_issues": 0,
+  "performance_optimized": 1,
+  "quality_scores": [],
+  "refactorings_applied": 0,
+  "files_analyzed": 20,
+  "architecture_violations": 0,
+  "tdd_coverage": 0.0,
+  "agents_executed": 0,
+  "total_execution_time": 85.66,
+  "average_quality": 0.0,
+  "god_code_fix_rate": 0.0,
+  "security_fix_rate": 0.0
+}

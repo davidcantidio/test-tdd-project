@@ -1,0 +1,90 @@
+[0;36m[info][0m Executando identify_invalid_data.py
+🔍 IDENTIFICANDO DADOS FALTANTES/INVÁLIDOS - TAREFA 1.1.1.8
+============================================================
+
+🔍 Validando epic_template.json...
+   ✅ Problemas encontrados: 4
+
+🔍 Validando example_epic_0.json...
+   ✅ Problemas encontrados: 39
+
+🔍 Validando main_template_epic.json...
+   ✅ Problemas encontrados: 4
+
+🔍 Validando epic_1.json...
+   ❌ Problemas encontrados: 22
+
+🔍 Validando template_template_epic.json...
+   ❌ Problemas encontrados: 5
+
+================================================================================
+🔍 RELATÓRIO DE VALIDAÇÃO DE DADOS
+================================================================================
+
+✅ epic_template.json
+   Estrutura: nested
+   Tasks: 3
+   ❌ Campos inválidos: 1
+      - epic.id: placeholder_value
+   🤔 Valores suspeitos: 69
+
+✅ example_epic_0.json
+   Estrutura: nested
+   Tasks: 39
+   🤔 Valores suspeitos: 58
+
+✅ main_template_epic.json
+   Estrutura: nested
+   Tasks: 3
+   ❌ Campos inválidos: 1
+      - epic.id: placeholder_value
+   🤔 Valores suspeitos: 68
+
+❌ epic_1.json
+   Estrutura: flat
+   Tasks: 10
+   ⚠️  Campos faltantes: 2
+      - epic.id
+      - epic.name
+   📋 Problemas em tasks: 10
+      - missing_task_field: 10
+   🤔 Valores suspeitos: 13
+
+❌ template_template_epic.json
+   Estrutura: flat
+   Tasks: 1
+   ⚠️  Campos faltantes: 2
+      - epic.id
+      - epic.name
+   ❌ Campos inválidos: 1
+      - epic.id: placeholder_value
+   📋 Problemas em tasks: 1
+      - missing_task_field: 1
+   🤔 Valores suspeitos: 7
+
+================================================================================
+📊 ANÁLISE DE QUALIDADE DOS DADOS
+================================================================================
+
+📈 Score de Qualidade: 97.3/100
+✅ Arquivos válidos: 3/5
+❌ Arquivos inválidos: 2/5
+
+🔍 Problemas mais comuns:
+   • suspicious_values: 215 ocorrências
+   • task_issues: 11 ocorrências
+   • missing_fields: 4 ocorrências
+   • invalid_fields: 3 ocorrências
+
+
+================================================================================
+💡 RECOMENDAÇÕES PARA CORREÇÃO
+================================================================================
+1. 🔄 Substituir 215 valores placeholder por dados reais
+2. 🔑 Regenerar IDs inválidos com formato consistente (numérico ou UUID)
+3. 📝 Adicionar 4 campos obrigatórios faltantes
+4. ⏱️  Revisar e padronizar estimate_minutes (remover negativos e excessivos)
+5. 🧪 Normalizar tdd_phase para valores padrão: red, green, refactor
+
+✅ Validação de dados completa!
+[0;32m[ok][0m Executando identify_invalid_data.py concluído

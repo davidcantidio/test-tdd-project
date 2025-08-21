@@ -1,0 +1,14 @@
+[0;36m[info][0m Health check do banco
+🏥 Health Check Mode
+  📊 Checking Framework DB...
+    ✅ Framework DB integrity: OK
+    📏 Framework DB size: 12.25 MB
+    ❌ Framework DB foreign key violations: 146
+    📊 Records: 3 epics, 4 tasks, 1 active users
+  📊 Checking Timer DB...
+    ✅ Timer DB integrity: OK
+    📏 Timer DB size: 0.05 MB
+    ✅ Timer DB foreign keys: OK
+    📊 Records: 34 sessions, 1 users
+✅ Health check completed
+[0;32m[ok][0m Health check do banco concluído

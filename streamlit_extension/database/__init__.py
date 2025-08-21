@@ -57,4 +57,3 @@ __all__ = [
     "create_schema_if_needed",
     "seed_initial_data",
 ]
-

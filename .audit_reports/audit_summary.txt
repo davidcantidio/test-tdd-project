@@ -1,0 +1,11 @@
+RESUMO DA AUDITORIA
+==================================================
+
+Score Final: 20/100
+Arquivos Analisados: 20
+God Codes: 52
+Security Issues: 0
+Performance Issues: 0
+Qualidade Média: 0.0/10
+Agentes Executados: 0
+Tempo Total: 85.7s

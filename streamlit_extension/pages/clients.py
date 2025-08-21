@@ -41,6 +41,10 @@ from streamlit_extension.utils.exception_handler import (
 
 # Optional dependencies with clean fallback
 dependency_manager = get_dependency_manager()
+
+# Streamlit availability check
+from streamlit_extension.utils.app_setup import STREAMLIT_AVAILABLE
+
 try:
     from streamlit_extension.components.form_components import render_entity_filters
 except ImportError:

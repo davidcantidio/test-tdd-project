@@ -1,0 +1,146 @@
+INFO:scripts.automated_audit.intelligent_code_agent.SemanticAnalysisEngine:Semantic Analysis Engine initialized with comprehensive knowledge bases
+INFO:systematic_file_auditor.EnterpriseSessionManager:EnterpriseSessionManager initialized
+INFO:systematic_file_auditor.SmartTokenBudgetManager:SmartTokenBudgetManager initialized: 40000 tokens/hour, 800000 daily budget, intelligent mode: True
+INFO:systematic_file_auditor.SetimaDataLoader:Sétima Camada carregada: 18 arquivos com pontuação de risco
+WARNING:systematic_file_auditor.EnhancedSystematicFileAuditor:⚠️ Intelligent agents not available - using legacy analysis
+INFO:systematic_file_auditor.EnhancedSystematicFileAuditor:Auditor inicializado (Sétima Camada: completa, IA: indisponível)
+INFO:scripts.automated_audit.intelligent_code_agent.IntelligentCodeAgent:Integrated with existing Enhanced Systematic File Auditor
+INFO:scripts.automated_audit.intelligent_code_agent.IntelligentCodeAgent:Intelligent Code Agent initialized: depth=advanced, mode=conservative, dry_run=False
+INFO:god_code_refactoring_agent.GodCodeRefactoringAgent:GodCodeRefactoringAgent initialized: dry_run=False, aggressive=False
+INFO:scripts.automated_audit.intelligent_refactoring_engine.IntelligentRefactoringEngine:Intelligent Refactoring Engine initialized with God Code Agent
+INFO:intelligent_code_agent.SemanticAnalysisEngine:Semantic Analysis Engine initialized with comprehensive knowledge bases
+INFO:intelligent_code_agent.IntelligentCodeAgent:Intelligent Code Agent initialized: depth=advanced, mode=conservative, dry_run=False
+INFO:god_code_refactoring_agent.GodCodeRefactoringAgent:GodCodeRefactoringAgent initialized: dry_run=False, aggressive=False
+INFO:intelligent_refactoring_engine.IntelligentRefactoringEngine:Intelligent Refactoring Engine initialized with God Code Agent
+INFO:scripts.automated_audit.tdd_intelligent_workflow_agent.TDDIntelligentWorkflowAgent:TDD Intelligent Workflow Agent initialized: TDAH=False, focus=25m
+INFO:scripts.automated_audit.god_code_refactoring_agent.GodCodeRefactoringAgent:GodCodeRefactoringAgent initialized: dry_run=False, aggressive=False
+INFO:scripts.automated_audit.meta_agent:Initialized 4 specialized agents
+INFO:scripts.automated_audit.meta_agent:MetaAgent initialized for .
+INFO:scripts.automated_audit.meta_agent:Token budget: 32000, TDAH features: False
+INFO:scripts.automated_audit.meta_agent:Executing plan for streamlit_extension/middleware/rate_limiting/core.py
+INFO:scripts.automated_audit.meta_agent:Agents: ['intelligent_code_agent', 'god_code_agent', 'refactoring_engine', 'tdd_workflow_agent']
+INFO:scripts.automated_audit.meta_agent:Estimated tokens: 11844
+INFO:scripts.automated_audit.meta_agent:Estimated time: 180.0s
+INFO:scripts.automated_audit.meta_agent:🔒 Acquiring file lock for intelligent_code_agent -> streamlit_extension/middleware/rate_limiting/core.py
+INFO:scripts.automated_audit.file_coordination_manager:Created backup: .agent_backups/core_intelligent_code_agent_20250820_213240.py.backup
+INFO:scripts.automated_audit.file_coordination_manager:🔒 Lock acquired: intelligent_code_agent -> streamlit_extension/middleware/rate_limiting/core.py
+INFO:scripts.automated_audit.intelligent_code_agent.IntelligentCodeAgent:Starting intelligent analysis of streamlit_extension/middleware/rate_limiting/core.py
+INFO:scripts.automated_audit.intelligent_code_agent.IntelligentCodeAgent:Analysis complete for streamlit_extension/middleware/rate_limiting/core.py: 270 lines, quality=38.3, refactorings=12
+INFO:scripts.automated_audit.file_coordination_manager:📝 Recorded modification: intelligent_code_agent -> streamlit_extension/middleware/rate_limiting/core.py (✅)
+INFO:scripts.automated_audit.meta_agent:🔓 Released file lock for intelligent_code_agent -> streamlit_extension/middleware/rate_limiting/core.py
+INFO:scripts.automated_audit.file_coordination_manager:🔓 Lock released: intelligent_code_agent -> streamlit_extension/middleware/rate_limiting/core.py
+INFO:scripts.automated_audit.meta_agent:🔒 Acquiring file lock for god_code_agent -> streamlit_extension/middleware/rate_limiting/core.py
+INFO:scripts.automated_audit.file_coordination_manager:Created backup: .agent_backups/core_god_code_agent_20250820_213241.py.backup
+INFO:scripts.automated_audit.file_coordination_manager:🔒 Lock acquired: god_code_agent -> streamlit_extension/middleware/rate_limiting/core.py
+INFO:scripts.automated_audit.god_code_refactoring_agent.GodCodeRefactoringAgent:GodCodeRefactoringAgent initialized: dry_run=False, aggressive=False
+INFO:scripts.automated_audit.god_code_refactoring_agent.GodCodeRefactoringAgent:Analyzing god codes in streamlit_extension/middleware/rate_limiting/core.py
+INFO:scripts.automated_audit.god_code_refactoring_agent.GodCodeRefactoringAgent:Found 1 god code patterns in streamlit_extension/middleware/rate_limiting/core.py
+INFO:scripts.automated_audit.god_code_refactoring_agent.GodCodeRefactoringAgent:Generating refactoring strategy for RateLimiter
+INFO:scripts.automated_audit.file_coordination_manager:📝 Recorded modification: god_code_agent -> streamlit_extension/middleware/rate_limiting/core.py (✅)
+INFO:scripts.automated_audit.meta_agent:🔓 Released file lock for god_code_agent -> streamlit_extension/middleware/rate_limiting/core.py
+INFO:scripts.automated_audit.file_coordination_manager:🔓 Lock released: god_code_agent -> streamlit_extension/middleware/rate_limiting/core.py
+INFO:scripts.automated_audit.meta_agent:🔒 Acquiring file lock for refactoring_engine -> streamlit_extension/middleware/rate_limiting/core.py
+INFO:scripts.automated_audit.file_coordination_manager:Created backup: .agent_backups/core_refactoring_engine_20250820_213241.py.backup
+INFO:scripts.automated_audit.file_coordination_manager:🔒 Lock acquired: refactoring_engine -> streamlit_extension/middleware/rate_limiting/core.py
+INFO:scripts.automated_audit.intelligent_refactoring_engine.IntelligentRefactoringEngine:Applying extract_method refactoring to streamlit_extension/middleware/rate_limiting/core.py (lines: [1])
+INFO:scripts.automated_audit.intelligent_refactoring_engine.IntelligentRefactoringEngine:Applying improve_exception_handling refactoring to streamlit_extension/middleware/rate_limiting/core.py (lines: [1])
+INFO:scripts.automated_audit.intelligent_refactoring_engine.IntelligentRefactoringEngine:Refactoring applied successfully. Backup: streamlit_extension/middleware/rate_limiting/core.py.backup
+INFO:scripts.automated_audit.intelligent_refactoring_engine.IntelligentRefactoringEngine:Applying optimize_string_operations refactoring to streamlit_extension/middleware/rate_limiting/core.py (lines: [1])
+INFO:scripts.automated_audit.intelligent_refactoring_engine.IntelligentRefactoringEngine:Refactoring applied successfully. Backup: streamlit_extension/middleware/rate_limiting/core.py.backup
+INFO:scripts.automated_audit.file_coordination_manager:📝 Recorded modification: refactoring_engine -> streamlit_extension/middleware/rate_limiting/core.py (✅)
+INFO:scripts.automated_audit.meta_agent:🔓 Released file lock for refactoring_engine -> streamlit_extension/middleware/rate_limiting/core.py
+INFO:scripts.automated_audit.file_coordination_manager:🔓 Lock released: refactoring_engine -> streamlit_extension/middleware/rate_limiting/core.py
+INFO:scripts.automated_audit.meta_agent:🔒 Acquiring file lock for tdd_workflow_agent -> streamlit_extension/middleware/rate_limiting/core.py
+INFO:scripts.automated_audit.file_coordination_manager:Created backup: .agent_backups/core_tdd_workflow_agent_20250820_213241.py.backup
+INFO:scripts.automated_audit.file_coordination_manager:🔒 Lock acquired: tdd_workflow_agent -> streamlit_extension/middleware/rate_limiting/core.py
+INFO:scripts.automated_audit.file_coordination_manager:📝 Recorded modification: tdd_workflow_agent -> streamlit_extension/middleware/rate_limiting/core.py (✅)
+INFO:scripts.automated_audit.meta_agent:🔓 Released file lock for tdd_workflow_agent -> streamlit_extension/middleware/rate_limiting/core.py
+INFO:scripts.automated_audit.file_coordination_manager:🔓 Lock released: tdd_workflow_agent -> streamlit_extension/middleware/rate_limiting/core.py
+INFO:scripts.automated_audit.meta_agent:Plan execution completed: 4 agents, 500 tokens, 0.6s
+🧠 MetaAgent - Intelligent Agent Coordination
+Automated agent selection and task optimization
+Task: Security Analysis
+Token Budget: 32,000
+Mode: Apply Changes
+
+
+🧠 MetaAgent Analysis: streamlit_extension/middleware/rate_limiting/core.py
+------------------------------------------------------------
+🎯 Agent Selection & Planning:
+   📋 Selected agents: intelligent_code_agent, tdd_workflow_agent, god_code_agent, refactoring_engine
+   🔥 Estimated tokens: 11844
+   ⏱️  Estimated time: 180.0s
+
+🚀 Execution Results:
+   ✅ Intelligent Code Agent
+      ⏱️  Time: 0.57s
+      🔥 Tokens: 0
+
+   ✅ God Code Agent
+      ⏱️  Time: 0.04s
+      🔥 Tokens: 0
+
+   ✅ Refactoring Engine
+      ⏱️  Time: 0.01s
+      🔥 Tokens: 300
+
+   ✅ Tdd Workflow Agent
+      ⏱️  Time: 0.01s
+      🔥 Tokens: 200
+
+📊 Analysis Summary:
+   🎯 Agents executed: 4
+   ✅ Successful: 4
+   ⏱️  Total time: 0.62s
+   🔥 Total tokens: 500
+   📈 Success rate: 100.0%
+
+⏱️  Total analysis time: 0.7s
+
+======================================================================
+🧠 METAAGENT ANALYSIS REPORT
+======================================================================
+
+📈 Overall Summary:
+   📁 Files analyzed: 1
+   ✅ Successful analyses: 1
+   ❌ Failed analyses: 0
+   🤖 Total agents executed: 4
+   🔥 Total tokens consumed: 500
+   ⏱️  Total execution time: 0.6s
+   📊 Average agents per file: 4.0
+   📊 Average tokens per file: 500
+   📊 Average time per file: 0.6s
+
+🤖 Agent Performance Statistics:
+   📋 God Code Agent:
+      🎯 Executions: 1
+      ✅ Success rate: 100.0%
+      🔥 Avg tokens: 0
+      ⏱️  Avg time: 0.04s
+   📋 Intelligent Code Agent:
+      🎯 Executions: 1
+      ✅ Success rate: 100.0%
+      🔥 Avg tokens: 0
+      ⏱️  Avg time: 0.57s
+   📋 Refactoring Engine:
+      🎯 Executions: 1
+      ✅ Success rate: 100.0%
+      🔥 Avg tokens: 300
+      ⏱️  Avg time: 0.01s
+   📋 Tdd Workflow Agent:
+      🎯 Executions: 1
+      ✅ Success rate: 100.0%
+      🔥 Avg tokens: 200
+      ⏱️  Avg time: 0.01s
+
+📁 File Analysis Results:
+   📄 streamlit_extension/middleware/rate_limiting/core.py
+      🤖 Agents: 4 (4 successful)
+      🔥 Tokens: 500
+      ⏱️  Time: 0.62s
+      🎯 Used: Intelligent Code Agent, God Code Agent, Refactoring Engine, Tdd Workflow Agent
+
+💡 MetaAgent Recommendations:
+   ✅ MetaAgent successfully coordinated intelligent analysis
+   🎯 Agent selection appears to be working effectively

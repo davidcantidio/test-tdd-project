@@ -407,7 +407,59 @@ Organização: 6 serviços • 10+ páginas • 20+ componentes • 30+ utils
 Segurança: 100% páginas protegidas • 100% forms com CSRF • 240+ padrões de validação
 Performance: OptimizedConnectionPool (4,600x+ improvement) • LRU cache • WAL mode
 
-🔗 See Also
+🤖 **AI AGENTS INTEGRATION**
+
+The Streamlit extension now integrates with intelligent audit agents for enhanced code quality:
+
+### **Code Quality Monitoring:**
+- **IntelligentCodeAgent**: Provides real-time code quality feedback in development UI
+- **RefactoringEngine**: Suggests automated improvements in code review panels
+- **TDDWorkflowAgent**: Optimizes TDD workflow with TDAH-friendly features
+
+### **Integration Points:**
+```python
+# In Streamlit components, use audit results
+from scripts.automated_audit.intelligent_code_agent import IntelligentCodeAgent
+
+# Display code quality metrics in dashboard
+if audit_results and audit_results.get('intelligent_analysis'):
+    st.metric("Code Quality Score", audit_results['quality_score'])
+    st.metric("Issues Found", audit_results['issues_found'])
+```
+
+### **Development Workflow Integration:**
+- Code quality widgets powered by IA analysis
+- Real-time refactoring suggestions in UI
+- TDD progress tracking with TDAH accessibility
+- Smart code review panels with IA insights
+
+### **AI-Powered Components:**
+```python
+# Enhanced dashboard with AI insights
+from streamlit_extension.components.analytics_cards import AIInsightsCard
+from streamlit_extension.components.debug_widgets import CodeQualityWidget
+
+# Display AI-powered analytics
+ai_card = AIInsightsCard(audit_results)
+ai_card.render_quality_metrics()
+ai_card.render_refactoring_suggestions()
+
+# Code quality monitoring in development
+quality_widget = CodeQualityWidget()
+quality_widget.show_real_time_analysis(current_file_path)
+```
+
+### **TDD Workflow Enhancement:**
+- **Phase Detection**: Automatic Red-Green-Refactor identification in UI
+- **Focus Sessions**: Pomodoro timer integrated with TDD workflow
+- **TDAH Features**: Energy-level adaptation and micro-task breakdown
+- **Progress Visualization**: Real-time TDD cycle completion tracking
+
+---
+
+## 🔗 See Also
+
+**AI Systems:** scripts/automated_audit/CLAUDE.md — Intelligent agents & automated code analysis
 
 Config: config/CLAUDE.md — Multi-ambiente, feature flags, segredos
 
@@ -492,3 +544,48 @@ Enterprise Streamlit app com segurança, desempenho e mantenibilidade em primeir
 - [ ] Aprovação para próxima etapa
 
 **Regra:** Nunca prosseguir sem completar checklist e gerar lista de arquivos.
+
+---
+
+## 🤖 **AI AGENTS INTEGRATION TRACKING**
+
+### **🎯 TRACKING ESPECÍFICO PARA INTEGRAÇÃO COM AGENTES IA**
+
+**Quando integrar agentes IA no Streamlit, use este template:**
+
+```
+📊 **STREAMLIT + AI AGENTS - INTEGRAÇÃO:**
+
+**UI Components com IA:**
+- streamlit_extension/components/analytics_cards.py - [integração com IntelligentCodeAgent]
+- streamlit_extension/components/debug_widgets.py - [widgets de qualidade de código IA]
+
+**Dashboard Enhancement:**
+- streamlit_extension/pages/dashboard.py - [métricas IA em tempo real]
+- streamlit_extension/components/dashboard_widgets.py - [widgets AI-powered]
+
+**TDD Workflow Integration:**
+- streamlit_extension/pages/timer.py - [TDDIntelligentWorkflowAgent integration]
+- streamlit_extension/services/timer_service.py - [TDAH accessibility features]
+
+**Code Quality Monitoring:**
+- streamlit_extension/utils/code_quality_monitor.py - [real-time analysis]
+
+**Status:** IA Integration pronta para revisão
+**AI Agents Used:** [IntelligentCodeAgent, RefactoringEngine, TDDWorkflowAgent]
+**Impact:** [Impacto na experiência do usuário e produtividade TDD]
+```
+
+### **🔧 CHECKLIST IA INTEGRATION**
+- [ ] Import dos agentes IA funcionando
+- [ ] UI components exibindo resultados da análise IA  
+- [ ] TDD workflow otimizado com features TDAH
+- [ ] Code quality metrics aparecendo no dashboard
+- [ ] Performance da integração validada
+- [ ] Fallback graceful se agentes indisponíveis
+
+### **⚠️ COMPATIBILIDADE IA**
+- **Fallback Graceful**: UI funciona sem agentes IA disponíveis
+- **Performance Impact**: Análise IA em background, UI responsiva
+- **Error Handling**: Errors de agentes IA tratados sem crashar UI
+- **Cache Strategy**: Resultados de análise IA cached para performance

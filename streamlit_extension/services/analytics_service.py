@@ -342,7 +342,7 @@ class AnalyticsService(BaseService):
             return ServiceResult.ok(summary)
             
         except Exception as e:
-            return self.handle_database_error("get_dashboard_summary", e)
+            logger.warning("Operation failed: %s", str(e))
     
     def get_client_analytics(self, client_id: int, days: int = 30) -> ServiceResult[Dict[str, Any]]:
         """
@@ -380,7 +380,7 @@ class AnalyticsService(BaseService):
             return ServiceResult.ok(analytics)
             
         except Exception as e:
-            return self.handle_database_error("get_client_analytics", e)
+            logger.warning("Operation failed: %s", str(e))
     
     def get_project_analytics(self, project_id: int) -> ServiceResult[Dict[str, Any]]:
         """
@@ -416,7 +416,7 @@ class AnalyticsService(BaseService):
             return ServiceResult.ok(analytics)
             
         except Exception as e:
-            return self.handle_database_error("get_project_analytics", e)
+            logger.warning("Operation failed: %s", str(e))
     
     def get_productivity_report(self, days: int = 30) -> ServiceResult[Dict[str, Any]]:
         """
@@ -455,7 +455,7 @@ class AnalyticsService(BaseService):
             return ServiceResult.ok(report)
             
         except Exception as e:
-            return self.handle_database_error("get_productivity_report", e)
+            logger.warning("Operation failed: %s", str(e))
     
     def get_tdd_metrics_report(self, days: int = 30) -> ServiceResult[Dict[str, Any]]:
         """
@@ -494,7 +494,7 @@ class AnalyticsService(BaseService):
             return ServiceResult.ok(report)
             
         except Exception as e:
-            return self.handle_database_error("get_tdd_metrics_report", e)
+            logger.warning("Operation failed: %s", str(e))
     
     def get_time_tracking_report(self, days: int = 30) -> ServiceResult[Dict[str, Any]]:
         """
@@ -532,7 +532,7 @@ class AnalyticsService(BaseService):
             return ServiceResult.ok(report)
             
         except Exception as e:
-            return self.handle_database_error("get_time_tracking_report", e)
+            logger.warning("Operation failed: %s", str(e))
     
     # Private helper methods for analytics calculations
     

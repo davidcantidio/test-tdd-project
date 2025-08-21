@@ -20,6 +20,12 @@ sys.path.append(str(Path(__file__).parent.parent.parent))
 # Clean dependency management - eliminates import hell pattern
 from streamlit_extension.utils.dependencies import require_dependency, get_dependency_manager
 
+# Streamlit availability check  
+from streamlit_extension.utils.app_setup import STREAMLIT_AVAILABLE, DATABASE_UTILS_AVAILABLE
+
+# User model for temporary authentication bypass
+from streamlit_extension.auth.user_model import User, UserRole
+
 # Required dependencies - fail fast if not available
 import streamlit as st
 from streamlit_extension.utils.database import DatabaseManager

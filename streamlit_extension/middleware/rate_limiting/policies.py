@@ -36,4 +36,3 @@ ENDPOINT_LIMITS: dict[str, EndpointPolicy] = {
     "/api/search": {"rate_limit": "100 per minute", "algorithm": "sliding_window"},
     "/api/bulk/*": {"rate_limit": "1 per 10 seconds", "algorithm": "fixed_window"},
 }
-
