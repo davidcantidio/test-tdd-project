@@ -183,8 +183,8 @@ class MetaAgent:
         self.token_usage_stats = defaultdict(int)
         self.performance_metrics = defaultdict(list)
         
-        logger.info(f"MetaAgent initialized for {self.project_root}")
-        logger.info(f"Token budget: {self.token_budget}, TDAH features: {self.enable_tdah_features}")
+        logger.info("MetaAgent initialized for %s", self.project_root)
+        logger.info("Token budget: %s, TDAH features: %s", self.token_budget, self.enable_tdah_features)
         
     def _initialize_agents(self):
         """Initialize all available specialized agents."""
@@ -219,10 +219,10 @@ class MetaAgent:
                 aggressive_refactoring=False
             )
             
-            logger.info(f"Initialized {len(self._agents)} specialized agents")
+            logger.info("Initialized %s specialized agents", len(self._agents))
             
         except Exception as e:
-            logger.error(f"Error initializing agents: {e}")
+            logger.error("Error initializing agents: %s", e)
             self._agents = {}
     
     def _build_agent_selection_rules(self) -> Dict[str, Any]:
@@ -376,7 +376,7 @@ class MetaAgent:
                 complexity_score = self._calculate_ast_complexity(tree)
                 
             except SyntaxError:
-                logger.warning(f"Could not parse AST for {file_path}")
+                logger.warning("Could not parse AST for %s", file_path)
                 function_count = content.count('def ')
                 class_count = content.count('class ')
                 complexity_score = line_count * 0.1  # Fallback estimate
@@ -410,7 +410,7 @@ class MetaAgent:
             )
             
         except Exception as e:
-            logger.error(f"Error analyzing file {file_path}: {e}")
+            logger.error("Error analyzing file %s: %s", file_path, e)
             return FileAnalysis(
                 file_path=file_path,
                 line_count=0,
@@ -640,7 +640,12 @@ class MetaAgent:
             
             # Skip agent if it would exceed token budget
             if estimated_tokens > available_tokens:
-                logger.warning(f"Skipping {agent_type.value} - estimated tokens ({estimated_tokens}) exceed budget ({available_tokens})")
+                logger.warning(
+                    "Skipping %s - estimated tokens (%s) exceed budget (%s)",
+                    agent_type.value,
+                    estimated_tokens,
+                    available_tokens,
+                )
                 continue
             
             configuration = self._build_agent_configuration(agent_type, file_analysis)
@@ -937,15 +942,15 @@ class MetaAgent:
         results = []
         start_time = time.time()
         
-        logger.info(f"Executing plan for {execution_plan.file_path}")
-        logger.info(f"Agents: {[a.value for a in execution_plan.execution_order]}")
-        logger.info(f"Estimated tokens: {execution_plan.total_estimated_tokens}")
-        logger.info(f"Estimated time: {execution_plan.total_estimated_time:.1f}s")
+        logger.info("Executing plan for %s", execution_plan.file_path)
+        logger.info("Agents: %s", [a.value for a in execution_plan.execution_order])
+        logger.info("Estimated tokens: %s", execution_plan.total_estimated_tokens)
+        logger.info("Estimated time: %.1fs", execution_plan.total_estimated_time)
         
         # Execute each agent in order
         for agent_type in execution_plan.execution_order:
             if agent_type not in self._agents:
-                logger.warning(f"Agent {agent_type.value} not available - skipping")
+                logger.warning("Agent %s not available - skipping", agent_type.value)
                 continue
             
             # Find the recommendation for this agent
@@ -955,7 +960,7 @@ class MetaAgent:
             )
             
             if not agent_rec:
-                logger.warning(f"No recommendation found for {agent_type.value}")
+                logger.warning("No recommendation found for %s", agent_type.value)
                 continue
             
             # Execute agent with configuration
@@ -972,7 +977,7 @@ class MetaAgent:
             
             # Check if we should stop due to errors
             if not result.success and agent_rec.priority == Priority.CRITICAL:
-                logger.error(f"Critical agent {agent_type.value} failed - stopping execution")
+                logger.error("Critical agent %s failed - stopping execution", agent_type.value)
                 break
         
         total_time = time.time() - start_time
@@ -993,7 +998,7 @@ class MetaAgent:
             "success_rate": len([r for r in results if r.success]) / len(results) if results else 0
         })
         
-        logger.info(f"Plan execution completed: {len(results)} agents, {total_tokens} tokens, {total_time:.1f}s")
+        logger.info("Plan execution completed: %s agents, %s tokens, %.1fs", len(results), total_tokens, total_time)
         
         return results
     
@@ -1021,7 +1026,7 @@ class MetaAgent:
             
             if will_modify_file:
                 # Execute with file coordination for safe modifications
-                logger.info(f"🔒 Acquiring file lock for {agent_name} -> {file_path}")
+                logger.info("🔒 Acquiring file lock for %s -> %s", agent_name, file_path)
                 
                 with self.coordination_manager.acquire_file_lock(
                     file_path, 
@@ -1045,7 +1050,7 @@ class MetaAgent:
                         error_message=None if success else str(result_data.get("error", "Unknown error"))
                     )
                     
-                    logger.info(f"🔓 Released file lock for {agent_name} -> {file_path}")
+                    logger.info("🔓 Released file lock for %s -> %s", agent_name, file_path)
                     
             else:
                 # Execute in analysis-only mode (dry_run)
@@ -1054,7 +1059,7 @@ class MetaAgent:
                 )
                 
         except Exception as e:
-            logger.error(f"Error executing {agent_name}: {e}")
+            logger.error("Error executing %s: %s", agent_name, e)
             errors.append(str(e))
             
             # Record failed modification if applicable
@@ -1187,7 +1192,7 @@ class MetaAgent:
                 raise ValueError(f"Unknown agent type: {agent_type}")
                 
         except Exception as e:
-            logger.error(f"Error in _execute_agent_safely for {agent_type.value}: {e}")
+            logger.error("Error in _execute_agent_safely for %s: %s", agent_type.value, e)
             return {"error": str(e), "file_path": file_path}, False, 0
     
     def _execute_god_code_agent_with_code_generation(
@@ -1275,7 +1280,7 @@ class MetaAgent:
             return results
             
         except Exception as e:
-            logger.error(f"Error in god code agent execution: {e}")
+            logger.error("Error in god code agent execution: %s", e)
             return {"error": f"God code agent execution failed: {e}"}
     
     def _apply_analysis_improvements(self, file_path: str, analysis_result: Dict[str, Any]) -> bool:
@@ -1284,14 +1289,14 @@ class MetaAgent:
             # Extract refactored code from analysis result
             refactored_code = self._extract_analysis_code(analysis_result)
             if not refactored_code:
-                logger.info(f"No code improvements found in analysis for {file_path}")
+                logger.info("No code improvements found in analysis for %s", file_path)
                 return False
             
             # Apply the refactored code
             return self._safe_write_file(file_path, refactored_code, "analysis_improvements")
             
         except Exception as e:
-            logger.error(f"Error applying analysis improvements to {file_path}: {e}")
+            logger.error("Error applying analysis improvements to %s: %s", file_path, e)
             return False
     
     def _apply_refactoring_results(self, file_path: str, refactoring_results: Dict[str, Any]) -> bool:
@@ -1300,14 +1305,14 @@ class MetaAgent:
             # Extract refactored code from refactoring results
             refactored_code = self._extract_refactoring_code(refactoring_results)
             if not refactored_code:
-                logger.info(f"No refactoring improvements found for {file_path}")
+                logger.info("No refactoring improvements found for %s", file_path)
                 return False
             
             # Apply the refactored code
             return self._safe_write_file(file_path, refactored_code, "refactoring_engine")
             
         except Exception as e:
-            logger.error(f"Error applying refactoring results to {file_path}: {e}")
+            logger.error("Error applying refactoring results to %s: %s", file_path, e)
             return False
     
     def _apply_tdd_improvements(self, file_path: str, tdd_analysis: Dict[str, Any]) -> bool:
@@ -1316,14 +1321,14 @@ class MetaAgent:
             # Extract improved code from TDD analysis
             improved_code = self._extract_tdd_code(tdd_analysis)
             if not improved_code:
-                logger.info(f"No TDD improvements found for {file_path}")
+                logger.info("No TDD improvements found for %s", file_path)
                 return False
             
             # Apply the improved code
             return self._safe_write_file(file_path, improved_code, "tdd_improvements")
             
         except Exception as e:
-            logger.error(f"Error applying TDD improvements to {file_path}: {e}")
+            logger.error("Error applying TDD improvements to %s: %s", file_path, e)
             return False
     
     def _apply_god_code_refactoring(self, file_path: str, god_code_results: Dict[str, Any]) -> bool:
@@ -1332,14 +1337,14 @@ class MetaAgent:
             # Extract refactored code from god code analysis
             refactored_code = self._extract_god_code_refactoring(god_code_results)
             if not refactored_code:
-                logger.info(f"No god code refactoring found for {file_path}")
+                logger.info("No god code refactoring found for %s", file_path)
                 return False
             
             # Apply the refactored code
             return self._safe_write_file(file_path, refactored_code, "god_code_refactoring")
             
         except Exception as e:
-            logger.error(f"Error applying god code refactoring to {file_path}: {e}")
+            logger.error("Error applying god code refactoring to %s: %s", file_path, e)
             return False
     
     def _extract_analysis_code(self, analysis_result: Any) -> Optional[str]:
@@ -1443,14 +1448,14 @@ class MetaAgent:
                     if isinstance(full_result, dict):
                         # Try updated_original first (complete refactored file)
                         if "updated_original" in full_result and full_result["updated_original"]:
-                            logger.info(f"Found updated_original code ({len(full_result['updated_original'])} chars)")
+                            logger.info("Found updated_original code (%s chars)", len(full_result['updated_original']))
                             return full_result["updated_original"]
                         
                         # Try combining refactored_modules
                         if "refactored_modules" in full_result and full_result["refactored_modules"]:
                             modules = full_result["refactored_modules"]
                             if isinstance(modules, dict) and modules:
-                                logger.info(f"Found refactored_modules: {list(modules.keys())}")
+                                logger.info("Found refactored_modules: %s", list(modules.keys()))
                                 combined_code = self._combine_refactored_modules(modules)
                                 if combined_code:
                                     return combined_code
@@ -1510,7 +1515,7 @@ class MetaAgent:
                 return "\n\n".join(code_parts)
             
         except Exception as e:
-            logger.error(f"Error combining refactored modules: {e}")
+            logger.error("Error combining refactored modules: %s", e)
         
         return None
     
@@ -1533,12 +1538,12 @@ class MetaAgent:
             
             # Validate that new code is actually different
             if new_code.strip() == original_code.strip():
-                logger.info(f"No changes needed for {file_path} - code is identical")
+                logger.info("No changes needed for %s - code is identical", file_path)
                 return False
             
             # Validate syntax of new code
             if not self._validate_refactored_code(new_code, file_path):
-                logger.error(f"Validation failed for refactored code in {file_path}")
+                logger.error("Validation failed for refactored code in %s", file_path)
                 return False
             
             # Create additional backup before modification
@@ -1550,15 +1555,15 @@ class MetaAgent:
             with open(file_path, 'w', encoding='utf-8') as f:
                 f.write(new_code)
             
-            logger.info(f"✅ Successfully applied {operation_type} to {file_path}")
-            logger.info(f"📋 Backup created: {backup_path}")
+            logger.info("✅ Successfully applied %s to %s", operation_type, file_path)
+            logger.info("📋 Backup created: %s", backup_path)
             
             # Verify the write was successful by reading back
             with open(file_path, 'r', encoding='utf-8') as f:
                 written_code = f.read()
             
             if written_code != new_code:
-                logger.error(f"File write verification failed for {file_path}")
+                logger.error("File write verification failed for %s", file_path)
                 # Restore from backup
                 with open(backup_path, 'r', encoding='utf-8') as f:
                     with open(file_path, 'w', encoding='utf-8') as f2:
@@ -1568,7 +1573,7 @@ class MetaAgent:
             return True
             
         except Exception as e:
-            logger.error(f"Error in _safe_write_file for {file_path}: {e}")
+            logger.error("Error in _safe_write_file for %s: %s", file_path, e)
             
             # Attempt to restore from backup if available
             try:
@@ -1576,9 +1581,9 @@ class MetaAgent:
                     with open(backup_path, 'r', encoding='utf-8') as f:
                         with open(file_path, 'w', encoding='utf-8') as f2:
                             f2.write(f.read())
-                    logger.info(f"Restored {file_path} from backup after error")
+                    logger.info("Restored %s from backup after error", file_path)
             except Exception as restore_error:
-                logger.error(f"Failed to restore backup for {file_path}: {restore_error}")
+                logger.error("Failed to restore backup for %s: %s", file_path, restore_error)
             
             return False
     
@@ -1602,7 +1607,11 @@ class MetaAgent:
             
             # Ensure code is not empty or trivial
             if len(lines) < 5:
-                logger.warning(f"Refactored code for {file_path} seems too short ({len(lines)} lines)")
+                logger.warning(
+                    "Refactored code for %s seems too short (%s lines)",
+                    file_path,
+                    len(lines),
+                )
                 return False
             
             # Check for obvious corruption patterns
@@ -1613,7 +1622,7 @@ class MetaAgent:
             
             for indicator in corruption_indicators:
                 if indicator in code:
-                    logger.error(f"Code corruption detected in {file_path}: {indicator}")
+                    logger.error("Code corruption detected in %s: %s", file_path, indicator)
                     return False
             
             # Check for basic Python structure
@@ -1624,16 +1633,20 @@ class MetaAgent:
             
             # Allow files without functions/classes (e.g., config files, scripts)
             if not has_functions_or_classes and len(lines) > 20:
-                logger.warning(f"Refactored code for {file_path} has no functions or classes but is {len(lines)} lines")
+                logger.warning(
+                    "Refactored code for %s has no functions or classes but is %s lines",
+                    file_path,
+                    len(lines),
+                )
             
             logger.debug(f"Code validation passed for {file_path}")
             return True
             
         except SyntaxError as e:
-            logger.error(f"Syntax error in refactored code for {file_path}: {e}")
+            logger.error("Syntax error in refactored code for %s: %s", file_path, e)
             return False
         except Exception as e:
-            logger.error(f"Error validating refactored code for {file_path}: {e}")
+            logger.error("Error validating refactored code for %s: %s", file_path, e)
             return False
     
     def get_performance_summary(self) -> Dict[str, Any]:
@@ -1746,7 +1759,7 @@ def run_meta_agent_analysis(
         }
         
     except Exception as e:
-        logger.error(f"Error in meta agent analysis: {e}")
+        logger.error("Error in meta agent analysis: %s", e)
         return {
             "file_path": file_path,
             "error": str(e),

@@ -119,6 +119,8 @@ class FileCoordinationManager:
     def _init_database(self):
         """Initialize coordination database."""
         with sqlite3.connect(str(self.db_path)) as conn:
+            conn.execute("PRAGMA journal_mode=WAL;")
+            conn.execute("PRAGMA foreign_keys=ON;")
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS file_locks (
                     file_path TEXT PRIMARY KEY,
@@ -178,7 +180,7 @@ class FileCoordinationManager:
         backup_path = self.backup_dir / backup_name
         shutil.copy2(file_path, backup_path)
         
-        logger.info(f"Created backup: {backup_path}")
+        logger.info("Created backup: %s", backup_path)
         return str(backup_path)
     
     def _cleanup_expired_locks(self):
@@ -186,6 +188,8 @@ class FileCoordinationManager:
         current_time = datetime.now()
         
         with sqlite3.connect(str(self.db_path)) as conn:
+            conn.execute("PRAGMA journal_mode=WAL;")
+            conn.execute("PRAGMA foreign_keys=ON;")
             cursor = conn.cursor()
             
             # Find expired locks
@@ -207,7 +211,7 @@ class FileCoordinationManager:
                 
                 conn.commit()
                 
-                logger.info(f"Cleaned up {len(expired_locks)} expired locks")
+                logger.info("Cleaned up %s expired locks", len(expired_locks))
     
     def _check_process_alive(self, process_id: int) -> bool:
         """Check if a process is still alive."""
@@ -247,7 +251,7 @@ class FileCoordinationManager:
         try:
             # Acquire lock
             lock_info = self._acquire_lock(absolute_path, agent_name, lock_type, create_backup)
-            logger.info(f"🔒 Lock acquired: {agent_name} -> {file_path}")
+            logger.info("🔒 Lock acquired: %s -> %s", agent_name, file_path)
             
             yield lock_info
             
@@ -255,7 +259,7 @@ class FileCoordinationManager:
             # Always release lock
             if lock_info:
                 self._release_lock(absolute_path, agent_name)
-                logger.info(f"🔓 Lock released: {agent_name} -> {file_path}")
+                logger.info("🔓 Lock released: %s -> %s", agent_name, file_path)
     
     def _acquire_lock(
         self, 
@@ -275,6 +279,8 @@ class FileCoordinationManager:
         
         while time.time() - wait_start < max_wait_time:
             with sqlite3.connect(str(self.db_path)) as conn:
+                conn.execute("PRAGMA journal_mode=WAL;")
+                conn.execute("PRAGMA foreign_keys=ON;")
                 cursor = conn.cursor()
                 
                 # Check for conflicting locks
@@ -299,7 +305,7 @@ class FileCoordinationManager:
                             WHERE file_path = ? AND process_id = ?
                         """, (file_path, proc_id))
                         conn.commit()
-                        logger.warning(f"Removed dead process lock: PID {proc_id}")
+                        logger.warning("Removed dead process lock: PID %s", proc_id)
                         continue
                     
                     # Check for conflicts (exclusive locks conflict with everything)
@@ -356,7 +362,7 @@ class FileCoordinationManager:
                 
                 # If conflicts exist, wait and retry
                 conflict_info = ", ".join(f"{agent}({type_})" for agent, type_, _ in conflicts)
-                logger.warning(f"Lock conflict for {file_path}: {conflict_info} - waiting...")
+                logger.warning("Lock conflict for %s: %s - waiting...", file_path, conflict_info)
                 time.sleep(1)
         
         # Timeout reached
@@ -368,6 +374,8 @@ class FileCoordinationManager:
     def _release_lock(self, file_path: str, agent_name: str):
         """Release file lock."""
         with sqlite3.connect(str(self.db_path)) as conn:
+            conn.execute("PRAGMA journal_mode=WAL;")
+            conn.execute("PRAGMA foreign_keys=ON;")
             cursor = conn.cursor()
             
             # Remove lock from database
@@ -423,6 +431,8 @@ class FileCoordinationManager:
         
         # Store in database
         with sqlite3.connect(str(self.db_path)) as conn:
+            conn.execute("PRAGMA journal_mode=WAL;")
+            conn.execute("PRAGMA foreign_keys=ON;")
             cursor = conn.cursor()
             
             cursor.execute("""
@@ -450,12 +460,14 @@ class FileCoordinationManager:
         # Store in memory
         self._modification_history.append(modification)
         
-        logger.info(f"📝 Recorded modification: {agent_name} -> {file_path} ({'✅' if success else '❌'})")
+        logger.info("📝 Recorded modification: %s -> %s (%s)", agent_name, file_path, '✅' if success else '❌')
     
     def get_lock_status(self) -> Dict[str, List[Dict[str, Any]]]:
         """Get current lock status across all processes."""
         
         with sqlite3.connect(str(self.db_path)) as conn:
+            conn.execute("PRAGMA journal_mode=WAL;")
+            conn.execute("PRAGMA foreign_keys=ON;")
             cursor = conn.cursor()
             
             cursor.execute("""
@@ -496,6 +508,8 @@ class FileCoordinationManager:
             return
         
         with sqlite3.connect(str(self.db_path)) as conn:
+            conn.execute("PRAGMA journal_mode=WAL;")
+            conn.execute("PRAGMA foreign_keys=ON;")
             cursor = conn.cursor()
             
             # Get current locks for logging
@@ -509,12 +523,14 @@ class FileCoordinationManager:
         # Clear memory
         self._active_locks.clear()
         
-        logger.warning(f"🧹 Emergency cleanup: Removed {lock_count} locks")
+        logger.warning("🧹 Emergency cleanup: Removed %s locks", lock_count)
     
     def get_modification_history(self, file_path: Optional[str] = None) -> List[Dict[str, Any]]:
         """Get modification history."""
         
         with sqlite3.connect(str(self.db_path)) as conn:
+            conn.execute("PRAGMA journal_mode=WAL;")
+            conn.execute("PRAGMA foreign_keys=ON;")
             cursor = conn.cursor()
             
             if file_path:

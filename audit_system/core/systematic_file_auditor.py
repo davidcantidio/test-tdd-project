@@ -1998,6 +1998,8 @@ class EnhancedSystematicFileAuditor:
                 try:
                     framework_db_path = self.db_manager.framework_db_path if hasattr(self.db_manager, 'framework_db_path') else "framework.db"
                     with sqlite3.connect(framework_db_path) as conn:
+                        conn.execute("PRAGMA journal_mode=WAL;")
+                        conn.execute("PRAGMA foreign_keys=ON;")
                         cursor = conn.cursor()
                         cursor.execute("SELECT 1")
                         cursor.fetchone()
@@ -2277,7 +2279,10 @@ class EnterpriseSessionManager:
     def _get_db_connection(self):
         """Get database connection consistently."""
         framework_db_path = self.db_manager.framework_db_path if hasattr(self.db_manager, 'framework_db_path') else "framework.db"
-        return sqlite3.connect(framework_db_path)
+        conn = sqlite3.connect(framework_db_path)
+        conn.execute("PRAGMA journal_mode=WAL;")
+        conn.execute("PRAGMA foreign_keys=ON;")
+        return conn
     
     def _ensure_session_tables(self) -> None:
         """Ensure session tracking tables exist in database."""
@@ -2286,6 +2291,8 @@ class EnterpriseSessionManager:
             framework_db_path = self.db_manager.framework_db_path if hasattr(self.db_manager, 'framework_db_path') else "framework.db"
             
             with sqlite3.connect(framework_db_path) as conn:
+                conn.execute("PRAGMA journal_mode=WAL;")
+                conn.execute("PRAGMA foreign_keys=ON;")
                 cursor = conn.cursor()
                 
                 # Session metadata table
@@ -2353,6 +2360,8 @@ class EnterpriseSessionManager:
             framework_db_path = self.db_manager.framework_db_path if hasattr(self.db_manager, 'framework_db_path') else "framework.db"
             
             with sqlite3.connect(framework_db_path) as conn:
+                conn.execute("PRAGMA journal_mode=WAL;")
+                conn.execute("PRAGMA foreign_keys=ON;")
                 cursor = conn.cursor()
                 cursor.execute("""
                     INSERT INTO audit_sessions 
@@ -2387,6 +2396,8 @@ class EnterpriseSessionManager:
         try:
             framework_db_path = self.db_manager.framework_db_path if hasattr(self.db_manager, 'framework_db_path') else "framework.db"
             with sqlite3.connect(framework_db_path) as conn:
+                conn.execute("PRAGMA journal_mode=WAL;")
+                conn.execute("PRAGMA foreign_keys=ON;")
                 cursor = conn.cursor()
                 
                 if session_id:
@@ -2483,6 +2494,8 @@ class EnterpriseSessionManager:
             # Save to database
             framework_db_path = self.db_manager.framework_db_path if hasattr(self.db_manager, 'framework_db_path') else "framework.db"
             with sqlite3.connect(framework_db_path) as conn:
+                conn.execute("PRAGMA journal_mode=WAL;")
+                conn.execute("PRAGMA foreign_keys=ON;")
                 cursor = conn.cursor()
                 cursor.execute("""
                     INSERT INTO audit_checkpoints (session_id, checkpoint_data)
@@ -2543,6 +2556,8 @@ class EnterpriseSessionManager:
             # Save to database
             framework_db_path = self.db_manager.framework_db_path if hasattr(self.db_manager, 'framework_db_path') else "framework.db"
             with sqlite3.connect(framework_db_path) as conn:
+                conn.execute("PRAGMA journal_mode=WAL;")
+                conn.execute("PRAGMA foreign_keys=ON;")
                 cursor = conn.cursor()
                 cursor.execute("""
                     INSERT OR REPLACE INTO audit_file_results
@@ -2625,6 +2640,8 @@ class EnterpriseSessionManager:
         try:
             framework_db_path = self.db_manager.framework_db_path if hasattr(self.db_manager, 'framework_db_path') else "framework.db"
             with sqlite3.connect(framework_db_path) as conn:
+                conn.execute("PRAGMA journal_mode=WAL;")
+                conn.execute("PRAGMA foreign_keys=ON;")
                 cursor = conn.cursor()
                 cursor.execute("""
                     UPDATE audit_sessions 

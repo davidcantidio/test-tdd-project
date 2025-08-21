@@ -119,7 +119,7 @@ def analyze_file(file_path: str, args: argparse.Namespace) -> Dict[str, Any]:
     return results
 
 
-def generate_report(all_results: List[Dict[str, Any]], output_file: str = None):
+def generate_report(all_results: List[Dict[str, Any]], output_file: str = None) -> None:
     """Generate comprehensive report of all analyzed files."""
     
     total_files = len(all_results)
@@ -334,7 +334,24 @@ Examples:
                        help='Minimal output (errors only)')
     
     args = parser.parse_args()
-    
+
+    # Sanitize and validate path inputs
+    if args.file:
+        args.file = str(Path(args.file).resolve())
+        if not Path(args.file).exists():
+            print(f"❌ Error: File not found: {args.file}")
+            return 1
+    if args.scan:
+        args.scan = str(Path(args.scan).resolve())
+        if not Path(args.scan).exists():
+            print(f"❌ Error: Directory not found: {args.scan}")
+            return 1
+    if args.project_root:
+        args.project_root = str(Path(args.project_root).resolve())
+        if not Path(args.project_root).exists():
+            print(f"❌ Error: Project root directory not found: {args.project_root}")
+            return 1
+
     # Setup logging
     if args.verbose:
         logging.basicConfig(level=logging.DEBUG)
@@ -356,18 +373,10 @@ Examples:
     files_to_analyze = []
     
     if args.file:
-        file_path = Path(args.file)
-        if not file_path.exists():
-            print(f"❌ Error: File not found: {args.file}")
-            return 1
-        files_to_analyze = [file_path]
-        
+        files_to_analyze = [Path(args.file)]
+
     elif args.scan:
         scan_path = Path(args.scan)
-        if not scan_path.exists():
-            print(f"❌ Error: Directory not found: {args.scan}")
-            return 1
-        
         files_to_analyze = scan_directory(scan_path)
         if not files_to_analyze:
             print(f"❌ No Python files found in: {args.scan}")
