@@ -101,4 +101,3 @@ class EnvironmentManager:
             else:
                 merged[key] = value
         return merged
-

@@ -907,7 +907,8 @@ class IntelligentCodeAgent:
         
         # Initialize intelligent rate limiter
         if RATE_LIMITER_AVAILABLE and enable_real_llm:
-            self.rate_limiter = IntelligentRateLimiter()
+            project_root = Path(__file__).resolve().parent.parent.parent
+            self.rate_limiter = IntelligentRateLimiter(project_root)
             self.logger.info("✅ Intelligent Rate Limiter initialized for real LLM usage")
         else:
             self.rate_limiter = None
@@ -1015,13 +1016,17 @@ class IntelligentCodeAgent:
         """
         if not (self.enable_real_llm and self.rate_limiter):
             return
-        if not self.rate_limiter.can_proceed(estimated_tokens, bucket):
-            sleep_time = self.rate_limiter.calculate_required_delay(estimated_tokens, bucket)
+        should_proceed, sleep_time, estimated_tokens = self.rate_limiter.should_proceed_with_operation(
+            operation_type="file_analysis",
+            file_path="unknown",  # Default file_path since not available in this context
+            file_size_lines=estimated_tokens // 150  # Aproximação: ~150 tokens por linha
+        )
+        
+        if not should_proceed or sleep_time > 0:
             # Evita logs ruidosos para sleeps muito curtos
             if sleep_time >= 0.05:
                 self.logger.debug("⏰ Rate limiting [%s]: sleeping %.2fs", bucket, sleep_time)
             time.sleep(sleep_time)
-        self.rate_limiter.record_usage(estimated_tokens, bucket)
     
     def _estimate_file_tokens(self, file_path: str) -> int:
         """
@@ -1107,7 +1112,7 @@ Provide structured analysis with confidence scoring.
         # Simulate real LLM response with actual understanding
         overview = {
             "overall_purpose": f"Code analysis indicates {self._extract_file_purpose(content, ast_tree)}",
-            "architectural_role": self._determine_architectural_role(file_path, content, ast_tree),
+            "architectural_role": self._determine_architectural_role_simple(file_path, content, ast_tree),
             "design_patterns": self._identify_design_patterns_llm_enhanced(content, ast_tree),
             "complexity_assessment": "MODERATE with opportunities for optimization",
             "confidence_score": 82.0
@@ -1178,8 +1183,8 @@ Provide structured analysis with confidence scoring.
         else:
             return "configuration or data module"
     
-    def _determine_architectural_role(self, file_path: str, content: str, ast_tree: Optional[ast.AST]) -> str:
-        """Determine architectural role with LLM insight."""
+    def _determine_architectural_role_simple(self, file_path: str, content: str, ast_tree: Optional[ast.AST]) -> str:
+        """Determine architectural role with LLM insight (simple version)."""
         if "service" in file_path.lower():
             return "service_layer"
         elif "utils" in file_path.lower():
@@ -1363,30 +1368,6 @@ Provide structured analysis with confidence scoring.
                             i, line, ast_map.get(i), context_lines, file_context
                         )
                         line_analyses.append(line_analysis)
-                surrounding_context = lines[context_start:context_end]
-                
-                # File-level context
-                file_context = {
-                    "total_lines": len(lines),
-                    "file_path": file_path,
-                    "imports": self._extract_imports(lines),
-                    "classes": self._extract_classes(ast_tree) if ast_tree else [],
-                    "functions": self._extract_functions(ast_tree) if ast_tree else []
-                }
-                
-                # Get AST node for this line
-                ast_node = ast_map.get(i)
-                
-                # Perform semantic analysis
-                line_analysis = self.semantic_engine.analyze_line_semantically(
-                    line_number=i,
-                    line_content=line,
-                    ast_node=ast_node,
-                    surrounding_context=surrounding_context,
-                    file_context=file_context
-                )
-                
-                line_analyses.append(line_analysis)
             
             # File-level analysis
             overall_purpose = self._determine_file_purpose(file_path, ast_tree, lines)

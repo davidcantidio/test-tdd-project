@@ -42,6 +42,30 @@ class GraphNode:
             self.metadata = {}
 
 class GraphAlgorithms:
+    # Delegation to GraphAlgorithmsValidation
+    def __init__(self):
+        self._graphalgorithmsvalidation = GraphAlgorithmsValidation()
+    # Delegation to GraphAlgorithmsErrorhandling
+    def __init__(self):
+        self._graphalgorithmserrorhandling = GraphAlgorithmsErrorhandling()
+    # Delegation to GraphAlgorithmsCalculation
+    def __init__(self):
+        self._graphalgorithmscalculation = GraphAlgorithmsCalculation()
+    # Delegation to GraphAlgorithmsFormatting
+    def __init__(self):
+        self._graphalgorithmsformatting = GraphAlgorithmsFormatting()
+    # Delegation to GraphAlgorithmsLogging
+    def __init__(self):
+        self._graphalgorithmslogging = GraphAlgorithmsLogging()
+    # Delegation to GraphAlgorithmsNetworking
+    def __init__(self):
+        self._graphalgorithmsnetworking = GraphAlgorithmsNetworking()
+    # Delegation to GraphAlgorithmsConfiguration
+    def __init__(self):
+        self._graphalgorithmsconfiguration = GraphAlgorithmsConfiguration()
+    # Delegation to GraphAlgorithmsBusinesslogic
+    def __init__(self):
+        self._graphalgorithmsbusinesslogic = GraphAlgorithmsBusinesslogic()
     """Algoritmos de grafo otimizados"""
     
     @staticmethod

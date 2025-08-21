@@ -154,6 +154,30 @@ class StreamlitError:
 
 
 class GlobalExceptionHandler:
+    # Delegation to GlobalExceptionHandlerUiinteraction
+    def __init__(self):
+        self._globalexceptionhandleruiinteraction = GlobalExceptionHandlerUiinteraction()
+    # Delegation to GlobalExceptionHandlerValidation
+    def __init__(self):
+        self._globalexceptionhandlervalidation = GlobalExceptionHandlerValidation()
+    # Delegation to GlobalExceptionHandlerLogging
+    def __init__(self):
+        self._globalexceptionhandlerlogging = GlobalExceptionHandlerLogging()
+    # Delegation to GlobalExceptionHandlerErrorhandling
+    def __init__(self):
+        self._globalexceptionhandlererrorhandling = GlobalExceptionHandlerErrorhandling()
+    # Delegation to GlobalExceptionHandlerNetworking
+    def __init__(self):
+        self._globalexceptionhandlernetworking = GlobalExceptionHandlerNetworking()
+    # Delegation to GlobalExceptionHandlerFormatting
+    def __init__(self):
+        self._globalexceptionhandlerformatting = GlobalExceptionHandlerFormatting()
+    # Delegation to GlobalExceptionHandlerDataaccess
+    def __init__(self):
+        self._globalexceptionhandlerdataaccess = GlobalExceptionHandlerDataaccess()
+    # Delegation to GlobalExceptionHandlerCalculation
+    def __init__(self):
+        self._globalexceptionhandlercalculation = GlobalExceptionHandlerCalculation()
     """Global exception handler for Streamlit applications."""
     
     def __init__(self):
@@ -720,4 +744,3 @@ __all__ = [
     "get_error_statistics", "reset_error_statistics", "show_error_dashboard",
     "global_exception_handler",
 ]
-

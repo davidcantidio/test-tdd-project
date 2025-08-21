@@ -1,440 +1,175 @@
- (cd "$(git rev-parse --show-toplevel)" && git apply --3way <<'EOF' 
-diff --git a/audit_system/core/interfaces.py b/audit_system/core/interfaces.py
-new file mode 100644
-index 0000000000000000000000000000000000000000..72761faa254f66a4c31b6ede0a679a5619334eb7
---- /dev/null
-+++ b/audit_system/core/interfaces.py
-@@ -0,0 +1,34 @@
-+from __future__ import annotations
-+
-+from dataclasses import dataclass
-+from pathlib import Path
-+from typing import Iterable, List, Protocol, Sequence
-+
-+
-+@dataclass(frozen=True)
-+class AgentRecommendation:
-+    name: str
-+    priority: int = 0
-+
-+
-+@dataclass(frozen=True)
-+class FileAnalysisResult:
-+    file_path: Path
-+    issues_found: int
-+    notes: str = ""
-+
-+
-+class Agent(Protocol):
-+    """Minimal contract expected from an analysis/refactoring agent."""
-+    name: str
-+
-+    def analyze_file(self, file_path: Path) -> FileAnalysisResult: ...
-+
-+    def can_apply(self, file_path: Path) -> bool: ...
-+
-+
-+class Auditor(Protocol):
-+    """High-level orchestration/auditor interface."""
-+    def plan_for(self, file_path: Path) -> Sequence[AgentRecommendation]: ...
-+
-+    def execute_plan(self, file_path: Path, agents: Iterable[Agent]) -> List[FileAnalysisResult]: ...
-diff --git a/audit_system/core/systematic_file_auditor_refactor_plan.md b/audit_system/core/systematic_file_auditor_refactor_plan.md
-new file mode 100644
-index 0000000000000000000000000000000000000000..672e46653d51e26c94e0660b255909b05ca420c2
---- /dev/null
-+++ b/audit_system/core/systematic_file_auditor_refactor_plan.md
-@@ -0,0 +1,18 @@
-+# Refactor Plan: systematic_file_auditor.py (fase 1 – não-invasiva)
-+
-+## Objetivos (curto prazo)
-+- Introduzir contratos (interfaces.py) para DI/testabilidade ✅
-+- Garantir I/O seguro com path validation e atomic write ✅
-+- Criar testes smoke (auditor/meta-agent) e utilitários ✅
-+
-+## Próximos passos (médio prazo)
-+1. Extrair "persistence" (checkpoints/sessions) para `core/persistence.py`
-+2. Extrair "planning" (seleção de agentes) para `coordination/plan.py`
-+3. Isolar "file ops" em `core/file_ops.py` usando `path_security.py`
-+4. Introduzir `Auditor` concreto que injeta dependências via construtor
-+
-+## Guidelines
-+- Nenhum método > 60 linhas
-+- Nenhuma classe > 400 linhas
-+- Funções puras sempre que possível
-+- Evitar efeitos colaterais fora de camadas “ops”
-diff --git a/audit_system/utils/path_security.py b/audit_system/utils/path_security.py
-new file mode 100644
-index 0000000000000000000000000000000000000000..74014728c462fdb09f0ce5e3f7a2a0c3fdf0155b
---- /dev/null
-+++ b/audit_system/utils/path_security.py
-@@ -0,0 +1,126 @@
-+from __future__ import annotations
-+
-+import io
-+import os
-+import tempfile
-+from contextlib import contextmanager
-+from dataclasses import dataclass
-+from pathlib import Path
-+from typing import Iterator, Optional
-+
-+
-+class PathSecurityError(Exception):
-+    """Raised when a path validation fails (possible path traversal or outside base)."""
-+
-+
-+def safe_join(base_dir: Path | str, candidate: Path | str) -> Path:
-+    """
-+    Join and normalize ensuring the resulting path stays inside base_dir.
-+    Prevents path traversal attacks (e.g., '../../etc/passwd').
-+    """
-+    base = Path(base_dir).resolve()
-+    target = (base / candidate).resolve()
-+    if base not in target.parents and target != base:
-+        raise PathSecurityError(f"Unsafe path outside base: {target} (base={base})")
-+    return target
-+
-+
-+def assert_within_base(base_dir: Path | str, candidate: Path | str) -> None:
-+    """Raise if candidate is not inside base_dir after resolution."""
-+    _ = safe_join(base_dir, candidate)
-+
-+
-+@contextmanager
-+def safe_open(
-+    base_dir: Path | str,
-+    candidate: Path | str,
-+    mode: str = "r",
-+    encoding: Optional[str] = "utf-8",
-+) -> Iterator[io.TextIOBase | io.BufferedIOBase]:
-+    """
-+    Open a file validating it resides under base_dir.
-+    - For text modes ('t' or default), returns a text IO with utf-8 by default.
-+    - For binary modes ('b'), returns a buffered binary IO.
-+    """
-+    path = safe_join(base_dir, candidate)
-+    is_binary = "b" in mode
-+    if is_binary:
-+        f = open(path, mode)  # noqa: P201  (path is validated by safe_join)
-+    else:
-+        f = open(path, mode, encoding=encoding)  # noqa: P201
-+    try:
-+        yield f
-+    finally:
-+        try:
-+            f.close()
-+        except Exception:
-+            pass
-+
-+
-+@dataclass(frozen=True)
-+class AtomicWriteResult:
-+    path: Path
-+    bytes_written: int
-+    backup_path: Optional[Path] = None
-+
-+
-+def _fsync_directory(path: Path) -> None:
-+    """Ensure directory entry is flushed to disk (best-effort; not all FS support)."""
-+    try:
-+        dir_fd = os.open(str(path), os.O_DIRECTORY)
-+        try:
-+            os.fsync(dir_fd)
-+        finally:
-+            os.close(dir_fd)
-+    except Exception:
-+        pass
-+
-+
-+def atomic_write(
-+    base_dir: Path | str,
-+    candidate: Path | str,
-+    data: bytes | str,
-+    *,
-+    encoding: Optional[str] = "utf-8",
-+    create_backup: bool = True,
-+) -> AtomicWriteResult:
-+    """
-+    Atomically write content to a validated path:
-+    - write to temporary file in the same directory
-+    - fsync temp file
-+    - optional backup of original file
-+    - atomic rename over the destination
-+    """
-+    dest = safe_join(base_dir, candidate)
-+    dest.parent.mkdir(parents=True, exist_ok=True)
-+
-+    backup_path: Optional[Path] = None
-+    if create_backup and dest.exists():
-+        backup_path = dest.with_suffix(dest.suffix + ".bak")
-+        try:
-+            if backup_path.exists():
-+                backup_path.unlink()
-+            dest.replace(backup_path)
-+        except Exception:
-+            backup_path = None
-+
-+    fd, tmp_name = tempfile.mkstemp(prefix=f".{dest.name}.tmp-", dir=str(dest.parent))
-+    tmp_path = Path(tmp_name)
-+    try:
-+        with os.fdopen(fd, "wb") as tmp:
-+            if isinstance(data, str):
-+                tmp.write(data.encode(encoding or "utf-8"))
-+            else:
-+                tmp.write(data)
-+            tmp.flush()
-+            os.fsync(tmp.fileno())
-+        tmp_path.replace(dest)
-+        _fsync_directory(dest.parent)
-+        byte_len = len(data if isinstance(data, (bytes, bytearray)) else data.encode(encoding or "utf-8"))
-+        return AtomicWriteResult(path=dest, bytes_written=byte_len, backup_path=backup_path)
-+    finally:
-+        if tmp_path.exists():
-+            try:
-+                tmp_path.unlink()
-+            except Exception:
-+                pass
-diff --git a/scripts/maintenance/refactor_safe_open.py b/scripts/maintenance/refactor_safe_open.py
-new file mode 100755
-index 0000000000000000000000000000000000000000..cada9298806ade48f709f722813a8ecd4201a2a5
---- /dev/null
-+++ b/scripts/maintenance/refactor_safe_open.py
-@@ -0,0 +1,108 @@
-+#!/usr/bin/env python3
-+"""
-+Refactor 'open(' to 'safe_open(BASE_DIR, ...)' inside 'audit_system/' Python files.
-+- Inserts: from audit_system.utils.path_security import safe_open
-+- Adds module-level BASE_DIR pointing to repo root (parents) or cwd as fallback
-+- Skips replacements where 'open(' is already qualified or part of a name (very conservative)
-+
-+USAGE:
-+  python scripts/maintenance/refactor_safe_open.py --dry-run
-+  python scripts/maintenance/refactor_safe_open.py --apply
-+"""
-+from __future__ import annotations
-+
-+import argparse
-+import re
-+from pathlib import Path
-+
-+ROOT = Path(__file__).resolve().parents[2]
-+TARGET_DIR = ROOT / "audit_system"
-+
-+OPEN_PATTERN = re.compile(r"(?<![A-Za-z0-9_\.])open\s*\(", re.MULTILINE)
-+
-+IMPORT_LINE = "from audit_system.utils.path_security import safe_open"
-+BASE_DIR_LINE = "BASE_DIR = Path(__file__).resolve().parents[2]"
-+
-+
-+def process_file(path: Path) -> tuple[bool, str]:
-+    text = path.read_text(encoding="utf-8")
-+    changed = False
-+    new_text = text
-+
-+    if IMPORT_LINE not in new_text:
-+        lines = new_text.splitlines()
-+        insert_idx = 0
-+        for i, ln in enumerate(lines[:50]):
-+            if ln.startswith("from __future__ import"):
-+                insert_idx = i + 1
-+        lines.insert(insert_idx, IMPORT_LINE)
-+        new_text = "\n".join(lines)
-+        changed = True
-+
-+    if "safe_open(" in new_text and "BASE_DIR" not in new_text:
-+        lines = new_text.splitlines()
-+        if "from pathlib import Path" not in new_text:
-+            for i, ln in enumerate(lines[:50]):
-+                if ln.startswith("import") or ln.startswith("from"):
-+                    insert_idx = i + 1
-+            else:
-+                insert_idx = 0
-+            lines.insert(insert_idx, "from pathlib import Path")
-+        insert_at = 0
-+        for i, ln in enumerate(lines[:100]):
-+            if ln.strip() == "" or ln.startswith(("import", "from")):
-+                insert_at = i + 1
-+            else:
-+                break
-+        lines.insert(insert_at, BASE_DIR_LINE)
-+        new_text = "\n".join(lines)
-+        changed = True
-+
-+    def repl(m: re.Match[str]) -> str:
-+        return "safe_open(BASE_DIR, "
-+
-+    replaced_text, n = OPEN_PATTERN.subn(repl, new_text)
-+    if n > 0:
-+        new_text = replaced_text
-+        changed = True
-+
-+    return changed, new_text
-+
-+
-+def main() -> None:
-+    ap = argparse.ArgumentParser()
-+    ap.add_argument("--apply", action="store_true", help="Write changes to files")
-+    ap.add_argument("--dry-run", action="store_true", help="Show diff-like preview")
-+    args = ap.parse_args()
-+
-+    assert TARGET_DIR.exists(), f"{TARGET_DIR} not found"
-+    py_files = [p for p in TARGET_DIR.rglob("*.py") if p.is_file()]
-+
-+    changed_any = False
-+    for f in py_files:
-+        changed, new_text = process_file(f)
-+        if not changed:
-+            continue
-+        changed_any = True
-+        if args.dry_run:
-+            print(f"--- {f}")
-+            print(f"+++ {f}")
-+            old_lines = f.read_text(encoding="utf-8").splitlines()
-+            new_lines = new_text.splitlines()
-+            for i, (o, n) in enumerate(zip(old_lines, new_lines)):
-+                if o != n:
-+                    print(f"@@ line {i+1} @@")
-+                    print(f"- {o}")
-+                    print(f"+ {n}")
-+            if len(new_lines) > len(old_lines):
-+                for j in range(len(old_lines), len(new_lines)):
-+                    print(f"+ {new_lines[j]}")
-+        if args.apply:
-+            f.write_text(new_text, encoding="utf-8")
-+
-+    if not changed_any:
-+        print("No changes needed.")
-+
-+
-+if __name__ == "__main__":
-+    main()
-diff --git a/tests/unit/test_auditor_smoke.py b/tests/unit/test_auditor_smoke.py
-new file mode 100644
-index 0000000000000000000000000000000000000000..e148b586415869a9bc14dc4c21b47b7aba16f0e8
---- /dev/null
-+++ b/tests/unit/test_auditor_smoke.py
-@@ -0,0 +1,40 @@
-+from __future__ import annotations
-+
-+from pathlib import Path
-+
-+import pytest
-+import sys, types, os
-+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
-+sys.modules.setdefault("streamlit", types.ModuleType("streamlit"))
-+
-+core_mod = pytest.importorskip("audit_system.core.systematic_file_auditor")
-+
-+
-+def _locate_candidate_class(mod) -> type | None:
-+    for name in ("EnhancedSystematicFileAuditor", "SystematicFileAuditor", "FileAuditor"):
-+        cls = getattr(mod, name, None)
-+        if isinstance(cls, type):
-+            return cls
-+    return None
-+
-+
-+def test_auditor_basic_flow(tmp_path: Path) -> None:
-+    AuditorCls = _locate_candidate_class(core_mod)
-+    assert AuditorCls is not None, "Auditor class not found in core.systematic_file_auditor"
-+    auditor = AuditorCls(project_root=tmp_path, audit_dir=tmp_path)
-+    file_path = tmp_path / "demo.py"
-+    file_path.write_text("def add(a,b):\n    return a+b\n")
-+    for meth in ("audit_file_enhanced", "audit_file", "analyze_file"):
-+        fn = getattr(auditor, meth, None)
-+        if callable(fn):
-+            try:
-+                res = fn(file_path=str(file_path))
-+            except TypeError:
-+                try:
-+                    res = fn(file_path=file_path)
-+                except TypeError:
-+                    continue
-+            assert res is not None or res is None
-+            break
-+    else:
-+        pytest.skip("No compatible auditor method found (audit_file_enhanced/audit_file/analyze_file)")
-diff --git a/tests/unit/test_meta_agent_selection.py b/tests/unit/test_meta_agent_selection.py
-new file mode 100644
-index 0000000000000000000000000000000000000000..f7bcf76ab021464e76db92b91abda4663df33b06
---- /dev/null
-+++ b/tests/unit/test_meta_agent_selection.py
-@@ -0,0 +1,25 @@
-+from __future__ import annotations
-+
-+from pathlib import Path
-+
-+import pytest
-+import sys, types, os
-+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
-+sys.modules.setdefault("streamlit", types.ModuleType("streamlit"))
-+
-+meta_agent_mod = pytest.importorskip("audit_system.coordination.meta_agent")
-+
-+
-+def test_recommend_agents_returns_list(tmp_path: Path) -> None:
-+    MetaAgent = getattr(meta_agent_mod, "MetaAgent", None)
-+    assert MetaAgent is not None, "MetaAgent class is required"
-+    ma = MetaAgent(project_root=tmp_path)
-+    f = tmp_path / "sample.py"
-+    f.write_text("x = 1\n")
-+    FileAnalysis = getattr(meta_agent_mod, "FileAnalysis")
-+    FileComplexity = getattr(meta_agent_mod, "FileComplexity")
-+    analysis = FileAnalysis(file_path=str(f), line_count=1, function_count=0, class_count=0, ast_complexity_score=0.0, file_complexity=FileComplexity.SIMPLE)
-+    recs = ma.recommend_agents(analysis)
-+    assert isinstance(recs, (list, tuple))
-+    for r in recs:
-+        assert hasattr(r, "name")
-diff --git a/tests/unit/test_path_security.py b/tests/unit/test_path_security.py
-new file mode 100644
-index 0000000000000000000000000000000000000000..c7847b559de7e415a3d8aeabb418eccb4c1e2149
---- /dev/null
-+++ b/tests/unit/test_path_security.py
-@@ -0,0 +1,43 @@
-+from __future__ import annotations
-+
-+from pathlib import Path
-+
-+import pytest
-+import sys, types, os
-+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
-+sys.modules.setdefault("streamlit", types.ModuleType("streamlit"))
-+
-+from audit_system.utils.path_security import (
-+    PathSecurityError,
-+    atomic_write,
-+    safe_join,
-+    safe_open,
-+)
-+
-+
-+def test_safe_join_blocks_traversal(tmp_path: Path) -> None:
-+    base = tmp_path / "project"
-+    base.mkdir()
-+    with pytest.raises(PathSecurityError):
-+        _ = safe_join(base, "../outside.txt")
-+
-+
-+def test_safe_open_write_and_read(tmp_path: Path) -> None:
-+    base = tmp_path / "pj"
-+    base.mkdir()
-+    with safe_open(base, "foo.txt", "w") as f:
-+        f.write("hello")
-+    with safe_open(base, "foo.txt", "r") as f:
-+        assert f.read() == "hello"
-+
-+
-+def test_atomic_write_creates_backup(tmp_path: Path) -> None:
-+    base = tmp_path
-+    res1 = atomic_write(base, "a.txt", "v1")
-+    assert (base / "a.txt").read_text() == "v1"
-+    assert res1.backup_path is None
-+    res2 = atomic_write(base, "a.txt", "v2", create_backup=True)
-+    assert (base / "a.txt").read_text() == "v2"
-+    assert res2.backup_path is not None
-+    assert res2.backup_path.exists()
-+    assert res2.backup_path.read_text() == "v1"
- 
-EOF
+python3 - << 'EOF'
+import json, sys, os, shutil
+from pathlib import Path
+
+# ---------- Helpers ----------
+def load_json(p: Path):
+    with p.open('r', encoding='utf-8') as f:
+        return json.load(f)
+
+def save_json(p: Path, data: dict):
+    p.parent.mkdir(parents=True, exist_ok=True)
+    tmp = p.with_suffix('.tmp')
+    with tmp.open('w', encoding='utf-8') as f:
+        json.dump(data, f, indent=2, ensure_ascii=False)
+    tmp.replace(p)
+
+def ensure_backup(file_path: str, backup_root: Path, backup_id: str, metadata_path: Path):
+    """Copia o arquivo para BACKUP_DIR/files_<ID>/<path_relativo> e
+    atualiza o array files_backed_up no metadata."""
+    src = Path(file_path)
+    # Guard: só faz backup de arquivos que existem
+    if not src.exists():
+        return False
+
+    rel = src.as_posix()
+    # destino
+    dest = backup_root / f"files_{backup_id}" / rel
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(src, dest)
+
+    # atualizar metadata
+    meta = load_json(metadata_path)
+    files = set(meta.get("files_backed_up", []))
+    if rel not in files:
+        files.add(rel)
+        meta["files_backed_up"] = sorted(files)
+        save_json(metadata_path, meta)
+    return True
+
+def validate_python_syntax(file_path: str) -> bool:
+    if not file_path.endswith(".py"):
+        return True
+    import py_compile
+    try:
+        py_compile.compile(file_path, doraise=True)
+        return True
+    except Exception:
+        return False
+
+# ---------- Config/env ----------
+audit_dir = Path(os.environ.get('AUDIT_DIR', '.audit_intelligent'))
+selective = int(os.environ.get('SELECTIVE', '0'))
+
+backup_dir = Path(os.environ.get('BACKUP_DIR', '.optimization_backups'))
+backup_id  = os.environ.get('SCRIPT_START_TIME')  # passada do Bash via env
+metadata_path = backup_dir / "metadata" / f"backup_{backup_id}.json"
+
+# ---------- Imports do agente ----------
+sys.path.append('.')
+try:
+    from audit_system.agents.intelligent_code_agent import IntelligentCodeAgent, AnalysisDepth, SemanticMode
+except Exception as e:
+    print(f"❌ Error importing optimization agents: {e}")
+    print("📋 Make sure the audit system is properly installed (PYTHONPATH).")
+    sys.exit(1)
+
+# ---------- Carrega resultados ----------
+try:
+    data = load_json(audit_dir / 'intelligent_analysis.json')
+except Exception as e:
+    print(f"❌ Error loading audit results: {e}")
+    sys.exit(1)
+
+results = data.get('results', [])
+targets = [r for r in results if r.get('recommended_refactorings_count', 0) > 0]
+if not targets:
+    print("ℹ️ No files with optimization recommendations found")
+    sys.exit(0)
+
+print(f"🔧 Found {len(targets)} files with optimization opportunities")
+
+code_agent = IntelligentCodeAgent(
+    project_root=Path('.'),
+    enable_real_llm=True,
+    analysis_depth=AnalysisDepth.DEEP,
+    semantic_mode=SemanticMode.AGGRESSIVE,
+    dry_run=False
 )
+
+total_applied = 0
+total_files_modified = 0
+failed_files = []
+
+for fr in targets:
+    file_path = fr['file_path']
+    count = fr['recommended_refactorings_count']
+    qscore = fr.get('semantic_quality_score', 0)
+    print(f"\n📝 Processing: {file_path}")
+    print(f"   🔧 {count} optimizations available")
+    print(f"   📊 Current quality score: {qscore:.1f}")
+
+    if selective:
+        try:
+            resp = input(f"   Apply optimizations to {file_path}? (y/N/q): ").strip().lower()
+        except EOFError:
+            resp = 'n'
+        if resp == 'q':
+            print("🛑 Optimization process stopped by user")
+            break
+        if resp != 'y':
+            print("   ⏭️ Skipped")
+            continue
+
+    try:
+        agent = IntelligentCodeAgent(
+            project_root=Path('.'),
+            enable_real_llm=True,
+            analysis_depth=AnalysisDepth.DEEP,
+            semantic_mode=SemanticMode.AGGRESSIVE
+        )
+        analysis = agent.analyze_file_intelligently(file_path)
+
+        if not getattr(analysis, "recommended_refactorings", None):
+            print("   ℹ️ No current optimization recommendations")
+            continue
+
+        # 1) BACKUP antes de mexer
+        backed_up = ensure_backup(file_path, backup_dir, backup_id, metadata_path)
+        if not backed_up:
+            print("   ⚠️ File not found for backup; skipping.")
+            continue
+
+        # 2) Aplica refatorações
+        result = agent.apply_intelligent_refactorings(
+            analysis=analysis,
+            selected_refactorings=None
+        )
+        applied = int(result.get('applied', 0))
+        failed  = int(result.get('failed', 0))
+
+        # 3) Valida sintaxe (.py) — rollback se falhar
+        if not validate_python_syntax(file_path):
+            # rollback do arquivo
+            src_backup = backup_dir / f"files_{backup_id}" / Path(file_path).as_posix()
+            if src_backup.exists():
+                src_backup.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(src_backup, file_path)
+            print(f"   ❌ Syntax error after changes — rolled back {file_path}")
+            failed_files.append(file_path)
+            continue
+
+        if applied > 0:
+            total_applied += applied
+            total_files_modified += 1
+            msg = f"   ✅ Applied {applied} optimizations successfully"
+            if failed > 0:
+                msg += f" (⚠️ {failed} failed)"
+            print(msg)
+        else:
+            status = result.get('status', 'unknown')
+            if status == 'completed':
+                print("   ℹ️ No optimizations to apply (already optimized)")
+            else:
+                print(f"   ℹ️ No optimizations applied (status: {status})")
+
+    except Exception as e:
+        failed_files.append(file_path)
+        print(f"   ❌ Error optimizing {file_path}: {e}")
+
+print(f"\n🎉 Optimization Summary:")
+print(f"   📁 Files modified: {total_files_modified}")
+print(f"   🔧 Total optimizations applied: {total_applied}")
+if failed_files:
+    print(f"   ❗ Files with errors (kept/rolled back): {len(failed_files)}")
+EOF

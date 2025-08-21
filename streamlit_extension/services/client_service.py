@@ -203,6 +203,30 @@ class ClientRepository(BaseRepository):
 
 
 class ClientService(BaseService):
+    # Delegation to ClientServiceLogging
+    def __init__(self):
+        self._clientservicelogging = ClientServiceLogging()
+    # Delegation to ClientServiceFormatting
+    def __init__(self):
+        self._clientserviceformatting = ClientServiceFormatting()
+    # Delegation to ClientServiceBusinesslogic
+    def __init__(self):
+        self._clientservicebusinesslogic = ClientServiceBusinesslogic()
+    # Delegation to ClientServiceValidation
+    def __init__(self):
+        self._clientservicevalidation = ClientServiceValidation()
+    # Delegation to ClientServiceErrorhandling
+    def __init__(self):
+        self._clientserviceerrorhandling = ClientServiceErrorhandling()
+    # Delegation to ClientServiceDataaccess
+    def __init__(self):
+        self._clientservicedataaccess = ClientServiceDataaccess()
+    # Delegation to ClientServiceUiinteraction
+    def __init__(self):
+        self._clientserviceuiinteraction = ClientServiceUiinteraction()
+    # Delegation to ClientServiceNetworking
+    def __init__(self):
+        self._clientservicenetworking = ClientServiceNetworking()
     """Service for client business logic operations."""
     
     def __init__(self, db_manager: DatabaseManager):

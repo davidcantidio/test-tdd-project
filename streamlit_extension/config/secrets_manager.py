@@ -99,4 +99,3 @@ class SecretsManager:
         if missing:
             raise ValueError(f"Missing secrets: {', '.join(missing)}")
         return True
-

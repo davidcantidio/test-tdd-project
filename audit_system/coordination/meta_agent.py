@@ -215,8 +215,7 @@ class MetaAgent:
             
             # Initialize GodCodeRefactoringAgent
             self._agents[AgentType.GOD_CODE_AGENT] = GodCodeRefactoringAgent(
-                dry_run=self.dry_run,
-                aggressive_refactoring=False
+                dry_run=self.dry_run
             )
             
             logger.info("Initialized %s specialized agents", len(self._agents))
@@ -647,15 +646,13 @@ class MetaAgent:
             estimated_tokens = self._estimate_agent_tokens(agent_type, file_analysis)
             estimated_time = self._estimate_agent_time(agent_type, file_analysis)
             
-            # Skip agent if it would exceed token budget
-            if estimated_tokens > available_tokens:
-                logger.warning(
-                    "Skipping %s - estimated tokens (%s) exceed budget (%s)",
-                    agent_type.value,
-                    estimated_tokens,
-                    available_tokens,
-                )
-                continue
+            # ✅ NO TOKEN BUDGET RESTRICTIONS - agents use whatever tokens needed
+            # Note: Token estimation provided for information only, not limitation
+            logger.debug(
+                "Agent %s estimated tokens: %s (no budget restrictions applied)",
+                agent_type.value,
+                estimated_tokens
+            )
             
             configuration = self._build_agent_configuration(agent_type, file_analysis)
             

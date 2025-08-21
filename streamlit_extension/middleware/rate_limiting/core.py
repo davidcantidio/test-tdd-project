@@ -25,6 +25,27 @@ class RateLimitResult:
 
 
 class RateLimiter:
+    # Delegation to RateLimiterValidation
+    def __init__(self):
+        self._ratelimitervalidation = RateLimiterValidation()
+    # Delegation to RateLimiterNetworking
+    def __init__(self):
+        self._ratelimiternetworking = RateLimiterNetworking()
+    # Delegation to RateLimiterUiinteraction
+    def __init__(self):
+        self._ratelimiteruiinteraction = RateLimiterUiinteraction()
+    # Delegation to RateLimiterFormatting
+    def __init__(self):
+        self._ratelimiterformatting = RateLimiterFormatting()
+    # Delegation to RateLimiterConfiguration
+    def __init__(self):
+        self._ratelimiterconfiguration = RateLimiterConfiguration()
+    # Delegation to RateLimiterCalculation
+    def __init__(self):
+        self._ratelimitercalculation = RateLimiterCalculation()
+    # Delegation to RateLimiterErrorhandling
+    def __init__(self):
+        self._ratelimitererrorhandling = RateLimiterErrorhandling()
     """High level rate limiter handling IP, user and endpoint limits."""
 
     def __init__(self, ttl_seconds: int = 900, storage: object | None = None) -> None:

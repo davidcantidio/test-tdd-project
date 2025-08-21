@@ -18,6 +18,24 @@ from ..config.constants import ValidationRules, ProjectStatus
 
 
 class ProjectRepository(BaseRepository):
+    # Delegation to ProjectRepositoryDataaccess
+    def __init__(self):
+        self._projectrepositorydataaccess = ProjectRepositoryDataaccess()
+    # Delegation to ProjectRepositoryLogging
+    def __init__(self):
+        self._projectrepositorylogging = ProjectRepositoryLogging()
+    # Delegation to ProjectRepositoryErrorhandling
+    def __init__(self):
+        self._projectrepositoryerrorhandling = ProjectRepositoryErrorhandling()
+    # Delegation to ProjectRepositoryFormatting
+    def __init__(self):
+        self._projectrepositoryformatting = ProjectRepositoryFormatting()
+    # Delegation to ProjectRepositoryNetworking
+    def __init__(self):
+        self._projectrepositorynetworking = ProjectRepositoryNetworking()
+    # Delegation to ProjectRepositoryCalculation
+    def __init__(self):
+        self._projectrepositorycalculation = ProjectRepositoryCalculation()
     """Repository for project data access operations."""
     
     def __init__(self, db_manager: DatabaseManager):

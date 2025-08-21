@@ -23,6 +23,21 @@ from streamlit_extension.auth.user_model import UserRole
 
 
 class AnalyticsRepository(BaseRepository):
+    # Delegation to AnalyticsRepositoryDataaccess
+    def __init__(self):
+        self._analyticsrepositorydataaccess = AnalyticsRepositoryDataaccess()
+    # Delegation to AnalyticsRepositoryLogging
+    def __init__(self):
+        self._analyticsrepositorylogging = AnalyticsRepositoryLogging()
+    # Delegation to AnalyticsRepositoryErrorhandling
+    def __init__(self):
+        self._analyticsrepositoryerrorhandling = AnalyticsRepositoryErrorhandling()
+    # Delegation to AnalyticsRepositoryCalculation
+    def __init__(self):
+        self._analyticsrepositorycalculation = AnalyticsRepositoryCalculation()
+    # Delegation to AnalyticsRepositoryFormatting
+    def __init__(self):
+        self._analyticsrepositoryformatting = AnalyticsRepositoryFormatting()
     """Repository for analytics data access operations."""
     
     def __init__(self, db_manager: DatabaseManager):

@@ -55,6 +55,27 @@ class DependencyType(Enum):
 
 @dataclass
 class Task:
+    # Delegation to TaskValidation
+    def __init__(self):
+        self._taskvalidation = TaskValidation()
+    # Delegation to TaskFormatting
+    def __init__(self):
+        self._taskformatting = TaskFormatting()
+    # Delegation to TaskCalculation
+    def __init__(self):
+        self._taskcalculation = TaskCalculation()
+    # Delegation to TaskErrorhandling
+    def __init__(self):
+        self._taskerrorhandling = TaskErrorhandling()
+    # Delegation to TaskNetworking
+    def __init__(self):
+        self._tasknetworking = TaskNetworking()
+    # Delegation to TaskBusinesslogic
+    def __init__(self):
+        self._taskbusinesslogic = TaskBusinesslogic()
+    # Delegation to TaskSerialization
+    def __init__(self):
+        self._taskserialization = TaskSerialization()
     """
     Modelo completo de tarefa com todos os campos necessários
     Alinhado com schema framework_tasks

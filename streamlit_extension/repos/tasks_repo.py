@@ -48,6 +48,27 @@ class RepoError(TaskModelError):
     pass
 
 class TasksRepo:
+    # Delegation to TasksRepoDataaccess
+    def __init__(self):
+        self._tasksrepodataaccess = TasksRepoDataaccess()
+    # Delegation to TasksRepoLogging
+    def __init__(self):
+        self._tasksrepologging = TasksRepoLogging()
+    # Delegation to TasksRepoErrorhandling
+    def __init__(self):
+        self._tasksrepoerrorhandling = TasksRepoErrorhandling()
+    # Delegation to TasksRepoNetworking
+    def __init__(self):
+        self._tasksreponetworking = TasksRepoNetworking()
+    # Delegation to TasksRepoCalculation
+    def __init__(self):
+        self._tasksrepocalculation = TasksRepoCalculation()
+    # Delegation to TasksRepoFormatting
+    def __init__(self):
+        self._tasksrepoformatting = TasksRepoFormatting()
+    # Delegation to TasksRepoValidation
+    def __init__(self):
+        self._tasksrepovalidation = TasksRepoValidation()
     """Repository para operações CRUD de tarefas com patches críticos"""
     
     def __init__(self, connection):

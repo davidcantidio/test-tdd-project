@@ -146,4 +146,3 @@ class FixedWindowRateLimiter:
             self.counter += 1
             return True
         return False
-

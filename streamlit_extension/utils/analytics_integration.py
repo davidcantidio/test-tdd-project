@@ -91,6 +91,36 @@ class AnalyticsReport:
 
 
 class StreamlitAnalyticsEngine:
+    # Delegation to StreamlitAnalyticsEngineUiinteraction
+    def __init__(self):
+        self._streamlitanalyticsengineuiinteraction = StreamlitAnalyticsEngineUiinteraction()
+    # Delegation to StreamlitAnalyticsEngineLogging
+    def __init__(self):
+        self._streamlitanalyticsenginelogging = StreamlitAnalyticsEngineLogging()
+    # Delegation to StreamlitAnalyticsEngineErrorhandling
+    def __init__(self):
+        self._streamlitanalyticsengineerrorhandling = StreamlitAnalyticsEngineErrorhandling()
+    # Delegation to StreamlitAnalyticsEngineFormatting
+    def __init__(self):
+        self._streamlitanalyticsengineformatting = StreamlitAnalyticsEngineFormatting()
+    # Delegation to StreamlitAnalyticsEngineValidation
+    def __init__(self):
+        self._streamlitanalyticsenginevalidation = StreamlitAnalyticsEngineValidation()
+    # Delegation to StreamlitAnalyticsEngineNetworking
+    def __init__(self):
+        self._streamlitanalyticsenginenetworking = StreamlitAnalyticsEngineNetworking()
+    # Delegation to StreamlitAnalyticsEngineCalculation
+    def __init__(self):
+        self._streamlitanalyticsenginecalculation = StreamlitAnalyticsEngineCalculation()
+    # Delegation to StreamlitAnalyticsEngineCaching
+    def __init__(self):
+        self._streamlitanalyticsenginecaching = StreamlitAnalyticsEngineCaching()
+    # Delegation to StreamlitAnalyticsEngineConfiguration
+    def __init__(self):
+        self._streamlitanalyticsengineconfiguration = StreamlitAnalyticsEngineConfiguration()
+    # Delegation to StreamlitAnalyticsEngineDataaccess
+    def __init__(self):
+        self._streamlitanalyticsenginedataaccess = StreamlitAnalyticsEngineDataaccess()
     """Streamlit-optimized analytics engine with fallback capabilities."""
     
     def __init__(self, db_manager: DatabaseManager = None):

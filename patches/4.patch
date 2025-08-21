@@ -1,454 +1,450 @@
- (cd "$(git rev-parse --show-toplevel)" && git apply --3way <<'EOF' 
-diff --git a/.gitignore b/.gitignore
-index c8bc9a888a42cbd5f5b17834e9651c7c72001707..f52bfc0b3047b0bd3bd7adac3fcaa20d4eb2332a 100644
---- a/.gitignore
-+++ b/.gitignore
-@@ -162,25 +162,160 @@ dmypy.json
- # PyCharm
- .idea/
+*** a/intelligent_refactoring_engine.py
+--- b/intelligent_refactoring_engine.py
+@@
+ from dataclasses import dataclass
+ import sys
+ import argparse
++from typing import Optional
  
- # Archives
- *.tar.gz
- *.zip
- *.rar
+ # Project setup
+ project_root = Path(__file__).resolve().parent.parent.parent
+ if str(project_root) not in sys.path:
+     sys.path.insert(0, str(project_root))
+@@
+     RATE_LIMITER_AVAILABLE = False
+     
+ # Context Integration
+ CONTEXT_BASE_PATH = Path(__file__).parent.parent / "context"
+ GUIDES_PATH = CONTEXT_BASE_PATH / "guides"
+ WORKFLOWS_PATH = CONTEXT_BASE_PATH / "workflows" 
+ NAVIGATION_PATH = CONTEXT_BASE_PATH / "navigation"
+@@
+ class IntelligentRefactoringEngine:
+@@
+         self.logger = logging.getLogger(f"{__name__}.IntelligentRefactoringEngine")
+         # Initialize intelligent rate limiter
+         if RATE_LIMITER_AVAILABLE and enable_real_llm:
+             self.rate_limiter = IntelligentRateLimiter()
+             self.logger.info("✅ Intelligent Rate Limiter initialized for refactoring operations")
+         else:
+             self.rate_limiter = None
+-            self.logger.warning("⚠️ Rate Limiter not available - using fallback timing")
++            self.logger.debug("ℹ️ Rate Limiter not available - using fallback timing")
+@@
+         self.refactoring_context = self._load_refactoring_context()
+@@
+         }
+@@
+         self.logger.info(
+             "🔧 Intelligent Refactoring Engine initialized: real_llm=%s, budget=%d tokens, tdah=%s",
+             enable_real_llm, tokens_budget, tdah_mode
+         )
  
- # Custom project files
- patches_backup/
- old_versions/
- deprecated/
- 
- # Docker
- docker-compose.override.yml
- .dockerignore
- 
- # Monitoring
- prometheus_data/
- grafana_data/
- 
- # Local development
- local_config.yaml
- development.db
- test_output/
++    # ------------- Internal helpers -------------------------------------------------
++    def _rl_guard(self, estimated_tokens: int, bucket: str) -> None:
++        """
++        Centraliza verificação/espera/registro do rate limiter para reduzir duplicação.
++        No-ops caso o rate limiter não esteja disponível ou o modo LLM esteja desabilitado.
++        """
++        if not (self.enable_real_llm and self.rate_limiter):
++            return
++        if not self.rate_limiter.can_proceed(estimated_tokens, bucket):
++            sleep_time = self.rate_limiter.calculate_required_delay(estimated_tokens, bucket)
++            # Evita logs ruidosos para sleeps muito curtos
++            if sleep_time >= 0.05:
++                self.logger.debug("⏰ Rate limiting [%s]: sleeping %.2fs", bucket, sleep_time)
++            time.sleep(sleep_time)
++        self.rate_limiter.record_usage(estimated_tokens, bucket)
 +
-+# ===================================================
-+# STREAMLIT CACHE AND ARTIFACTS
-+# ===================================================
-+.streamlit/
-+**/.streamlit_cache/
-+**/streamlit_cache/
-+__streamlit__/
-+.streamlit_cache*
-+streamlit-*.log
-+streamlit_app.log*
+@@
+         self.logger.info("🧠 Applying LLM-powered extract method refactoring")
+-        
+-        # Check rate limiting
+-        estimated_tokens = self.real_llm_config["extract_method_tokens"]
+-        if self.rate_limiter and self.enable_real_llm:
+-            if not self.rate_limiter.can_proceed(estimated_tokens, "extract_method"):
+-                sleep_time = self.rate_limiter.calculate_required_delay(estimated_tokens, "extract_method")
+-                self.logger.info(f"⏰ Rate limiting: sleeping {sleep_time:.1f}s for method extraction")
+-                time.sleep(sleep_time)
++        estimated_tokens = self.real_llm_config["extract_method_tokens"]
++        self._rl_guard(estimated_tokens, "extract_method")
+@@
+-            # Record token usage
+-            if self.rate_limiter:
+-                self.rate_limiter.record_usage(estimated_tokens, "extract_method")
+-            
+             # Simulate LLM-powered extraction
+             # In production, would use actual LLM response
+             extracted_method_name = "extracted_functionality"
+             improvements = {
+-                "complexity_reduction": 35.0,
+-                "readability_improvement": 45.0,
+-                "maintainability_increase": 40.0
++                "complexity_reduction": 35.0,        # percent (0-100)
++                "readability_improvement": 45.0,      # percent (0-100)
++                "maintainability_increase": 40.0      # percent (0-100)
+             }
+@@
+         self.logger.info("🧠 Applying LLM-powered exception handling improvement")
+-        
+-        estimated_tokens = self.real_llm_config["exception_improvement_tokens"]
+-        
+-        if self.enable_real_llm:
+-            # Check rate limiting
+-            if self.rate_limiter:
+-                if not self.rate_limiter.can_proceed(estimated_tokens, "exception_handling"):
+-                    sleep_time = self.rate_limiter.calculate_required_delay(estimated_tokens, "exception_handling")
+-                    time.sleep(sleep_time)
+-            
++        estimated_tokens = self.real_llm_config["exception_improvement_tokens"]
++        if self.enable_real_llm:
++            self._rl_guard(estimated_tokens, "exception_handling")
+             # Real LLM analysis for exception improvement
+             improvements = {
+-                "error_coverage": 60.0,
+-                "logging_quality": 55.0,
+-                "recovery_capability": 50.0
++                "error_coverage": 60.0,      # percent
++                "logging_quality": 55.0,     # percent
++                "recovery_capability": 50.0  # percent
+             }
+-            
+-            # Record token usage
+-            if self.rate_limiter:
+-                self.rate_limiter.record_usage(estimated_tokens, "exception_handling")
+         else:
+             # Fallback to pattern-based
+             return self._apply_improve_exception_handling(lines, refactoring, file_path)
+@@
+         self.logger.info("🧠 Applying LLM-powered string optimization")
+-        
+-        estimated_tokens = self.real_llm_config["string_optimization_tokens"]
+-        
+-        if self.enable_real_llm and self.rate_limiter:
+-            if not self.rate_limiter.can_proceed(estimated_tokens, "string_optimization"):
+-                sleep_time = self.rate_limiter.calculate_required_delay(estimated_tokens, "string_optimization")
+-                time.sleep(sleep_time)
+-            self.rate_limiter.record_usage(estimated_tokens, "string_optimization")
++        estimated_tokens = self.real_llm_config["string_optimization_tokens"]
++        if self.enable_real_llm:
++            self._rl_guard(estimated_tokens, "string_optimization")
+@@
+-        estimated_tokens = self.real_llm_config["god_code_analysis_tokens"]
+-        
++        estimated_tokens = self.real_llm_config["god_code_analysis_tokens"]
+         if self.enable_real_llm:
+-            # Use the god code agent with real LLM capabilities
+-            if self.rate_limiter:
+-                if not self.rate_limiter.can_proceed(estimated_tokens, "god_method"):
+-                    sleep_time = self.rate_limiter.calculate_required_delay(estimated_tokens, "god_method")
+-                    time.sleep(sleep_time)
++            # Use the god code agent with real LLM capabilities
++            self._rl_guard(estimated_tokens, "god_method")
+@@
+-            if self.rate_limiter:
+-                self.rate_limiter.record_usage(estimated_tokens, "god_method")
+-            
+             improvements = {
+                 "complexity_reduction": 65.0,
+                 "responsibility_separation": 70.0,
+                 "maintainability_increase": 60.0
+             }
+@@
+         self.logger.info("🧠 Applying LLM-powered database query optimization")
+-        
+-        estimated_tokens = self.real_llm_config["query_optimization_tokens"]
+-        
++        estimated_tokens = self.real_llm_config["query_optimization_tokens"]
+         if self.enable_real_llm:
+-            if self.rate_limiter:
+-                if not self.rate_limiter.can_proceed(estimated_tokens, "query_optimization"):
+-                    sleep_time = self.rate_limiter.calculate_required_delay(estimated_tokens, "query_optimization")
+-                    time.sleep(sleep_time)
+-                self.rate_limiter.record_usage(estimated_tokens, "query_optimization")
++            self._rl_guard(estimated_tokens, "query_optimization")
+             
+             improvements = {
+                 "query_reduction": 50.0,
+                 "performance_gain": 45.0,
+                 "database_load_reduction": 40.0
+             }
+@@
+         self.logger.info("🧠 Applying LLM-powered constants extraction")
+-        
+-        estimated_tokens = self.real_llm_config["constants_extraction_tokens"]
+-        
+-        if self.enable_real_llm and self.rate_limiter:
+-            if not self.rate_limiter.can_proceed(estimated_tokens, "constants_extraction"):
+-                sleep_time = self.rate_limiter.calculate_required_delay(estimated_tokens, "constants_extraction")
+-                time.sleep(sleep_time)
+-            self.rate_limiter.record_usage(estimated_tokens, "constants_extraction")
++        estimated_tokens = self.real_llm_config["constants_extraction_tokens"]
++        if self.enable_real_llm:
++            self._rl_guard(estimated_tokens, "constants_extraction")
+@@
+         self.logger.info("🧠 Applying LLM-powered conditional logic improvement")
+-        
+-        estimated_tokens = self.real_llm_config["conditional_logic_tokens"]
+-        
++        estimated_tokens = self.real_llm_config["conditional_logic_tokens"]
+         if self.enable_real_llm:
+-            if self.rate_limiter:
+-                if not self.rate_limiter.can_proceed(estimated_tokens, "conditional_logic"):
+-                    sleep_time = self.rate_limiter.calculate_required_delay(estimated_tokens, "conditional_logic")
+-                    time.sleep(sleep_time)
+-                self.rate_limiter.record_usage(estimated_tokens, "conditional_logic")
++            self._rl_guard(estimated_tokens, "conditional_logic")
+             
+             improvements = {
+                 "complexity_reduction": 40.0,
+                 "readability_improvement": 50.0,
+                 "logic_clarity": 45.0
+             }
+@@
+     def _apply_optimize_string_operations(
+         self, 
+         lines: List[str], 
+         refactoring: IntelligentRefactoring, 
+         file_path: str
+     ) -> RefactoringResult:
+         """Apply string operation optimizations."""
+@@
+-            # Convert string concatenation to f-strings
+-            if "+" in line and any(quote in line for quote in ['"', "'"]):
+-                optimized_line = self._optimize_string_concatenation(line)
++            # Convert string concatenation to f-strings (best-effort)
++            if "+" in line and any(q in line for q in ('"', "'")):
++                optimized_line = self._optimize_string_concatenation(line)
+                 if optimized_line != line:
+                     refactored_lines[line_idx] = optimized_line
+                     affected_lines.append(line_num)
+-                    improvements["performance_improvement"] += 0.3
+-                    improvements["readability_improvement"] += 0.5
++                    improvements["performance_improvement"] += 10.0  # percent (heurístico)
++                    improvements["readability_improvement"] += 15.0  # percent
+@@
+-        # Identify potential N+1 query patterns
++        # Identify potential N+1 query patterns (heurístico, não-destrutivo)
+         for line_num in refactoring.target_lines:
+             line_idx = line_num - 1
+             line = lines[line_idx]
+@@
+-                        improvements["performance_improvement"] += 1.0
++                        improvements["performance_improvement"] += 5.0  # percent heurístico
+@@
+     def _apply_extract_constants(
+         self, 
+         lines: List[str], 
+         refactoring: IntelligentRefactoring, 
+         file_path: str
+     ) -> RefactoringResult:
+-        """Apply constant extraction for magic numbers and strings."""
++        """Apply constant extraction for magic numbers, com salvaguardas."""
+         
+         refactored_lines = lines.copy()
+         affected_lines = []
+         constants_to_add = []
+-        improvements = {"maintainability_improvement": 0.0}
++        improvements = {"maintainability_improvement": 0.0}  # percent
 +
-+# ===================================================  
-+# PYTHON CACHE AND BUILD ARTIFACTS
-+# ===================================================
-+__pycache__/
-+*.py[cod]
-+*$py.class
-+*.so
-+
-+# Distribution / packaging
-+.Python
-+build/
-+develop-eggs/
-+dist/
-+downloads/
-+eggs/
-+.eggs/
-+lib/
-+lib64/
-+parts/
-+sdist/
-+var/
-+wheels/
-+*.egg-info/
-+.installed.cfg
-+*.egg
-+MANIFEST
-+
-+# PyInstaller
-+*.manifest
-+*.spec
-+
-+# Installer logs
-+pip-log.txt
-+pip-delete-this-directory.txt
-+
-+# Unit test / coverage reports
-+htmlcov/
-+.tox/
-+.nox/
-+.coverage
-+.coverage.*
-+.cache
-+nosetests.xml
-+coverage.xml
-+*.cover
-+.hypothesis/
-+.pytest_cache/
-+
-+# ===================================================
-+# DATABASE ARTIFACTS
-+# ===================================================
-+*.db-journal
-+*.db-wal
-+*.db-shm
-+*.sqlite-journal
-+*.sqlite-wal
-+*.sqlite-shm
-+
-+# ===================================================
-+# LOGS AND TEMPORARY FILES  
-+# ===================================================
-+logs/
-+*.log
-+temp/
-+tmp/
-+cache/
-+.cache/
-+
-+# ===================================================
-+# IDE AND EDITOR FILES
-+# ===================================================
-+.vscode/
-+.idea/
-+*.swp
-+*.swo
-+*~
-+.project
-+.pydevproject
-+
-+# ===================================================
-+# OS GENERATED FILES
-+# ===================================================
-+.DS_Store
-+.DS_Store?
-+._*
-+.Spotlight-V100
-+.Trashes
-+ehthumbs.db
-+Thumbs.db
-+
-+# ===================================================
-+# ENVIRONMENT AND CONFIG
-+# ===================================================
-+.env
-+.env.local
-+.env.*.local
-+.venv
-+env/
-+venv/
-+ENV/
-+env.bak/
-+venv.bak/
-+
-+# ===================================================
-+# PROJECT SPECIFIC
-+# ===================================================
-+# Backup files
-+*.bak
-+*.backup
-+*.old
-+
-+# Archive files
-+*.zip
-+*.tar.gz
-+*.rar
-+
-+# Temporary migration files
-+migration_backup/
-+temp_migrations/
-+
-+# Local configuration overrides
-+local_config.py
-+local_settings.py
-diff --git a/CLAUDE.md b/CLAUDE.md
-index fb610d149c1885bde2d6782c2405cf996c21d7fd..2baff833e1b6ac6900a5b134ab11bb7e1d93c0dd 100644
---- a/CLAUDE.md
-+++ b/CLAUDE.md
-@@ -993,50 +993,55 @@ streamlit run streamlit_extension/streamlit_app.py
- - ✅ **Foundation Established** - 47.2% files centralized (infrastructure ready)
- - ✅ **Client Page Refactored** - Demonstration of enum usage patterns
- 
- ### 📊 **PHASE 2 FINAL METRICS**
- - **Type Hints Coverage:** 98.1% (A+ Grade)
- - **Code Duplication Reduction:** 75% in form components
- - **Constants System:** 12 enums + 5 config classes
- - **Test Coverage:** 525+ tests (100% success rate)
- - **Code Quality:** Production-ready maintainable architecture
- 
- *Last updated: 2025-08-16 by Claude*  
- *Phase 2 (Code Quality) **COMPLETE** ✅*  
- *Type Safety: **A+ GRADE** | DRY Architecture: **75% REDUCTION** | Constants: **CENTRALIZED***  
- *Security Status: **ZERO CRITICAL VULNERABILITIES** - 100% database access patterns secured*  
- *Total Tests: **525+** (100% passing) | Runtime: **<10s***  
- *Status: **PRODUCTION-READY CODE QUALITY** - Enterprise maintainability achieved*  
- 
- ### 🧹 **PROJECT CLEANUP COMPLETED (2025-08-16)**
- - ✅ **Enterprise Structure**: docs/ and scripts/ organization implemented
- - ✅ **Documentation Organized**: 28+ .md files categorized (archive/development/security)
- - ✅ **Scripts Organized**: Maintenance, migration, analysis, setup, testing
- - ✅ **Patches Consolidated**: Valid patches 1-6 organized in patches_applied/
- - ✅ **Cache Management**: Comprehensive cleanup with automated tools
- - ✅ **Repository Optimized**: Clean structure ready for enterprise deployment
- 
-+### 🧹 **Repository Cache Maintenance**
-+- `python cleanup_cache.py --dry-run` to preview files and directories that would be removed
-+- `python cleanup_cache.py` to delete cache artifacts and temporary files
-+- `python validate_gitignore.py` to verify ignore patterns remain effective
-+
- *Next: Phase 3 - Service Layer Implementation*
- - Sempre leia o arquivo antes de tentar edita-lo.
- Claude (Dev Sênior + Tech Leader)
- 
- Atua como Desenvolvedor Sênior:
- 
- Executa tarefas complexas, que envolvem arquitetura, múltiplos arquivos interdependentes ou decisões de design de sistema.
- 
- Assume atividades que exigem juízo crítico, escolhas de padrões e boas práticas.
- 
- Atua como Tech Leader:
- 
- Define o escopo das tarefas antes de delegar ao Codex.
- 
- Evita conflitos de código distribuindo prompts que atuem em arquivos diferentes ou blocos independentes.
- 
- Revisa, ajusta e valida os patches gerados pelo Codex antes de integração.
- 
- Garante que as entregas sigam a visão geral do projeto e o Definition of Done.
- 
- Codex (Dev Júnior)
- 
- Executa tarefas braçais, repetitivas e bem definidas.
- 
- É eficiente para:
-diff --git a/cleanup_cache.py b/cleanup_cache.py
-new file mode 100755
-index 0000000000000000000000000000000000000000..a8f052601a4e90d4dd5be13c8e72c2cf6294cff4
---- /dev/null
-+++ b/cleanup_cache.py
-@@ -0,0 +1,159 @@
-+#!/usr/bin/env python3
-+"""
-+Repository Cache Cleanup Script
-+Removes Streamlit cache artifacts and other temporary files
-+"""
-+
-+import os
-+import shutil
-+from pathlib import Path
-+from typing import List, Tuple
-+
-+
-+class RepositoryCleanup:
-+    """Repository cleanup utility"""
-+
-+    def __init__(self, repo_root: str = "."):
-+        self.repo_root = Path(repo_root).resolve()
-+        self.removed_files: List[str] = []
-+        self.removed_dirs: List[str] = []
-+        self.errors: List[str] = []
-+
-+    def _should_skip(self, path: Path) -> bool:
-+        """Return True if path is inside .git directory."""
-+        return ".git" in path.parts
-+
-+    def find_cache_artifacts(self) -> List[Path]:
-+        """Find all cache artifacts in repository"""
-+        patterns = [
-+            "**/.streamlit_cache/",
-+            "**/streamlit_cache/",
-+            "**/__streamlit__/",
-+            "**/.streamlit/",
-+            "**/__pycache__/",
-+            "**/*.pyc",
-+            "**/*.pyo",
-+            "**/*.pyd",
-+            "**/logs/",
-+            "**/temp/",
-+            "**/tmp/",
-+            "**/.cache/",
-+            "**/*.log",
-+            "**/*~",
-+            "**/.DS_Store",
-+            "**/Thumbs.db",
-+        ]
-+
-+        artifacts: List[Path] = []
-+        for pattern in patterns:
-+            matches = list(self.repo_root.glob(pattern))
-+            artifacts.extend(matches)
-+        return artifacts
-+
-+    def clean_cache_files(self, dry_run: bool = False) -> Tuple[int, int]:
-+        """Clean cache files and directories"""
-+        artifacts = self.find_cache_artifacts()
-+        files_removed = 0
-+        dirs_removed = 0
-+
-+        for artifact in artifacts:
-+            if self._should_skip(artifact):
-+                continue
-+            try:
-+                if artifact.is_file():
-+                    if not dry_run:
-+                        artifact.unlink()
-+                        self.removed_files.append(str(artifact))
-+                    files_removed += 1
-+                    print(f"{'[DRY RUN] Would remove' if dry_run else 'Removed'} file: {artifact}")
-+                elif artifact.is_dir():
-+                    if not dry_run:
-+                        shutil.rmtree(artifact)
-+                        self.removed_dirs.append(str(artifact))
-+                    dirs_removed += 1
-+                    print(f"{'[DRY RUN] Would remove' if dry_run else 'Removed'} directory: {artifact}")
-+            except Exception as e:
-+                error_msg = f"Error removing {artifact}: {e}"
-+                self.errors.append(error_msg)
-+                print(f"❌ {error_msg}")
-+
-+        return files_removed, dirs_removed
-+
-+    def clean_database_artifacts(self, dry_run: bool = False) -> int:
-+        """Clean database temporary files"""
-+        db_patterns = ["**/*.db-journal", "**/*.db-wal", "**/*.db-shm"]
-+
-+        removed = 0
-+        for pattern in db_patterns:
-+            matches = list(self.repo_root.glob(pattern))
-+            for match in matches:
-+                if self._should_skip(match):
++        # Precompute string literal spans para não mexer dentro de strings
++        def _string_spans(s: str) -> List[Tuple[int, int]]:
++            spans: List[Tuple[int, int]] = []
++            quote = None
++            start = -1
++            i = 0
++            while i < len(s):
++                ch = s[i]
++                if quote:
++                    if ch == "\\":
++                        i += 2
++                        continue
++                    if ch == quote:
++                        spans.append((start, i))
++                        quote = None
++                    i += 1
 +                    continue
++                if ch in ("'", '"'):
++                    quote = ch
++                    start = i
++                i += 1
++            return spans
++        def _in_spans(idx: int, spans: List[Tuple[int, int]]) -> bool:
++            return any(a <= idx <= b for (a, b) in spans)
+@@
+-            # Find magic numbers
+-            magic_numbers = re.findall(r'\b(\d+)\b', line)
+-            for number in magic_numbers:
+-                if int(number) > 10:  # Only extract significant numbers
+-                    constant_name = f"MAGIC_NUMBER_{number}"
+-                    constants_to_add.append((constant_name, number))
+-                    
+-                    # Replace in line
+-                    refactored_lines[line_idx] = line.replace(number, constant_name)
+-                    affected_lines.append(line_num)
+-                    improvements["maintainability_improvement"] += 0.2
++            spans = _string_spans(line)
++            # Encontra números "nus" que não estão colados a letras/underscore (evita ident/versões)
++            for m in re.finditer(r'(?<![A-Za-z_])(\d+)(?![A-Za-z_])', line):
++                num_txt = m.group(1)
++                start_i = m.start(1)
++                # ignora se dentro de string
++                if _in_spans(start_i, spans):
++                    continue
++                num_val = int(num_txt)
++                # ignora números pequenos e anos comuns
++                if num_val <= 10 or 1900 <= num_val <= 2100:
++                    continue
++                constant_name = f"MAGIC_NUMBER_{num_val}"
++                constants_to_add.append((constant_name, num_txt))
++                # substitui apenas esta ocorrência
++                line = line[:m.start(1)] + constant_name + line[m.end(1):]
++                refactored_lines[line_idx] = line
++                affected_lines.append(line_num)
++                improvements["maintainability_improvement"] += 5.0  # percent heurístico
+@@
+-        """Generate the extracted method code."""
++        """Generate the extracted method code."""
+@@
+-        """Optimize string concatenation to use f-strings."""
+-        # This is a simplified implementation
+-        # In practice, this would need more sophisticated parsing
+-        
+-        # Pattern: "string" + variable + "string"
+-        pattern = r'("[^"]*")\s*\+\s*(\w+)\s*\+\s*("[^"]*")'
+-        match = re.search(pattern, line)
+-        
+-        if match:
+-            str1, var, str2 = match.groups()
+-            replacement = f'f{str1[:-1]}{{{var}}}{str2[1:]}'
+-            return line.replace(match.group(0), replacement)
+-        
+-        return line
++        """Optimize string concatenation to use f-strings (best-effort sem AST)."""
++        # Casos simples: "a" + x + "b"  |  'a' + x + 'b'
++        patterns = [
++            (r'("([^"\\]|\\.)*")\s*\+\s*([A-Za-z_]\w*)\s*\+\s*("([^"\\]|\\.)*")', '"'),
++            (r"(\'([^'\\]|\\.)*\')\s*\+\s*([A-Za-z_]\w*)\s*\+\s*(\'([^'\\]|\\.)*\')", "'"),
++        ]
++        for pat, quote in patterns:
++            m = re.search(pat, line)
++            if not m:
++                continue
++            left, var, right = m.group(1), m.group(3), m.group(4)
++            # monta f-string preservando conteúdo
++            # remove aspas finais/iniciais para concatenar
++            fprefix = f"f{left[:-1]}"  # tira aspas finais
++            fsuffix = f"{right[1:]}"   # tira aspas iniciais
++            replacement = f"{fprefix}{{{var}}}{fsuffix}"
++            return line.replace(m.group(0), replacement)
++        return line
+@@
+-        return "Consider collecting IDs and using batch query: WHERE id IN (...)"
++        return "Consider collecting IDs and using batch query: WHERE id IN (...)"  # orientação não-destrutiva
+@@
+-    def apply_intelligent_refactorings(
++    def apply_intelligent_refactorings(
+         self, 
+-        analysis_result: Dict[str, Any], 
+-        selected_strategies: List[int] = None
++        analysis_result: Dict[str, Any], 
++        selected_strategies: Optional[List[int]] = None
+     ) -> Dict[str, Any]:
+         """Apply intelligent refactorings based on analysis results - MetaAgent compatible method."""
+@@
+-            strategy_names = list(self.refactoring_strategies.keys())
++            strategy_names = list(self.refactoring_strategies.keys())
+@@
+-                # Create a simple refactoring for this strategy
+-                refactoring = IntelligentRefactoring(
+-                    refactoring_type=strategy_name,
+-                    target_lines=[1],  # Simplified - would need real analysis
+-                    description=f"Apply {strategy_name} refactoring",
+-                    confidence=0.8
+-                )
++                # Constrói com argumentos mínimos garantidos para evitar quebras entre versões
++                refactoring = IntelligentRefactoring(
++                    refactoring_type=strategy_name,
++                    target_lines=[1],  # Simplificado – em produção viria do analyzer
++                    description=f"Apply {strategy_name} refactoring"
++                )
++                # Campos opcionais (defensivo)
++                for name, value in (
++                    ("confidence", 0.8),
++                    ("confidence_score", 0.8),
++                ):
++                    try:
++                        setattr(refactoring, name, value)
++                    except Exception:
++                        pass
+@@
+-                        # Estimate tokens used for this operation
+-                        total_tokens_used += 150  # Rough estimate per refactoring
++                        # Estimate tokens used for this operation
++                        total_tokens_used += 150  # Rough estimate per refactoring
+@@
+ def main():
+@@
+-    parser.add_argument("--apply", action="store_true", help="Apply refactoring (not just analyze)")
++    parser.add_argument("--apply", action="store_true", help="Apply refactoring (writes file). If omitted, runs in dry-run mode.")
+     parser.add_argument("--dry-run", action="store_true", help="Show what would be done")
+     parser.add_argument("-v", "--verbose", action="store_true", help="Verbose output")
+@@
+-        engine = IntelligentRefactoringEngine(dry_run=args.dry_run or not args.apply)
++        engine = IntelligentRefactoringEngine(dry_run=args.dry_run or not args.apply)
+@@
+-        if args.refactoring_type:
+-            # Create a sample refactoring (in practice, this would come from analysis)
+-            refactoring = IntelligentRefactoring(
+-                refactoring_type=args.refactoring_type,
+-                target_lines=[1, 2, 3],  # Sample lines
+-                description=f"Apply {args.refactoring_type} refactoring",
+-                benefits=["Improved code quality"],
+-                risks=["Minimal"],
+-                confidence_score=0.85,
+-                estimated_impact={"maintainability": "high_improvement"}
+-            )
++        if args.refactoring_type:
++            # Constrói refactoring com argumentos mínimos (compatível entre versões)
++            refactoring = IntelligentRefactoring(
++                refactoring_type=args.refactoring_type,
++                target_lines=[1, 2, 3],  # Exemplo; em produção deve vir da análise
++                description=f"Apply {args.refactoring_type} refactoring"
++            )
++            # Seta atributos opcionais se existirem (defensivo, sem quebrar)
++            for name, value in (
++                ("benefits", ["Improved code quality"]),
++                ("risks", ["Minimal"]),
++                ("confidence", 0.85),
++                ("confidence_score", 0.85),
++                ("estimated_impact", {"maintainability": "high_improvement"}),
++            ):
 +                try:
-+                    if not dry_run:
-+                        match.unlink()
-+                        self.removed_files.append(str(match))
-+                    removed += 1
-+                    print(f"{'[DRY RUN] Would remove' if dry_run else 'Removed'} DB artifact: {match}")
-+                except Exception as e:
-+                    self.errors.append(f"Error removing {match}: {e}")
-+        return removed
-+
-+    def generate_report(self) -> str:
-+        """Generate cleanup report"""
-+        report = f"""
-+🧹 REPOSITORY CLEANUP REPORT
-+{'='*50}
-+
-+📊 SUMMARY:
-+- Files removed: {len(self.removed_files)}
-+- Directories removed: {len(self.removed_dirs)}
-+- Errors encountered: {len(self.errors)}
-+
-+📁 REMOVED FILES:
-+{chr(10).join(f"  - {f}" for f in self.removed_files[:10])}
-+{'  - ... and more' if len(self.removed_files) > 10 else ''}
-+
-+📂 REMOVED DIRECTORIES:
-+{chr(10).join(f"  - {d}" for d in self.removed_dirs)}
-+
-+❌ ERRORS:
-+{chr(10).join(f"  - {e}" for e in self.errors)}
-+
-+✅ CLEANUP COMPLETE!
-+"""
-+        return report
-+
-+
-+def main() -> None:
-+    """Main cleanup script"""
-+    import argparse
-+
-+    parser = argparse.ArgumentParser(description="Repository Cache Cleanup")
-+    parser.add_argument("--dry-run", action="store_true", help="Show what would be removed")
-+    parser.add_argument("--repo", default=".", help="Repository root path")
-+    args = parser.parse_args()
-+
-+    print("🧹 Repository Cache Cleanup Starting...")
-+    print("=" * 50)
-+
-+    cleanup = RepositoryCleanup(args.repo)
-+
-+    # Clean cache artifacts
-+    files, dirs = cleanup.clean_cache_files(dry_run=args.dry_run)
-+
-+    # Clean database artifacts
-+    db_files = cleanup.clean_database_artifacts(dry_run=args.dry_run)
-+
-+    # Generate report
-+    print(cleanup.generate_report())
-+
-+    if args.dry_run:
-+        print("🔍 DRY RUN COMPLETE - No files were actually removed")
-+        print("Run without --dry-run to perform actual cleanup")
-+    else:
-+        print("✅ CLEANUP COMPLETE")
-+
-+
-+if __name__ == "__main__":
-+    main()
-diff --git a/validate_gitignore.py b/validate_gitignore.py
-new file mode 100755
-index 0000000000000000000000000000000000000000..979a2c2a5bac8580e0ef15671184ac964bad39a4
---- /dev/null
-+++ b/validate_gitignore.py
-@@ -0,0 +1,54 @@
-+#!/usr/bin/env python3
-+"""
-+Validate .gitignore patterns are working correctly
-+"""
-+
-+import subprocess
-+import sys
-+from pathlib import Path
-+
-+
-+def test_gitignore_patterns() -> bool:
-+    """Test that gitignore patterns work correctly"""
-+
-+    test_files = [
-+        ".streamlit_cache/test.txt",
-+        "__pycache__/test.pyc",
-+        "logs/test.log",
-+        ".DS_Store",
-+        "temp/test.tmp",
-+    ]
-+
-+    for test_file in test_files:
-+        Path(test_file).parent.mkdir(parents=True, exist_ok=True)
-+        Path(test_file).touch()
-+
-+    result = subprocess.run([
-+        "git",
-+        "status",
-+        "--porcelain",
-+    ], capture_output=True, text=True)
-+
-+    ignored_count = 0
-+    for test_file in test_files:
-+        if test_file not in result.stdout:
-+            ignored_count += 1
-+            print(f"✅ {test_file} - properly ignored")
-+        else:
-+            print(f"❌ {test_file} - NOT ignored")
-+
-+    for test_file in test_files:
-+        p = Path(test_file)
-+        if p.exists():
-+            p.unlink()
-+        parent = p.parent
-+        if parent.exists() and not any(parent.iterdir()):
-+            parent.rmdir()
-+
-+    print(f"\n📊 GITIGNORE VALIDATION: {ignored_count}/{len(test_files)} patterns working")
-+    return ignored_count == len(test_files)
-+
-+
-+if __name__ == "__main__":
-+    success = test_gitignore_patterns()
-+    sys.exit(0 if success else 1)
- 
-EOF
-)
++                    setattr(refactoring, name, value)
++                except Exception:
++                    pass
+@@
+-            print(f"\n🔧 Refactoring Results for {args.file}")
++            print(f"\n🔧 Refactoring Results for {args.file}")
+             print(f"=" * 50)
+             print(f"Type: {result.refactoring_type}")
+             print(f"Success: {result.success}")
+             print(f"Lines affected: {len(result.lines_affected)}")
+@@
+-                for improvement, value in result.improvements.items():
+-                    print(f"  {improvement}: {value:.1f}")
++                for improvement, value in result.improvements.items():
++                    try:
++                        print(f"  {improvement}: {float(value):.1f}")
++                    except Exception:
++                        print(f"  {improvement}: {value}")
+@@
+-            project_root = Path(__file__).resolve().parent.parent.parent
++            project_root = Path(__file__).resolve().parent.parent.parent
+             agent = IntelligentCodeAgent(project_root=project_root, dry_run=True)
+@@
+-                    if result.success:
++                    if result.success:
+                         print(f"   ✅ Applied successfully")
+                     else:
+                         print(f"   ❌ Failed: {result.errors}")

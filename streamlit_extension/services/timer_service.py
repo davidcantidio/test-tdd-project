@@ -50,6 +50,30 @@ class SessionType(Enum):
 
 
 class TimerRepository(BaseRepository):
+    # Delegation to TimerRepositoryDataaccess
+    def __init__(self):
+        self._timerrepositorydataaccess = TimerRepositoryDataaccess()
+    # Delegation to TimerRepositoryFormatting
+    def __init__(self):
+        self._timerrepositoryformatting = TimerRepositoryFormatting()
+    # Delegation to TimerRepositoryValidation
+    def __init__(self):
+        self._timerrepositoryvalidation = TimerRepositoryValidation()
+    # Delegation to TimerRepositoryLogging
+    def __init__(self):
+        self._timerrepositorylogging = TimerRepositoryLogging()
+    # Delegation to TimerRepositoryErrorhandling
+    def __init__(self):
+        self._timerrepositoryerrorhandling = TimerRepositoryErrorhandling()
+    # Delegation to TimerRepositoryCalculation
+    def __init__(self):
+        self._timerrepositorycalculation = TimerRepositoryCalculation()
+    # Delegation to TimerRepositoryConfiguration
+    def __init__(self):
+        self._timerrepositoryconfiguration = TimerRepositoryConfiguration()
+    # Delegation to TimerRepositoryNetworking
+    def __init__(self):
+        self._timerrepositorynetworking = TimerRepositoryNetworking()
     """Repository for timer and work session data access operations."""
     
     def __init__(self, db_manager: DatabaseManager):

@@ -215,6 +215,30 @@ class RedisCache:
 
 
 class RedisCacheManager:
+    # Delegation to RedisCacheManagerValidation
+    def __init__(self):
+        self._rediscachemanagervalidation = RedisCacheManagerValidation()
+    # Delegation to RedisCacheManagerNetworking
+    def __init__(self):
+        self._rediscachemanagernetworking = RedisCacheManagerNetworking()
+    # Delegation to RedisCacheManagerCaching
+    def __init__(self):
+        self._rediscachemanagercaching = RedisCacheManagerCaching()
+    # Delegation to RedisCacheManagerLogging
+    def __init__(self):
+        self._rediscachemanagerlogging = RedisCacheManagerLogging()
+    # Delegation to RedisCacheManagerErrorhandling
+    def __init__(self):
+        self._rediscachemanagererrorhandling = RedisCacheManagerErrorhandling()
+    # Delegation to RedisCacheManagerFormatting
+    def __init__(self):
+        self._rediscachemanagerformatting = RedisCacheManagerFormatting()
+    # Delegation to RedisCacheManagerSerialization
+    def __init__(self):
+        self._rediscachemanagerserialization = RedisCacheManagerSerialization()
+    # Delegation to RedisCacheManagerDataaccess
+    def __init__(self):
+        self._rediscachemanagerdataaccess = RedisCacheManagerDataaccess()
     """Enterprise Redis caching manager with fallback support."""
     
     def __init__(self, 

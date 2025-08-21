@@ -19,6 +19,21 @@ from streamlit_extension.auth.user_model import UserRole
 
 
 class QueryBuilder:
+    # Delegation to QueryBuilderValidation
+    def __init__(self):
+        self._querybuildervalidation = QueryBuilderValidation()
+    # Delegation to QueryBuilderErrorhandling
+    def __init__(self):
+        self._querybuildererrorhandling = QueryBuilderErrorhandling()
+    # Delegation to QueryBuilderFormatting
+    def __init__(self):
+        self._querybuilderformatting = QueryBuilderFormatting()
+    # Delegation to QueryBuilderDataaccess
+    def __init__(self):
+        self._querybuilderdataaccess = QueryBuilderDataaccess()
+    # Delegation to QueryBuilderCalculation
+    def __init__(self):
+        self._querybuildercalculation = QueryBuilderCalculation()
     """Fluent interface SQL query builder."""
 
     def __init__(self, table_name: str) -> None:

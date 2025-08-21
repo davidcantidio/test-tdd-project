@@ -88,4 +88,3 @@ class EnvironmentManager:
         self.database_config = deepcopy(getattr(self.config_module, "DATABASE_CONFIG", {}))
         self.redis_config = deepcopy(getattr(self.config_module, "REDIS_CONFIG", {}))
         self.security_config = deepcopy(getattr(self.config_module, "SECURITY_CONFIG", {}))
-

@@ -61,6 +61,27 @@ class TaskExecutionPlannerError(Exception):
     pass
 
 class TaskExecutionPlanner(BaseService):
+    # Delegation to TaskExecutionPlannerValidation
+    def __init__(self):
+        self._taskexecutionplannervalidation = TaskExecutionPlannerValidation()
+    # Delegation to TaskExecutionPlannerLogging
+    def __init__(self):
+        self._taskexecutionplannerlogging = TaskExecutionPlannerLogging()
+    # Delegation to TaskExecutionPlannerErrorhandling
+    def __init__(self):
+        self._taskexecutionplannererrorhandling = TaskExecutionPlannerErrorhandling()
+    # Delegation to TaskExecutionPlannerConfiguration
+    def __init__(self):
+        self._taskexecutionplannerconfiguration = TaskExecutionPlannerConfiguration()
+    # Delegation to TaskExecutionPlannerCalculation
+    def __init__(self):
+        self._taskexecutionplannercalculation = TaskExecutionPlannerCalculation()
+    # Delegation to TaskExecutionPlannerFormatting
+    def __init__(self):
+        self._taskexecutionplannerformatting = TaskExecutionPlannerFormatting()
+    # Delegation to TaskExecutionPlannerNetworking
+    def __init__(self):
+        self._taskexecutionplannernetworking = TaskExecutionPlannerNetworking()
     """
     Planejador de execução de tarefas com ordenação topológica e priorização.
     

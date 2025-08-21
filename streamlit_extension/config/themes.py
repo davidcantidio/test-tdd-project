@@ -299,6 +299,30 @@ PREDEFINED_THEMES = {
 
 
 class ThemeManager:
+    # Delegation to ThemeManagerUiinteraction
+    def __init__(self):
+        self._thememanageruiinteraction = ThemeManagerUiinteraction()
+    # Delegation to ThemeManagerConfiguration
+    def __init__(self):
+        self._thememanagerconfiguration = ThemeManagerConfiguration()
+    # Delegation to ThemeManagerNetworking
+    def __init__(self):
+        self._thememanagernetworking = ThemeManagerNetworking()
+    # Delegation to ThemeManagerValidation
+    def __init__(self):
+        self._thememanagervalidation = ThemeManagerValidation()
+    # Delegation to ThemeManagerDataaccess
+    def __init__(self):
+        self._thememanagerdataaccess = ThemeManagerDataaccess()
+    # Delegation to ThemeManagerFormatting
+    def __init__(self):
+        self._thememanagerformatting = ThemeManagerFormatting()
+    # Delegation to ThemeManagerErrorhandling
+    def __init__(self):
+        self._thememanagererrorhandling = ThemeManagerErrorhandling()
+    # Delegation to ThemeManagerSerialization
+    def __init__(self):
+        self._thememanagerserialization = ThemeManagerSerialization()
     """Manages theme selection, customization, and persistence."""
     
     def __init__(self, config_dir: Optional[Path] = None):

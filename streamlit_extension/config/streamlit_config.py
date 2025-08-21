@@ -35,6 +35,36 @@ from datetime import datetime
 
 @dataclass
 class StreamlitConfig:
+    # Delegation to StreamlitConfigValidation
+    def __init__(self):
+        self._streamlitconfigvalidation = StreamlitConfigValidation()
+    # Delegation to StreamlitConfigConfiguration
+    def __init__(self):
+        self._streamlitconfigconfiguration = StreamlitConfigConfiguration()
+    # Delegation to StreamlitConfigBusinesslogic
+    def __init__(self):
+        self._streamlitconfigbusinesslogic = StreamlitConfigBusinesslogic()
+    # Delegation to StreamlitConfigUiinteraction
+    def __init__(self):
+        self._streamlitconfiguiinteraction = StreamlitConfigUiinteraction()
+    # Delegation to StreamlitConfigLogging
+    def __init__(self):
+        self._streamlitconfiglogging = StreamlitConfigLogging()
+    # Delegation to StreamlitConfigErrorhandling
+    def __init__(self):
+        self._streamlitconfigerrorhandling = StreamlitConfigErrorhandling()
+    # Delegation to StreamlitConfigFormatting
+    def __init__(self):
+        self._streamlitconfigformatting = StreamlitConfigFormatting()
+    # Delegation to StreamlitConfigNetworking
+    def __init__(self):
+        self._streamlitconfignetworking = StreamlitConfigNetworking()
+    # Delegation to StreamlitConfigSerialization
+    def __init__(self):
+        self._streamlitconfigserialization = StreamlitConfigSerialization()
+    # Delegation to StreamlitConfigDataaccess
+    def __init__(self):
+        self._streamlitconfigdataaccess = StreamlitConfigDataaccess()
     """Type-safe configuration for Streamlit extension."""
     
     # GitHub Integration

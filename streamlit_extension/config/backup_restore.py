@@ -113,6 +113,36 @@ class BackupInfo:
 
 
 class ConfigurationBackupManager:
+    # Delegation to ConfigurationBackupManagerConfiguration
+    def __init__(self):
+        self._configurationbackupmanagerconfiguration = ConfigurationBackupManagerConfiguration()
+    # Delegation to ConfigurationBackupManagerFormatting
+    def __init__(self):
+        self._configurationbackupmanagerformatting = ConfigurationBackupManagerFormatting()
+    # Delegation to ConfigurationBackupManagerValidation
+    def __init__(self):
+        self._configurationbackupmanagervalidation = ConfigurationBackupManagerValidation()
+    # Delegation to ConfigurationBackupManagerDataaccess
+    def __init__(self):
+        self._configurationbackupmanagerdataaccess = ConfigurationBackupManagerDataaccess()
+    # Delegation to ConfigurationBackupManagerUiinteraction
+    def __init__(self):
+        self._configurationbackupmanageruiinteraction = ConfigurationBackupManagerUiinteraction()
+    # Delegation to ConfigurationBackupManagerLogging
+    def __init__(self):
+        self._configurationbackupmanagerlogging = ConfigurationBackupManagerLogging()
+    # Delegation to ConfigurationBackupManagerErrorhandling
+    def __init__(self):
+        self._configurationbackupmanagererrorhandling = ConfigurationBackupManagerErrorhandling()
+    # Delegation to ConfigurationBackupManagerSerialization
+    def __init__(self):
+        self._configurationbackupmanagerserialization = ConfigurationBackupManagerSerialization()
+    # Delegation to ConfigurationBackupManagerCaching
+    def __init__(self):
+        self._configurationbackupmanagercaching = ConfigurationBackupManagerCaching()
+    # Delegation to ConfigurationBackupManagerNetworking
+    def __init__(self):
+        self._configurationbackupmanagernetworking = ConfigurationBackupManagerNetworking()
     """Manages configuration backups, restore, and migrations."""
     
     def __init__(self, backup_dir: Optional[Path] = None):

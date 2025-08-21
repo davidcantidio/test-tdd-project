@@ -1,708 +1,122 @@
- (cd "$(git rev-parse --show-toplevel)" && git apply --3way <<'EOF' 
-diff --git a/report.md b/report.md
-index 903403bdf541a03c89efcaab6f5eddeede3cbdfc..eeeb476b844f571d3b2531b3322ebd26b43dc689 100644
---- a/report.md
-+++ b/report.md
-@@ -1,32 +1,30 @@
- Summary
--Removed the unconditional “or True” execution guard so that client and project pages only run when invoked as a script, preventing unwanted side effects during imports
--
--Confirmed database-level cascading deletes from clients to projects to epics, ensuring hierarchical cleanup via foreign-key constraints
-+Implemented correlation ID-based structured logging and integrated it into client and project pages for multi-user operation tracing.
+--- a/audit_intelligent.sh
++++ b/audit_intelligent.sh
+@@ -1,10 +1,67 @@
+ #!/bin/bash
+ # 🧠 AUDIT SCRIPT INTELIGENTE - Auditoria Extensiva com Real LLM Analysis
+ # 
+ # Baseado na infraestrutura de agentes inteligentes testada e validada
+ # Realiza auditoria semântica profunda de todo o projeto
  
- Testing
--⚠️ pytest *(hung during test_connection_pool_limit, interrupted)*
-+⚠️ pytest *(17 errors during collection)*
+-set -euo pipefail
++set -euo pipefail
++shopt -s lastpipe
++export LC_ALL=C.UTF-8
++umask 077
++
++## -------------------------
++## Flags & helpers
++## -------------------------
++VERBOSE=0
++KEEP=0
++LIMIT=""
++
++usage() {
++  cat <<'USAGE'
++Uso: ./audit_intelligent.sh [opções]
++  --verbose          Liga modo verboso (set -x)
++  --keep             Não apaga .audit_intelligent antes de rodar
++  --limit N          Limita a análise a N arquivos prioritários (propagado aos blocos python)
++  -h|--help          Mostra esta ajuda
++USAGE
++}
++
++die() { echo "❌ ERRO: $*" >&2; exit 1; }
++info(){ printf '%s\n' "$*"; }
++
++on_err() {
++  local lineno=$1
++  echo "💥 Falha na linha ${lineno}. Consulte os artefatos em ${AUDIT_DIR}/ (se já criados)." >&2
++}
++trap 'on_err $LINENO' ERR
++set -o errtrace
++
++while [[ $# -gt 0 ]]; do
++  case "$1" in
++    --verbose) VERBOSE=1; shift ;;
++    --keep)    KEEP=1;    shift ;;
++    --limit)   LIMIT="${2:-}"; [[ -n "${LIMIT}" ]] || die "--limit requer um valor"; shift 2 ;;
++    -h|--help) usage; exit 0 ;;
++    *) die "Opção inválida: $1";;
++  esac
++done
++
++if [[ ${VERBOSE} -eq 1 ]]; then
++  set -x
++fi
++
++command -v python3 >/dev/null 2>&1 || die "python3 não encontrado no PATH"
  
- Critical Issues List
- Item	Severity	Confidence	Effort	Risk	Priority
- Missing authentication/authorization across Streamlit pages	CRITICAL	CERTAIN	LARGE	10	P0
- No CSRF protection in forms; Streamlit lacks built-in safeguards	CRITICAL	PROBABLE	LARGE	9	P0
- Client and project forms allow rich text without output encoding, exposing XSS vectors	HIGH	PROBABLE	MEDIUM	8	P0
- Hanging test_connection_pool_limit suggests connection pooling or deadlock issues	HIGH	PROBABLE	MEDIUM	7	P1
- Untracked cache artifacts indicate inadequate .gitignore and potential repository bloat	MEDIUM	CERTAIN	SMALL	5	P1
- Security Vulnerability Report
- Vector	Severity	CVSS (est.)	Notes	Remediation
- XSS via unsanitized form inputs	HIGH	7.5	No output encoding for client/project description fields	Encode/escape output; sanitize inputs server-side
- CSRF (no tokens)	CRITICAL	8.8	All forms vulnerable to cross-site requests	Implement CSRF tokens or server-side validation of origin
- Sensitive data exposure in logs	MEDIUM	5.0	Error logs may reveal DB paths and details	Redact sensitive info; centralize logging
- Denial of Service through uncontrolled connection pool growth	HIGH	7.0	Hanging tests suggest pooled connections aren’t released	Add timeouts, enforce pool limits, monitor usage
- Lack of rate limiting	MEDIUM	5.5	Streamlit endpoints unprotected from brute-force	Implement reverse proxy or app-level rate limiting
- Performance Bottleneck Analysis
- Heavy SQL queries lack pagination; add LIMIT/OFFSET for large datasets.
+ # Configuração
+ AUDIT_DIR=".audit_intelligent"
+ PROJECT_ROOT="."
+ TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
+ REPORT_FILE="${AUDIT_DIR}/intelligent_audit_report_${TIMESTAMP}.md"
  
- No caching layer around expensive joins beyond per-function decorator; consider Redis or similar.
+-echo "🧠 Iniciando AUDITORIA INTELIGENTE EXTENSIVA..."
+-echo "📅 Timestamp: ${TIMESTAMP}"
++run_step() {
++  # Uso: run_step "Descrição" comando...
++  local desc="$1"; shift
++  info "▶️  ${desc}"
++  "$@"
++  local rc=$?
++  info "✅ ${desc} (rc=${rc})"
++}
++
++echo "🧠 Iniciando AUDITORIA INTELIGENTE EXTENSIVA…"
++echo "📅 Timestamp: ${TIMESTAMP}"
+@@ -16,9 +73,20 @@
  
- Connection pool test hang indicates potential deadlock or unreleased connections.
+ # Limpar e criar diretório de auditoria
+-rm -rf "${AUDIT_DIR}"
+-mkdir -p "${AUDIT_DIR}"/{reports,analysis,recommendations,performance}
++if [[ ${KEEP} -eq 0 ]]; then
++  # Defesa adicional: garanta que a var não está vazia
++  [[ -n "${AUDIT_DIR}" && "${AUDIT_DIR}" != "/" ]] || die "AUDIT_DIR inválido"
++  rm -rf -- "${AUDIT_DIR}"
++fi
++mkdir -p -- "${AUDIT_DIR}"/{reports,analysis,recommendations,performance}
++
++# Registrar meta-informações da execução
++{
++  echo "timestamp=${TIMESTAMP}"
++  echo "project_root=${PROJECT_ROOT}"
++  echo "keep=${KEEP}"
++  echo "limit=${LIMIT}"
++  python3 --version 2>&1 | sed 's/^/python_version=/'
++} > "${AUDIT_DIR}/run.meta"
  
- Streamlit reruns on every interaction; memoize heavy calculations to cut rerender time.
+ # Banner de início
+ cat > "${REPORT_FILE}" << 'EOF'
+@@ -34,6 +102,20 @@
+ **Agentes:** 5 agentes inteligentes + context integration  
  
- Large numbers of cascade deletes may lock tables; wrap in transactions with proper isolation.
-@@ -74,58 +72,65 @@ Production Deployment Checklist
- Separate environment configs for dev/staging/prod.
+ EOF
++
++# Helper para injetar LIMIT para os blocos Python (via variável de ambiente)
++export AI_AUDIT_LIMIT="${LIMIT}"
++
++# Pequeno wrapper para rodar blocos Python com padronização de log
++pyblock() { python3 - "$@"; }
++
++## Exemplo de uso uniformizado
++## run_step "Fase 1: Inventário Completo do Sistema" \
++##   pyblock <<'EOF'
++##   # código python…
++## EOF
++
++echo "📊 Executando análise de inventário completo..."
  
- Store secrets in vault or environment variables (no hard-coded paths).
- 
- Set up structured logging and monitoring (e.g., Prometheus/Grafana).
- 
- Implement health-check endpoint for orchestration tools.
- 
- Ensure graceful shutdown handling for open connections.
- 
- Configure resource limits and auto-scaling thresholds.
- 
- Add connection retry logic and circuit breakers for DB.
- 
- Use feature flags for incomplete or experimental features.
- 
- Technical Debt Registry
- Replace ad-hoc SQL strings with query builders or ORM models.
- 
- Create migration scripts for missing columns (points_value, due_date, icon).
- 
- Remove .streamlit_cache from repository and enforce gitignore.
- 
- Resolve hanging connection pool test to avoid future deadlocks.
- 
--Introduce comprehensive logging with correlation IDs for multi-user tracing.
- 
- Best Practices Violations
- Streamlit pages previously executed on import (fixed), indicating past side-effect risk.
- 
- No global exception handler; errors bubble to UI with raw messages.
- 
- Business logic intertwined with presentation in Streamlit pages.
- 
- Lack of docstrings/comments in DatabaseManager methods hampers onboarding.
- 
- Missing pagination and limit checks in list endpoints.
- 
- Risk Assessment Matrix
- Risk	Probability	Impact	Score	Mitigation
- Unauthorized data modification (no auth/CSRF)	High	High	9	Implement auth & CSRF tokens
- Connection pool deadlock	Medium	High	7	Add timeouts, better pooling strategy
- XSS in rich text fields	Medium	High	7	Sanitize/encode outputs
- Data loss on cascaded delete	Low	High	6	Require soft delete + audit trail
- Repository bloat from cache files	Medium	Medium	5	Update .gitignore, clean caches
- Notes
- Full test suite execution was interrupted due to hanging test_connection_pool_limit; the issue should be investigated before production deployment.
- 
- 
--Arquivos (2)
-+Arquivos (4)
-+
-+streamlit_extension/utils/correlation_logging.py
-++205
-+-0
-+
-+streamlit_extension/utils/log_formatter.py
-++75
-+-0
- 
- streamlit_extension/pages/clients.py
--+3
---2
-++15
-+-12
- 
- streamlit_extension/pages/projects.py
--+3
---2
-\ No newline at end of file
-++17
-+-2
-diff --git a/streamlit_extension/pages/clients.py b/streamlit_extension/pages/clients.py
-index 5c5f019d33cf6b5cbf2596afac5d7bb8d16ce4db..2e7bd29a8ff75ac8167c884594e4cc794b838e83 100644
---- a/streamlit_extension/pages/clients.py
-+++ b/streamlit_extension/pages/clients.py
-@@ -32,50 +32,63 @@ try:
-     from streamlit_extension.utils.security import (
-         create_safe_client, sanitize_display, validate_form, check_rate_limit,
-         security_manager
-     )
-     from streamlit_extension.config import load_config
-     from streamlit_extension.config.constants import (
-         GeneralStatus, ClientTier, CompanySize, UIConstants, FormFields
-     )
-     # Import authentication middleware
-     from streamlit_extension.auth.middleware import init_protected_page
-     DATABASE_UTILS_AVAILABLE = True
- except ImportError:
-     DATABASE_UTILS_AVAILABLE = False
-     DatabaseManager = validate_client_data = load_config = None
-     create_safe_client = sanitize_display = validate_form = None
-     GeneralStatus = ClientTier = CompanySize = UIConstants = FormFields = None
-     init_protected_page = None
- 
- from streamlit_extension.utils.exception_handler import (
-     handle_streamlit_exceptions,
-     streamlit_error_boundary,
-     safe_streamlit_operation,
-     get_error_statistics,
- )
- 
-+from streamlit_extension.utils.correlation_logging import with_correlation_logging
-+
-+
-+@with_correlation_logging(
-+    "create_client",
-+    lambda client_data, db_manager: {"client_key": client_data.get("client_key")},
-+)
-+def create_client_with_logging(
-+    client_data: Dict[str, Any], db_manager: DatabaseManager
-+) -> Optional[int]:
-+    """Create client with correlation logging."""
-+    return db_manager.create_client(**client_data)
-+
- 
- def render_client_card(client: Dict[str, Any], db_manager: DatabaseManager):
-     """Render an individual client card."""
-     if not STREAMLIT_AVAILABLE:
-         return
-     
-     with st.container():
-         # Card header with status indicator
-         status_colors = {
-             GeneralStatus.ACTIVE.value if GeneralStatus else "active": "🟢",
-             GeneralStatus.INACTIVE.value if GeneralStatus else "inactive": "🟡", 
-             GeneralStatus.SUSPENDED.value if GeneralStatus else "suspended": "🔴",
-             GeneralStatus.ARCHIVED.value if GeneralStatus else "archived": "⚫"
-         }
-         status_emoji = status_colors.get(client.get("status", "active"), "⚪")
-         
-         col1, col2, col3 = st.columns([3, 1, 1])
-         
-         with col1:
-             st.markdown(f"### {status_emoji} {client['name']}")
-             st.caption(f"**Key:** {client.get('client_key', 'N/A')} | **Tier:** {client.get('client_tier', 'standard').title()}")
-         
-         with col2:
-             if st.button("✏️ Edit", key=f"edit_client_{client['id']}", use_container_width=True):
-                 st.session_state[f"edit_client_{client['id']}"] = True
-@@ -390,74 +403,64 @@ def render_create_client_form(db_manager: DatabaseManager):
-                             st.error(f"🔒 Security: {error}")
-                         return
-                 
-                 # Sanitize data for security
-                 client_data = create_safe_client(raw_data) if create_safe_client else raw_data
-                 
-                 is_valid, errors = validate_client_data(client_data)
-                 
-                 if is_valid:
-                     # Check uniqueness
-                     existing_clients_result = db_manager.get_clients(include_inactive=True)
-                     existing_clients = existing_clients_result.get("data", []) if isinstance(existing_clients_result, dict) else []
-                     
-                     if not validate_email_uniqueness(primary_contact_email, existing_clients):
-                         st.error("❌ Email already exists for another client")
-                     elif not validate_client_key_uniqueness(client_key, existing_clients):
-                         st.error("❌ Client key already exists")
-                     else:
-                         # Check rate limit for database write
-                         db_rate_allowed, db_rate_error = check_rate_limit("db_write") if check_rate_limit else (True, None)
-                         if not db_rate_allowed:
-                             st.error(f"🚦 Database {db_rate_error}")
-                             return
-                         
-                         # Create client
--                        client_id = db_manager.create_client(
--                            client_key=client_key,
--                            name=name,
--                            description=description,
--                            industry=industry,
--                            company_size=company_size,
--                            primary_contact_name=primary_contact_name,
--                            primary_contact_email=primary_contact_email,
--                            status=status,
--                            client_tier=client_tier,
--                            hourly_rate=hourly_rate
--                        )
-+                        client_id = create_client_with_logging(client_data, db_manager)
-                         
-                         if client_id:
-                             st.success("✅ Client created successfully!")
-                             st.rerun()
-                         else:
-                             st.error("❌ Failed to create client")
-                 else:
-                     for error in errors:
-                         st.error(f"❌ {error}")
- 
- 
- @handle_streamlit_exceptions(show_error=True, attempt_recovery=True)
-+@with_correlation_logging("render_clients_page")
- def render_clients_page():
-     """Render the main clients management page."""
-     if not STREAMLIT_AVAILABLE:
-         return {"error": "Streamlit not available"}
-     
-     if not DATABASE_UTILS_AVAILABLE:
-         st.error("❌ Database utilities not available")
-         return {"error": "Database utilities not available"}
-     
-     # Initialize protected page with authentication
-     current_user = init_protected_page("👥 Client Management")
-     if not current_user:
-         return {"error": "Authentication required"}
-     
-     # Check rate limit for page load
-     page_rate_allowed, page_rate_error = check_rate_limit("page_load") if check_rate_limit else (True, None)
-     if not page_rate_allowed:
-         st.error(f"🚦 {page_rate_error}")
-         st.info("Please wait before reloading the page.")
-         return {"error": "Rate limited"}
-     
-     st.markdown("Manage your clients, contacts, and business relationships")
-     st.markdown("---")
-     
-     # Initialize database manager
-diff --git a/streamlit_extension/pages/projects.py b/streamlit_extension/pages/projects.py
-index b66b1445ac231dc846284a86cd58a896f72b8bc8..817e9c1f6947d839e67b04f5806c7fcbc4ee4e8e 100644
---- a/streamlit_extension/pages/projects.py
-+++ b/streamlit_extension/pages/projects.py
-@@ -26,50 +26,63 @@ except ImportError:
-     st = None
- 
- # Local imports
- try:
-     from streamlit_extension.utils.database import DatabaseManager
-     from streamlit_extension.utils.validators import validate_project_data, validate_project_key_uniqueness
-     from streamlit_extension.utils.security import (
-         create_safe_project, sanitize_display, validate_form, check_rate_limit,
-         security_manager
-     )
-     from streamlit_extension.utils.exception_handler import (
-         handle_streamlit_exceptions, streamlit_error_boundary, safe_streamlit_operation
-     )
-     from streamlit_extension.config import load_config
-     # Import authentication middleware
-     from streamlit_extension.auth.middleware import init_protected_page
-     DATABASE_UTILS_AVAILABLE = True
- except ImportError:
-     DATABASE_UTILS_AVAILABLE = False
-     DatabaseManager = validate_project_data = load_config = None
-     create_safe_project = sanitize_display = validate_form = None
-     handle_streamlit_exceptions = streamlit_error_boundary = safe_streamlit_operation = None
-     init_protected_page = None
- 
- 
-+from streamlit_extension.utils.correlation_logging import with_correlation_logging
-+
-+
-+@with_correlation_logging(
-+    "create_project",
-+    lambda db_manager, **kwargs: {"project_key": kwargs.get("project_key")},
-+)
-+def create_project_with_logging(
-+    db_manager: DatabaseManager, **project_data: Any
-+) -> Optional[int]:
-+    """Create project with correlation logging."""
-+    return db_manager.create_project(**project_data)
-+
- 
- def render_project_card(project: Dict[str, Any], db_manager: DatabaseManager, clients_map: Dict[int, str]):
-     """Render an individual project card."""
-     if not STREAMLIT_AVAILABLE:
-         return
-     
-     with st.container():
-         # Card header with status indicator
-         status_colors = {
-             "planning": "🟡",
-             "in_progress": "🟢", 
-             "completed": "✅",
-             "on_hold": "⏸️",
-             "cancelled": "🔴"
-         }
-         status_emoji = status_colors.get(project.get("status", "planning"), "⚪")
-         
-         col1, col2, col3 = st.columns([3, 1, 1])
-         
-         with col1:
-             client_name = clients_map.get(project.get('client_id'), 'Unknown Client')
-             st.markdown(f"### {status_emoji} {project['name']}")
-             st.caption(f"**Client:** {client_name} | **Key:** {project.get('project_key', 'N/A')}")
-         
-         with col2:
-@@ -440,82 +453,84 @@ def render_create_project_form(db_manager: DatabaseManager, clients_map: Dict[in
-                     security_valid, security_errors = validate_form(raw_data)
-                     if not security_valid:
-                         for error in security_errors:
-                             st.error(f"🔒 Security: {error}")
-                         return
-                 
-                 # Sanitize data for security
-                 project_data = create_safe_project(raw_data) if create_safe_project else raw_data
-                 
-                 is_valid, errors = validate_project_data(project_data)
-                 
-                 if is_valid:
-                     # Check uniqueness
-                     existing_projects = db_manager.get_projects(include_inactive=True)
-                     
-                     if not validate_project_key_uniqueness(project_key, selected_client_id, existing_projects):
-                         st.error("❌ Project key already exists for this client")
-                     else:
-                         # Check rate limit for database write
-                         db_rate_allowed, db_rate_error = check_rate_limit("db_write") if check_rate_limit else (True, None)
-                         if not db_rate_allowed:
-                             st.error(f"🚦 Database {db_rate_error}")
-                             return
-                         
-                         # Create project
--                        project_id = db_manager.create_project(
-+                        project_id = create_project_with_logging(
-+                            db_manager,
-                             client_id=selected_client_id,
-                             project_key=project_key,
-                             name=name,
-                             description=description,
-                             project_type=project_type,
--                            methodology=methodology
-+                            methodology=methodology,
-                         )
-                         
-                         if project_id:
-                             # Update additional fields
-                             additional_fields = {
-                                 'planned_start_date': planned_start_date.isoformat(),
-                                 'planned_end_date': planned_end_date.isoformat(),
-                                 'budget_amount': budget_amount,
-                                 'budget_currency': budget_currency,
-                                 'estimated_hours': estimated_hours,
-                                 'status': status,
-                                 'health_status': health_status
-                             }
-                             db_manager.update_project(project_id, **additional_fields)
-                             
-                             st.success("✅ Project created successfully!")
-                             st.rerun()
-                         else:
-                             st.error("❌ Failed to create project")
-                 else:
-                     for error in errors:
-                         st.error(f"❌ {error}")
- 
- 
- @handle_streamlit_exceptions(show_error=True, attempt_recovery=True)
-+@with_correlation_logging("render_projects_page")
- def render_projects_page():
-     """Render the main projects management page."""
-     if not STREAMLIT_AVAILABLE:
-         return {"error": "Streamlit not available"}
-     
-     if not DATABASE_UTILS_AVAILABLE:
-         st.error("❌ Database utilities not available")
-         return {"error": "Database utilities not available"}
-     
-     # Initialize protected page with authentication
-     current_user = init_protected_page("📁 Project Management")
-     if not current_user:
-         return {"error": "Authentication required"}
-     
-     # Check rate limit for page load
-     page_rate_allowed, page_rate_error = check_rate_limit("page_load") if check_rate_limit else (True, None)
-     if not page_rate_allowed:
-         st.error(f"🚦 {page_rate_error}")
-         st.info("Please wait before reloading the page.")
-         return {"error": "Rate limited"}
-     
-     st.markdown("Manage your projects, timelines, and deliverables")
-     st.markdown("---")
-     
-     # Initialize database manager
-diff --git a/streamlit_extension/utils/correlation_logging.py b/streamlit_extension/utils/correlation_logging.py
-new file mode 100644
-index 0000000000000000000000000000000000000000..43ad639c073d2ab0150d73599d20e2aabd7b6684
---- /dev/null
-+++ b/streamlit_extension/utils/correlation_logging.py
-@@ -0,0 +1,205 @@
-+"""
-+Correlation ID Logging System
-+Provides request tracking and structured logging for multi-user environments
-+"""
-+
-+import uuid
-+import time
-+import logging
-+import json
-+from datetime import datetime
-+from typing import Any, Dict, Optional, Union
-+from contextlib import contextmanager
-+from functools import wraps
-+
-+# Safe imports
-+try:
-+    import streamlit as st
-+    STREAMLIT_AVAILABLE = True
-+except ImportError:
-+    STREAMLIT_AVAILABLE = False
-+    st = None
-+
-+
-+class CorrelationIDManager:
-+    """Manages correlation IDs for request tracking"""
-+
-+    def __init__(self) -> None:
-+        self._correlation_storage = {}
-+
-+    def generate_correlation_id(self, prefix: str = "req") -> str:
-+        """Generate a new correlation ID"""
-+        return f"{prefix}_{uuid.uuid4().hex[:12]}"
-+
-+    def get_current_correlation_id(self) -> Optional[str]:
-+        """Get current correlation ID from context"""
-+        if STREAMLIT_AVAILABLE and st and hasattr(st, "session_state"):
-+            return st.session_state.get("correlation_id")
-+        return None
-+
-+    def set_correlation_id(self, correlation_id: str) -> None:
-+        """Set correlation ID in current context"""
-+        if STREAMLIT_AVAILABLE and st and hasattr(st, "session_state"):
-+            st.session_state["correlation_id"] = correlation_id
-+
-+    def ensure_correlation_id(self) -> str:
-+        """Ensure correlation ID exists, create if needed"""
-+        correlation_id = self.get_current_correlation_id()
-+        if not correlation_id:
-+            correlation_id = self.generate_correlation_id()
-+            self.set_correlation_id(correlation_id)
-+        return correlation_id
-+
-+
-+class StructuredLogger:
-+    """Structured logging with correlation ID support"""
-+
-+    def __init__(self, name: str) -> None:
-+        self.logger = logging.getLogger(name)
-+        self.correlation_manager = CorrelationIDManager()
-+
-+        # Configure JSON formatter if not already configured
-+        if not self.logger.handlers:
-+            self._setup_json_logging()
-+
-+    def _setup_json_logging(self) -> None:
-+        """Setup JSON-based logging format"""
-+        from .log_formatter import JSONFormatter
-+
-+        handler = logging.StreamHandler()
-+        handler.setFormatter(JSONFormatter())
-+        self.logger.addHandler(handler)
-+        self.logger.setLevel(logging.INFO)
-+
-+    def _get_session_info(self) -> Dict[str, Any]:
-+        """Extract session information"""
-+        session_info: Dict[str, Any] = {}
-+
-+        if STREAMLIT_AVAILABLE and st and hasattr(st, "session_state"):
-+            session_info["session_id"] = st.session_state.get("session_id", "unknown")
-+            session_info["user_id"] = st.session_state.get("user_id", "anonymous")
-+
-+            # Extract IP if available
-+            try:
-+                if hasattr(st, "experimental_get_query_params"):
-+                    session_info["query_params"] = st.experimental_get_query_params()
-+            except Exception:
-+                pass
-+
-+        return session_info
-+
-+    def log_operation(
-+        self,
-+        operation: str,
-+        level: str = "INFO",
-+        message: str = "",
-+        duration_ms: Optional[float] = None,
-+        success: bool = True,
-+        error: Optional[Exception] = None,
-+        metadata: Optional[Dict[str, Any]] = None,
-+    ) -> None:
-+        """Log an operation with correlation context"""
-+
-+        correlation_id = self.correlation_manager.ensure_correlation_id()
-+        session_info = self._get_session_info()
-+
-+        log_entry: Dict[str, Any] = {
-+            "timestamp": datetime.utcnow().isoformat() + "Z",
-+            "correlation_id": correlation_id,
-+            "operation": operation,
-+            "level": level,
-+            "message": message,
-+            "success": success,
-+            **session_info,
-+        }
-+
-+        if duration_ms is not None:
-+            log_entry["duration_ms"] = round(duration_ms, 2)
-+
-+        if error:
-+            log_entry["error"] = {
-+                "type": type(error).__name__,
-+                "message": str(error),
-+                "traceback": str(error) if hasattr(error, "__traceback__") else None,
-+            }
-+
-+        if metadata:
-+            log_entry["metadata"] = metadata
-+
-+        log_level = getattr(logging, level.upper(), logging.INFO)
-+        self.logger.log(log_level, json.dumps(log_entry))
-+
-+    def info(self, operation: str, message: str, **kwargs: Any) -> None:
-+        """Log info level operation"""
-+        self.log_operation(operation, "INFO", message, **kwargs)
-+
-+    def error(
-+        self, operation: str, message: str, error: Exception | None = None, **kwargs: Any
-+    ) -> None:
-+        """Log error level operation"""
-+        self.log_operation(operation, "ERROR", message, error=error, success=False, **kwargs)
-+
-+    def warning(self, operation: str, message: str, **kwargs: Any) -> None:
-+        """Log warning level operation"""
-+        self.log_operation(operation, "WARNING", message, **kwargs)
-+
-+    @contextmanager
-+    def track_operation(
-+        self, operation: str, metadata: Optional[Dict[str, Any]] = None
-+    ):
-+        """Context manager to track operation duration and success"""
-+        start_time = time.time()
-+        correlation_id = self.correlation_manager.ensure_correlation_id()
-+
-+        self.info(
-+            f"{operation}_start",
-+            f"Starting operation: {operation}",
-+            metadata={"correlation_id": correlation_id, **(metadata or {})},
-+        )
-+
-+        try:
-+            yield correlation_id
-+            duration_ms = (time.time() - start_time) * 1000
-+            self.info(
-+                f"{operation}_complete",
-+                f"Operation completed successfully: {operation}",
-+                duration_ms=duration_ms,
-+                metadata=metadata,
-+            )
-+        except Exception as e:
-+            duration_ms = (time.time() - start_time) * 1000
-+            self.error(
-+                f"{operation}_failed",
-+                f"Operation failed: {operation}",
-+                error=e,
-+                duration_ms=duration_ms,
-+                metadata=metadata,
-+            )
-+            raise
-+
-+
-+def with_correlation_logging(operation: str, metadata_func=None):
-+    """Decorator to add correlation logging to functions"""
-+
-+    def decorator(func):
-+        @wraps(func)
-+        def wrapper(*args, **kwargs):
-+            logger = StructuredLogger(func.__module__)
-+
-+            metadata: Dict[str, Any] = {}
-+            if metadata_func:
-+                try:
-+                    metadata = metadata_func(*args, **kwargs)
-+                except Exception:
-+                    pass
-+
-+            with logger.track_operation(operation, metadata):
-+                return func(*args, **kwargs)
-+
-+        return wrapper
-+
-+    return decorator
-+
-+
-+# Global logger instance
-+correlation_logger = StructuredLogger(__name__)
-diff --git a/streamlit_extension/utils/log_formatter.py b/streamlit_extension/utils/log_formatter.py
-new file mode 100644
-index 0000000000000000000000000000000000000000..e6771476c7a77de41f2d782bf3f1a1390eb94cc1
---- /dev/null
-+++ b/streamlit_extension/utils/log_formatter.py
-@@ -0,0 +1,75 @@
-+"""
-+JSON Log Formatter for structured logging
-+"""
-+
-+import json
-+import logging
-+from datetime import datetime
-+from typing import Any, Dict
-+
-+
-+class JSONFormatter(logging.Formatter):
-+    """JSON formatter for structured logging"""
-+
-+    def format(self, record: logging.LogRecord) -> str:
-+        """Format log record as JSON"""
-+
-+        # Start with basic log record
-+        log_entry = {
-+            "timestamp": datetime.fromtimestamp(record.created).isoformat() + "Z",
-+            "level": record.levelname,
-+            "logger": record.name,
-+            "module": record.module,
-+            "function": record.funcName,
-+            "line": record.lineno,
-+            "message": record.getMessage(),
-+        }
-+
-+        # Add exception info if present
-+        if record.exc_info:
-+            log_entry["exception"] = self.formatException(record.exc_info)
-+
-+        # Add extra fields if present
-+        for key, value in record.__dict__.items():
-+            if key not in [
-+                "name",
-+                "msg",
-+                "args",
-+                "levelname",
-+                "levelno",
-+                "pathname",
-+                "filename",
-+                "module",
-+                "lineno",
-+                "funcName",
-+                "created",
-+                "msecs",
-+                "relativeCreated",
-+                "thread",
-+                "threadName",
-+                "processName",
-+                "process",
-+                "exc_info",
-+                "exc_text",
-+                "stack_info",
-+            ]:
-+                log_entry[key] = value
-+
-+        return json.dumps(log_entry, default=str)
-+
-+
-+class CorrelationFilter(logging.Filter):
-+    """Filter to add correlation ID to all log records"""
-+
-+    def __init__(self) -> None:
-+        super().__init__()
-+        from .correlation_logging import CorrelationIDManager
-+
-+        self.correlation_manager = CorrelationIDManager()
-+
-+    def filter(self, record: logging.LogRecord) -> bool:
-+        """Add correlation ID to log record"""
-+        correlation_id = self.correlation_manager.get_current_correlation_id()
-+        if correlation_id:
-+            record.correlation_id = correlation_id
-+        return True
- 
-EOF
-)
+ # 1. INVENTÁRIO COMPLETO DO PROJETO
+-echo "🔍 Fase 1: Inventário Completo do Sistema"
++echo "🔍 Fase 1: Inventário Completo do Sistema"

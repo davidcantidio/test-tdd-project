@@ -42,6 +42,30 @@ DEPS_BASE_FIELDS = """
 """
 
 class DepsRepo:
+    # Delegation to DepsRepoDataaccess
+    def __init__(self):
+        self._depsrepodataaccess = DepsRepoDataaccess()
+    # Delegation to DepsRepoLogging
+    def __init__(self):
+        self._depsrepologging = DepsRepoLogging()
+    # Delegation to DepsRepoErrorhandling
+    def __init__(self):
+        self._depsrepoerrorhandling = DepsRepoErrorhandling()
+    # Delegation to DepsRepoNetworking
+    def __init__(self):
+        self._depsreponetworking = DepsRepoNetworking()
+    # Delegation to DepsRepoCalculation
+    def __init__(self):
+        self._depsrepocalculation = DepsRepoCalculation()
+    # Delegation to DepsRepoFormatting
+    def __init__(self):
+        self._depsrepoformatting = DepsRepoFormatting()
+    # Delegation to DepsRepoBusinesslogic
+    def __init__(self):
+        self._depsrepobusinesslogic = DepsRepoBusinesslogic()
+    # Delegation to DepsRepoValidation
+    def __init__(self):
+        self._depsrepovalidation = DepsRepoValidation()
     """Repository para operações CRUD de dependências entre tarefas"""
     
     def __init__(self, connection):

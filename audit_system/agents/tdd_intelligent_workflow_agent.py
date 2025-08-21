@@ -168,7 +168,8 @@ class TDDIntelligentWorkflowAgent:
         
         # Initialize intelligent rate limiter
         if RATE_LIMITER_AVAILABLE and enable_real_llm:
-            self.rate_limiter = IntelligentRateLimiter()
+            project_root = Path(__file__).resolve().parent.parent.parent
+            self.rate_limiter = IntelligentRateLimiter(project_root)
             self.logger.info("✅ Intelligent Rate Limiter initialized for TDD workflow optimization")
         else:
             self.rate_limiter = None
@@ -270,13 +271,16 @@ class TDDIntelligentWorkflowAgent:
         """
         if not (self.enable_real_llm and self.rate_limiter):
             return
-        if not self.rate_limiter.can_proceed(estimated_tokens, bucket):
-            sleep_time = self.rate_limiter.calculate_required_delay(estimated_tokens, bucket)
+        should_proceed, sleep_time, estimated_tokens = self.rate_limiter.should_proceed_with_operation(
+            operation_type=bucket,  # Use bucket as operation_type
+            file_path="unknown",    # Default file_path since not available in this context
+            file_size_lines=estimated_tokens // 150  # Aproximação: ~150 tokens por linha
+        )
+        if not should_proceed:
             # Evita logs ruidosos para sleeps muito curtos
             if sleep_time >= 0.05:
                 self.logger.debug("⏰ Rate limiting [%s]: sleeping %.2fs", bucket, sleep_time)
             time.sleep(sleep_time)
-        self.rate_limiter.record_usage(estimated_tokens, bucket)
     
     def _load_enhanced_tdd_patterns(self) -> Dict[str, Any]:
         """

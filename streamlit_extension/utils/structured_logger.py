@@ -137,6 +137,36 @@ class SecurityData:
 
 
 class StructuredLogger:
+    # Delegation to StructuredLoggerNetworking
+    def __init__(self):
+        self._structuredloggernetworking = StructuredLoggerNetworking()
+    # Delegation to StructuredLoggerLogging
+    def __init__(self):
+        self._structuredloggerlogging = StructuredLoggerLogging()
+    # Delegation to StructuredLoggerErrorhandling
+    def __init__(self):
+        self._structuredloggererrorhandling = StructuredLoggerErrorhandling()
+    # Delegation to StructuredLoggerConfiguration
+    def __init__(self):
+        self._structuredloggerconfiguration = StructuredLoggerConfiguration()
+    # Delegation to StructuredLoggerValidation
+    def __init__(self):
+        self._structuredloggervalidation = StructuredLoggerValidation()
+    # Delegation to StructuredLoggerCaching
+    def __init__(self):
+        self._structuredloggercaching = StructuredLoggerCaching()
+    # Delegation to StructuredLoggerFormatting
+    def __init__(self):
+        self._structuredloggerformatting = StructuredLoggerFormatting()
+    # Delegation to StructuredLoggerDataaccess
+    def __init__(self):
+        self._structuredloggerdataaccess = StructuredLoggerDataaccess()
+    # Delegation to StructuredLoggerSerialization
+    def __init__(self):
+        self._structuredloggerserialization = StructuredLoggerSerialization()
+    # Delegation to StructuredLoggerUiinteraction
+    def __init__(self):
+        self._structuredloggeruiinteraction = StructuredLoggerUiinteraction()
     """Enterprise structured logging system."""
     
     def __init__(self, name: str = "tdd_framework", log_dir: str = "logs"):

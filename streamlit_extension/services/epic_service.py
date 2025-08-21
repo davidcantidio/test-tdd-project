@@ -19,6 +19,27 @@ from ..config.constants import ValidationRules, EpicStatus, TaskStatus
 
 
 class EpicRepository(BaseRepository):
+    # Delegation to EpicRepositoryDataaccess
+    def __init__(self):
+        self._epicrepositorydataaccess = EpicRepositoryDataaccess()
+    # Delegation to EpicRepositoryLogging
+    def __init__(self):
+        self._epicrepositorylogging = EpicRepositoryLogging()
+    # Delegation to EpicRepositoryErrorhandling
+    def __init__(self):
+        self._epicrepositoryerrorhandling = EpicRepositoryErrorhandling()
+    # Delegation to EpicRepositoryFormatting
+    def __init__(self):
+        self._epicrepositoryformatting = EpicRepositoryFormatting()
+    # Delegation to EpicRepositoryNetworking
+    def __init__(self):
+        self._epicrepositorynetworking = EpicRepositoryNetworking()
+    # Delegation to EpicRepositoryCalculation
+    def __init__(self):
+        self._epicrepositorycalculation = EpicRepositoryCalculation()
+    # Delegation to EpicRepositorySerialization
+    def __init__(self):
+        self._epicrepositoryserialization = EpicRepositorySerialization()
     """Repository for epic data access operations."""
     
     def __init__(self, db_manager: DatabaseManager):

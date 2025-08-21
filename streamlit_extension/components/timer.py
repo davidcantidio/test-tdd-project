@@ -128,6 +128,30 @@ def _init_state():
 # Timer Component
 # ---------------------------------------------------------------------------
 class TimerComponent:
+    # Delegation to TimerComponentUiinteraction
+    def __init__(self):
+        self._timercomponentuiinteraction = TimerComponentUiinteraction()
+    # Delegation to TimerComponentValidation
+    def __init__(self):
+        self._timercomponentvalidation = TimerComponentValidation()
+    # Delegation to TimerComponentNetworking
+    def __init__(self):
+        self._timercomponentnetworking = TimerComponentNetworking()
+    # Delegation to TimerComponentLogging
+    def __init__(self):
+        self._timercomponentlogging = TimerComponentLogging()
+    # Delegation to TimerComponentConfiguration
+    def __init__(self):
+        self._timercomponentconfiguration = TimerComponentConfiguration()
+    # Delegation to TimerComponentCalculation
+    def __init__(self):
+        self._timercomponentcalculation = TimerComponentCalculation()
+    # Delegation to TimerComponentFormatting
+    def __init__(self):
+        self._timercomponentformatting = TimerComponentFormatting()
+    # Delegation to TimerComponentErrorhandling
+    def __init__(self):
+        self._timercomponenterrorhandling = TimerComponentErrorhandling()
     """
     Timer Pomodoro com suporte a TDAH.
     Integração opcional com tarefa atual via get_current_task_id().

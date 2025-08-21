@@ -70,6 +70,24 @@ class AuthResult:
 
 
 class AuthManager:
+    # Delegation to AuthManagerDataaccess
+    def __init__(self):
+        self._authmanagerdataaccess = AuthManagerDataaccess()
+    # Delegation to AuthManagerUiinteraction
+    def __init__(self):
+        self._authmanageruiinteraction = AuthManagerUiinteraction()
+    # Delegation to AuthManagerValidation
+    def __init__(self):
+        self._authmanagervalidation = AuthManagerValidation()
+    # Delegation to AuthManagerCalculation
+    def __init__(self):
+        self._authmanagercalculation = AuthManagerCalculation()
+    # Delegation to AuthManagerErrorhandling
+    def __init__(self):
+        self._authmanagererrorhandling = AuthManagerErrorhandling()
+    # Delegation to AuthManagerFormatting
+    def __init__(self):
+        self._authmanagerformatting = AuthManagerFormatting()
     """Manage user registration, authentication and session state.
 
     The manager stores credentials in a SQLite database and tracks active

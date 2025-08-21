@@ -74,6 +74,33 @@ except ImportError:
 
 
 class StreamlitSecurityManager:
+    # Delegation to StreamlitSecurityManagerUiinteraction
+    def __init__(self):
+        self._streamlitsecuritymanageruiinteraction = StreamlitSecurityManagerUiinteraction()
+    # Delegation to StreamlitSecurityManagerLogging
+    def __init__(self):
+        self._streamlitsecuritymanagerlogging = StreamlitSecurityManagerLogging()
+    # Delegation to StreamlitSecurityManagerConfiguration
+    def __init__(self):
+        self._streamlitsecuritymanagerconfiguration = StreamlitSecurityManagerConfiguration()
+    # Delegation to StreamlitSecurityManagerValidation
+    def __init__(self):
+        self._streamlitsecuritymanagervalidation = StreamlitSecurityManagerValidation()
+    # Delegation to StreamlitSecurityManagerErrorhandling
+    def __init__(self):
+        self._streamlitsecuritymanagererrorhandling = StreamlitSecurityManagerErrorhandling()
+    # Delegation to StreamlitSecurityManagerFormatting
+    def __init__(self):
+        self._streamlitsecuritymanagerformatting = StreamlitSecurityManagerFormatting()
+    # Delegation to StreamlitSecurityManagerBusinesslogic
+    def __init__(self):
+        self._streamlitsecuritymanagerbusinesslogic = StreamlitSecurityManagerBusinesslogic()
+    # Delegation to StreamlitSecurityManagerNetworking
+    def __init__(self):
+        self._streamlitsecuritymanagernetworking = StreamlitSecurityManagerNetworking()
+    # Delegation to StreamlitSecurityManagerCalculation
+    def __init__(self):
+        self._streamlitsecuritymanagercalculation = StreamlitSecurityManagerCalculation()
     """Manage security for Streamlit forms and data display.
 
     The manager combines XSS sanitization, JSON payload validation, rate

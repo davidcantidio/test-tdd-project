@@ -31,6 +31,30 @@ except ImportError as e:
 
 
 class GoogleOAuthManager:
+    # Delegation to GoogleOAuthManagerUiinteraction
+    def __init__(self):
+        self._googleoauthmanageruiinteraction = GoogleOAuthManagerUiinteraction()
+    # Delegation to GoogleOAuthManagerValidation
+    def __init__(self):
+        self._googleoauthmanagervalidation = GoogleOAuthManagerValidation()
+    # Delegation to GoogleOAuthManagerErrorhandling
+    def __init__(self):
+        self._googleoauthmanagererrorhandling = GoogleOAuthManagerErrorhandling()
+    # Delegation to GoogleOAuthManagerConfiguration
+    def __init__(self):
+        self._googleoauthmanagerconfiguration = GoogleOAuthManagerConfiguration()
+    # Delegation to GoogleOAuthManagerNetworking
+    def __init__(self):
+        self._googleoauthmanagernetworking = GoogleOAuthManagerNetworking()
+    # Delegation to GoogleOAuthManagerFormatting
+    def __init__(self):
+        self._googleoauthmanagerformatting = GoogleOAuthManagerFormatting()
+    # Delegation to GoogleOAuthManagerDataaccess
+    def __init__(self):
+        self._googleoauthmanagerdataaccess = GoogleOAuthManagerDataaccess()
+    # Delegation to GoogleOAuthManagerLogging
+    def __init__(self):
+        self._googleoauthmanagerlogging = GoogleOAuthManagerLogging()
     """Manages Google OAuth 2.0 authentication flow for Streamlit applications."""
     
     def __init__(self):
