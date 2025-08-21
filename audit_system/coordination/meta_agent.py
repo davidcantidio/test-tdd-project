@@ -314,34 +314,43 @@ class MetaAgent:
         }
         
     def _build_token_estimation_models(self) -> Dict[str, Any]:
-        """Build models for estimating token usage per agent type."""
+        """Build models for estimating token usage per agent type.
+        
+        REAL LLM MODELS based on comprehensive analysis requirements:
+        - Small files (2 lines): ~5K-15K tokens for semantic + architectural analysis
+        - Large files (1685 lines): ~40K-80K tokens for 6-layer comprehensive analysis
+        - Real LLM analysis scales with complexity and analysis depth
+        """
         return {
-            # Base token estimates per agent (conservative estimates)
+            # REAL LLM: IntelligentCodeAgent does semantic understanding + code quality
             AgentType.INTELLIGENT_CODE_AGENT: {
-                "base_tokens": 500,
-                "tokens_per_line": 2.5,
-                "tokens_per_function": 100,
-                "tokens_per_class": 150,
-                "complexity_multiplier": 1.5
+                "base_tokens": 8000,   # Semantic understanding baseline
+                "tokens_per_line": 15,  # Scales with code complexity
+                "tokens_per_function": 200,  # Function-level analysis
+                "tokens_per_class": 500,  # Class-level architectural analysis
+                "complexity_multiplier": 2.0  # High complexity impact for real analysis
             },
+            # REAL LLM: RefactoringEngine does architectural + performance analysis
             AgentType.REFACTORING_ENGINE: {
-                "base_tokens": 300,
-                "tokens_per_line": 1.5,
-                "tokens_per_function": 75,
-                "complexity_multiplier": 1.3
+                "base_tokens": 12000,  # Architectural analysis baseline
+                "tokens_per_line": 20,  # Pattern detection scaling
+                "tokens_per_function": 300,  # Refactoring opportunity analysis
+                "complexity_multiplier": 2.5  # High impact for refactoring decisions
             },
+            # REAL LLM: TDDWorkflowAgent does test strategy + workflow analysis
             AgentType.TDD_WORKFLOW_AGENT: {
-                "base_tokens": 200,
-                "tokens_per_line": 1.0,
-                "tokens_per_function": 50,
-                "complexity_multiplier": 1.2
+                "base_tokens": 10000,  # TDD strategy analysis
+                "tokens_per_line": 12,  # Test coverage analysis
+                "tokens_per_function": 150,  # Test case analysis
+                "complexity_multiplier": 1.0  # No complexity impact observed
             },
+            # REAL LLM: GodCodeAgent does anti-pattern detection + complexity analysis
             AgentType.GOD_CODE_AGENT: {
-                "base_tokens": 400,
-                "tokens_per_line": 2.0,
-                "tokens_per_function": 80,
-                "god_code_bonus": 500,  # Extra tokens for god code analysis
-                "complexity_multiplier": 2.0
+                "base_tokens": 6000,  # Anti-pattern detection baseline
+                "tokens_per_line": 8,  # Complexity analysis scaling
+                "tokens_per_function": 100,  # Function complexity analysis
+                "god_code_bonus": 5000,  # Significant analysis when god codes found
+                "complexity_multiplier": 3.0  # High impact for complex anti-patterns
             }
         }
     

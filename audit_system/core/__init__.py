@@ -7,16 +7,21 @@ Componentes centrais do sistema de auditoria:
 - EnhancedSystematicFileAuditor: Sistema base de auditoria com sessões empresariais
 """
 
-from audit_system.core.systematic_file_auditor import (
-    EnhancedSystematicFileAuditor,
-    SetimaDataLoader,
-    EnterpriseSessionManager,
-    SmartTokenBudgetManager
-)
+try:
+    from audit_system.core.systematic_file_auditor import (
+        EnhancedSystematicFileAuditor,
+        SetimaDataLoader,
+        EnterpriseSessionManager,
+        SmartTokenBudgetManager,
+    )
+except Exception:
+    EnhancedSystematicFileAuditor = (
+        SetimaDataLoader
+    ) = EnterpriseSessionManager = SmartTokenBudgetManager = None
 
 __all__ = [
     "EnhancedSystematicFileAuditor",
-    "SetimaDataLoader", 
+    "SetimaDataLoader",
     "EnterpriseSessionManager",
-    "SmartTokenBudgetManager"
+    "SmartTokenBudgetManager",
 ]

@@ -26,10 +26,31 @@ __version__ = "1.0.0"
 __author__ = "Claude + David"
 
 # Main exports for easy access
-from audit_system.coordination.meta_agent import MetaAgent, TaskType, run_meta_agent_analysis
-from audit_system.agents.intelligent_code_agent import IntelligentCodeAgent, AnalysisDepth, SemanticMode
-from audit_system.agents.god_code_refactoring_agent import GodCodeRefactoringAgent, run_god_code_analysis
-from audit_system.coordination.file_coordination_manager import FileCoordinationManager, get_coordination_manager
+try:
+    from audit_system.coordination.meta_agent import (
+        MetaAgent,
+        TaskType,
+        run_meta_agent_analysis,
+    )
+    from audit_system.agents.intelligent_code_agent import (
+        IntelligentCodeAgent,
+        AnalysisDepth,
+        SemanticMode,
+    )
+    from audit_system.agents.god_code_refactoring_agent import (
+        GodCodeRefactoringAgent,
+        run_god_code_analysis,
+    )
+    from audit_system.coordination.file_coordination_manager import (
+        FileCoordinationManager,
+        get_coordination_manager,
+    )
+except Exception as e:  # pragma: no cover - optional deps may be missing
+    # Keep module importable even if optional dependencies (e.g., streamlit) are absent
+    MetaAgent = TaskType = run_meta_agent_analysis = None
+    IntelligentCodeAgent = AnalysisDepth = SemanticMode = None
+    GodCodeRefactoringAgent = run_god_code_analysis = None
+    FileCoordinationManager = get_coordination_manager = None
 
 __all__ = [
     "MetaAgent",
