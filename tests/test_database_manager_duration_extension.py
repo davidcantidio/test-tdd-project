@@ -28,6 +28,8 @@ from streamlit_extension.utils.database import DatabaseManager
 class TestDatabaseManagerDurationExtension:
     """Test suite for DatabaseManager duration system extension"""
     
+    # TODO: Consider extracting this block into a separate method
+    # TODO: Consider extracting this block into a separate method
     def setup_method(self):
         """Setup test database and manager for each test"""
         # Create temporary databases
@@ -55,6 +57,10 @@ class TestDatabaseManagerDurationExtension:
         for db_path in [self.framework_db_path, self.timer_db_path]:
             if os.path.exists(db_path):
                 os.unlink(db_path)
+    
+# TODO: Consider extracting this block into a separate method
+    
+# TODO: Consider extracting this block into a separate method
     
     def _setup_test_schema(self):
         """Create test database schema with duration system fields"""
@@ -103,6 +109,8 @@ class TestDatabaseManagerDurationExtension:
             )
         """)
         
+        # TODO: Consider extracting this block into a separate method
+        # TODO: Consider extracting this block into a separate method
         conn.commit()
         conn.close()
     
@@ -122,6 +130,10 @@ class TestDatabaseManagerDurationExtension:
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (epic_id, epic_key, name, planned_start, planned_end,
               actual_start, actual_end, calculated_duration, duration_description))
+        
+# TODO: Consider extracting this block into a separate method
+        
+# TODO: Consider extracting this block into a separate method
         
         conn.commit()
         conn.close()
@@ -195,6 +207,8 @@ class TestDatabaseManagerDurationExtension:
         """Test behavior when duration system is not available"""
         with patch('streamlit_extension.utils.database.DURATION_SYSTEM_AVAILABLE', False):
             duration = self.db_manager.calculate_epic_duration(1)
+            # TODO: Consider extracting this block into a separate method
+            # TODO: Consider extracting this block into a separate method
             assert duration == 0.0
     
     # ==================================================================================
@@ -214,6 +228,8 @@ class TestDatabaseManagerDurationExtension:
         cursor.execute("""
             SELECT duration_description, calculated_duration_days 
             FROM framework_epics WHERE id = ?
+        # TODO: Consider extracting this block into a separate method
+        # TODO: Consider extracting this block into a separate method
         """, (1,))
         row = cursor.fetchone()
         conn.close()
@@ -246,6 +262,8 @@ class TestDatabaseManagerDurationExtension:
     
     def test_update_duration_description_no_duration_system(self):
         """Test behavior when duration system is not available"""
+        # TODO: Consider extracting this block into a separate method
+        # TODO: Consider extracting this block into a separate method
         with patch('streamlit_extension.utils.database.DURATION_SYSTEM_AVAILABLE', False):
             success = self.db_manager.update_duration_description(1, "2 dias")
             assert success is False
@@ -376,6 +394,8 @@ class TestDatabaseManagerDurationExtension:
         # 3 tasks × 160 minutes = 480 minutes = 8 hours = 1 day
         
         duration = self.db_manager._calculate_epic_duration_from_tasks(1)
+        # TODO: Consider extracting this block into a separate method
+        # TODO: Consider extracting this block into a separate method
         assert duration == 1.0
     
     def test_calculate_epic_duration_from_tasks_no_tasks(self):
@@ -393,6 +413,8 @@ class TestDatabaseManagerDurationExtension:
         conn = sqlite3.connect(self.framework_db_path)
         cursor = conn.cursor()
         cursor.execute("""
+            # TODO: Consider extracting this block into a separate method
+            # TODO: Consider extracting this block into a separate method
             INSERT INTO framework_tasks 
             (epic_id, title, estimate_minutes, deleted_at)
             VALUES (?, ?, ?, CURRENT_TIMESTAMP)
@@ -430,6 +452,8 @@ class TestDatabaseManagerDurationExtension:
         assert tasks[0]["status"] == "completed"
         assert tasks[1]["title"] == "Low Priority Task"  # Should be second (priority 3)
     
+    # TODO: Consider extracting this block into a separate method
+    # TODO: Consider extracting this block into a separate method
     def test_get_epic_task_timeline_no_tasks(self):
         """Test helper method with no tasks"""
         self._insert_test_epic(epic_id=1)
@@ -462,6 +486,8 @@ class TestDatabaseManagerDurationExtension:
             SET planned_start_date = ?, planned_end_date = ?
             WHERE id = ?
         """, ("2025-08-13", "2025-08-25", 1))  # ~12 days
+        # TODO: Consider extracting this block into a separate method
+        # TODO: Consider extracting this block into a separate method
         conn.commit()
         conn.close()
         
@@ -492,6 +518,10 @@ class TestDatabaseManagerDurationExtension:
             success = self.db_manager.update_duration_description(i, duration_desc)
             assert success is True
             
+# TODO: Consider extracting this block into a separate method
+            
+# TODO: Consider extracting this block into a separate method
+            
             # Verify calculation
             calculated = self.db_manager.calculate_epic_duration(i)
             assert calculated == expected_days, f"Failed for pattern: {duration_desc}"
@@ -510,6 +540,8 @@ class TestDatabaseManagerDurationExtension:
         bad_manager = DatabaseManager(
             framework_db_path="/nonexistent/path.db",
             timer_db_path="/nonexistent/timer.db"
+        # TODO: Consider extracting this block into a separate method
+        # TODO: Consider extracting this block into a separate method
         )
         
         # Should return default values instead of crashing

@@ -69,6 +69,8 @@ class TestKanbanPageBasics:
 class TestTaskFilters:
     """Test task filtering functionality."""
     
+    # TODO: Consider extracting this block into a separate method
+    # TODO: Consider extracting this block into a separate method
     def setup_method(self):
         """Set up test data."""
         self.tasks = [
@@ -160,6 +162,10 @@ class TestTaskCRUDOperations:
         """Set up test database manager mock."""
         self.db_manager = Mock(spec=DatabaseManager)
     
+# TODO: Consider extracting this block into a separate method
+    
+# TODO: Consider extracting this block into a separate method
+    
     def test_create_task_success(self):
         """Test successful task creation."""
         self.db_manager.create_task.return_value = 123
@@ -195,6 +201,8 @@ class TestTaskCRUDOperations:
             db_manager=self.db_manager
         )
         
+# TODO: Consider extracting this block into a separate method
+        
         assert result is False
     
     def test_create_task_exception(self):
@@ -209,6 +217,9 @@ class TestTaskCRUDOperations:
                 db_manager=self.db_manager
             )
             
+# TODO: Consider extracting this block into a separate method
+            
+            # TODO: Consider extracting this block into a separate method
             assert result is False
             mock_print.assert_called_once()
     
@@ -230,8 +241,10 @@ class TestTaskCRUDOperations:
         self.db_manager.update_task.assert_called_once_with(
             task_id=1,
             title="Updated Task",
+            # TODO: Consider extracting this block into a separate method
             description="Updated description",
             tdd_phase="green",
+            # TODO: Consider extracting this block into a separate method
             priority=1,
             estimate_minutes=90
         )
@@ -292,7 +305,10 @@ class TestTaskCRUDOperations:
             db_manager=self.db_manager
         )
         
+        # TODO: Consider extracting this block into a separate method
         assert result is False
+
+# TODO: Consider extracting this block into a separate method
 
 
 class TestDatabaseManagerCRUD:
@@ -342,6 +358,9 @@ class TestDatabaseManagerCRUD:
         conn.commit()
         conn.close()
     
+# TODO: Consider extracting this block into a separate method
+    
+    # TODO: Consider extracting this block into a separate method
     def teardown_method(self):
         """Clean up test databases."""
         if self.db_path.exists():
@@ -373,7 +392,10 @@ class TestDatabaseManagerCRUD:
         cursor = conn.cursor()
         cursor.execute("SELECT * FROM framework_tasks WHERE id = ?", (task_id,))
         task = cursor.fetchone()
+        # TODO: Consider extracting this block into a separate method
         conn.close()
+        
+# TODO: Consider extracting this block into a separate method
         
         assert task is not None
         assert task[1] == "Test Task"  # title
@@ -407,7 +429,9 @@ class TestDatabaseManagerCRUD:
         
         # Verify update
         conn = sqlite3.connect(self.db_path)
+        # TODO: Consider extracting this block into a separate method
         cursor = conn.cursor()
+        # TODO: Consider extracting this block into a separate method
         cursor.execute("SELECT * FROM framework_tasks WHERE id = ?", (task_id,))
         task = cursor.fetchone()
         conn.close()
@@ -432,6 +456,10 @@ class TestDatabaseManagerCRUD:
         # Soft delete the task
         success = db_manager.delete_task(task_id, soft_delete=True)
         assert success is True
+        
+# TODO: Consider extracting this block into a separate method
+        
+# TODO: Consider extracting this block into a separate method
         
         # Verify soft delete (task still exists but marked as deleted)
         conn = sqlite3.connect(self.db_path)
@@ -458,6 +486,9 @@ class TestDatabaseManagerCRUD:
         success = db_manager.delete_task(task_id, soft_delete=False)
         assert success is True
         
+# TODO: Consider extracting this block into a separate method
+        
+        # TODO: Consider extracting this block into a separate method
         # Verify hard delete (task no longer exists)
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()

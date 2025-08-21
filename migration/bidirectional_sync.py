@@ -75,6 +75,8 @@ class SyncResult:
     errors: List[str]
     duration_ms: float
     
+    # TODO: Consider extracting this block into a separate method
+    # TODO: Consider extracting this block into a separate method
     def __post_init__(self):
         if self.changes_made is None:
             self.changes_made = []
@@ -158,6 +160,10 @@ class BidirectionalSyncEngine:
     - Rollback automático em caso de erro
     """
     
+# TODO: Consider extracting this block into a separate method
+    
+# TODO: Consider extracting this block into a separate method
+    
     def __init__(self, db_path: str = "framework.db",
                  conflict_resolution: ConflictResolution = ConflictResolution.TIMESTAMP_WINS,
                  max_retries: int = 3,
@@ -182,6 +188,8 @@ class BidirectionalSyncEngine:
     
     def calculate_checksum(self, data: Dict[str, Any]) -> str:
         """Calculate SHA-256 checksum of data for change detection."""
+        # TODO: Consider extracting this block into a separate method
+        # TODO: Consider extracting this block into a separate method
         json_str = json.dumps(data, sort_keys=True, ensure_ascii=False)
         return hashlib.sha256(json_str.encode()).hexdigest()
     
@@ -232,6 +240,8 @@ class BidirectionalSyncEngine:
         with self.get_database_connection() as conn:
             cursor = conn.execute(
                 "SELECT COUNT(*) FROM framework_epics WHERE epic_key = ? AND deleted_at IS NULL",
+                # TODO: Consider extracting this block into a separate method
+                # TODO: Consider extracting this block into a separate method
                 (epic_key,)
             )
             return cursor.fetchone()[0] > 0
@@ -258,6 +268,8 @@ class BidirectionalSyncEngine:
                 ORDER BY task_sequence, task_key
             """, (epic_data['id'],))
             
+            # TODO: Consider extracting this block into a separate method
+            # TODO: Consider extracting this block into a separate method
             tasks = [dict(row) for row in cursor.fetchall()]
             epic_data['tasks'] = tasks
             
@@ -314,6 +326,8 @@ class BidirectionalSyncEngine:
                 # Insert tasks using the same connection
                 self.insert_tasks_to_db(epic_id, epic_data.get('tasks', []), conn=conn)
 
+                # TODO: Consider extracting this block into a separate method
+                # TODO: Consider extracting this block into a separate method
                 conn.commit()
                 return epic_id
             except Exception:
@@ -366,6 +380,8 @@ class BidirectionalSyncEngine:
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """
 
+        # TODO: Consider extracting this block into a separate method
+        # TODO: Consider extracting this block into a separate method
         if conn is None:
             with self.get_database_connection() as own_conn:
                 own_conn.executemany(insert_sql, task_rows)
@@ -409,6 +425,8 @@ class BidirectionalSyncEngine:
             result.success = True
             
         except Exception as e:
+            # TODO: Consider extracting this block into a separate method
+            # TODO: Consider extracting this block into a separate method
             result.errors.append(f"Error syncing to database: {str(e)}")
             traceback.print_exc()
         
@@ -455,6 +473,8 @@ class BidirectionalSyncEngine:
             result.changes_made.append(f"Exported epic {epic_key} to {output_path}")
             result.success = True
             
+        # TODO: Consider extracting this block into a separate method
+        # TODO: Consider extracting this block into a separate method
         except Exception as e:
             result.errors.append(f"Error exporting to JSON: {str(e)}")
             traceback.print_exc()
@@ -521,6 +541,8 @@ class BidirectionalSyncEngine:
                 db_value = task.get(db_field)
                 if db_value:
                     try:
+                        # TODO: Consider extracting this block into a separate method
+                        # TODO: Consider extracting this block into a separate method
                         json_task[json_field] = json.loads(db_value) if isinstance(db_value, str) else db_value
                     except (json.JSONDecodeError, TypeError):
                         json_task[json_field] = []
@@ -546,6 +568,8 @@ class BidirectionalSyncEngine:
             conn.execute("""
                 INSERT OR REPLACE INTO epic_json_sync (
                     epic_id, epic_key, json_file_path, 
+                    # TODO: Consider extracting this block into a separate method
+                    # TODO: Consider extracting this block into a separate method
                     sync_status, last_sync_at, sync_direction,
                     created_at, updated_at
                 ) VALUES (?, ?, ?, 'synced', ?, ?, ?, ?)
@@ -598,6 +622,8 @@ class BidirectionalSyncEngine:
         return results
 
 
+# TODO: Consider extracting this block into a separate method
+# TODO: Consider extracting this block into a separate method
 def main():
     """Test bidirectional sync engine."""
     print("🔄 Bidirectional Sync Engine Test")

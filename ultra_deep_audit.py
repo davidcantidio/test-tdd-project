@@ -67,6 +67,8 @@ class UltraDeepArchitectureAnalyzer:
         self.business_logic_flaws: List[Dict] = []
         self.debt_hotspots: Dict[str, float] = {}
         
+    # TODO: Consider extracting this block into a separate method
+    # TODO: Consider extracting this block into a separate method
     def analyze_race_conditions(self):
         """Detect potential race conditions and thread safety issues."""
         print("🔬 Analyzing race conditions and concurrency issues...")
@@ -116,6 +118,10 @@ class UltraDeepArchitectureAnalyzer:
                         recommendation="Implement proper locking mechanisms or use atomic operations"
                     ))
 
+# TODO: Consider extracting this block into a separate method
+
+# TODO: Consider extracting this block into a separate method
+
     def analyze_memory_leaks(self):
         """Detect potential memory leaks and resource management issues."""
         print("🔬 Analyzing memory leaks and resource management...")
@@ -159,6 +165,8 @@ class UltraDeepArchitectureAnalyzer:
                         exploitation_difficulty="HARD",
                         fix_complexity="SIMPLE",
                         code_snippet=content[match.start():match.end()][:100],
+                        # TODO: Consider extracting this block into a separate method
+                        # TODO: Consider extracting this block into a separate method
                         recommendation="Implement proper resource cleanup and use context managers"
                     ))
 
@@ -204,6 +212,8 @@ class UltraDeepArchitectureAnalyzer:
                         likelihood="HIGH",
                         exploitation_difficulty="TRIVIAL",
                         fix_complexity="MODERATE",
+                        # TODO: Consider extracting this block into a separate method
+                        # TODO: Consider extracting this block into a separate method
                         code_snippet=content[match.start():match.end()][:100],
                         recommendation="Implement proper data sanitization and encryption"
                     ))
@@ -320,6 +330,8 @@ class UltraDeepArchitectureAnalyzer:
                         self.function_pure = old_pure
                 
                 visitor = StateMutationVisitor(self, file_path)
+                # TODO: Consider extracting this block into a separate method
+                # TODO: Consider extracting this block into a separate method
                 visitor.visit(tree)
                 
             except Exception:
@@ -362,6 +374,8 @@ class UltraDeepArchitectureAnalyzer:
                         line_number=line_no,
                         impact="System-wide failures, debugging difficulties, data loss",
                         likelihood="MEDIUM",
+                        # TODO: Consider extracting this block into a separate method
+                        # TODO: Consider extracting this block into a separate method
                         exploitation_difficulty="MODERATE",
                         fix_complexity="SIMPLE",
                         code_snippet=content[match.start():match.end()][:100],
@@ -403,6 +417,8 @@ class UltraDeepArchitectureAnalyzer:
                         file_path=file_path,
                         line_number=line_no,
                         impact="Data breach, service disruption, man-in-the-middle attacks",
+                        # TODO: Consider extracting this block into a separate method
+                        # TODO: Consider extracting this block into a separate method
                         likelihood="MEDIUM",
                         exploitation_difficulty="EASY",
                         fix_complexity="SIMPLE",
@@ -465,6 +481,8 @@ class UltraDeepArchitectureAnalyzer:
                     pattern='debt_accumulation',
                     description=f"Technical debt hotspot (score: {debt_score:.1f})",
                     file_path=file_path,
+                    # TODO: Consider extracting this block into a separate method
+                    # TODO: Consider extracting this block into a separate method
                     line_number=0,
                     impact="Increased maintenance cost, bug introduction risk",
                     likelihood="HIGH",
@@ -480,6 +498,8 @@ class UltraDeepArchitectureAnalyzer:
             return
         
         for file_path in streamlit_dir.rglob("*.py"):
+            # TODO: Consider extracting this block into a separate method
+            # TODO: Consider extracting this block into a separate method
             if '__pycache__' in str(file_path) or 'test' in str(file_path):
                 continue
             try:

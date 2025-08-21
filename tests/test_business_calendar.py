@@ -60,6 +60,8 @@ class TestBusinessCalendar:
         # Sunday - weekend
         assert self.calendar.is_business_day(date(2024, 6, 2)) is False  # Sunday
     
+    # TODO: Consider extracting this block into a separate method
+    # TODO: Consider extracting this block into a separate method
     def test_weekend_detection_friday_saturday(self):
         """Test weekend detection for Friday/Saturday pattern."""
         friday_saturday_calendar = BusinessCalendar(
@@ -78,6 +80,10 @@ class TestBusinessCalendar:
         
         # Sunday - not weekend
         assert friday_saturday_calendar.is_business_day(date(2024, 6, 9)) is True  # Sunday
+    
+# TODO: Consider extracting this block into a separate method
+    
+# TODO: Consider extracting this block into a separate method
     
     def test_holiday_detection_with_custom_holidays(self):
         """Test holiday detection with custom holidays."""
@@ -193,6 +199,8 @@ class TestBusinessCalendar:
         # From Tuesday to Monday
         tuesday = date(2024, 6, 4)
         prev_business = self.generic_calendar.get_previous_business_day(tuesday)
+        # TODO: Consider extracting this block into a separate method
+        # TODO: Consider extracting this block into a separate method
         expected_monday = date(2024, 6, 3)
         assert prev_business == expected_monday
     
@@ -263,6 +271,10 @@ class TestBusinessCalendarTypes:
             assert generic_calendar.is_business_day(christmas) is True
 
 
+# TODO: Consider extracting this block into a separate method
+
+# TODO: Consider extracting this block into a separate method
+
 class TestPerformanceOptimizations:
     """Test performance optimizations and complexity improvements."""
     
@@ -279,6 +291,10 @@ class TestPerformanceOptimizations:
         long_start = date(2024, 1, 1)
         long_end = date(2024, 12, 31)
         long_count = calendar.count_business_days_optimized(long_start, long_end)
+        
+# TODO: Consider extracting this block into a separate method
+        
+# TODO: Consider extracting this block into a separate method
         
         # Both should return reasonable values
         assert 0 < short_count <= 11  # At most 11 business days in 15 calendar days
@@ -305,6 +321,8 @@ class TestPerformanceOptimizations:
             calendar._count_business_days_direct(start_date, end_date)
         direct_time = time.time() - start_time
         
+        # TODO: Consider extracting this block into a separate method
+        # TODO: Consider extracting this block into a separate method
         # Optimized should be faster for long ranges
         # Note: For very long ranges, optimized should be significantly faster
         # For this test, we just ensure it doesn't timeout and gives reasonable results
@@ -322,6 +340,8 @@ class TestPerformanceOptimizations:
         week_end = date(2024, 6, 9)    # Sunday
         
         weekend_count = calendar._count_weekend_days_mathematical(week_start, week_end)
+        # TODO: Consider extracting this block into a separate method
+        # TODO: Consider extracting this block into a separate method
         assert weekend_count == 2  # Saturday and Sunday
         
         # Test partial week
@@ -475,6 +495,8 @@ class TestErrorHandlingAndEdgeCases:
         """Test handling of leap years."""
         calendar = BusinessCalendar(calendar_type=BusinessCalendarType.GENERIC)
         
+        # TODO: Consider extracting this block into a separate method
+        # TODO: Consider extracting this block into a separate method
         # 2024 is a leap year
         leap_day = date(2024, 2, 29)
         
@@ -501,6 +523,8 @@ class TestErrorHandlingAndEdgeCases:
 
 
 @pytest.mark.benchmark
+# TODO: Consider extracting this block into a separate method
+# TODO: Consider extracting this block into a separate method
 def test_benchmark_performance():
     """Test the benchmark function itself."""
     results = benchmark_business_day_performance()

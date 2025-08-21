@@ -47,6 +47,8 @@ class SystematicAccessControlFixer:
             'database': ['configure_', '_configure', 'connect_', '_connect', 'init_db', '_init_db']
         }
         
+    # TODO: Consider extracting this block into a separate method
+    # TODO: Consider extracting this block into a separate method
     def scan_access_control_gaps(self):
         """Scan the entire codebase for access control gaps."""
         print("🔍 SCANNING FOR ACCESS CONTROL GAPS...")
@@ -194,6 +196,10 @@ def {func_name}("""
         except Exception as e:
             print(f"⚠️ Error analyzing {file_path}: {e}")
     
+# TODO: Consider extracting this block into a separate method
+    
+# TODO: Consider extracting this block into a separate method
+    
     def apply_systematic_fixes(self):
         """Apply access control fixes systematically."""
         print(f"\n🛡️ APPLYING ACCESS CONTROL FIXES...")
@@ -216,6 +222,8 @@ def {func_name}("""
         
         print(f"\n✅ ACCESS CONTROL FIXES SUMMARY:")
         print(f"   Total fixes applied: {len(self.fixes_applied)}")
+        # TODO: Consider extracting this block into a separate method
+        # TODO: Consider extracting this block into a separate method
         print(f"   Total fixes needed: {len(self.fixes_needed)}")
         print(f"   Success rate: {len(self.fixes_applied)/len(self.fixes_needed)*100:.1f}%")
     
@@ -251,6 +259,8 @@ def {func_name}("""
             
             return applied_count
             
+        # TODO: Consider extracting this block into a separate method
+        # TODO: Consider extracting this block into a separate method
         except Exception as e:
             print(f"     ❌ Error processing file: {e}")
             return 0
@@ -277,6 +287,10 @@ def {func_name}("""
         if not has_user_role:
             new_imports.append("from streamlit_extension.auth.user_model import UserRole")
         
+# TODO: Consider extracting this block into a separate method
+        
+# TODO: Consider extracting this block into a separate method
+        
         # Insert imports
         for i, import_line in enumerate(reversed(new_imports)):
             lines.insert(import_line_idx + 1, import_line)
@@ -300,6 +314,10 @@ def {func_name}("""
             
             # Insert decorator before function
             lines.insert(func_line_idx, decorator_indent + decorator)
+            
+# TODO: Consider extracting this block into a separate method
+            
+# TODO: Consider extracting this block into a separate method
             
             return True
             
@@ -332,6 +350,8 @@ def {func_name}("""
             except Exception as e:
                 validation_errors.append(f"Validation error for {fix.file_path}: {e}")
         
+        # TODO: Consider extracting this block into a separate method
+        # TODO: Consider extracting this block into a separate method
         if validation_errors:
             print(f"❌ VALIDATION ERRORS ({len(validation_errors)}):")
             for error in validation_errors[:10]:  # Show first 10 errors
@@ -384,6 +404,8 @@ def {func_name}("""
             'risk_breakdown': {risk: len(fixes) for risk, fixes in risk_summary.items()}
         }
 
+# TODO: Consider extracting this block into a separate method
+# TODO: Consider extracting this block into a separate method
 def main():
     print("🛡️ SYSTEMATIC ACCESS CONTROL SECURITY FIXES")
     print("=" * 70)

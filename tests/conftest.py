@@ -29,6 +29,8 @@ def test_data_dir():
 
 
 @pytest.fixture(scope="function")
+# TODO: Consider extracting this block into a separate method
+# TODO: Consider extracting this block into a separate method
 def temp_db():
     """Create temporary database for testing."""
     with tempfile.NamedTemporaryFile(suffix='.db', delete=False) as temp_file:
@@ -103,6 +105,8 @@ def sample_task_data():
     }
 
 
+# TODO: Consider extracting this block into a separate method
+# TODO: Consider extracting this block into a separate method
 @pytest.fixture
 def sample_timer_sessions():
     """Sample timer session data for testing."""
@@ -138,6 +142,10 @@ def mock_config():
     config.max_disk_cache_mb = 100
     return config
 
+
+# TODO: Consider extracting this block into a separate method
+
+# TODO: Consider extracting this block into a separate method
 
 @pytest.fixture
 def mock_database_manager(temp_db, sample_epic_data, sample_task_data, sample_timer_sessions):
@@ -180,6 +188,8 @@ def mock_database_manager(temp_db, sample_epic_data, sample_task_data, sample_ti
         "timer_db_connected": True
     }
     
+    # TODO: Consider extracting this block into a separate method
+    # TODO: Consider extracting this block into a separate method
     return db_manager
 
 
@@ -216,6 +226,10 @@ def mock_streamlit():
         
         # Session state mock
         mock_st.session_state = {}
+        
+# TODO: Consider extracting this block into a separate method
+        
+# TODO: Consider extracting this block into a separate method
         
         yield mock_st
 
@@ -258,6 +272,8 @@ def analytics_test_data():
                     "avg_focus": 7.0,
                     "tasks_completed": 0,
                     "interruptions": 1
+                # TODO: Consider extracting this block into a separate method
+                # TODO: Consider extracting this block into a separate method
                 }
             ]
         }

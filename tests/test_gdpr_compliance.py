@@ -34,6 +34,8 @@ except ImportError:
 class TestConsentRecord:
     """Test ConsentRecord functionality."""
     
+    # TODO: Consider extracting this block into a separate method
+    # TODO: Consider extracting this block into a separate method
     def test_consent_record_creation(self):
         """Test consent record creation and validation."""
         consent = ConsentRecord(
@@ -52,6 +54,10 @@ class TestConsentRecord:
         assert consent.consent_given is True
         assert consent.is_valid() is True
         assert consent.consent_withdrawn is False
+    
+# TODO: Consider extracting this block into a separate method
+    
+# TODO: Consider extracting this block into a separate method
     
     def test_consent_withdrawal(self):
         """Test consent withdrawal functionality."""
@@ -82,6 +88,10 @@ class TestConsentRecord:
         )
         consent.consent_timestamp = datetime.now() - timedelta(days=1)
         
+# TODO: Consider extracting this block into a separate method
+        
+# TODO: Consider extracting this block into a separate method
+        
         assert consent.is_valid() is False
     
     def test_consent_serialization(self):
@@ -102,6 +112,8 @@ class TestConsentRecord:
         assert "technical" in consent_dict["data_categories"]
         assert isinstance(consent_dict["consent_timestamp"], str)
 
+# TODO: Consider extracting this block into a separate method
+
 
 class TestDataSubjectRequest:
     """Test DataSubjectRequest functionality."""
@@ -115,7 +127,9 @@ class TestDataSubjectRequest:
             verification_method="email"
         )
         
+        # TODO: Consider extracting this block into a separate method
         assert request.request_type == DataSubjectRightType.ACCESS
+        # TODO: Consider extracting this block into a separate method
         assert request.data_subject_id == "user_request"
         assert request.email == "user@test.com"
         assert request.processing_status == "pending"
@@ -162,6 +176,9 @@ class TestDataSubjectRequest:
             email="reject@test.com"
         )
         
+# TODO: Consider extracting this block into a separate method
+        
+        # TODO: Consider extracting this block into a separate method
         rejection_reason = "Insufficient verification"
         request.reject_request(rejection_reason)
         
@@ -197,8 +214,10 @@ class TestGDPRAuditLogger:
             log_file = f.name
         yield log_file
         # Cleanup
+        # TODO: Consider extracting this block into a separate method
         Path(log_file).unlink(missing_ok=True)
     
+    # TODO: Consider extracting this block into a separate method
     def test_audit_logger_creation(self, temp_log_file):
         """Test audit logger creation and file handling."""
         logger = GDPRAuditLogger(temp_log_file)
@@ -215,8 +234,10 @@ class TestGDPRAuditLogger:
             data_type="profile",
             accessed_by="admin",
             purpose="support_request"
+        # TODO: Consider extracting this block into a separate method
         )
         
+        # TODO: Consider extracting this block into a separate method
         # Verify log entry
         with open(temp_log_file, 'r') as f:
             log_content = f.read()
@@ -258,7 +279,10 @@ class TestDataRetentionManager:
     
     def test_retention_manager_creation(self, temp_retention_db):
         """Test retention manager creation and database initialization."""
+        # TODO: Consider extracting this block into a separate method
         manager = DataRetentionManager(temp_retention_db)
+        
+# TODO: Consider extracting this block into a separate method
         
         assert manager.db_path == temp_retention_db
         # Database should be created and accessible
@@ -281,6 +305,9 @@ class TestDataRetentionManager:
         
         assert policy_id is not None
         
+# TODO: Consider extracting this block into a separate method
+        
+        # TODO: Consider extracting this block into a separate method
         # Verify policy was stored
         with manager._get_connection() as conn:
             cursor = conn.execute(
@@ -310,8 +337,10 @@ class TestDataRetentionManager:
             data_category=DataCategory.BEHAVIORAL,
             deletion_date=deletion_date,
             policy_id=policy_id
+        # TODO: Consider extracting this block into a separate method
         )
         
+        # TODO: Consider extracting this block into a separate method
         assert deletion_id is not None
         
         # Verify scheduled deletion
@@ -377,8 +406,10 @@ class TestGDPRManager:
     
     def test_gdpr_manager_initialization(self, gdpr_manager):
         """Test GDPR manager initialization."""
+        # TODO: Consider extracting this block into a separate method
         assert gdpr_manager.db_path is not None
         assert gdpr_manager.audit_logger is not None
+        # TODO: Consider extracting this block into a separate method
         assert gdpr_manager.retention_manager is not None
         assert isinstance(gdpr_manager.data_processors, dict)
     
@@ -396,8 +427,10 @@ class TestGDPRManager:
         """Test consent recording and retrieval."""
         consent = ConsentRecord(
             data_subject_id="user_consent",
+            # TODO: Consider extracting this block into a separate method
             purpose="Testing consent",
             legal_basis=ConsentBasis.CONSENT,
+            # TODO: Consider extracting this block into a separate method
             data_categories=[DataCategory.IDENTITY],
             consent_given=True
         )
@@ -426,7 +459,10 @@ class TestGDPRManager:
         success = gdpr_manager.withdraw_consent("user_withdraw", consent_id)
         assert success is True
         
+# TODO: Consider extracting this block into a separate method
+        
         # Should no longer appear in valid consents
+        # TODO: Consider extracting this block into a separate method
         valid_consents = gdpr_manager.get_valid_consents("user_withdraw")
         assert len(valid_consents) == 0
     
@@ -452,9 +488,11 @@ class TestGDPRManager:
         
         gdpr_manager.register_data_processor("user_profile", mock_processor)
         
+        # TODO: Consider extracting this block into a separate method
         # Create and submit request
         request = DataSubjectRequest(
             request_type=DataSubjectRightType.ACCESS,
+            # TODO: Consider extracting this block into a separate method
             data_subject_id="user_access",
             email="access@test.com"
         )
@@ -490,9 +528,11 @@ class TestGDPRManager:
         gdpr_manager.record_consent(consent)
         
         # Create and submit erasure request
+        # TODO: Consider extracting this block into a separate method
         request = DataSubjectRequest(
             request_type=DataSubjectRightType.ERASURE,
             data_subject_id="user_erasure",
+            # TODO: Consider extracting this block into a separate method
             email="erasure@test.com"
         )
         request.mark_verified()
@@ -517,8 +557,11 @@ class TestGDPRManager:
             data_subject_id="user_report",
             purpose="Testing report",
             consent_given=True
+        # TODO: Consider extracting this block into a separate method
         )
         gdpr_manager.record_consent(consent)
+        
+# TODO: Consider extracting this block into a separate method
         
         request = DataSubjectRequest(
             request_type=DataSubjectRightType.ACCESS,
@@ -551,8 +594,10 @@ class TestGDPRManager:
         # Attempt to process unverified request
         response = gdpr_manager.process_data_subject_request(request_id)
         
+        # TODO: Consider extracting this block into a separate method
         assert response is not None
         assert "error" in response
+        # TODO: Consider extracting this block into a separate method
         assert "not verified" in response["error"].lower()
 
 

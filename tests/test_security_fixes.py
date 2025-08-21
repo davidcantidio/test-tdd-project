@@ -52,6 +52,8 @@ class TestCachePathTraversalPrevention:
         if os.path.exists(self.temp_dir):
             shutil.rmtree(self.temp_dir)
     
+    # TODO: Consider extracting this block into a separate method
+    # TODO: Consider extracting this block into a separate method
     def test_path_traversal_key_sanitization(self):
         """Test that path traversal attempts in cache keys are sanitized."""
         # Test various path traversal attempts
@@ -76,6 +78,10 @@ class TestCachePathTraversalPrevention:
             assert '/' not in cache_key
             assert '\\' not in cache_key
     
+# TODO: Consider extracting this block into a separate method
+    
+# TODO: Consider extracting this block into a separate method
+    
     def test_cache_key_filesystem_validation(self):
         """Test filesystem validation of cache keys."""
         # Valid cache keys (SHA-256 hashes)
@@ -95,6 +101,8 @@ class TestCachePathTraversalPrevention:
             "",  # Empty string
         ]
         
+        # TODO: Consider extracting this block into a separate method
+        # TODO: Consider extracting this block into a separate method
         for key in invalid_keys:
             assert not self.cache._validate_cache_key_for_filesystem(key)
     
@@ -123,6 +131,8 @@ class TestCachePathTraversalPrevention:
                     self.cache._set_to_disk(malicious_key, {"test": "data"}, 60)
                     
                     # Verify security violation was logged
+                    # TODO: Consider extracting this block into a separate method
+                    # TODO: Consider extracting this block into a separate method
                     mock_security_logger.error.assert_called()
                     error_call = mock_security_logger.error.call_args[0][0]
                     assert "SECURITY VIOLATION: Path traversal detected" in error_call
@@ -153,6 +163,8 @@ class TestSecurePickleLoading:
         self.temp_dir = tempfile.mkdtemp()
     
     def teardown_method(self):
+        # TODO: Consider extracting this block into a separate method
+        # TODO: Consider extracting this block into a separate method
         """Clean up test environment."""
         import shutil
         if os.path.exists(self.temp_dir):
@@ -177,6 +189,8 @@ class TestSecurePickleLoading:
                 return (eval, ("print('EXPLOITED!')",))
         
         dangerous_obj = DangerousClass()
+        # TODO: Consider extracting this block into a separate method
+        # TODO: Consider extracting this block into a separate method
         dangerous_pickle = pickle.dumps(dangerous_obj)
         
         unpickler = SecureUnpickler(BytesIO(dangerous_pickle))
@@ -217,6 +231,7 @@ class TestSecurePickleLoading:
         large_pickle_path = Path(self.temp_dir) / "large.pkl"
         
         # Create a large file
+        # TODO: Consider extracting this block into a separate method
         large_data = "x" * (60 * 1024 * 1024)  # 60MB
         with open(large_pickle_path, 'wb') as f:
             pickle.dump(large_data, f)
@@ -232,6 +247,8 @@ class TestSecurePickleLoading:
         with open(safe_pickle_path, 'wb') as f:
             pickle.dump(safe_data, f)
         
+        # TODO: Consider extracting this block into a separate method
+        # TODO: Consider extracting this block into a separate method
         output_path = Path(self.temp_dir) / "output.secure"
         
         # Should succeed with secure loading (default)
@@ -256,6 +273,9 @@ class TestSecurePickleLoading:
             assert result is True
             mock_secure.assert_called_once()
 
+
+# TODO: Consider extracting this block into a separate method
+# TODO: Consider extracting this block into a separate method
 
 class TestEnhancedInputSanitization:
     """Test suite for enhanced input sanitization patterns."""
@@ -283,6 +303,8 @@ class TestEnhancedInputSanitization:
             "pg_sleep(5)",  # PostgreSQL sleep
             "information_schema.tables",  # information gathering
             "@@version",  # SQL Server version
+            # TODO: Consider extracting this block into a separate method
+            # TODO: Consider extracting this block into a separate method
             "EXTRACTVALUE(1, CONCAT(0x7e, (SELECT password FROM users)))",  # error-based
         ]
         
@@ -313,6 +335,8 @@ class TestEnhancedInputSanitization:
             # Removed unsupported AngularJS directive to avoid false negatives
             "fetch('/api/steal-data')",  # Fetch API
             "new Worker('evil.js')",  # Web Workers
+            # TODO: Consider extracting this block into a separate method
+            # TODO: Consider extracting this block into a separate method
             "postMessage('evil', '*')",  # PostMessage
             "&#x6A;&#x61;&#x76;&#x61;&#x73;&#x63;&#x72;&#x69;&#x70;&#x74;",  # Hex encoded "javascript"
         ]
@@ -342,6 +366,8 @@ class TestEnhancedInputSanitization:
             "/.env",
             "/wp-config.php",
             "uploads/../../../etc/passwd",  # Combined with legitimate path
+            # TODO: Consider extracting this block into a separate method
+            # TODO: Consider extracting this block into a separate method
             "....//etc/passwd",  # Multiple dots
             "..//etc/passwd",  # Double slash
             "..\\\\windows\\\\system32",  # Double backslash
@@ -371,6 +397,10 @@ class TestEnhancedInputSanitization:
         for content in legitimate_content:
             violations = self.validator._validate_string(content, path="$")
 
+# TODO: Consider extracting this block into a separate method
+
+# TODO: Consider extracting this block into a separate method
+
             # Should not trigger security violations
             security_violations = [v for v in violations if v.violation_type in [
                 SecurityViolationType.SQL_INJECTION,
@@ -384,6 +414,8 @@ class TestSecurityLoggingAndMonitoring:
     """Test suite for security logging and monitoring."""
     
     def test_security_violations_are_logged(self):
+        # TODO: Consider extracting this block into a separate method
+        # TODO: Consider extracting this block into a separate method
         """Test that security violations are detected during validation."""
         validator = SecureJsonValidator(strict_mode=True)
 
@@ -413,6 +445,8 @@ class TestSecurityLoggingAndMonitoring:
         
         violation_counts = {}
         
+        # TODO: Consider extracting this block into a separate method
+        # TODO: Consider extracting this block into a separate method
         for payload in test_payloads:
             is_valid, violations = validator.validate_json_string(payload)
             
@@ -445,6 +479,8 @@ class TestIntegrationSecurity:
         # Test JSON validation
         validator = SecureJsonValidator(strict_mode=True)
         malicious_json = json.dumps({
+            # TODO: Consider extracting this block into a separate method
+            # TODO: Consider extracting this block into a separate method
             "sql": "'; DROP TABLE users; --",
             "xss": "<script>alert('pwned')</script>",
             "lfi": "../../../../etc/passwd"

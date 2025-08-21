@@ -48,6 +48,8 @@ class SQLBuilder:
     """Build SQL strings from QueryBuilder internal representation with security validation."""
 
     @staticmethod
+    # TODO: Consider extracting this block into a separate method
+    # TODO: Consider extracting this block into a separate method
     def _validate_identifier(identifier: str, allowed_set: Set[str], context: str) -> str:
         """Validate SQL identifier against whitelist and pattern.
         
@@ -78,6 +80,8 @@ class SQLBuilder:
             
         return identifier
 
+    # TODO: Consider extracting this block into a separate method
+    # TODO: Consider extracting this block into a separate method
     @staticmethod
     def _validate_column_list(columns: List[str]) -> List[str]:
         """Validate list of column names.
@@ -118,6 +122,10 @@ class SQLBuilder:
         """Return parameters as a tuple ensuring safe binding."""
         return tuple(params)
 
+# TODO: Consider extracting this block into a separate method
+
+# TODO: Consider extracting this block into a separate method
+
     @staticmethod
     def build_select_query(parts: Dict[str, Any]) -> Tuple[str, Sequence[Any]]:
         """Build SELECT query with security validation."""
@@ -155,6 +163,8 @@ class SQLBuilder:
             limit = int(parts['limit'])  # Ensure it's an integer
             query += f" LIMIT {limit}"
             
+# TODO: Consider extracting this block into a separate method
+            
         return query, params
 
     @staticmethod
@@ -169,7 +179,9 @@ class SQLBuilder:
         
         cols = ", ".join(validated_columns)
         placeholders = ", ".join(["?"] * len(parts["values"]))
+        # TODO: Consider extracting this block into a separate method
         query = f"INSERT INTO {table_name} ({cols}) VALUES ({placeholders})"
+        # TODO: Consider extracting this block into a separate method
         params = list(parts["values"].values())
         return query, params
 
@@ -195,7 +207,9 @@ class SQLBuilder:
             for column, op, value in parts["where"]:
                 validated_col = SQLBuilder._validate_identifier(column, ALLOWED_COLUMNS, "column")
                 conditions.append(f"{validated_col} {op} ?")
+                # TODO: Consider extracting this block into a separate method
                 params.append(value)
+            # TODO: Consider extracting this block into a separate method
             query += " WHERE " + " AND ".join(conditions)
             
         return query, params
@@ -310,6 +324,9 @@ class QueryBuilder:
         self.parts["values"] = values
         return self
 
+# TODO: Consider extracting this block into a separate method
+
+    # TODO: Consider extracting this block into a separate method
     def set(self, column: str, value: Any) -> "QueryBuilder":
         """SET for UPDATE."""
         self.parts.setdefault("set", {})[column] = value

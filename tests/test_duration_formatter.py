@@ -92,6 +92,8 @@ class TestDurationFormatter:
     # REAL EPIC DATA FORMAT TESTS
     # ==================================================================================
     
+    # TODO: Consider extracting this block into a separate method
+    # TODO: Consider extracting this block into a separate method
     def test_format_epic_data_patterns(self):
         """Test formatting patterns found in real epic data"""
         test_cases = [
@@ -437,6 +439,10 @@ class TestRealEpicDataIntegration:
         assert parsed_days == original_days
         assert reformatted == formatted
     
+# TODO: Consider extracting this block into a separate method
+    
+# TODO: Consider extracting this block into a separate method
+    
     def test_all_epic_patterns_compatibility(self):
         """Test compatibility with all real epic duration patterns"""
         # Test patterns from actual epic files
@@ -456,6 +462,8 @@ class TestRealEpicDataIntegration:
             # Format from days
             formatted = self.formatter.format(expected_days)
             # Note: formatter might choose different units (e.g., 7 days → 1 semana)
+            # TODO: Consider extracting this block into a separate method
+            # TODO: Consider extracting this block into a separate method
             reparsed = self.formatter.parse_formatted_duration(formatted)
             assert reparsed == expected_days
     
@@ -529,6 +537,10 @@ class TestErrorHandlingAndEdgeCases:
 class TestPerformance:
     """Performance tests to ensure formatting meets targets"""
     
+# TODO: Consider extracting this block into a separate method
+    
+# TODO: Consider extracting this block into a separate method
+    
     def setup_method(self):
         self.formatter = DurationFormatter()
     
@@ -542,6 +554,8 @@ class TestPerformance:
         
         for duration in durations:
             result = self.formatter.format(duration)
+            # TODO: Consider extracting this block into a separate method
+            # TODO: Consider extracting this block into a separate method
             assert isinstance(result, str)
             assert len(result) > 0
         

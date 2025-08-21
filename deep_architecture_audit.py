@@ -102,6 +102,8 @@ class DeepArchitectureAnalyzer:
                     impact="Can cause import failures, initialization order issues, and tight coupling"
                 )
 
+    # TODO: Consider extracting this block into a separate method
+    # TODO: Consider extracting this block into a separate method
     def analyze_semantic_duplication(self):
         """Detect semantically similar code blocks."""
         print("🔍 Analyzing semantic code duplication...")
@@ -139,6 +141,10 @@ class DeepArchitectureAnalyzer:
                     impact="Increases maintenance burden and risk of inconsistent changes"
                 )
 
+# TODO: Consider extracting this block into a separate method
+
+# TODO: Consider extracting this block into a separate method
+
     def analyze_solid_violations(self):
         """Detect SOLID principle violations."""
         print("🔍 Analyzing SOLID principle violations...")
@@ -166,6 +172,8 @@ class DeepArchitectureAnalyzer:
                             pattern['file'],
                             pattern['line'],
                             recommendation="Break down into smaller, focused functions",
+                            # TODO: Consider extracting this block into a separate method
+                            # TODO: Consider extracting this block into a separate method
                             impact="Hard to test and maintain"
                         )
 
@@ -205,6 +213,8 @@ class DeepArchitectureAnalyzer:
                         description,
                         file_path,
                         line_no,
+                        # TODO: Consider extracting this block into a separate method
+                        # TODO: Consider extracting this block into a separate method
                         recommendation="Use parameterized queries, safe serialization, strong hashing",
                         impact="Potential data breach or system compromise"
                     )
@@ -236,6 +246,8 @@ class DeepArchitectureAnalyzer:
                         severity, "PERFORMANCE",
                         description,
                         file_path,
+                        # TODO: Consider extracting this block into a separate method
+                        # TODO: Consider extracting this block into a separate method
                         line_no,
                         recommendation="Optimize data access patterns and avoid inefficient operations",
                         impact="Degraded system performance"
@@ -256,6 +268,8 @@ class DeepArchitectureAnalyzer:
             if import_count > 20:
                 self.add_issue(
                     "MEDIUM", "COUPLING",
+                    # TODO: Consider extracting this block into a separate method
+                    # TODO: Consider extracting this block into a separate method
                     f"High coupling: module '{module}' imports {import_count} other modules",
                     module,
                     recommendation="Consider dependency injection or facade patterns",
@@ -313,6 +327,8 @@ class DeepArchitectureAnalyzer:
         """Create a hash representing the structure of a function."""
         # This is a simplified version - could be enhanced with AST analysis
         structure_elements = [
+            # TODO: Consider extracting this block into a separate method
+            # TODO: Consider extracting this block into a separate method
             func_info.get('name', ''),
             str(func_info.get('arg_count', 0)),
             str(func_info.get('line_count', 0)),
@@ -394,6 +410,8 @@ class DeepArchitectureAnalyzer:
                             'line_count': max(1, end_line - node.lineno)
                         }
                         
+                        # TODO: Consider extracting this block into a separate method
+                        # TODO: Consider extracting this block into a separate method
                         self.analyzer.code_patterns['large_classes'].append(class_info)
                 
                 collector = MetadataCollector(self, file_path)

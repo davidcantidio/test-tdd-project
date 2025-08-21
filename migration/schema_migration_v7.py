@@ -47,6 +47,8 @@ class SchemaMigrationV7:
     - Data integrity preservation
     """
     
+    # TODO: Consider extracting this block into a separate method
+    # TODO: Consider extracting this block into a separate method
     def __init__(self, db_path: str = "framework.db"):
         self.db_path = db_path
         self.migration_version = "v7"
@@ -85,6 +87,10 @@ class SchemaMigrationV7:
             }
         ]
     
+# TODO: Consider extracting this block into a separate method
+    
+# TODO: Consider extracting this block into a separate method
+    
     def validate_database_connection(self) -> bool:
         """Validate database exists and is accessible."""
         try:
@@ -119,6 +125,8 @@ class SchemaMigrationV7:
             self.logger.info(f"Database backup created: {self.backup_path}")
             return True
         except Exception as e:
+            # TODO: Consider extracting this block into a separate method
+            # TODO: Consider extracting this block into a separate method
             self.logger.error(f"Failed to create backup: {e}")
             return False
     
@@ -139,6 +147,8 @@ class SchemaMigrationV7:
                     self.logger.info(f"Table {table_name} has {len(columns)} existing columns")
                     
         except Exception as e:
+            # TODO: Consider extracting this block into a separate method
+            # TODO: Consider extracting this block into a separate method
             self.logger.error(f"Failed to check existing columns: {e}")
             
         return existing_columns
@@ -211,6 +221,8 @@ class SchemaMigrationV7:
                     self.logger.error("Migration validation failed")
                     return False
                     
+        # TODO: Consider extracting this block into a separate method
+        # TODO: Consider extracting this block into a separate method
         except Exception as e:
             self.logger.error(f"Migration failed: {e}")
             traceback.print_exc()
@@ -232,6 +244,10 @@ class SchemaMigrationV7:
             
             with open(log_file, 'w') as f:
                 json.dump(log_data, f, indent=2)
+            
+# TODO: Consider extracting this block into a separate method
+            
+# TODO: Consider extracting this block into a separate method
             
             self.logger.info(f"Migration log saved: {log_file}")
             
@@ -265,6 +281,8 @@ class SchemaMigrationV7:
                 
                 # Test data insertion to ensure columns work
                 if validation_passed:
+                    # TODO: Consider extracting this block into a separate method
+                    # TODO: Consider extracting this block into a separate method
                     validation_passed = self.test_column_functionality()
                 
                 return validation_passed
@@ -363,6 +381,8 @@ class SchemaMigrationV7:
                         self.logger.info("Achievement columns functionality test passed")
                     else:
                         self.logger.error("Achievement columns functionality test failed")
+                        # TODO: Consider extracting this block into a separate method
+                        # TODO: Consider extracting this block into a separate method
                         return False
                 
                 self.logger.info("All column functionality tests passed")
@@ -400,6 +420,8 @@ class SchemaMigrationV7:
                     summary["tables"][table_name] = {
                         "expected_columns": expected_columns,
                         "present_columns": present_columns,
+                        # TODO: Consider extracting this block into a separate method
+                        # TODO: Consider extracting this block into a separate method
                         "missing_columns": missing_columns,
                         "migration_needed": len(missing_columns) > 0
                     }
@@ -476,6 +498,8 @@ if __name__ == "__main__":
             return False
 
 
+# TODO: Consider extracting this block into a separate method
+# TODO: Consider extracting this block into a separate method
 def main():
     """Main migration execution function."""
     print("🔧 Database Schema Migration V7")

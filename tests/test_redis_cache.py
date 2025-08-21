@@ -107,6 +107,8 @@ class TestCacheMetrics:
         assert stats["hit_rate_percent"] == 0.0
         assert 0.3 <= stats["avg_response_time"] <= 0.4
     
+    # TODO: Consider extracting this block into a separate method
+    # TODO: Consider extracting this block into a separate method
     def test_mixed_operations(self):
         """Test mixed cache operations."""
         self.setUp()
@@ -122,6 +124,10 @@ class TestCacheMetrics:
         assert stats["errors"] == 1
         assert stats["total_requests"] == 4
         assert stats["hit_rate_percent"] == 66.66666666666667  # 2 hits out of 3 cache ops
+    
+# TODO: Consider extracting this block into a separate method
+    
+# TODO: Consider extracting this block into a separate method
     
     def test_reset_stats(self):
         """Test statistics reset."""
@@ -161,6 +167,8 @@ class TestRedisCacheManager:
         mock_redis.Redis.side_effect = ConnectionError("Redis not available")
         
         cache_manager = RedisCacheManager()
+        # TODO: Consider extracting this block into a separate method
+        # TODO: Consider extracting this block into a separate method
         assert not cache_manager.is_available
         assert cache_manager.client is None
     
@@ -182,6 +190,8 @@ class TestRedisCacheManager:
         
         # Test same parameters should generate same key
         key3 = self.cache_manager._generate_cache_key(
+            # TODO: Consider extracting this block into a separate method
+            # TODO: Consider extracting this block into a separate method
             "client", 123, status="active", include_inactive=True
         )
         assert key2 == key3
@@ -201,6 +211,8 @@ class TestRedisCacheManager:
         serialized = self.cache_manager._serialize_data(test_data)
         assert isinstance(serialized, str)
         
+        # TODO: Consider extracting this block into a separate method
+        # TODO: Consider extracting this block into a separate method
         # Test deserialization
         deserialized = self.cache_manager._deserialize_data(serialized)
         assert deserialized == test_data
@@ -229,6 +241,8 @@ class TestRedisCacheManager:
         assert result == {"data": "test"}
         mock_client.get.assert_called_once()
         
+        # TODO: Consider extracting this block into a separate method
+        # TODO: Consider extracting this block into a separate method
         # Test delete operation
         mock_client.delete.return_value = 1
         result = cache_manager.delete("test_key")
@@ -261,6 +275,8 @@ class TestCacheDecorator:
     """Test the @cached decorator."""
     
     def setUp(self):
+        # TODO: Consider extracting this block into a separate method
+        # TODO: Consider extracting this block into a separate method
         """Setup for each test."""
         # Clear any existing cache
         try:
@@ -285,6 +301,8 @@ class TestCacheDecorator:
         assert result1["call_count"] == 1
         
         # Second call with same parameters should use cache
+        # TODO: Consider extracting this block into a separate method
+        # TODO: Consider extracting this block into a separate method
         result2 = expensive_function("value1", param2="value2")
         assert result2["call_count"] == 1  # Same call count from cache
         assert result1 == result2
@@ -335,6 +353,8 @@ class TestCachedDatabaseManager:
             mock_db_class.return_value = self.mock_db_manager
             self.cached_db = CachedDatabaseManager(
                 framework_db_path="test.db",
+                # TODO: Consider extracting this block into a separate method
+                # TODO: Consider extracting this block into a separate method
                 enable_cache=True
             )
     
@@ -385,6 +405,10 @@ class TestCachedDatabaseManager:
         result = self.cached_db.check_database_health()
         assert result == {"status": "healthy"}
         self.mock_db_manager.check_database_health.assert_called_once()
+
+# TODO: Consider extracting this block into a separate method
+
+# TODO: Consider extracting this block into a separate method
 
 
 @pytest.mark.skipif(not REDIS_CACHE_AVAILABLE, reason="Redis cache not available")
@@ -468,6 +492,8 @@ class TestConcurrency:
             set_operations = [r for r in results if r[0] == "set"]
             get_operations = [r for r in results if r[0] == "get"]
             
+            # TODO: Consider extracting this block into a separate method
+            # TODO: Consider extracting this block into a separate method
             # Most operations should succeed
             successful_sets = sum(1 for _, success in set_operations if success)
             successful_gets = sum(1 for _, success in get_operations if success)
@@ -485,6 +511,8 @@ class TestFallbackBehavior:
         # Create cache manager with invalid connection
         cache_manager = RedisCacheManager(
             host="invalid_host",
+            # TODO: Consider extracting this block into a separate method
+            # TODO: Consider extracting this block into a separate method
             port=9999,
             socket_connect_timeout=0.1
         )

@@ -30,6 +30,8 @@ class ResponsibilityViolation:
 class MixedResponsibilitiesAnalyzer:
     """Analyzes and fixes SRP violations systematically."""
     
+    # TODO: Consider extracting this block into a separate method
+    # TODO: Consider extracting this block into a separate method
     def __init__(self):
         self.violations: List[ResponsibilityViolation] = []
         self.files_analyzed = 0
@@ -73,6 +75,10 @@ class MixedResponsibilitiesAnalyzer:
             }
         }
     
+# TODO: Consider extracting this block into a separate method
+    
+# TODO: Consider extracting this block into a separate method
+    
     def analyze_all_files(self) -> Dict[str, Any]:
         """Analyze all Python files for SRP violations."""
         print("🎯 ANALYZING MIXED RESPONSIBILITIES...")
@@ -90,6 +96,8 @@ class MixedResponsibilitiesAnalyzer:
             self.files_analyzed += 1
             self._analyze_file(py_file)
         
+        # TODO: Consider extracting this block into a separate method
+        # TODO: Consider extracting this block into a separate method
         # Generate comprehensive report
         return self._generate_analysis_report()
     
@@ -107,6 +115,10 @@ class MixedResponsibilitiesAnalyzer:
                 if isinstance(node, ast.FunctionDef):
                     self.functions_analyzed += 1
                     self._analyze_function(node, file_path, content)
+                    
+# TODO: Consider extracting this block into a separate method
+                    
+# TODO: Consider extracting this block into a separate method
                     
         except Exception as e:
             print(f"Error analyzing {file_path}: {e}")
@@ -127,6 +139,8 @@ class MixedResponsibilitiesAnalyzer:
                     file_path=str(file_path),
                     line_number=node.lineno,
                     responsibilities=major_responsibilities,
+                    # TODO: Consider extracting this block into a separate method
+                    # TODO: Consider extracting this block into a separate method
                     severity=self._calculate_severity(major_responsibilities, function_code),
                     code_snippet=function_code[:300] + "..." if len(function_code) > 300 else function_code,
                     suggested_refactor=self._suggest_refactor(node.name, major_responsibilities)
@@ -143,6 +157,7 @@ class MixedResponsibilitiesAnalyzer:
         base_indent = len(lines[start_line]) - len(lines[start_line].lstrip())
         
         for i in range(start_line + 1, len(lines)):
+            # TODO: Consider extracting this block into a separate method
             line = lines[i]
             if line.strip() and (len(line) - len(line.lstrip())) <= base_indent:
                 end_line = i
@@ -154,6 +169,9 @@ class MixedResponsibilitiesAnalyzer:
         """Identify what responsibilities a function has."""
         responsibilities = set()
         code_lower = code.lower()
+        
+# TODO: Consider extracting this block into a separate method
+# TODO: Consider extracting this block into a separate method
         
         for responsibility, keywords in self.responsibility_keywords.items():
             if any(keyword.lower() in code_lower for keyword in keywords):
@@ -169,6 +187,7 @@ class MixedResponsibilitiesAnalyzer:
             keyword_count = 0
             keywords = self.responsibility_keywords[responsibility]
             
+            # TODO: Consider extracting this block into a separate method
             for keyword in keywords:
                 keyword_count += code.lower().count(keyword.lower())
             
@@ -184,6 +203,8 @@ class MixedResponsibilitiesAnalyzer:
             'database': ['cursor.execute', 'get_connection', 'with_db', 'transaction'],
             'ui': ['st.error', 'st.success', 'st.warning', 'st.markdown', 'st.container'],
             'logging': ['logger.error', 'logger.info', 'logger.debug', 'print(f"'],
+            # TODO: Consider extracting this block into a separate method
+            # TODO: Consider extracting this block into a separate method
             'validation': ['ValidationError', 'is_valid_', 'sanitize_'],
             'business_logic': ['calculate_', 'algorithm', 'business_rule'],
             'file_io': ['with open', 'json.dump', 'Path('],
@@ -194,6 +215,8 @@ class MixedResponsibilitiesAnalyzer:
         return any(indicator in code for indicator in indicators)
     
     def _calculate_severity(self, responsibilities: Set[str], code: str) -> str:
+        # TODO: Consider extracting this block into a separate method
+        # TODO: Consider extracting this block into a separate method
         """Calculate severity of the SRP violation."""
         if len(responsibilities) >= 4:
             return "CRITICAL"
@@ -214,6 +237,8 @@ class MixedResponsibilitiesAnalyzer:
         if 'ui' in responsibilities:
             suggestions.append(f"Extract UI rendering to {function_name}_ui_layer()")
         
+        # TODO: Consider extracting this block into a separate method
+        # TODO: Consider extracting this block into a separate method
         if 'logging' in responsibilities:
             suggestions.append(f"Extract logging to {function_name}_audit_layer()")
         
@@ -250,6 +275,8 @@ class MixedResponsibilitiesAnalyzer:
         
         return {
             "summary": {
+                # TODO: Consider extracting this block into a separate method
+                # TODO: Consider extracting this block into a separate method
                 "files_analyzed": self.files_analyzed,
                 "functions_analyzed": self.functions_analyzed,
                 "violations_found": len(self.violations),
@@ -308,6 +335,8 @@ class MixedResponsibilitiesAnalyzer:
             })
         
         # Create fully serializable report
+        # TODO: Consider extracting this block into a separate method
+        # TODO: Consider extracting this block into a separate method
         serializable_report = {
             "summary": report["summary"],
             "violations_by_severity": serializable_by_severity,
@@ -346,6 +375,8 @@ class MixedResponsibilitiesAnalyzer:
             print(f"   {resp}: {count} functions")
 
 
+# TODO: Consider extracting this block into a separate method
+# TODO: Consider extracting this block into a separate method
 def main():
     """Main analysis execution."""
     print("🎯 MIXED RESPONSIBILITIES ANALYZER - PHASE 10")

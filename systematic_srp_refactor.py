@@ -50,6 +50,8 @@ class SystematicSRPRefactor:
             print("❌ Analysis report not found. Run mixed_responsibilities_analyzer.py first.")
             return {}
     
+    # TODO: Consider extracting this block into a separate method
+    # TODO: Consider extracting this block into a separate method
     def create_refactor_plans(self) -> List[RefactorPlan]:
         """Create refactor plans for top 12 violations."""
         print("🎯 CREATING SYSTEMATIC REFACTOR PLANS...")
@@ -76,6 +78,10 @@ class SystematicSRPRefactor:
         
         return self.refactor_plans
     
+# TODO: Consider extracting this block into a separate method
+    
+# TODO: Consider extracting this block into a separate method
+    
     def _get_unique_violations(self, violations: List[Dict]) -> List[Dict]:
         """Get unique violations by function name and file path."""
         seen = set()
@@ -86,6 +92,10 @@ class SystematicSRPRefactor:
             if key not in seen:
                 seen.add(key)
                 unique.append(violation)
+        
+# TODO: Consider extracting this block into a separate method
+        
+# TODO: Consider extracting this block into a separate method
         
         return unique
     
@@ -125,6 +135,8 @@ class SystematicSRPRefactor:
         return RefactorPlan(
             function_name=function_name,
             file_path=violation['file_path'],
+            # TODO: Consider extracting this block into a separate method
+            # TODO: Consider extracting this block into a separate method
             original_responsibilities=responsibilities,
             extracted_functions=extracted_functions,
             refactor_strategy=" + ".join(strategies)
@@ -158,6 +170,10 @@ class SystematicSRPRefactor:
             except Exception as e:
                 results["failed_refactors"].append(plan)
                 print(f"   ❌ ERROR: {e}")
+        
+# TODO: Consider extracting this block into a separate method
+        
+# TODO: Consider extracting this block into a separate method
         
         self.files_refactored = len(results["files_modified"])
         self.extracted_functions_created = len(results["functions_created"])
@@ -208,6 +224,8 @@ class SystematicSRPRefactor:
             
             # Write updated file
             with open(file_path, 'w', encoding='utf-8') as f:
+                # TODO: Consider extracting this block into a separate method
+                # TODO: Consider extracting this block into a separate method
                 f.write(updated_content)
             
             return True
@@ -224,6 +242,10 @@ class SystematicSRPRefactor:
         # Find the end of the function by indentation
         end_line = len(lines)
         base_indent = len(lines[start_line]) - len(lines[start_line].lstrip())
+        
+# TODO: Consider extracting this block into a separate method
+        
+# TODO: Consider extracting this block into a separate method
         
         for i in range(start_line + 1, len(lines)):
             line = lines[i]
@@ -249,6 +271,8 @@ class SystematicSRPRefactor:
         for extracted_func in plan.extracted_functions:
             extracted_functions_code.append(self._create_extracted_function(
                 extracted_func, plan.original_responsibilities, base_indent
+            # TODO: Consider extracting this block into a separate method
+            # TODO: Consider extracting this block into a separate method
             ))
         
         # Create coordinator function
@@ -297,6 +321,8 @@ class SystematicSRPRefactor:
         
         return f"""{indent}def {func_name}(self, *args, **kwargs) -> {return_type}:
 {body_indent}\"\"\"{purpose}.\"\"\"
+# TODO: Consider extracting this block into a separate method
+# TODO: Consider extracting this block into a separate method
 {body_indent}# TODO: Implement extracted {purpose.lower()}
 {body_indent}# This function was extracted to improve SRP compliance
 {body_indent}try:
@@ -335,6 +361,8 @@ class SystematicSRPRefactor:
         
         return f"""{signature}
 {body_indent}\"\"\"Refactored function with improved SRP compliance.
+# TODO: Consider extracting this block into a separate method
+# TODO: Consider extracting this block into a separate method
 {body_indent}
 {body_indent}This function now coordinates between extracted responsibilities:
 {body_indent}{', '.join(extracted_funcs) if extracted_funcs else 'No extracted functions'}
@@ -362,6 +390,8 @@ class SystematicSRPRefactor:
         if start_idx is None:
             return content  # Function not found
         
+        # TODO: Consider extracting this block into a separate method
+        # TODO: Consider extracting this block into a separate method
         # Find function end by indentation
         base_indent = len(lines[start_idx]) - len(lines[start_idx].lstrip())
         end_idx = len(lines)
@@ -433,6 +463,8 @@ class SystematicSRPRefactor:
             print(f"   Success rate: {success_rate:.1f}%")
 
 
+# TODO: Consider extracting this block into a separate method
+# TODO: Consider extracting this block into a separate method
 def main():
     """Main refactor execution."""
     print("🎯 SYSTEMATIC SRP REFACTOR - PHASE 10")

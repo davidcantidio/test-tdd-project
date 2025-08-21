@@ -224,6 +224,8 @@ class TestDurationCalculator:
         # Uses average Gregorian month length (~30.4375 days)
         assert days == pytest.approx(30.4375)
     
+    # TODO: Consider extracting this block into a separate method
+    # TODO: Consider extracting this block into a separate method
     def test_parse_and_convert_to_days_real_epic_formats(self):
         """Test parsing and converting real epic duration formats"""
         # Test formats from real epic data
@@ -441,6 +443,10 @@ class TestRealEpicDataIntegration:
         end_date = self.calculator.calculate_end_date(start_date, days)
         assert end_date == date(2025, 1, 8)
     
+# TODO: Consider extracting this block into a separate method
+    
+# TODO: Consider extracting this block into a separate method
+    
     def test_epic_duration_patterns_comprehensive(self):
         """Test all duration patterns found in real epic data"""
         test_patterns = [
@@ -452,6 +458,8 @@ class TestRealEpicDataIntegration:
         ]
         
         for duration_str, expected_days in test_patterns:
+            # TODO: Consider extracting this block into a separate method
+            # TODO: Consider extracting this block into a separate method
             calculated_days = self.calculator.parse_and_convert_to_days(duration_str)
             assert calculated_days == expected_days, f"Failed for pattern: {duration_str}"
     
@@ -532,6 +540,10 @@ class TestErrorHandlingAndEdgeCases:
 class TestPerformance:
     """Performance tests to ensure duration calculations meet targets"""
     
+# TODO: Consider extracting this block into a separate method
+    
+# TODO: Consider extracting this block into a separate method
+    
     def setup_method(self):
         self.calculator = DurationCalculator()
     
@@ -546,6 +558,8 @@ class TestPerformance:
         for i in range(100):
             start_date = base_start
             end_date = base_start + timedelta(days=i)
+            # TODO: Consider extracting this block into a separate method
+            # TODO: Consider extracting this block into a separate method
             duration = self.calculator.calculate_duration_days(start_date, end_date)
             assert duration == i
         

@@ -1,0 +1,90 @@
+{
+  "meta_analysis_summary": {
+    "total_files_analyzed": 6,
+    "successful_analyses": 6,
+    "failed_analyses": 0,
+    "total_agents_executed": 24,
+    "total_tokens_consumed": 2400,
+    "total_execution_time": 59.66670489311218
+  },
+  "files": [
+    {
+      "file_path": "/home/david/Documentos/canimport/test-tdd-project/audit_system/agents/intelligent_code_agent.py",
+      "agents_executed": 4,
+      "successful_agents": 4,
+      "tokens_used": 350,
+      "execution_time": 31.868274211883545,
+      "agents_used": [
+        "intelligent_code_agent",
+        "god_code_agent",
+        "refactoring_engine",
+        "tdd_workflow_agent"
+      ]
+    },
+    {
+      "file_path": "/home/david/Documentos/canimport/test-tdd-project/audit_system/agents/__init__.py",
+      "agents_executed": 4,
+      "successful_agents": 4,
+      "tokens_used": 500,
+      "execution_time": 0.041676998138427734,
+      "agents_used": [
+        "intelligent_code_agent",
+        "god_code_agent",
+        "refactoring_engine",
+        "tdd_workflow_agent"
+      ]
+    },
+    {
+      "file_path": "/home/david/Documentos/canimport/test-tdd-project/audit_system/agents/intelligent_refactoring_engine.py",
+      "agents_executed": 4,
+      "successful_agents": 4,
+      "tokens_used": 350,
+      "execution_time": 11.295450925827026,
+      "agents_used": [
+        "intelligent_code_agent",
+        "god_code_agent",
+        "refactoring_engine",
+        "tdd_workflow_agent"
+      ]
+    },
+    {
+      "file_path": "/home/david/Documentos/canimport/test-tdd-project/audit_system/agents/static_rules_agent.py",
+      "agents_executed": 4,
+      "successful_agents": 4,
+      "tokens_used": 500,
+      "execution_time": 0.011375665664672852,
+      "agents_used": [
+        "intelligent_code_agent",
+        "god_code_agent",
+        "refactoring_engine",
+        "tdd_workflow_agent"
+      ]
+    },
+    {
+      "file_path": "/home/david/Documentos/canimport/test-tdd-project/audit_system/agents/tdd_intelligent_workflow_agent.py",
+      "agents_executed": 4,
+      "successful_agents": 4,
+      "tokens_used": 350,
+      "execution_time": 8.905632972717285,
+      "agents_used": [
+        "intelligent_code_agent",
+        "god_code_agent",
+        "refactoring_engine",
+        "tdd_workflow_agent"
+      ]
+    },
+    {
+      "file_path": "/home/david/Documentos/canimport/test-tdd-project/audit_system/agents/god_code_refactoring_agent.py",
+      "agents_executed": 4,
+      "successful_agents": 4,
+      "tokens_used": 350,
+      "execution_time": 7.544294118881226,
+      "agents_used": [
+        "intelligent_code_agent",
+        "god_code_agent",
+        "refactoring_engine",
+        "tdd_workflow_agent"
+      ]
+    }
+  ]
+}

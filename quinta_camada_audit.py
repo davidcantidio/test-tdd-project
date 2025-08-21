@@ -91,6 +91,8 @@ class SemanticAuditEngine:
         self.business_logic_functions = defaultdict(list)
         self.performance_critical_paths = []
         
+    # TODO: Consider extracting this block into a separate method
+    # TODO: Consider extracting this block into a separate method
     def analyze_system_architecture(self):
         """Perform comprehensive architectural analysis."""
         print("🧠 QUINTA CAMADA - SEMANTIC & ARCHITECTURAL AUDIT")
@@ -108,6 +110,10 @@ class SemanticAuditEngine:
         self._evaluate_maintenance_debt()
         
         return self._generate_semantic_report()
+    
+# TODO: Consider extracting this block into a separate method
+    
+# TODO: Consider extracting this block into a separate method
     
     def _build_dependency_graph(self):
         """Build comprehensive dependency graph using AST analysis."""
@@ -263,6 +269,8 @@ class SemanticAuditEngine:
                         recommendation="Separate concerns into distinct functions/classes"
                     ))
         
+        # TODO: Consider extracting this block into a separate method
+        # TODO: Consider extracting this block into a separate method
         visitor = DependencyVisitor(self, file_path)
         visitor.visit(tree)
     
@@ -306,6 +314,8 @@ class SemanticAuditEngine:
                     impact="Data privacy violation, compliance breach",
                     business_risk="DATA_BREACH",
                     fix_effort="MODERATE",
+                    # TODO: Consider extracting this block into a separate method
+                    # TODO: Consider extracting this block into a separate method
                     affected_components=[call[2] for call in sensitive_exposure],
                     recommendation="Implement data sanitization and secure logging practices"
                 ))
@@ -357,6 +367,8 @@ class SemanticAuditEngine:
                     file_path=file_path,
                     function_name=func_name,
                     impact="Unauthorized access to sensitive operations",
+                    # TODO: Consider extracting this block into a separate method
+                    # TODO: Consider extracting this block into a separate method
                     business_risk="DATA_BREACH",
                     fix_effort="MODERATE",
                     recommendation="Add authentication checks or @require_auth decorator"
@@ -395,6 +407,8 @@ class SemanticAuditEngine:
     def _extract_entity_from_function(self, function):
         """Extract entity name from function name."""
         func_name = function.split(':')[1].lower()
+        # TODO: Consider extracting this block into a separate method
+        # TODO: Consider extracting this block into a separate method
         entities = ['client', 'project', 'epic', 'task', 'user']
         for entity in entities:
             if entity in func_name:
@@ -425,6 +439,8 @@ class SemanticAuditEngine:
                 description=f"Function '{func_name}' has potential N+1 query problem",
                 file_path=file_path,
                 function_name=func_name,
+                # TODO: Consider extracting this block into a separate method
+                # TODO: Consider extracting this block into a separate method
                 impact="Poor performance, database overload",
                 business_risk="OPERATIONAL_FAILURE",
                 fix_effort="MODERATE",
@@ -462,6 +478,8 @@ class SemanticAuditEngine:
                 severity="INTEGRATION",
                 category="ERROR_SWALLOWING",
                 description=f"Function '{func_name}' may swallow errors without proper handling",
+                # TODO: Consider extracting this block into a separate method
+                # TODO: Consider extracting this block into a separate method
                 file_path=file_path,
                 function_name=func_name,
                 impact="Hidden failures, difficult debugging, silent data corruption",
@@ -497,6 +515,8 @@ class SemanticAuditEngine:
                     severity="INTEGRATION",
                     category="FRAGILE_INTEGRATION",
                     description=f"Function '{func_name}' lacks resilience patterns for external calls",
+                    # TODO: Consider extracting this block into a separate method
+                    # TODO: Consider extracting this block into a separate method
                     file_path=file_path,
                     function_name=func_name,
                     impact="System failures due to external dependencies",
@@ -532,6 +552,8 @@ class SemanticAuditEngine:
             
             if total_coupling > high_coupling_threshold:
                 self.issues.append(SemanticIssue(
+                    # TODO: Consider extracting this block into a separate method
+                    # TODO: Consider extracting this block into a separate method
                     severity="MAINTENANCE",
                     category="HIGH_COUPLING",
                     description=f"Module has high coupling ({total_coupling} dependencies)",

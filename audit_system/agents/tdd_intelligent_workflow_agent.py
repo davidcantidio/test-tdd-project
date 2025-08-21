@@ -44,6 +44,8 @@ from __future__ import annotations
 import logging
 import time
 import sys
+import os
+import subprocess
 from pathlib import Path
 from typing import Dict, List, Any, Optional, Tuple
 from dataclasses import dataclass, field
@@ -250,11 +252,17 @@ class TDDIntelligentWorkflowAgent:
                 self.logger.info("✅ Loaded TDAH optimization guidelines for workflow management")
             
             # Load system architecture for TDD strategy adaptation
-            status_path = NAVIGATION_PATH / "STATUS.md"
-            if status_path.exists():
-                with open(status_path, 'r', encoding='utf-8') as f:
-                    context["architecture_patterns"]["system_status"] = f.read()
-                self.logger.info("✅ Loaded system architecture for TDD strategy context")
+            # Prefer NAVIGATION_PATH/STATUS.md; fallback to project root
+            status_candidates = [
+                NAVIGATION_PATH / "STATUS.md",
+                self.project_root / "STATUS.md"
+            ]
+            for status_path in status_candidates:
+                if status_path.exists():
+                    with open(status_path, 'r', encoding='utf-8') as f:
+                        context["architecture_patterns"]["system_status"] = f.read()
+                    self.logger.info("✅ Loaded system architecture for TDD strategy context: %s", status_path)
+                    break
             
             self.logger.info("📚 TDD analysis context loaded successfully with enhanced patterns")
             
@@ -827,12 +835,43 @@ class TDDIntelligentWorkflowAgent:
         return analysis.testability_score  # Use testability as proxy
     
     def _check_for_failing_tests(self, file_path: str) -> bool:
-        """Check for failing tests."""
-        return False  # Simplified
+        """Check for failing tests using pytest execution."""
+        try:
+            # Find related test files
+            test_files = self._find_test_files_for_module(file_path)
+            if not test_files:
+                return False  # No tests = no failing tests
+            
+            # Run pytest in batch to reduce overhead
+            self._rl_guard(600, "pytest_check_failing")
+            cmd = ['python', '-m', 'pytest', *test_files, '--tb=no', '-q', '--disable-warnings']
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=60, cwd=self.project_root)
+            if result.returncode > 0:
+                self.logger.info("Found failing tests in related files: %s", ", ".join(test_files))
+                return True
+            return False
+            
+        except Exception as e:
+            self.logger.warning(f"Failed to check for failing tests in {file_path}: {e}")
+            return False
     
     def _check_for_passing_tests(self, file_path: str) -> bool:
-        """Check for passing tests.""" 
-        return True  # Simplified
+        """Check for passing tests using pytest execution."""
+        try:
+            # Find related test files
+            test_files = self._find_test_files_for_module(file_path)
+            if not test_files:
+                return False  # No tests = no passing tests
+            
+            # Run pytest in batch and validate return code 0
+            self._rl_guard(600, "pytest_check_passing")
+            cmd = ['python', '-m', 'pytest', *test_files, '--tb=no', '-q', '--disable-warnings']
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=60, cwd=self.project_root)
+            return result.returncode == 0
+            
+        except Exception as e:
+            self.logger.warning(f"Failed to check for passing tests in {file_path}: {e}")
+            return False
     
     def _calculate_refactoring_safety(self, analysis: FileSemanticAnalysis) -> float:
         """Calculate how safe refactoring would be."""
@@ -1104,11 +1143,57 @@ class TDDIntelligentWorkflowAgent:
     
     def _detect_current_phase(self, file_path: str) -> Optional[TDDPhase]:
         """Detect current TDD phase based on file analysis."""
-        # Simplified detection logic
-        if "_test.py" in file_path or "test_" in file_path:
+        # Improved detection logic with more patterns
+        lower = file_path.lower()
+        if any(pat in lower for pat in ("/tests/", "\\tests\\", "test_", "_test.py")):
             return TDDPhase.RED
         else:
             return TDDPhase.GREEN
+    
+    def _find_test_files_for_module(self, file_path: str) -> List[str]:
+        """
+        Find test files related to the target module.
+        Heuristics:
+          - tests/test_<module>.py
+          - tests/**/test_<module>.py
+          - tests/**/<module>_test.py
+          - If module is in subdirectories, tries base names.
+        """
+        project = Path(self.project_root)
+        tests_dir = project / "tests"
+        if not tests_dir.exists():
+            return []
+        
+        target = Path(file_path)
+        module_stem = target.stem  # filename without extension
+        candidates: List[Path] = []
+        
+        # Common patterns
+        patterns = [
+            f"test_{module_stem}.py",
+            f"{module_stem}_test.py",
+        ]
+        # Direct search in tests/
+        for pat in patterns:
+            for p in tests_dir.rglob(pat):
+                candidates.append(p)
+        
+        # If nothing found, fallback: all tests mentioning the stem in name
+        if not candidates:
+            for p in tests_dir.rglob("test_*.py"):
+                if module_stem in p.name:
+                    candidates.append(p)
+        
+        # Dedup and only existing files
+        uniq = []
+        seen = set()
+        for p in candidates:
+            if p.exists():
+                s = str(p.resolve())
+                if s not in seen:
+                    uniq.append(s)
+                    seen.add(s)
+        return uniq
 
 
 def main():

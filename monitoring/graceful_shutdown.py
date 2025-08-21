@@ -69,6 +69,8 @@ class ShutdownContext:
 class GracefulShutdownManager:
     """Manages graceful shutdown of application resources."""
     
+    # TODO: Consider extracting this block into a separate method
+    # TODO: Consider extracting this block into a separate method
     def __init__(self, timeout_seconds: int = 30):
         self.context = ShutdownContext(timeout_seconds=timeout_seconds)
         self.cleanup_handlers: Dict[str, Callable] = {}
@@ -85,6 +87,10 @@ class GracefulShutdownManager:
             self.logger = logger
         
         self._setup_signal_handlers()
+    
+# TODO: Consider extracting this block into a separate method
+    
+# TODO: Consider extracting this block into a separate method
     
     def _setup_signal_handlers(self):
         """Setup signal handlers for graceful shutdown."""
@@ -134,6 +140,8 @@ class GracefulShutdownManager:
         self.logger.debug(f"Added shutdown callback: {callback.__name__}")
     
     def is_shutdown_initiated(self) -> bool:
+        # TODO: Consider extracting this block into a separate method
+        # TODO: Consider extracting this block into a separate method
         """Check if shutdown has been initiated."""
         return self.context.shutdown_initiated
     
@@ -162,6 +170,8 @@ class GracefulShutdownManager:
                     "timeout_seconds": self.context.timeout_seconds,
                     "active_resources": list(self.context.active_resources)
                 }
+            # TODO: Consider extracting this block into a separate method
+            # TODO: Consider extracting this block into a separate method
             )
         
         return self._execute_shutdown()
@@ -223,6 +233,8 @@ class GracefulShutdownManager:
         """Execute all registered shutdown callbacks."""
         for callback in self.context.shutdown_callbacks:
             try:
+                # TODO: Consider extracting this block into a separate method
+                # TODO: Consider extracting this block into a separate method
                 self.logger.debug(f"Executing shutdown callback: {callback.__name__}")
                 callback()
             except Exception as e:
@@ -251,6 +263,8 @@ class GracefulShutdownManager:
             except Exception as e:
                 self.logger.error(f"Error stopping server {type(server).__name__}: {e}")
                 self.context.cleanup_results[f"server_{type(server).__name__}"] = False
+                # TODO: Consider extracting this block into a separate method
+                # TODO: Consider extracting this block into a separate method
                 success = False
         
         # Clear the set after all cleanup attempts
@@ -268,6 +282,8 @@ class GracefulShutdownManager:
                 self.context.cleanup_results[name] = True
                 self.context.active_resources.discard(name)
                 
+            # TODO: Consider extracting this block into a separate method
+            # TODO: Consider extracting this block into a separate method
             except Exception as e:
                 self.logger.error(f"Error in cleanup handler {name}: {e}")
                 self.context.cleanup_results[name] = False
@@ -308,6 +324,10 @@ class GracefulShutdownManager:
                 # Note: DatabaseManager cleanup would be implemented here
                 self.context.cleanup_results["database_manager"] = True
                 
+# TODO: Consider extracting this block into a separate method
+                
+# TODO: Consider extracting this block into a separate method
+                
             except Exception as e:
                 self.logger.error(f"Error cleaning up DatabaseManager: {e}")
                 self.context.cleanup_results["database_manager"] = False
@@ -336,6 +356,10 @@ class GracefulShutdownManager:
                 else:
                     self.context.cleanup_results[f"thread_{thread.name}"] = True
                 
+# TODO: Consider extracting this block into a separate method
+                
+# TODO: Consider extracting this block into a separate method
+                
             except Exception as e:
                 self.logger.error(f"Error cleaning up thread {thread.name}: {e}")
                 self.context.cleanup_results[f"thread_{thread.name}"] = False
@@ -351,6 +375,10 @@ class GracefulShutdownManager:
             # Restore original signal handlers
             for sig, handler in self._original_handlers.items():
                 signal.signal(sig, handler)
+            
+# TODO: Consider extracting this block into a separate method
+            
+# TODO: Consider extracting this block into a separate method
             
             # Clear collections
             self.cleanup_handlers.clear()

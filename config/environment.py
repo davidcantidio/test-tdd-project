@@ -135,6 +135,8 @@ class EnvironmentConfigLoader:
         self.environment = os.getenv("TDD_ENVIRONMENT", "development").lower()
         logger.info(f"Loading configuration for environment: {self.environment}")
     
+    # TODO: Consider extracting this block into a separate method
+    # TODO: Consider extracting this block into a separate method
     def load_config(self) -> AppConfig:
         """Load complete configuration for current environment."""
         
@@ -153,6 +155,10 @@ class EnvironmentConfigLoader:
         logger.info(f"Configuration loaded successfully for {self.environment}")
         return config
     
+# TODO: Consider extracting this block into a separate method
+    
+# TODO: Consider extracting this block into a separate method
+    
     def _load_base_config(self) -> AppConfig:
         """Load base configuration from file."""
         config_file = self.config_dir / f"{self.environment}.toml"
@@ -163,6 +169,8 @@ class EnvironmentConfigLoader:
                 config_data = tomllib.load(f)
             return self._dict_to_config(config_data)
         else:
+            # TODO: Consider extracting this block into a separate method
+            # TODO: Consider extracting this block into a separate method
             logger.warning(f"Config file not found: {config_file}, using defaults")
             return AppConfig(environment=self.environment)
     
@@ -190,6 +198,8 @@ class EnvironmentConfigLoader:
             config.security.require_auth = False  # Optional for dev
             config.security.log_level = "DEBUG"
             config.monitoring.enable_health_check = False
+            # TODO: Consider extracting this block into a separate method
+            # TODO: Consider extracting this block into a separate method
             config.performance.enable_redis = False
         
         return config
@@ -232,6 +242,8 @@ class EnvironmentConfigLoader:
             config.host = host
         
         # Monitoring
+        # TODO: Consider extracting this block into a separate method
+        # TODO: Consider extracting this block into a separate method
         if log_level := os.getenv("LOG_LEVEL"):
             config.security.log_level = log_level.upper()
         
@@ -261,6 +273,8 @@ class EnvironmentConfigLoader:
         
         # Validate database paths
         if config.environment not in ["test", "development"] and config.environment.startswith("test"):
+            # TODO: Consider extracting this block into a separate method
+            # TODO: Consider extracting this block into a separate method
             db_path = Path(config.database.framework_db_path)
             if not db_path.exists() and config.environment == "production":
                 logger.warning(f"Database file not found: {db_path}")

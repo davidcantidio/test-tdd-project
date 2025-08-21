@@ -65,6 +65,8 @@ class HealthCheck:
         self.last_result = None
         self.last_error = None
     
+    # TODO: Consider extracting this block into a separate method
+    # TODO: Consider extracting this block into a separate method
     def run(self) -> Dict[str, Any]:
         """Run health check with timeout."""
         start_time = time.time()
@@ -101,6 +103,10 @@ class HealthCheck:
                 "timestamp": self.last_check_time.isoformat()
             }
     
+# TODO: Consider extracting this block into a separate method
+    
+# TODO: Consider extracting this block into a separate method
+    
     def _run_with_timeout(self) -> Dict[str, Any]:
         """Run check function with timeout."""
         import signal
@@ -122,6 +128,8 @@ class HealthCheck:
                 signal.signal(signal.SIGALRM, old_handler)
 
 
+# TODO: Consider extracting this block into a separate method
+# TODO: Consider extracting this block into a separate method
 class HealthCheckManager:
     """Manages multiple health checks and provides endpoints."""
     
@@ -137,6 +145,8 @@ class HealthCheckManager:
                 self.environment = config.environment
                 self.version = config.version
             except Exception:
+                # TODO: Consider extracting this block into a separate method
+                # TODO: Consider extracting this block into a separate method
                 pass
         
         self._register_default_checks()
@@ -161,6 +171,8 @@ class HealthCheckManager:
         self.add_check("uptime", self._check_uptime, timeout=0.5, critical=False)
     
     def add_check(self, name: str, check_func, timeout: float = 5.0, critical: bool = True):
+        # TODO: Consider extracting this block into a separate method
+        # TODO: Consider extracting this block into a separate method
         """Add a custom health check."""
         check = HealthCheck(name, check_func, timeout, critical)
         self.checks.append(check)
@@ -186,6 +198,8 @@ class HealthCheckManager:
             "environment": self.environment,
             "version": self.version,
             "uptime_seconds": round((datetime.now(timezone.utc) - self.start_time).total_seconds()),
+            # TODO: Consider extracting this block into a separate method
+            # TODO: Consider extracting this block into a separate method
             "duration_ms": round((time.time() - start_time) * 1000, 2),
             "checks": check_results
         }
@@ -204,6 +218,8 @@ class HealthCheckManager:
             for result in check_results
         )
         
+        # TODO: Consider extracting this block into a separate method
+        # TODO: Consider extracting this block into a separate method
         if critical_failed:
             return HealthStatus.UNHEALTHY
         elif any_failed:
@@ -237,6 +253,10 @@ class HealthCheckManager:
                     "timer_db": str(db_manager.timer_db_path)
                 }
             }
+            
+# TODO: Consider extracting this block into a separate method
+            
+# TODO: Consider extracting this block into a separate method
             
         except Exception as e:
             return {
@@ -279,6 +299,8 @@ class HealthCheckManager:
                     "environment": config.environment,
                     "debug": config.debug,
                     "auth_required": config.security.require_auth
+                # TODO: Consider extracting this block into a separate method
+                # TODO: Consider extracting this block into a separate method
                 }
             }
             
@@ -316,6 +338,8 @@ class HealthCheckManager:
                     "total_gb": round(total / (1024**3), 2),
                     "used_gb": round(used / (1024**3), 2),
                     "free_gb": round(free / (1024**3), 2),
+                    # TODO: Consider extracting this block into a separate method
+                    # TODO: Consider extracting this block into a separate method
                     "free_percent": round(free_percent, 1)
                 }
             }
@@ -358,6 +382,8 @@ class HealthCheckManager:
             }
             
         except ImportError:
+            # TODO: Consider extracting this block into a separate method
+            # TODO: Consider extracting this block into a separate method
             return {
                 "status": HealthStatus.DEGRADED,
                 "message": "psutil not available for memory monitoring",
@@ -388,6 +414,8 @@ class HealthCheckManager:
             
         except Exception as e:
             return {
+                # TODO: Consider extracting this block into a separate method
+                # TODO: Consider extracting this block into a separate method
                 "status": HealthStatus.DEGRADED,
                 "message": f"Uptime check failed: {e}",
                 "details": {"error": str(e)}
@@ -408,6 +436,8 @@ class HealthCheckRequestHandler(BaseHTTPRequestHandler):
         if parsed_path.path == "/health":
             self._handle_health_check()
         elif parsed_path.path == "/ready":
+            # TODO: Consider extracting this block into a separate method
+            # TODO: Consider extracting this block into a separate method
             self._handle_readiness_check()
         elif parsed_path.path == "/live":
             self._handle_liveness_check()
@@ -436,6 +466,8 @@ class HealthCheckRequestHandler(BaseHTTPRequestHandler):
             self._send_response(503, {
                 "status": "not_ready",
                 "message": "Critical health checks failing"
+            # TODO: Consider extracting this block into a separate method
+            # TODO: Consider extracting this block into a separate method
             })
         else:
             self._send_response(200, {
@@ -476,6 +508,10 @@ class HealthCheckRequestHandler(BaseHTTPRequestHandler):
         
         response_json = json.dumps(data, indent=2)
         self.wfile.write(response_json.encode('utf-8'))
+    
+# TODO: Consider extracting this block into a separate method
+    
+# TODO: Consider extracting this block into a separate method
     
     def log_message(self, format, *args):
         """Override to use Python logging."""

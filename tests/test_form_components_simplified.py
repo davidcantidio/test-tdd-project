@@ -154,6 +154,8 @@ def test_standard_form_submit_button():
     assert form.submitted == True
 
 
+# TODO: Consider extracting this block into a separate method
+# TODO: Consider extracting this block into a separate method
 def test_standard_form_validation():
     """Test form validation integration."""
     st = DummyStreamlit()
@@ -204,6 +206,10 @@ def test_client_form_initialization():
     assert isinstance(form, StandardForm)
 
 
+# TODO: Consider extracting this block into a separate method
+
+# TODO: Consider extracting this block into a separate method
+
 def test_client_form_validation_success():
     """Test successful client validation."""
     form = ClientForm("client_form", "Create Client")
@@ -216,6 +222,8 @@ def test_client_form_validation_success():
     }
     
     errors = form.validate_client_data(valid_data)
+    # TODO: Consider extracting this block into a separate method
+    # TODO: Consider extracting this block into a separate method
     assert errors == []
 
 
@@ -230,6 +238,7 @@ def test_client_form_validation_missing_required():
     }
     
     errors = form.validate_client_data(invalid_data)
+    # TODO: Consider extracting this block into a separate method
     assert len(errors) > 0
     assert any("Missing required field" in error for error in errors)
 
@@ -244,6 +253,8 @@ def test_client_form_validation_invalid_email():
         "primary_contact_email": "invalid-email"
     }
     
+    # TODO: Consider extracting this block into a separate method
+    # TODO: Consider extracting this block into a separate method
     errors = form.validate_client_data(invalid_data)
     assert any("Invalid email format" in error for error in errors)
 
@@ -280,6 +291,8 @@ def test_project_form_initialization():
     """Test ProjectForm initialization."""
     form = ProjectForm("project_form", "Create Project")
     
+    # TODO: Consider extracting this block into a separate method
+    # TODO: Consider extracting this block into a separate method
     assert form.form_id == "project_form"
     assert form.title == "Create Project"
     assert isinstance(form, StandardForm)
@@ -294,6 +307,8 @@ def test_project_form_validation_success():
         "project_key": "test_project",
         "name": "Test Project",
         "status": "planning"
+    # TODO: Consider extracting this block into a separate method
+    # TODO: Consider extracting this block into a separate method
     }
     
     errors = form.validate_project_data(valid_data)
@@ -309,6 +324,8 @@ def test_project_form_validation_missing_required():
         "project_key": "",
         "name": "",
         "status": ""
+    # TODO: Consider extracting this block into a separate method
+    # TODO: Consider extracting this block into a separate method
     }
     
     errors = form.validate_project_data(invalid_data)
@@ -372,6 +389,9 @@ def test_form_validation_text_length():
     errors = fv.validate_text_length("ab", 3, 10, "field")
     assert "must be at least 3 characters" in errors[0]
     
+# TODO: Consider extracting this block into a separate method
+# TODO: Consider extracting this block into a separate method
+    
     errors = fv.validate_text_length("a" * 11, 3, 10, "field")
     assert "must be at most 10 characters" in errors[0]
     
@@ -423,6 +443,10 @@ def test_create_client_form():
     assert form.title == "Test Title"
 
 
+# TODO: Consider extracting this block into a separate method
+
+# TODO: Consider extracting this block into a separate method
+
 def test_create_project_form():
     """Test project form creation convenience function."""
     form = create_project_form("test_id", "Test Title")
@@ -446,6 +470,10 @@ def test_render_messages():
         assert len(st.successes) == 1
         assert "✅ Success!" in st.successes[0]
         
+# TODO: Consider extracting this block into a separate method
+        
+# TODO: Consider extracting this block into a separate method
+        
         render_error_messages(["Error 1", "Error 2"])
         assert len(st.errors) == 2
         assert "❌ Error 1" in st.errors[0]
@@ -467,6 +495,10 @@ def test_full_client_form_workflow():
     })
     
     form = ClientForm("client_form", "Create Client", st_module=st)
+    
+# TODO: Consider extracting this block into a separate method
+    
+# TODO: Consider extracting this block into a separate method
     
     # Render form (should collect data)
     form.render_client_fields()

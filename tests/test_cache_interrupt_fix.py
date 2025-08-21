@@ -46,6 +46,8 @@ class TestCacheInterruptFix:
         except:
             pass
     
+    # TODO: Consider extracting this block into a separate method
+    # TODO: Consider extracting this block into a separate method
     def test_basic_cache_operations_work(self):
         """Test that basic cache operations work correctly."""
         # Test set
@@ -66,6 +68,10 @@ class TestCacheInterruptFix:
         # Verify deletion
         result = self.cache.get("test_key")
         assert result is None
+    
+# TODO: Consider extracting this block into a separate method
+    
+# TODO: Consider extracting this block into a separate method
     
     def test_lock_timeout_protection(self):
         """Test that lock operations have timeout protection."""
@@ -144,6 +150,8 @@ class TestCacheInterruptFix:
                 errors.append("Thread timeout - possible deadlock")
         
         # Verify results
+        # TODO: Consider extracting this block into a separate method
+        # TODO: Consider extracting this block into a separate method
         assert len(errors) == 0, f"Concurrent access errors: {errors}"
         assert len(results) >= 25, f"Expected >=25 successes, got {len(results)}"  # 5 workers * 10 ops, allow some failures due to timeouts
     
@@ -162,6 +170,8 @@ class TestCacheInterruptFix:
             assert isinstance(result, bool)
             
             # Get should not crash
+            # TODO: Consider extracting this block into a separate method
+            # TODO: Consider extracting this block into a separate method
             retrieved = self.cache.get("problem_key")
             # Should return None or the data, shouldn't raise exception
             assert retrieved is None or retrieved == data
@@ -183,6 +193,8 @@ class TestCacheInterruptFix:
             assert cache.get("mem_key") is None
             
             stats = cache.get_stats()
+            # TODO: Consider extracting this block into a separate method
+            # TODO: Consider extracting this block into a separate method
             assert stats["disk_writes"] == 0  # No disk operations
             
         finally:
@@ -204,6 +216,8 @@ class TestCacheInterruptFix:
             assert stats["memory_entries"] <= 3
             
             # Recent entries should still be accessible
+            # TODO: Consider extracting this block into a separate method
+            # TODO: Consider extracting this block into a separate method
             assert small_cache.get("key_4") == "value_4"
             
         finally:
@@ -223,6 +237,8 @@ class TestCacheInterruptFix:
             assert cache.set("timeout_key", "timeout_value") is True
             assert cache.get("timeout_key") == "timeout_value"
             
+        # TODO: Consider extracting this block into a separate method
+        # TODO: Consider extracting this block into a separate method
         finally:
             cache.shutdown()
 
@@ -248,6 +264,8 @@ class TestCacheDecoratorFix:
         
         # Second call should use cache
         result2 = expensive_function(1, 2)
+        # TODO: Consider extracting this block into a separate method
+        # TODO: Consider extracting this block into a separate method
         assert result2 == 3
         assert call_count == 1  # Function not called again
         
@@ -279,6 +297,8 @@ class TestCacheDecoratorFix:
         assert call_count == 1
         
         # Failing call should not be cached
+        # TODO: Consider extracting this block into a separate method
+        # TODO: Consider extracting this block into a separate method
         with pytest.raises(ValueError):
             failing_function(True)
         assert call_count == 2
@@ -319,6 +339,7 @@ class TestInterruptSafetyIntegration:
         results = validate_interrupt_safety()
         
         assert isinstance(results, dict)
+        # TODO: Consider extracting this block into a separate method
         assert "success_count" in results
         assert "error_count" in results
         assert "total_tests" in results
@@ -334,6 +355,8 @@ class TestInterruptSafetyIntegration:
         cache = InterruptSafeCache()
         
         try:
+            # TODO: Consider extracting this block into a separate method
+            # TODO: Consider extracting this block into a separate method
             # Should have original handler stored
             assert hasattr(cache, '_original_sigint_handler')
             
@@ -355,6 +378,8 @@ class TestInterruptSafetyIntegration:
         cache.shutdown()
         
         # Cache should be marked as interrupted
+        # TODO: Consider extracting this block into a separate method
+        # TODO: Consider extracting this block into a separate method
         assert cache._interrupted is True
         
         # Operations after shutdown should fail gracefully
@@ -382,6 +407,8 @@ class TestCachePerformance:
             
             # Test get performance
             start_time = time.time()
+            # TODO: Consider extracting this block into a separate method
+            # TODO: Consider extracting this block into a separate method
             for i in range(100):
                 cache.get(f"perf_key_{i}")
             get_time = time.time() - start_time

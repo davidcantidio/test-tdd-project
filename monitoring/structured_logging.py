@@ -76,6 +76,8 @@ class StructuredLogFormatter(logging.Formatter):
         self.include_correlation = include_correlation
         self.include_performance = include_performance
     
+    # TODO: Consider extracting this block into a separate method
+    # TODO: Consider extracting this block into a separate method
     def format(self, record: logging.LogRecord) -> str:
         """Format log record as structured JSON."""
         # Base log entry
@@ -142,6 +144,10 @@ class CorrelationIDFilter(logging.Filter):
 class PerformanceLoggerMixin:
     """Mixin to add performance logging capabilities."""
     
+# TODO: Consider extracting this block into a separate method
+    
+# TODO: Consider extracting this block into a separate method
+    
     def log_performance(self, operation: str, duration_ms: float, **kwargs):
         """Log performance metrics."""
         performance_data = {
@@ -178,6 +184,8 @@ class PerformanceLoggerMixin:
 class SecurityEventLogger:
     """Logger for security-related events."""
     
+    # TODO: Consider extracting this block into a separate method
+    # TODO: Consider extracting this block into a separate method
     def __init__(self, logger_name: str = "security"):
         self.logger = get_structured_logger(logger_name)
     
@@ -193,6 +201,8 @@ class SecurityEventLogger:
                     'method': method,
                     'timestamp': datetime.now(timezone.utc).isoformat(),
                     **kwargs
+                # TODO: Consider extracting this block into a separate method
+                # TODO: Consider extracting this block into a separate method
                 }
             }
         )
@@ -208,6 +218,8 @@ class SecurityEventLogger:
                     'resource': resource,
                     'action': action,
                     'timestamp': datetime.now(timezone.utc).isoformat(),
+                    # TODO: Consider extracting this block into a separate method
+                    # TODO: Consider extracting this block into a separate method
                     **kwargs
                 }
             }
@@ -273,6 +285,8 @@ def clear_correlation_context():
 
 
 @contextmanager
+# TODO: Consider extracting this block into a separate method
+# TODO: Consider extracting this block into a separate method
 def correlation_context(correlation_id: Optional[str] = None, **kwargs):
     """Context manager for correlation tracking."""
     if correlation_id is None:
@@ -298,6 +312,10 @@ def correlation_context(correlation_id: Optional[str] = None, **kwargs):
             clear_correlation_context()
 
 
+# TODO: Consider extracting this block into a separate method
+
+# TODO: Consider extracting this block into a separate method
+
 def update_correlation_context(**kwargs):
     """Update current correlation context."""
     context = get_correlation_context()
@@ -317,6 +335,8 @@ def get_structured_logger(name: str, level: Optional[str] = None) -> logging.Log
     if not logger.handlers:
         setup_structured_logging(logger, level)
     
+    # TODO: Consider extracting this block into a separate method
+    # TODO: Consider extracting this block into a separate method
     return logger
 
 
@@ -383,6 +403,10 @@ def setup_structured_logging(logger: Optional[logging.Logger] = None, level: Opt
     
     logger.addHandler(handler)
     
+# TODO: Consider extracting this block into a separate method
+    
+# TODO: Consider extracting this block into a separate method
+    
     return logger
 
 
@@ -401,6 +425,8 @@ def log_request_start(operation: str, **kwargs) -> str:
                 'event_type': 'request_start',
                 'operation': operation,
                 **kwargs
+            # TODO: Consider extracting this block into a separate method
+            # TODO: Consider extracting this block into a separate method
             }
         })
     
@@ -511,6 +537,10 @@ class ApplicationLogger(PerformanceLoggerMixin):
             }
         )
 
+
+# TODO: Consider extracting this block into a separate method
+
+# TODO: Consider extracting this block into a separate method
 
 # Global logger instances
 security_logger = SecurityEventLogger()

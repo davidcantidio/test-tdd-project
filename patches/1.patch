@@ -1,175 +1,335 @@
-python3 - << 'EOF'
-import json, sys, os, shutil
-from pathlib import Path
-
-# ---------- Helpers ----------
-def load_json(p: Path):
-    with p.open('r', encoding='utf-8') as f:
-        return json.load(f)
-
-def save_json(p: Path, data: dict):
-    p.parent.mkdir(parents=True, exist_ok=True)
-    tmp = p.with_suffix('.tmp')
-    with tmp.open('w', encoding='utf-8') as f:
-        json.dump(data, f, indent=2, ensure_ascii=False)
-    tmp.replace(p)
-
-def ensure_backup(file_path: str, backup_root: Path, backup_id: str, metadata_path: Path):
-    """Copia o arquivo para BACKUP_DIR/files_<ID>/<path_relativo> e
-    atualiza o array files_backed_up no metadata."""
-    src = Path(file_path)
-    # Guard: só faz backup de arquivos que existem
-    if not src.exists():
-        return False
-
-    rel = src.as_posix()
-    # destino
-    dest = backup_root / f"files_{backup_id}" / rel
-    dest.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copy2(src, dest)
-
-    # atualizar metadata
-    meta = load_json(metadata_path)
-    files = set(meta.get("files_backed_up", []))
-    if rel not in files:
-        files.add(rel)
-        meta["files_backed_up"] = sorted(files)
-        save_json(metadata_path, meta)
-    return True
-
-def validate_python_syntax(file_path: str) -> bool:
-    if not file_path.endswith(".py"):
-        return True
-    import py_compile
-    try:
-        py_compile.compile(file_path, doraise=True)
-        return True
-    except Exception:
-        return False
-
-# ---------- Config/env ----------
-audit_dir = Path(os.environ.get('AUDIT_DIR', '.audit_intelligent'))
-selective = int(os.environ.get('SELECTIVE', '0'))
-
-backup_dir = Path(os.environ.get('BACKUP_DIR', '.optimization_backups'))
-backup_id  = os.environ.get('SCRIPT_START_TIME')  # passada do Bash via env
-metadata_path = backup_dir / "metadata" / f"backup_{backup_id}.json"
-
-# ---------- Imports do agente ----------
-sys.path.append('.')
-try:
-    from audit_system.agents.intelligent_code_agent import IntelligentCodeAgent, AnalysisDepth, SemanticMode
-except Exception as e:
-    print(f"❌ Error importing optimization agents: {e}")
-    print("📋 Make sure the audit system is properly installed (PYTHONPATH).")
-    sys.exit(1)
-
-# ---------- Carrega resultados ----------
-try:
-    data = load_json(audit_dir / 'intelligent_analysis.json')
-except Exception as e:
-    print(f"❌ Error loading audit results: {e}")
-    sys.exit(1)
-
-results = data.get('results', [])
-targets = [r for r in results if r.get('recommended_refactorings_count', 0) > 0]
-if not targets:
-    print("ℹ️ No files with optimization recommendations found")
-    sys.exit(0)
-
-print(f"🔧 Found {len(targets)} files with optimization opportunities")
-
-code_agent = IntelligentCodeAgent(
-    project_root=Path('.'),
-    enable_real_llm=True,
-    analysis_depth=AnalysisDepth.DEEP,
-    semantic_mode=SemanticMode.AGGRESSIVE,
-    dry_run=False
-)
-
-total_applied = 0
-total_files_modified = 0
-failed_files = []
-
-for fr in targets:
-    file_path = fr['file_path']
-    count = fr['recommended_refactorings_count']
-    qscore = fr.get('semantic_quality_score', 0)
-    print(f"\n📝 Processing: {file_path}")
-    print(f"   🔧 {count} optimizations available")
-    print(f"   📊 Current quality score: {qscore:.1f}")
-
-    if selective:
-        try:
-            resp = input(f"   Apply optimizations to {file_path}? (y/N/q): ").strip().lower()
-        except EOFError:
-            resp = 'n'
-        if resp == 'q':
-            print("🛑 Optimization process stopped by user")
-            break
-        if resp != 'y':
-            print("   ⏭️ Skipped")
-            continue
-
-    try:
-        agent = IntelligentCodeAgent(
-            project_root=Path('.'),
-            enable_real_llm=True,
-            analysis_depth=AnalysisDepth.DEEP,
-            semantic_mode=SemanticMode.AGGRESSIVE
-        )
-        analysis = agent.analyze_file_intelligently(file_path)
-
-        if not getattr(analysis, "recommended_refactorings", None):
-            print("   ℹ️ No current optimization recommendations")
-            continue
-
-        # 1) BACKUP antes de mexer
-        backed_up = ensure_backup(file_path, backup_dir, backup_id, metadata_path)
-        if not backed_up:
-            print("   ⚠️ File not found for backup; skipping.")
-            continue
-
-        # 2) Aplica refatorações
-        result = agent.apply_intelligent_refactorings(
-            analysis=analysis,
-            selected_refactorings=None
-        )
-        applied = int(result.get('applied', 0))
-        failed  = int(result.get('failed', 0))
-
-        # 3) Valida sintaxe (.py) — rollback se falhar
-        if not validate_python_syntax(file_path):
-            # rollback do arquivo
-            src_backup = backup_dir / f"files_{backup_id}" / Path(file_path).as_posix()
-            if src_backup.exists():
-                src_backup.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copy2(src_backup, file_path)
-            print(f"   ❌ Syntax error after changes — rolled back {file_path}")
-            failed_files.append(file_path)
-            continue
-
-        if applied > 0:
-            total_applied += applied
-            total_files_modified += 1
-            msg = f"   ✅ Applied {applied} optimizations successfully"
-            if failed > 0:
-                msg += f" (⚠️ {failed} failed)"
-            print(msg)
-        else:
-            status = result.get('status', 'unknown')
-            if status == 'completed':
-                print("   ℹ️ No optimizations to apply (already optimized)")
-            else:
-                print(f"   ℹ️ No optimizations applied (status: {status})")
-
-    except Exception as e:
-        failed_files.append(file_path)
-        print(f"   ❌ Error optimizing {file_path}: {e}")
-
-print(f"\n🎉 Optimization Summary:")
-print(f"   📁 Files modified: {total_files_modified}")
-print(f"   🔧 Total optimizations applied: {total_applied}")
-if failed_files:
-    print(f"   ❗ Files with errors (kept/rolled back): {len(failed_files)}")
-EOF
+*** a/audit_system/agents/tdd_intelligent_workflow_agent.py
+--- b/audit_system/agents/tdd_intelligent_workflow_agent.py
+@@
+ from __future__ import annotations
+ 
+ import logging
+ import time
+ import sys
++import os
++import subprocess
+ from pathlib import Path
+ from typing import Dict, List, Any, Optional, Tuple
+ from dataclasses import dataclass, field
+ from enum import Enum
+ from datetime import datetime, timedelta
+ import argparse
+@@
+ CONTEXT_BASE_PATH = Path(__file__).parent.parent / "context"
+ GUIDES_PATH = CONTEXT_BASE_PATH / "guides"
+ WORKFLOWS_PATH = CONTEXT_BASE_PATH / "workflows" 
+ NAVIGATION_PATH = CONTEXT_BASE_PATH / "navigation"
+ 
+@@
+     def _load_tdd_analysis_context(self) -> Dict[str, Any]:
+         """
+         📚 Load TDD and TDAH context for enhanced workflow optimization.
+         """
+         context = {
+             "tdd_patterns": {},
+             "tdah_guidelines": {},
+             "workflow_optimizations": {},
+             "architecture_patterns": {}
+         }
+ 
+         try:
+             # Load TDD workflow patterns for real understanding
+             tdd_patterns_path = WORKFLOWS_PATH / "TDD_WORKFLOW_PATTERNS.md"
+             if tdd_patterns_path.exists():
+                 with open(tdd_patterns_path, 'r', encoding='utf-8') as f:
+                     context["tdd_patterns"]["content"] = f.read()
+                     context["tdd_patterns"]["cycle_insights"] = [
+                         "Red phase focuses on clear test definitions and failure analysis",
+                         "Green phase emphasizes minimal implementation and quick success",
+                         "Refactor phase balances code quality with test preservation",
+                         "Cycle efficiency depends on proper phase separation and focus"
+                     ]
+                 self.logger.info("✅ Loaded TDD workflow patterns for real cycle analysis")
+ 
+             # Load TDAH optimization guidelines for workflow management
+             tdah_guide_path = WORKFLOWS_PATH / "TDAH_OPTIMIZATION_GUIDE.md"
+             if tdah_guide_path.exists():
+                 with open(tdah_guide_path, 'r', encoding='utf-8') as f:
+                     context["tdah_guidelines"]["content"] = f.read()
+                     context["tdah_guidelines"]["workflow_principles"] = [
+                         "Break complex TDD cycles into 15-25 minute focused sessions",
+                         "Provide immediate feedback on each cycle completion",
+                         "Use visual progress indicators for sustained motivation",
+                         "Allow flexible session timing based on energy levels",
+                         "Implement gentle interruption recovery for hyperfocus protection"
+                     ]
+                 self.logger.info("✅ Loaded TDAH optimization guidelines for workflow management")
+ 
+-            # Load system architecture for TDD strategy adaptation
+-            status_path = NAVIGATION_PATH / "STATUS.md"
+-            if status_path.exists():
+-                with open(status_path, 'r', encoding='utf-8') as f:
+-                    context["architecture_patterns"]["system_status"] = f.read()
+-                self.logger.info("✅ Loaded system architecture for TDD strategy context")
++            # Load system architecture for TDD strategy adaptation
++            # Prefer NAVIGATION_PATH/STATUS.md; fallback para raiz do projeto
++            status_candidates = [
++                NAVIGATION_PATH / "STATUS.md",
++                self.project_root / "STATUS.md"
++            ]
++            for status_path in status_candidates:
++                if status_path.exists():
++                    with open(status_path, 'r', encoding='utf-8') as f:
++                        context["architecture_patterns"]["system_status"] = f.read()
++                    self.logger.info("✅ Loaded system architecture for TDD strategy context: %s", status_path)
++                    break
+ 
+             self.logger.info("📚 TDD analysis context loaded successfully with enhanced patterns")
+ 
+         except Exception as e:
+             self.logger.warning(f"⚠️ Error loading TDD analysis context: {e}")
+ 
+         return context
+@@
+     def start_tdd_workflow_session(
+         self, 
+         target_file: str, 
+         initial_phase: TDDPhase,
+         user_energy_level: TDAHEnergyLevel,
+         focus_session_minutes: Optional[int] = None
+     ) -> TDDWorkflowSession:
+         """Start a new TDD workflow session with TDAH optimization."""
+ 
+         session_id = f"tdd_session_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+         focus_minutes = focus_session_minutes or self.default_focus_minutes
+ 
+         # Analyze the target file
+         self.logger.info("Analyzing %s for TDD workflow optimization", target_file)
++        # rate limiting guard para operação pesada
++        self._rl_guard(self.real_llm_config.get("tdd_phase_detection_tokens", 1500), "tdd_phase_analysis")
+         semantic_analysis = self.code_agent.analyze_file_intelligently(target_file)
+         tdd_analysis = self._analyze_tdd_specific_aspects(semantic_analysis, target_file)
+ 
+         # Create TDAH-optimized tasks
+         tasks = self._create_tdah_optimized_tasks(
+             semantic_analysis, tdd_analysis, initial_phase, user_energy_level
+         )
+@@
+         try:
+             while session.tasks_remaining:
+                 # Get next task based on energy level and complexity
+                 next_task = self._select_next_task(session)
+ 
+                 if not next_task:
+                     self.logger.info("No suitable tasks for current energy level")
+                     break
+ 
+                 # Execute task with TDAH support
+                 task_result = self._execute_tdah_optimized_task(session, next_task)
+ 
+                 if task_result["success"]:
+                     session.tasks_completed.append(next_task)
+                     session.tasks_remaining.remove(next_task)
+                     results["tasks_completed"] += 1
+ 
+                     # TDAH encouragement
+                     if self.tdah_mode:
+                         self._provide_tdah_encouragement(next_task, task_result)
+ 
+                 # Check for focus session boundaries
+                 if self._should_suggest_break(session):
+                     break_result = self._handle_focus_break(session)
+                     results["tdah_support_used"].append(break_result)
+ 
+                 # Check for phase transitions
+                 phase_change = self._check_tdd_phase_transition(session)
+                 if phase_change:
+                     results["phase_transitions"].append(phase_change)
+ 
+             # Final analysis
++            self._rl_guard(self.real_llm_config.get("progress_assessment_tokens", 1000), "progress_assessment")
+             final_analysis = self.code_agent.analyze_file_intelligently(session.target_file)
+             results["final_quality_score"] = final_analysis.semantic_quality_score
+             results["quality_improvements"] = session.quality_improvements_applied
+@@
+     def _determine_tdd_phase(self, analysis: FileSemanticAnalysis, file_path: str) -> TDDPhase:
+         """Determine current TDD phase based on analysis."""
+-        # Simplified logic - in practice would analyze test files and implementation
+-        if "test" in file_path:
++        # Melhoria: considera padrões de teste comuns
++        lower = file_path.lower()
++        if any(pat in lower for pat in ("/tests/", "\\tests\\", "test_", "_test.py")):
+             return TDDPhase.RED
+         elif analysis.semantic_quality_score < 70:
+             return TDDPhase.REFACTOR
+         else:
+             return TDDPhase.GREEN
+@@
+     def _check_for_failing_tests(self, file_path: str) -> bool:
+         """Check for failing tests using pytest execution."""
+         try:
+             # Find related test files
+-            test_files = self._find_test_files_for_module(file_path)
++            test_files = self._find_test_files_for_module(file_path)
+             if not test_files:
+                 return False  # No tests = no failing tests
+ 
+-            # Run pytest on test files and check for failures
+-            for test_file in test_files:
+-                if not os.path.exists(test_file):
+-                    continue
+-                    
+-                result = subprocess.run([
+-                    'python', '-m', 'pytest', test_file, '--tb=no', '-q', '--disable-warnings'
+-                ], capture_output=True, text=True, timeout=30, cwd=self.project_root)
+-                
+-                # pytest returns >0 if there are failures
+-                if result.returncode > 0:
+-                    self.logger.info(f"Found failing tests in {test_file}")
+-                    return True
+-
+-            return False  # All tests passed
++            # Executa em lote para reduzir overhead
++            self._rl_guard(600, "pytest_check_failing")
++            cmd = ['python', '-m', 'pytest', *test_files, '--tb=no', '-q', '--disable-warnings']
++            result = subprocess.run(cmd, capture_output=True, text=True, timeout=60, cwd=self.project_root)
++            if result.returncode > 0:
++                self.logger.info("Found failing tests in related files: %s", ", ".join(test_files))
++                return True
++            return False
+ 
+         except Exception as e:
+             self.logger.warning(f"Failed to check for failing tests in {file_path}: {e}")
+             return False
+ 
+     def _check_for_passing_tests(self, file_path: str) -> bool:
+         """Check for passing tests using pytest execution."""
+         try:
+             # Find related test files
+-            test_files = self._find_test_files_for_module(file_path)
++            test_files = self._find_test_files_for_module(file_path)
+             if not test_files:
+                 return False  # No tests = no passing tests
+ 
+-            # Run pytest on test files and check if all pass
+-            all_passing = True
+-            tests_found = False
+-            
+-            for test_file in test_files:
+-                if not os.path.exists(test_file):
+-                    continue
+-                    
+-                tests_found = True
+-                result = subprocess.run([
+-                    'python', '-m', 'pytest', test_file, '--tb=no', '-q', '--disable-warnings'
+-                ], capture_output=True, text=True, timeout=30, cwd=self.project_root)
+-                
+-                # pytest returns 0 if all tests pass
+-                if result.returncode != 0:
+-                    self.logger.info(f"Tests failing in {test_file}")
+-                    all_passing = False
+-                    break
+-            
+-            return tests_found and all_passing
++            # Executa em lote e valida retorno 0
++            self._rl_guard(600, "pytest_check_passing")
++            cmd = ['python', '-m', 'pytest', *test_files, '--tb=no', '-q', '--disable-warnings']
++            result = subprocess.run(cmd, capture_output=True, text=True, timeout=60, cwd=self.project_root)
++            return result.returncode == 0
+ 
+         except Exception as e:
+             self.logger.warning(f"Failed to check for passing tests in {file_path}: {e}")
+             return False
+@@
+     def _generate_tdd_next_steps(
+         self, 
+         phase: TDDPhase, 
+         coverage: float, 
+         analysis: FileSemanticAnalysis
+     ) -> List[str]:
+         """Generate TDD-specific next steps."""
+         steps = []
+ 
+         if phase == TDDPhase.RED:
+             steps.append("Write failing tests that specify desired behavior")
+             steps.append("Ensure tests fail for the right reasons")
+         elif phase == TDDPhase.GREEN:
+             steps.append("Implement minimal code to make tests pass")
+             steps.append("Avoid over-engineering in this phase")
+         else:  # REFACTOR
+             steps.extend([ref.description for ref in analysis.recommended_refactorings[:3]])
+ 
+         return steps
+@@
+     def _provide_post_task_support(
+         self, 
+         task: TDAHOptimizedTask, 
+         result: Dict[str, Any], 
+         duration: timedelta
+     ) -> None:
+         """Provide post-task support and celebration."""
+         print(f"\n🎉 Task completed: {task.description}")
+         print(f"⏱️ Actual time: {duration.total_seconds():.1f} seconds")
+         print(f"🎯 {task.encouragement_message}")
+ 
+         # Dopamine reward for TDAH
+         if task.immediate_feedback_available:
+             print("✨ Immediate feedback: Changes applied successfully!")
+ 
+         print("\n💪 Great job! Ready for the next challenge?\n")
++
++    def _find_test_files_for_module(self, file_path: str) -> List[str]:
++        """
++        Procura arquivos de teste relacionados ao módulo alvo.
++        Heurística:
++          - tests/test_<module>.py
++          - tests/**/test_<module>.py
++          - tests/**/<module>_test.py
++          - Se <module> estiver em subpastas, tenta os nomes-base.
++        """
++        project = Path(self.project_root)
++        tests_dir = project / "tests"
++        if not tests_dir.exists():
++            return []
++
++        target = Path(file_path)
++        module_stem = target.stem  # nome do arquivo sem extensão
++        candidates: List[Path] = []
++
++        # Padrões comuns
++        patterns = [
++            f"test_{module_stem}.py",
++            f"{module_stem}_test.py",
++        ]
++        # Busca direta em tests/
++        for pat in patterns:
++            for p in tests_dir.rglob(pat):
++                candidates.append(p)
++
++        # Se nada encontrado, fallback: todos testes que mencionem o stem no nome
++        if not candidates:
++            for p in tests_dir.rglob("test_*.py"):
++                if module_stem in p.name:
++                    candidates.append(p)
++
++        # Dedup e somente existentes
++        uniq = []
++        seen = set()
++        for p in candidates:
++            if p.exists():
++                s = str(p.resolve())
++                if s not in seen:
++                    uniq.append(s)
++                    seen.add(s)
++        return uniq
+@@
+     def _run_test_task(self, file_path: str, task: TDAHOptimizedTask) -> Dict[str, Any]:
+-        """Run tests for a specific task."""
+-        return {"type": "test", "passed": True}
++        """Run tests for a specific task."""
++        test_files = self._find_test_files_for_module(file_path)
++        if not test_files:
++            self.logger.info("No related tests found for %s", file_path)
++            return {"type": "test", "passed": False, "reason": "no_tests_found"}
++        self._rl_guard(800, "pytest_run_task")
++        cmd = ['python', '-m', 'pytest', *test_files, '--tb=short', '-q', '--disable-warnings']
++        result = subprocess.run(cmd, capture_output=True, text=True, timeout=120, cwd=self.project_root)
++        passed = (result.returncode == 0)
++        if not passed:
++            self.logger.info("Tests failed for %s\nstdout:\n%s\nstderr:\n%s", file_path, result.stdout, result.stderr)
++        return {"type": "test", "passed": passed, "files": test_files}

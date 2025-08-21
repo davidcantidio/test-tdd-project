@@ -1,6 +1,8 @@
 # Auto-gerado por tools/refactor_split_db.py — NÃO EDITAR À MÃO
 from __future__ import annotations
 
+# TODO: Consider extracting this block into a separate method
+# TODO: Consider extracting this block into a separate method
 def get_epics(manager, page: int=1, page_size: int=50, status_filter: Optional[Union[EpicStatus, str]]=None, project_id: Optional[int]=None) -> Dict[str, Any]:
     """Get epics with intelligent caching and pagination.
         
@@ -53,6 +55,10 @@ def get_all_epics(manager) -> List[Dict[str, Any]]:
     """Backward compatibility method - get all epics without pagination."""
     result = manager.get_epics(page=1, page_size=1000)
     return result['data'] if isinstance(result, dict) else result
+
+# TODO: Consider extracting this block into a separate method
+
+# TODO: Consider extracting this block into a separate method
 
 def get_tasks(manager, epic_id: Optional[int]=None, page: int=1, page_size: int=100, status_filter: Optional[Union[TaskStatus, str]]=None, tdd_phase_filter: Optional[Union[TDDPhase, str]]=None) -> Dict[str, Any]:
     """Get tasks with intelligent caching, pagination, and filtering.
@@ -111,6 +117,8 @@ def get_tasks(manager, epic_id: Optional[int]=None, page: int=1, page_size: int=
 
 def get_all_tasks(manager, epic_id: Optional[int]=None) -> List[Dict[str, Any]]:
     """Backward compatibility method - get all tasks without pagination."""
+    # TODO: Consider extracting this block into a separate method
+    # TODO: Consider extracting this block into a separate method
     result = manager.get_tasks(epic_id=epic_id, page=1, page_size=1000)
     return result['data'] if isinstance(result, dict) else result
 
@@ -128,6 +136,8 @@ def get_timer_sessions(manager, days: int=30) -> List[Dict[str, Any]]:
                 cursor = conn.cursor()
                 cursor.execute(query, [f'-{days}'])
                 return [dict(row) for row in cursor.fetchall()]
+    # TODO: Consider extracting this block into a separate method
+    # TODO: Consider extracting this block into a separate method
     except Exception as e:
         logger.error(f'Error loading timer sessions: {e}', exc_info=True)
         return []
@@ -155,6 +165,8 @@ def get_user_stats(manager, user_id: int=1) -> Dict[str, Any]:
                 cursor.execute('\n                        SELECT COUNT(*) FROM user_streaks\n                        WHERE user_id = ? AND current_count > 0\n                    ', [user_id])
                 row = cursor.fetchone()
                 stats['active_streaks'] = row[0] if row and row[0] is not None else 0
+            # TODO: Consider extracting this block into a separate method
+            # TODO: Consider extracting this block into a separate method
             return stats
     except Exception as e:
         logger.error(f'Error loading user stats: {e}', exc_info=True)
@@ -170,6 +182,8 @@ def get_achievements(manager, user_id: int=1) -> List[Dict[str, Any]]:
                 return [dict(row._mapping) for row in result]
             else:
                 cursor = conn.cursor()
+                # TODO: Consider extracting this block into a separate method
+                # TODO: Consider extracting this block into a separate method
                 cursor.execute(query, [user_id])
                 return [dict(row) for row in cursor.fetchall()]
     except Exception as e:
@@ -228,6 +242,8 @@ def get_epics_with_hierarchy(manager, project_id: Optional[int]=None, client_id:
         logger.error(f'Error loading epics with hierarchy: {e}')
         if STREAMLIT_AVAILABLE and st:
             st.error(f'❌ Error loading epics with hierarchy: {e}')
+        # TODO: Consider extracting this block into a separate method
+        # TODO: Consider extracting this block into a separate method
         return {'data': [], 'total': 0, 'page': page, 'page_size': page_size, 'total_pages': 0}
 
 def get_all_epics_with_hierarchy(manager, project_id: Optional[int]=None, client_id: Optional[int]=None) -> List[Dict[str, Any]]:
@@ -255,6 +271,8 @@ def get_hierarchy_overview(manager, client_id: Optional[int]=None) -> List[Dict[
             if SQLALCHEMY_AVAILABLE:
                 result = conn.execute(text(query), params)
                 return [dict(row._mapping) for row in result]
+            # TODO: Consider extracting this block into a separate method
+            # TODO: Consider extracting this block into a separate method
             else:
                 cursor = conn.cursor()
                 cursor.execute(query, params)
@@ -282,6 +300,8 @@ def get_client_dashboard(manager, client_id: Optional[int]=None) -> List[Dict[st
             query += ' ORDER BY client_name'
             if SQLALCHEMY_AVAILABLE:
                 result = conn.execute(text(query), params)
+                # TODO: Consider extracting this block into a separate method
+                # TODO: Consider extracting this block into a separate method
                 return [dict(row._mapping) for row in result]
             else:
                 cursor = conn.cursor()
@@ -313,6 +333,8 @@ def get_project_dashboard(manager, project_id: Optional[int]=None, client_id: Op
                 params.append(client_id)
             query += ' ORDER BY client_name, project_name'
             if SQLALCHEMY_AVAILABLE:
+                # TODO: Consider extracting this block into a separate method
+                # TODO: Consider extracting this block into a separate method
                 result = conn.execute(text(query), params)
                 return [dict(row._mapping) for row in result]
             else:
@@ -371,6 +393,8 @@ def create_client(manager, client_key: str, name: str, description: str='', indu
                 result = conn.execute(text(f'INSERT INTO {TableNames.CLIENTS} ({columns}) VALUES ({named_placeholders})'), client_data)
                 conn.commit()
                 return result.lastrowid
+            # TODO: Consider extracting this block into a separate method
+            # TODO: Consider extracting this block into a separate method
             else:
                 cursor = conn.cursor()
                 cursor.execute(f'INSERT INTO {TableNames.CLIENTS} ({columns}) VALUES ({placeholders})', list(client_data.values()))
@@ -407,6 +431,8 @@ def create_project(manager, client_id: int, project_key: str, name: str, descrip
                 named_placeholders = ', '.join([f':{key}' for key in project_data.keys()])
                 result = conn.execute(text(f'INSERT INTO {TableNames.PROJECTS} ({columns}) VALUES ({named_placeholders})'), project_data)
                 conn.commit()
+                # TODO: Consider extracting this block into a separate method
+                # TODO: Consider extracting this block into a separate method
                 return result.lastrowid
             else:
                 cursor = conn.cursor()
@@ -430,6 +456,8 @@ def update_epic_project(manager, epic_id: int, project_id: int) -> bool:
             True if successful, False otherwise
         """
     try:
+        # TODO: Consider extracting this block into a separate method
+        # TODO: Consider extracting this block into a separate method
         with manager.get_connection('framework') as conn:
             if SQLALCHEMY_AVAILABLE:
                 conn.execute(text('\n                        UPDATE framework_epics \n                        SET project_id = :project_id, updated_at = CURRENT_TIMESTAMP\n                        WHERE id = :epic_id\n                    '), {'project_id': project_id, 'epic_id': epic_id})
@@ -453,6 +481,8 @@ def get_client_by_key(manager, client_key: str) -> Optional[Dict[str, Any]]:
             Client dictionary if found, None otherwise
         """
     try:
+        # TODO: Consider extracting this block into a separate method
+        # TODO: Consider extracting this block into a separate method
         with manager.get_connection('framework') as conn:
             if SQLALCHEMY_AVAILABLE:
                 result = conn.execute(text('\n                        SELECT * FROM framework_clients \n                        WHERE client_key = :client_key AND deleted_at IS NULL\n                    '), {'client_key': client_key})
@@ -477,6 +507,8 @@ def get_project_by_key(manager, client_id: int, project_key: str) -> Optional[Di
         Returns:
             Project dictionary if found, None otherwise
         """
+    # TODO: Consider extracting this block into a separate method
+    # TODO: Consider extracting this block into a separate method
     try:
         with manager.get_connection('framework') as conn:
             if SQLALCHEMY_AVAILABLE:
@@ -536,6 +568,8 @@ def update_client(manager, client_id: int, **fields: Any) -> bool:
         with manager.get_connection('framework') as conn:
             if SQLALCHEMY_AVAILABLE:
                 conn.execute(text(f'\n                        UPDATE {TableNames.CLIENTS}\n                        SET {', '.join(set_clauses)}\n                        WHERE id = :client_id AND deleted_at IS NULL\n                    '), values)
+                # TODO: Consider extracting this block into a separate method
+                # TODO: Consider extracting this block into a separate method
                 conn.commit()
             else:
                 cursor = conn.cursor()
@@ -581,6 +615,8 @@ def delete_client(manager, client_id: int, soft_delete: bool=True) -> bool:
         """
     try:
         with manager.get_connection('framework') as conn:
+            # TODO: Consider extracting this block into a separate method
+            # TODO: Consider extracting this block into a separate method
             if soft_delete:
                 if SQLALCHEMY_AVAILABLE:
                     conn.execute(text('\n                            UPDATE {TableNames.CLIENTS}\n                            SET deleted_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP\n                            WHERE id = :client_id\n                        '), {'client_id': client_id})
@@ -622,6 +658,8 @@ def update_project(manager, project_id: int, **fields: Any) -> bool:
                 values[key] = value
         values['project_id'] = project_id
         with manager.get_connection('framework') as conn:
+            # TODO: Consider extracting this block into a separate method
+            # TODO: Consider extracting this block into a separate method
             if SQLALCHEMY_AVAILABLE:
                 conn.execute(text(f'\n                        UPDATE {TableNames.PROJECTS}\n                        SET {', '.join(set_clauses)}\n                        WHERE id = :project_id AND deleted_at IS NULL\n                    '), values)
                 conn.commit()

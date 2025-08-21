@@ -1,0 +1,25 @@
+{
+  "meta_analysis_summary": {
+    "total_files_analyzed": 1,
+    "successful_analyses": 1,
+    "failed_analyses": 0,
+    "total_agents_executed": 4,
+    "total_tokens_consumed": 500,
+    "total_execution_time": 0.0708932876586914
+  },
+  "files": [
+    {
+      "file_path": "/home/david/Documentos/canimport/test-tdd-project/audit_system/agents/__init__.py",
+      "agents_executed": 4,
+      "successful_agents": 4,
+      "tokens_used": 500,
+      "execution_time": 0.0708932876586914,
+      "agents_used": [
+        "intelligent_code_agent",
+        "god_code_agent",
+        "refactoring_engine",
+        "tdd_workflow_agent"
+      ]
+    }
+  ]
+}

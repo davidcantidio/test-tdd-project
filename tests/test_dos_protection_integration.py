@@ -34,6 +34,8 @@ except ImportError as e:
 class TestRateLimiterIntegration:
     """Test rate limiter integration and functionality."""
     
+    # TODO: Consider extracting this block into a separate method
+    # TODO: Consider extracting this block into a separate method
     def test_rate_limiter_basic_functionality(self):
         """Test basic rate limiting functionality."""
         limiter = RateLimiter()
@@ -48,6 +50,10 @@ class TestRateLimiterIntegration:
         for i in range(2):
             allowed = limiter.check_limit("test", custom_config=config)
             assert not allowed, f"Request {i+4} should be blocked"
+    
+# TODO: Consider extracting this block into a separate method
+    
+# TODO: Consider extracting this block into a separate method
     
     def test_rate_limiter_different_algorithms(self):
         """Test different rate limiting algorithms."""
@@ -68,6 +74,8 @@ class TestRateLimiterIntegration:
         )
         
         # Both should work
+        # TODO: Consider extracting this block into a separate method
+        # TODO: Consider extracting this block into a separate method
         assert limiter.check_limit("token_test", custom_config=token_config)
         assert limiter.check_limit("sliding_test", custom_config=sliding_config)
     
@@ -92,6 +100,10 @@ class TestRateLimiterIntegration:
             test_endpoint()
 
 
+# TODO: Consider extracting this block into a separate method
+
+# TODO: Consider extracting this block into a separate method
+
 class TestCircuitBreakerIntegration:
     """Test circuit breaker integration and functionality."""
     
@@ -109,6 +121,8 @@ class TestCircuitBreakerIntegration:
         # Test failure detection
         for i in range(3):
             with pytest.raises(Exception):
+                # TODO: Consider extracting this block into a separate method
+                # TODO: Consider extracting this block into a separate method
                 breaker.call(failing_function)
         
         # Circuit should now be open
@@ -143,6 +157,8 @@ class TestCircuitBreakerIntegration:
         time.sleep(0.3)
         
         # Should now allow testing (half-open state)
+        # TODO: Consider extracting this block into a separate method
+        # TODO: Consider extracting this block into a separate method
         def successful_function():
             return "success"
         
@@ -169,6 +185,8 @@ class TestCircuitBreakerIntegration:
             with pytest.raises(Exception):
                 unreliable_service()
         
+        # TODO: Consider extracting this block into a separate method
+        # TODO: Consider extracting this block into a separate method
         # 3rd call should be blocked by circuit breaker
         with pytest.raises(CircuitBreakerError):
             unreliable_service()
@@ -186,6 +204,8 @@ class TestDoSProtectionIntegration:
             timestamp=time.time(),
             ip_address="192.168.1.100",
             user_agent="Test Agent",
+            # TODO: Consider extracting this block into a separate method
+            # TODO: Consider extracting this block into a separate method
             endpoint="/api/test",
             request_size=1024
         )
@@ -210,6 +230,10 @@ class TestDoSProtectionIntegration:
             endpoint="/api/test",
             request_size=1024
         )
+        
+# TODO: Consider extracting this block into a separate method
+        
+# TODO: Consider extracting this block into a separate method
         
         # First 2 requests should be allowed
         for i in range(2):
@@ -258,6 +282,8 @@ class TestDoSProtectionIntegration:
                 if result["threat_score"] > 0.3:
                     threat_detected = True
                     break
+            # TODO: Consider extracting this block into a separate method
+            # TODO: Consider extracting this block into a separate method
             except ThreatDetectedError:
                 threat_detected = True
                 break
@@ -289,6 +315,10 @@ class TestDoSProtectionIntegration:
         # Give some time for monitoring to update
         time.sleep(0.1)
         
+# TODO: Consider extracting this block into a separate method
+        
+# TODO: Consider extracting this block into a separate method
+        
         context = RequestContext(
             timestamp=time.time(),
             ip_address="192.168.1.103",
@@ -305,6 +335,8 @@ class TestDoSProtectionIntegration:
         """Test DoS protection decorator."""
         call_count = 0
         
+        # TODO: Consider extracting this block into a separate method
+        # TODO: Consider extracting this block into a separate method
         @dos_protect("decorated_endpoint", max_requests=3, window=5)
         def protected_endpoint():
             nonlocal call_count
@@ -391,6 +423,10 @@ class TestDoSProtectionThreadSafety:
             thread = threading.Thread(target=worker, args=(i,))
             threads.append(thread)
             thread.start()
+        
+# TODO: Consider extracting this block into a separate method
+        
+# TODO: Consider extracting this block into a separate method
         
         # Wait for all threads to complete
         for thread in threads:

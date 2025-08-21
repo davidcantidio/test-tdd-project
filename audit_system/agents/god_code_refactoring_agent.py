@@ -273,11 +273,17 @@ class GodCodeRefactoringAgent:
                 self.logger.info("✅ Loaded TDD workflow patterns")
             
             # Load architecture information
-            status_path = NAVIGATION_PATH / "STATUS.md"
-            if status_path.exists():
-                with open(status_path, 'r', encoding='utf-8') as f:
-                    context.architecture_info["system_status"] = f.read()
-                self.logger.info("✅ Loaded system status information")
+            # Prefer NAVIGATION_PATH/STATUS.md; fallback to project root
+            status_candidates = [
+                NAVIGATION_PATH / "STATUS.md",
+                self.project_root / "STATUS.md"
+            ]
+            for status_path in status_candidates:
+                if status_path.exists():
+                    with open(status_path, 'r', encoding='utf-8') as f:
+                        context.architecture_info["system_status"] = f.read()
+                    self.logger.info("✅ Loaded system status information: %s", status_path)
+                    break
                 
             navigation_path = NAVIGATION_PATH / "NAVIGATION.md"
             if navigation_path.exists():

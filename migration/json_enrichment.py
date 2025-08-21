@@ -131,6 +131,8 @@ class JSONEnrichmentEngine:
                 calculation_notes=f"Calculation failed: {str(e)}"
             )
     
+    # TODO: Consider extracting this block into a separate method
+    # TODO: Consider extracting this block into a separate method
     def analyze_tasks(self, tasks: List[Dict[str, Any]]) -> Dict[str, Any]:
         """Analyze task array and extract statistics."""
         if not tasks:
@@ -174,6 +176,10 @@ class JSONEnrichmentEngine:
             'task_phases': task_phases
         }
     
+# TODO: Consider extracting this block into a separate method
+    
+# TODO: Consider extracting this block into a separate method
+    
     def categorize_epic(self, epic_data: Dict[str, Any]) -> Tuple[str, int]:
         """
         Categorize epic based on labels and calculate complexity score.
@@ -198,6 +204,10 @@ class JSONEnrichmentEngine:
         score += min(len(epic_data.get('goals', [])), 2)  # +0-2 for goals
         score += min(len(epic_data.get('definition_of_done', [])), 2)  # +0-2 for DoD
         score += min(len(epic_data.get('tasks', [])) // 5, 2)  # +0-2 for task count
+        
+# TODO: Consider extracting this block into a separate method
+        
+# TODO: Consider extracting this block into a separate method
         
         return category, min(score, 10)
     
@@ -270,6 +280,8 @@ class JSONEnrichmentEngine:
             )
             
             return {
+                # TODO: Consider extracting this block into a separate method
+                # TODO: Consider extracting this block into a separate method
                 **epic_data,
                 'calculated_fields': asdict(CalculatedFields()),
                 'metadata': asdict(error_metadata)
@@ -319,6 +331,10 @@ class JSONEnrichmentEngine:
             
             return result
             
+# TODO: Consider extracting this block into a separate method
+            
+# TODO: Consider extracting this block into a separate method
+            
         except Exception as e:
             print(f"❌ Error enriching {file_path}: {e}")
             traceback.print_exc()
@@ -365,6 +381,8 @@ class JSONEnrichmentEngine:
         return enriched_epics
 
 
+# TODO: Consider extracting this block into a separate method
+# TODO: Consider extracting this block into a separate method
 def main():
     """Main function to test JSON enrichment."""
     print("✨ JSON Enrichment Engine Test")

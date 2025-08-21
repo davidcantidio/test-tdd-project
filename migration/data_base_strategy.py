@@ -66,6 +66,8 @@ class DataBaseCalculator:
     baseado em uma estratégia de data base configurável.
     """
     
+    # TODO: Consider extracting this block into a separate method
+    # TODO: Consider extracting this block into a separate method
     def __init__(self, base_strategy: DateBaseStrategy = DateBaseStrategy.NEXT_MONDAY,
                  specific_date: Optional[date] = None):
         self.base_strategy = base_strategy
@@ -83,6 +85,10 @@ class DataBaseCalculator:
             'semanas': re.compile(r'(\d+\.?\d*)\s*semanas?'),
             'horas': re.compile(r'(\d+\.?\d*)\s*horas?'),
         }
+    
+# TODO: Consider extracting this block into a separate method
+    
+# TODO: Consider extracting this block into a separate method
     
     def get_base_date(self, reference_date: Optional[date] = None) -> date:
         """
@@ -122,6 +128,8 @@ class DataBaseCalculator:
                     candidate += timedelta(days=1)
                 return candidate
         
+        # TODO: Consider extracting this block into a separate method
+        # TODO: Consider extracting this block into a separate method
         else:
             raise ValueError(f"Unknown base strategy: {self.base_strategy}")
     
@@ -150,6 +158,8 @@ class DataBaseCalculator:
         # Fallback - try to extract number and assume days
         number_match = re.search(r'(\d+\.?\d*)', duration_str)
         if number_match:
+            # TODO: Consider extracting this block into a separate method
+            # TODO: Consider extracting this block into a separate method
             return float(number_match.group(1)), 'dias'
         
         raise ValueError(f"Could not parse duration string: {duration_str}")
@@ -177,6 +187,8 @@ class DataBaseCalculator:
             duration_days = duration_value
         
         if use_business_days and DURATION_SYSTEM_AVAILABLE:
+            # TODO: Consider extracting this block into a separate method
+            # TODO: Consider extracting this block into a separate method
             return self.business_calendar.add_business_days(start_date, int(duration_days))
         else:
             # Calendar days calculation
@@ -204,6 +216,8 @@ class DataBaseCalculator:
         try:
             duration_value, unit = self.parse_duration_string(duration_str)
             if unit == 'semanas' or (unit == 'dias' and duration_value >= 5):
+                # TODO: Consider extracting this block into a separate method
+                # TODO: Consider extracting this block into a separate method
                 return True
         except ValueError:
             pass
@@ -266,6 +280,8 @@ class DataBaseCalculator:
         )
 
 
+# TODO: Consider extracting this block into a separate method
+# TODO: Consider extracting this block into a separate method
 def validate_with_example():
     """Validate the data base strategy with example epic."""
     print("🧪 Validating Data Base Strategy with Example Epic")
@@ -309,6 +325,10 @@ def validate_with_example():
             print(f"   ❌ Error: {e}")
             print()
 
+
+# TODO: Consider extracting this block into a separate method
+
+# TODO: Consider extracting this block into a separate method
 
 def create_default_config() -> Dict[str, Any]:
     """Create default configuration for data base strategy."""

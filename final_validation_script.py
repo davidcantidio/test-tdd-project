@@ -50,6 +50,8 @@ class FinalValidationAnalyzer(ast.NodeVisitor):
         })
         self.generic_visit(node)
     
+    # TODO: Consider extracting this block into a separate method
+    # TODO: Consider extracting this block into a separate method
     def visit_Attribute(self, node):
         # Detect session state violations (st.session_state direct access)
         if (isinstance(node.value, ast.Name) and 
@@ -97,6 +99,10 @@ class FinalValidationAnalyzer(ast.NodeVisitor):
             })
         self.generic_visit(node)
     
+# TODO: Consider extracting this block into a separate method
+    
+# TODO: Consider extracting this block into a separate method
+    
     def visit_ImportFrom(self, node):
         if node.module:
             for alias in node.names:
@@ -110,6 +116,8 @@ class FinalValidationAnalyzer(ast.NodeVisitor):
         self.generic_visit(node)
 
 
+# TODO: Consider extracting this block into a separate method
+# TODO: Consider extracting this block into a separate method
 def analyze_file(file_path: Path, analyzer: FinalValidationAnalyzer) -> bool:
     """Analyze a single Python file."""
     try:
@@ -144,6 +152,10 @@ def get_file_metrics(file_path: Path) -> Dict[str, Any]:
     except Exception as e:
         return {'error': str(e)}
 
+
+# TODO: Consider extracting this block into a separate method
+
+# TODO: Consider extracting this block into a separate method
 
 def run_final_validation():
     """Run comprehensive validation of refactoring."""

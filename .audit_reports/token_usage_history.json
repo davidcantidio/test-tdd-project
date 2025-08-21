@@ -1,0 +1,57 @@
+{
+  "usage_history": [
+    {
+      "timestamp": 1755753523.8608992,
+      "operation_type": "intelligent_analysis",
+      "file_path": "large_file.py",
+      "tokens_consumed": 16348,
+      "duration": 3.365284172947398,
+      "api_provider": "claude"
+    },
+    {
+      "timestamp": 1755753523.8645911,
+      "operation_type": "refactoring",
+      "file_path": "medium_file.py",
+      "tokens_consumed": 13427,
+      "duration": 3.052625933911499,
+      "api_provider": "claude"
+    },
+    {
+      "timestamp": 1755753523.8649788,
+      "operation_type": "tdd_analysis",
+      "file_path": "small_file.py",
+      "tokens_consumed": 7053,
+      "duration": 3.324640308065152,
+      "api_provider": "claude"
+    },
+    {
+      "timestamp": 1755753523.8652167,
+      "operation_type": "security_analysis",
+      "file_path": "critical_file.py",
+      "tokens_consumed": 22690,
+      "duration": 1.1593529778528442,
+      "api_provider": "claude"
+    },
+    {
+      "timestamp": 1755753613.8844893,
+      "operation_type": "comprehensive_audit",
+      "file_path": "/home/david/Documentos/canimport/test-tdd-project/audit_system/agents/__init__.py",
+      "tokens_consumed": 31722,
+      "duration": 3.175929307937622,
+      "api_provider": "claude"
+    },
+    {
+      "timestamp": 1755753706.6044436,
+      "operation_type": "comprehensive_audit",
+      "file_path": "/home/david/Documentos/canimport/test-tdd-project/audit_system/agents/tdd_intelligent_workflow_agent.py",
+      "tokens_consumed": 26275,
+      "duration": 92.71867299079895,
+      "api_provider": "claude"
+    }
+  ],
+  "session_stats": {
+    "session_start": 1755753610.7074804,
+    "session_tokens": 57997,
+    "session_requests": 2
+  }
+}

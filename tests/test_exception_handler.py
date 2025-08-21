@@ -43,6 +43,8 @@ class TestStreamlitError:
         assert error.error_id is not None
         assert len(error.error_id) == 12  # SHA-256 hash truncated
         
+    # TODO: Consider extracting this block into a separate method
+    # TODO: Consider extracting this block into a separate method
     def test_error_with_custom_params(self):
         """Test error creation with custom parameters."""
         exception = sqlite3.OperationalError("Database locked")
@@ -61,6 +63,10 @@ class TestStreamlitError:
         assert error.context == {"operation": "insert"}
         assert error.suggestions == ["Try again", "Check connection"]
     
+# TODO: Consider extracting this block into a separate method
+    
+# TODO: Consider extracting this block into a separate method
+    
     def test_user_message_generation(self):
         """Test automatic user message generation."""
         # Database error
@@ -76,6 +82,8 @@ class TestStreamlitError:
         assert "Required file not found" in file_error.user_message
         
         # Unknown error
+        # TODO: Consider extracting this block into a separate method
+        # TODO: Consider extracting this block into a separate method
         unknown_error = StreamlitError(RuntimeError("Unknown issue"))
         assert "unexpected error occurred" in unknown_error.user_message
     
@@ -107,6 +115,8 @@ class TestGlobalExceptionHandler:
     """Test GlobalExceptionHandler class."""
     
     def setup_method(self):
+        # TODO: Consider extracting this block into a separate method
+        # TODO: Consider extracting this block into a separate method
         """Setup for each test."""
         self.handler = GlobalExceptionHandler()
         self.handler.reset_error_stats()
@@ -144,6 +154,8 @@ class TestGlobalExceptionHandler:
         assert severity5 == ErrorSeverity.MEDIUM
         
         # System error
+        # TODO: Consider extracting this block into a separate method
+        # TODO: Consider extracting this block into a separate method
         sys_error = MemoryError("out of memory")
         category6, severity6 = self.handler.classify_exception(sys_error)
         assert category6 == ErrorCategory.SYSTEM
@@ -162,6 +174,8 @@ class TestGlobalExceptionHandler:
                 attempt_recovery=False
             )
         
+        # TODO: Consider extracting this block into a separate method
+        # TODO: Consider extracting this block into a separate method
         assert isinstance(error, StreamlitError)
         assert error.exception == exception
         assert error.context == context
@@ -178,6 +192,8 @@ class TestGlobalExceptionHandler:
         stats = self.handler.get_error_stats()
         
         assert stats["total_errors"] == 3
+        # TODO: Consider extracting this block into a separate method
+        # TODO: Consider extracting this block into a separate method
         assert stats["errors_by_category"][ErrorCategory.VALIDATION] == 1
         assert stats["errors_by_category"][ErrorCategory.DATABASE] == 1
         assert stats["errors_by_category"][ErrorCategory.NETWORK] == 1
@@ -244,6 +260,8 @@ class TestExceptionDecorator:
     def test_decorator_exception(self):
         """Test decorator with exception."""
         @handle_streamlit_exceptions(show_error=False)
+        # TODO: Consider extracting this block into a separate method
+        # TODO: Consider extracting this block into a separate method
         def failing_function():
             raise ValueError("Test error")
         
@@ -295,6 +313,10 @@ class TestErrorBoundary:
 class TestSafeOperation:
     """Test safe operation wrapper."""
     
+# TODO: Consider extracting this block into a separate method
+    
+# TODO: Consider extracting this block into a separate method
+    
     def test_safe_operation_success(self):
         """Test safe operation with successful function."""
         def add_numbers(a, b):
@@ -310,6 +332,8 @@ class TestSafeOperation:
         
         with patch('streamlit_extension.utils.exception_handler.STREAMLIT_AVAILABLE', False):
             result = safe_streamlit_operation(
+                # TODO: Consider extracting this block into a separate method
+                # TODO: Consider extracting this block into a separate method
                 failing_function, 
                 default_return="default_value",
                 operation_name="test_safe_op"
@@ -341,6 +365,8 @@ class TestSafeOperation:
         # Error case
         with patch('streamlit_extension.utils.exception_handler.STREAMLIT_AVAILABLE', False):
             result = safe_streamlit_operation(
+                # TODO: Consider extracting this block into a separate method
+                # TODO: Consider extracting this block into a separate method
                 complex_function,
                 -1, 3,
                 multiplier=2,
@@ -366,6 +392,8 @@ class TestGlobalInstallation:
             # Test that it handles exceptions
             with patch('streamlit_extension.utils.exception_handler.STREAMLIT_AVAILABLE', False):
                 # This would normally raise an exception
+                # TODO: Consider extracting this block into a separate method
+                # TODO: Consider extracting this block into a separate method
                 try:
                     raise ValueError("Global handler test")
                 except ValueError:
@@ -382,6 +410,8 @@ class TestErrorStatistics:
     def test_get_error_statistics(self):
         """Test getting error statistics."""
         # Reset stats first
+        # TODO: Consider extracting this block into a separate method
+        # TODO: Consider extracting this block into a separate method
         global_exception_handler.reset_error_stats()
         
         # Generate some errors
@@ -412,6 +442,8 @@ class TestErrorStatistics:
         # Create multiple threads
         threads = []
         for i in range(3):
+            # TODO: Consider extracting this block into a separate method
+            # TODO: Consider extracting this block into a separate method
             thread = threading.Thread(target=generate_errors, args=(i,))
             threads.append(thread)
             thread.start()

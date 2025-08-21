@@ -40,6 +40,8 @@ from streamlit_extension.endpoints.api_middleware import (
 class TestAPIEndpoints:
     """Test API endpoint functionality."""
     
+    # TODO: Consider extracting this block into a separate method
+    # TODO: Consider extracting this block into a separate method
     def setup_method(self):
         """Setup test fixtures."""
         self.sample_epic_id = 1
@@ -99,6 +101,8 @@ class TestAPIEndpoints:
 
     @patch('streamlit_extension.endpoints.execution_api.is_authenticated')
     @patch('streamlit_extension.endpoints.execution_api.check_rate_limit')
+    # TODO: Consider extracting this block into a separate method
+    # TODO: Consider extracting this block into a separate method
     @patch('streamlit_extension.endpoints.execution_api.get_task_service')
     def test_handle_execution_planning_success(self, mock_get_service, mock_rate_limit, mock_auth):
         """Test successful execution planning."""
@@ -167,6 +171,8 @@ class TestAPIEndpoints:
         assert "error" in result
         assert result["code"] == "SERVICE_UNAVAILABLE"
 
+# TODO: Consider extracting this block into a separate method
+
     @patch('streamlit_extension.endpoints.execution_api.get_task_service')
     def test_handle_execution_planning_service_failure(self, mock_get_service):
         """Test execution planning with service failure."""
@@ -180,7 +186,9 @@ class TestAPIEndpoints:
         result = handle_execution_planning(self.sample_query_params)
         
         assert "error" in result
+        # TODO: Consider extracting this block into a separate method
         assert result["code"] == "PLANNING_FAILED"
+        # TODO: Consider extracting this block into a separate method
         assert result["details"] == ["Planning failed"]
 
     def test_handle_presets_list_success(self):
@@ -350,6 +358,9 @@ class TestAPIMiddleware:
 class TestAPIIntegration:
     """Integration tests for API functionality."""
     
+# TODO: Consider extracting this block into a separate method
+    
+    # TODO: Consider extracting this block into a separate method
     @patch('streamlit_extension.endpoints.execution_api.is_authenticated')
     @patch('streamlit_extension.endpoints.execution_api.check_rate_limit')
     @patch('streamlit_extension.endpoints.execution_api.get_task_service')
@@ -371,7 +382,10 @@ class TestAPIIntegration:
         
         result = handle_api_request("execution", query_params)
         
+# TODO: Consider extracting this block into a separate method
+        
         assert result.get("success") is True
+        # TODO: Consider extracting this block into a separate method
         assert "data" in result
         assert result["data"]["epic_id"] == 1
         assert "timestamp" in result

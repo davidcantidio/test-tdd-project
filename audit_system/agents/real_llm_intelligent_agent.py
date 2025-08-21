@@ -41,6 +41,7 @@ This agent consumes real API tokens. Ensure proper budgeting and monitoring
 in production deployments. Consider hybrid approaches for cost optimization.
 """
 
+import os
 import time
 import logging
 from dataclasses import dataclass, field

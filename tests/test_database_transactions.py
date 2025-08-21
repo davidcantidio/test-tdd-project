@@ -38,6 +38,8 @@ from duration_system.database_transactions import (
 class TestDatabaseConnectionPool:
     """Test suite for database connection pooling."""
     
+    # TODO: Consider extracting this block into a separate method
+    # TODO: Consider extracting this block into a separate method
     def setup_method(self):
         """Setup for each test method."""
         # Create temporary database
@@ -93,6 +95,10 @@ class TestDatabaseConnectionPool:
         
         stats = self.pool.stats
         assert stats["connections_reused"] > 0
+    
+# TODO: Consider extracting this block into a separate method
+    
+# TODO: Consider extracting this block into a separate method
     
     def test_concurrent_connections(self):
         """Test concurrent connection handling."""
@@ -220,6 +226,8 @@ class TestDatabaseConnectionPool:
         assert self.pool._is_connection_healthy(broken_conn) is False
 
 
+# TODO: Consider extracting this block into a separate method
+# TODO: Consider extracting this block into a separate method
 class TestTransactionalDatabaseManager:
     """Test suite for transactional database operations."""
     
@@ -261,6 +269,8 @@ class TestTransactionalDatabaseManager:
         """Cleanup after each test."""
         self.manager.close()
         try:
+            # TODO: Consider extracting this block into a separate method
+            # TODO: Consider extracting this block into a separate method
             Path(self.db_path).unlink()
         except:
             pass
@@ -283,6 +293,8 @@ class TestTransactionalDatabaseManager:
     
     def test_epic_not_found_error(self):
         """Test error handling for non-existent epic."""
+        # TODO: Consider extracting this block into a separate method
+        # TODO: Consider extracting this block into a separate method
         result = self.manager.update_epic_duration_safe(999, "5 dias", 5.0)
         
         assert result.success is False
@@ -305,6 +317,8 @@ class TestTransactionalDatabaseManager:
             """, (datetime.now() + timedelta(seconds=1),))
             conn.commit()
         
+        # TODO: Consider extracting this block into a separate method
+        # TODO: Consider extracting this block into a separate method
         # Now try to update - this might succeed or fail depending on timing
         result = self.manager.update_epic_duration_safe(1, "15 dias", 15.0)
         
@@ -341,6 +355,8 @@ class TestTransactionalDatabaseManager:
         assert result.result == 3  # 3 epics updated (999 doesn't exist)
         
         # Verify updates
+        # TODO: Consider extracting this block into a separate method
+        # TODO: Consider extracting this block into a separate method
         for epic_id in [1, 2, 3]:
             read_result = self.manager.get_epic_duration_safe(epic_id)
             assert read_result.success is True
@@ -361,6 +377,10 @@ class TestTransactionalDatabaseManager:
             """)
             conn.commit()
         
+# TODO: Consider extracting this block into a separate method
+        
+# TODO: Consider extracting this block into a separate method
+        
         result = self.manager.validate_duration_consistency_safe(1)
         
         assert result.success is True
@@ -378,6 +398,8 @@ class TestTransactionalDatabaseManager:
                     planned_end_date = '2024-06-05'
                 WHERE id = 1
             """)
+            # TODO: Consider extracting this block into a separate method
+            # TODO: Consider extracting this block into a separate method
             conn.commit()
         
         result = self.manager.validate_duration_consistency_safe(1)
@@ -392,6 +414,10 @@ class TestTransactionalDatabaseManager:
         """Test retry mechanism for transient failures."""
         # This is tricky to test without actually causing database locks
         # We'll test the mechanism by checking stats
+        
+# TODO: Consider extracting this block into a separate method
+        
+# TODO: Consider extracting this block into a separate method
         
         # Perform several operations
         for i in range(3):
@@ -412,6 +438,8 @@ class TestTransactionalDatabaseManager:
             return cursor.fetchone()[0]
         
         result = immediate_operation()
+        # TODO: Consider extracting this block into a separate method
+        # TODO: Consider extracting this block into a separate method
         assert result.success is True
         assert result.result >= 1
         
@@ -436,6 +464,8 @@ class TestTransactionalDatabaseManager:
         
         # Try to cause a failure
         failure_result = self.manager.update_epic_duration_safe(999, "1 dia", 1.0)
+        # TODO: Consider extracting this block into a separate method
+        # TODO: Consider extracting this block into a separate method
         assert failure_result.success is False
         
         # Check stats
@@ -479,6 +509,8 @@ class TestConcurrentTransactionSafety:
                 conn.execute("""
                     INSERT INTO framework_epics 
                     (id, epic_key, name, duration_description, calculated_duration_days)
+                    # TODO: Consider extracting this block into a separate method
+                    # TODO: Consider extracting this block into a separate method
                     VALUES (?, ?, ?, ?, ?)
                 """, (i, f'TEST_{i}', f'Test Epic {i}', f'{i} dias', float(i)))
             
@@ -506,6 +538,8 @@ class TestConcurrentTransactionSafety:
                 )
                 results.append((epic_id, result))
             except Exception as e:
+                # TODO: Consider extracting this block into a separate method
+                # TODO: Consider extracting this block into a separate method
                 errors.append((epic_id, str(e)))
         
         # Launch concurrent updates to different epics
@@ -541,6 +575,8 @@ class TestConcurrentTransactionSafety:
             futures = [executor.submit(update_epic_1, i) for i in range(1, 6)]
             
             for future in as_completed(futures):
+                # TODO: Consider extracting this block into a separate method
+                # TODO: Consider extracting this block into a separate method
                 future.result()  # Wait for completion
         
         # Should have some results (not necessarily all successful due to conflicts)
@@ -634,6 +670,8 @@ class TestConcurrentTransactionSafety:
             for future in as_completed(futures):
                 future.result()
         
+        # TODO: Consider extracting this block into a separate method
+        # TODO: Consider extracting this block into a separate method
         # Should handle high concurrency without major issues
         total_operations = len(results) + len(errors)
         assert total_operations == 50
@@ -729,7 +767,9 @@ class TestSafeDatabaseOperationsMixin:
         is_valid = self.db_manager.validate_date_consistency_safe(1)
         assert isinstance(is_valid, bool)
         
+        # TODO: Consider extracting this block into a separate method
         # Should be valid for our test data
+        # TODO: Consider extracting this block into a separate method
         assert is_valid is True
     
     def test_transaction_stats_access(self):
@@ -746,6 +786,8 @@ class TestSafeDatabaseOperationsMixin:
 
 
 class TestIntegrationAndUtilities:
+    # TODO: Consider extracting this block into a separate method
+    # TODO: Consider extracting this block into a separate method
     """Test integration functions and utilities."""
     
     def test_transaction_safety_test_function(self):

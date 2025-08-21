@@ -22,6 +22,8 @@ class SyntaxErrorFixer:
         self.errors_fixed = 0
         self.failed_files = []
         
+    # TODO: Consider extracting this block into a separate method
+    # TODO: Consider extracting this block into a separate method
     def fix_all_syntax_errors(self):
         """Fix syntax errors in all files."""
         print("🔧 FIXING SYNTAX ERRORS SYSTEMATICALLY...")
@@ -59,6 +61,10 @@ class SyntaxErrorFixer:
             return True
         except Exception:
             return False
+    
+# TODO: Consider extracting this block into a separate method
+    
+# TODO: Consider extracting this block into a separate method
     
     def _fix_file_syntax(self, file_path: Path) -> bool:
         """Fix syntax errors in a single file."""
@@ -99,6 +105,8 @@ class SyntaxErrorFixer:
             return True
             
         except Exception as e:
+            # TODO: Consider extracting this block into a separate method
+            # TODO: Consider extracting this block into a separate method
             print(f"     Error: {e}")
             return False
     
@@ -149,6 +157,8 @@ class SyntaxErrorFixer:
             
             # Insert auth imports
             for auth_import in reversed(unique_auth_imports):
+                # TODO: Consider extracting this block into a separate method
+                # TODO: Consider extracting this block into a separate method
                 clean_lines.insert(insert_idx, auth_import)
         
         return '\n'.join(clean_lines)
@@ -202,6 +212,8 @@ class SyntaxErrorFixer:
     def _fix_decorator_syntax(self, content: str) -> str:
         """Fix decorator syntax issues."""
         # Fix decorators that end up on same line as function
+        # TODO: Consider extracting this block into a separate method
+        # TODO: Consider extracting this block into a separate method
         content = re.sub(r'@require_auth\(\)\s*def ', '@require_auth()\ndef ', content)
         content = re.sub(r'@require_admin\s*def ', '@require_admin\ndef ', content)
         
@@ -222,6 +234,8 @@ class SyntaxErrorFixer:
             if (line.strip() == 'from streamlit_extension.auth.user_model import UserRole' and
                 len(clean_lines) > 0 and 
                 not (clean_lines[-1].strip().startswith('import') or clean_lines[-1].strip().startswith('from'))):
+                # TODO: Consider extracting this block into a separate method
+                # TODO: Consider extracting this block into a separate method
                 continue
             
             clean_lines.append(line)
@@ -237,6 +251,8 @@ class SyntaxErrorFixer:
         for line in lines:
             if (line.strip().startswith('import ') or line.strip().startswith('from ')):
                 if line.strip() in seen_imports:
+                    # TODO: Consider extracting this block into a separate method
+                    # TODO: Consider extracting this block into a separate method
                     continue  # Skip duplicate
                 seen_imports.add(line.strip())
             
@@ -283,6 +299,10 @@ class SyntaxErrorFixer:
         
         return '\n'.join(clean_lines)
     
+# TODO: Consider extracting this block into a separate method
+    
+# TODO: Consider extracting this block into a separate method
+    
     def _is_before_function(self, lines: List[str], decorator_idx: int) -> bool:
         """Check if decorator is properly placed before a function."""
         for i in range(decorator_idx + 1, min(len(lines), decorator_idx + 3)):
@@ -302,6 +322,8 @@ class SyntaxErrorFixer:
             for file_path in self.failed_files[:10]:
                 print(f"   • {file_path}")
 
+# TODO: Consider extracting this block into a separate method
+# TODO: Consider extracting this block into a separate method
 def main():
     print("🔧 SYSTEMATIC SYNTAX ERROR FIXER")
     print("=" * 60)

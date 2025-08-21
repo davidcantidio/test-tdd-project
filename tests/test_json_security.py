@@ -60,6 +60,8 @@ class TestSecureJsonValidator:
         assert is_valid is True
         assert len(violations) == 0
     
+    # TODO: Consider extracting this block into a separate method
+    # TODO: Consider extracting this block into a separate method
     def test_depth_limit_exceeded(self):
         """Test detection of excessive nesting depth."""
         deep_data = {
@@ -81,6 +83,10 @@ class TestSecureJsonValidator:
         assert any(v.violation_type == SecurityViolationType.DEPTH_LIMIT_EXCEEDED 
                   for v in violations)
     
+# TODO: Consider extracting this block into a separate method
+    
+# TODO: Consider extracting this block into a separate method
+    
     def test_size_limit_exceeded(self):
         """Test detection of oversized content."""
         # Create string that exceeds limit
@@ -92,6 +98,8 @@ class TestSecureJsonValidator:
         
         assert is_valid is False
         assert len(violations) > 0
+        # TODO: Consider extracting this block into a separate method
+        # TODO: Consider extracting this block into a separate method
         assert any(v.violation_type == SecurityViolationType.SIZE_LIMIT_EXCEEDED 
                   for v in violations)
     
@@ -106,6 +114,8 @@ class TestSecureJsonValidator:
         is_valid, violations = self.validator.validate_data(dangerous_data)
         
         assert is_valid is False
+        # TODO: Consider extracting this block into a separate method
+        # TODO: Consider extracting this block into a separate method
         dangerous_violations = [v for v in violations 
                                if v.violation_type == SecurityViolationType.DANGEROUS_KEY]
         assert len(dangerous_violations) >= 2  # __proto__ and constructor
@@ -120,6 +130,8 @@ class TestSecureJsonValidator:
         
         is_valid, violations = self.validator.validate_data(script_data)
         
+        # TODO: Consider extracting this block into a separate method
+        # TODO: Consider extracting this block into a separate method
         assert is_valid is False
         script_violations = [v for v in violations 
                            if v.violation_type == SecurityViolationType.SCRIPT_INJECTION]
@@ -134,6 +146,10 @@ class TestSecureJsonValidator:
         }
         
         is_valid, violations = self.validator.validate_data(sql_data)
+        
+# TODO: Consider extracting this block into a separate method
+        
+# TODO: Consider extracting this block into a separate method
         
         assert is_valid is False
         sql_violations = [v for v in violations 
@@ -259,6 +275,8 @@ class TestJsonSanitization:
     def test_null_byte_removal(self):
         """Test removal of null bytes."""
         data = {
+            # TODO: Consider extracting this block into a separate method
+            # TODO: Consider extracting this block into a separate method
             "field": "text\x00with\x00nulls"
         }
         
@@ -365,6 +383,8 @@ class TestSecureJsonFieldHandler:
     def test_secure_deserialize_with_sanitization(self):
         """Test deserialization with sanitization."""
         # Create handler in non-strict mode
+        # TODO: Consider extracting this block into a separate method
+        # TODO: Consider extracting this block into a separate method
         handler = SecureJsonFieldHandler(strict_mode=False)
         
         json_str = '{"__proto__": "bad", "safe": "value"}'
@@ -416,6 +436,10 @@ class TestFactoryFunctions:
         """Test API validator creation."""
         validator = create_api_validator()
         
+# TODO: Consider extracting this block into a separate method
+        
+# TODO: Consider extracting this block into a separate method
+        
         assert validator.strict_mode is True
         assert validator.allow_dangerous_keys is False
         assert validator.max_keys == 100
@@ -450,6 +474,8 @@ class TestIntegrationWithJsonHandler:
         assert hasattr(enhanced, 'sanitize_data')
         
         # Test validation works
+        # TODO: Consider extracting this block into a separate method
+        # TODO: Consider extracting this block into a separate method
         dangerous_data = {"__proto__": "bad"}
         is_valid, violations = enhanced.validate_security(dangerous_data)
         assert is_valid is False
@@ -471,6 +497,8 @@ class TestSecurityViolationReporting:
             "script": "<script>alert('XSS')</script>"
         }
         
+        # TODO: Consider extracting this block into a separate method
+        # TODO: Consider extracting this block into a separate method
         is_valid, violations = validator.validate_data(data)
         
         assert is_valid is False
@@ -490,6 +518,8 @@ class TestSecurityViolationReporting:
             SecurityViolation(
                 violation_type=SecurityViolationType.DANGEROUS_KEY,
                 message="Test violation",
+                # TODO: Consider extracting this block into a separate method
+                # TODO: Consider extracting this block into a separate method
                 path="$.test"
             )
         ]
@@ -516,6 +546,8 @@ class TestEdgeCases:
         is_valid, violations = validator.validate_data([])
         assert is_valid is True
         
+        # TODO: Consider extracting this block into a separate method
+        # TODO: Consider extracting this block into a separate method
         # Null
         is_valid, violations = validator.validate_data(None)
         assert is_valid is True
@@ -535,6 +567,8 @@ class TestEdgeCases:
         """Test validation of mixed safe and unsafe content."""
         validator = create_strict_validator()
         
+        # TODO: Consider extracting this block into a separate method
+        # TODO: Consider extracting this block into a separate method
         data = {
             "safe": "normal text",
             "number": 42,
