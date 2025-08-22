@@ -142,11 +142,70 @@ with transaction():     # Optimized transactions
 
 ## 🛠️ Commands
 
+### **Core Development Commands**
 ```bash
 pytest tests/                                       # Run tests (525+ tests, 98%+ coverage)
 python scripts/maintenance/database_maintenance.py  # Database maintenance
 python scripts/testing/comprehensive_integrity_test.py  # Production certification
 ```
+
+### **🧠 Claude Subagents - Code Analysis & Optimization**
+
+> **Real LLM-powered code intelligence** using Claude subagents for semantic analysis and intelligent refactoring.
+
+#### **Code Analysis (scan_issues_subagents.py)**
+```bash
+# Analyze specific file with Claude intelligence
+python scan_issues_subagents.py --file audit_system/tools/complexity_analyzer_tool.py --verbose
+
+# Analyze entire directory with detailed reporting
+python scan_issues_subagents.py streamlit_extension/ --format json > analysis_report.json
+
+# Find only files with detected issues (complexity > threshold)
+python scan_issues_subagents.py --issues-only --complexity-threshold 30 --verbose
+```
+
+#### **Code Optimization (apply_fixes_subagents.py)**
+```bash
+# Preview optimizations without applying (dry-run)
+python apply_fixes_subagents.py audit_system/tools/complexity_analyzer_tool.py --dry-run --verbose
+
+# Apply real optimizations with backup
+python apply_fixes_subagents.py complex_file.py --force --backup-dir ./backups/
+
+# Optimize entire directory with progress tracking
+python apply_fixes_subagents.py --directory src/ --backup-dir ./backups/ --verbose
+```
+
+#### **System Verification (subagent_verification.py)**
+```bash
+# Verify Claude subagent availability
+python subagent_verification.py --report
+
+# Test specific subagent functionality
+python subagent_verification.py --test intelligent-code-analyzer --verbose
+
+# Complete system diagnostic
+python subagent_verification.py --diagnostic --full-report
+```
+
+#### **Demonstration (demo_claude_subagents.py)**
+```bash
+# Complete functionality demonstration
+python demo_claude_subagents.py
+
+# Shows real file modifications, performance metrics, and system validation
+```
+
+### **✨ Claude Subagents Features**
+
+- **🧠 Real LLM Intelligence**: Semantic code analysis vs. traditional AST parsing
+- **🎯 Intelligent Refactoring**: God method extraction, complexity reduction, pattern optimization
+- **🛡️ Zero Legacy Fallback**: System intentionally breaks if Claude subagents unavailable
+- **📊 Proven Results**: 271+ lines optimized in complexity_analyzer_tool.py
+- **🔄 Real-time Optimization**: ComplexityThresholds class, magic constants extraction, method decomposition
+
+**Requirements**: Claude Code environment with Task tool access (no OpenAI API key needed)
 
 ## 📈 Status
 

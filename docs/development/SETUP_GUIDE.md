@@ -13,6 +13,7 @@
 - [🐍 Python Project Setup](#-python-project-setup)
 - [📦 Node.js Project Setup](#-nodejs-project-setup)
 - [🔀 Mixed Project Setup](#-mixed-project-setup)
+- [🧠 Claude Subagents Setup](#-claude-subagents-setup)
 - [🐙 GitHub Integration](#-github-integration)
 - [🎨 GitHub Pages Dashboard](#-github-pages-dashboard)
 - [✅ Environment Validation](#-environment-validation)
@@ -256,6 +257,98 @@ For projects using both Python and Node.js:
    # JavaScript/TypeScript tests
    npm test
    ```
+
+## 🧠 **Claude Subagents Setup**
+
+### **🎯 Real LLM-Powered Code Intelligence**
+
+The TDD framework includes **Claude subagents** for intelligent code analysis and optimization using real LLM semantic understanding.
+
+#### **Prerequisites**
+- **Claude Code Environment**: Must be running in Claude Code CLI
+- **Task Tool Access**: Claude subagents require native Task tool availability
+- **No OpenAI API Key**: System works exclusively with Claude subagents
+
+#### **Available Claude Subagents**
+- **`intelligent-code-analyzer`**: Semantic code analysis and complexity detection
+- **`agno-optimization-orchestrator`**: Intelligent code optimization and refactoring
+- **`intelligent-refactoring-specialist`**: Advanced refactoring with pattern recognition
+
+#### **Setup & Verification**
+
+1. **Verify Subagent Availability**:
+   ```bash
+   # Check Claude subagent system status
+   python subagent_verification.py --report
+   
+   # Test specific subagent functionality
+   python subagent_verification.py --test intelligent-code-analyzer --verbose
+   
+   # Complete diagnostic
+   python subagent_verification.py --diagnostic --full-report
+   ```
+
+2. **System Requirements Check**:
+   ```bash
+   # This will fail if not in Claude Code environment (by design)
+   python scan_issues_subagents.py --help
+   
+   # Expected: Either help output OR error about Task tool unavailable
+   ```
+
+#### **Usage Examples**
+
+**Code Analysis**:
+```bash
+# Analyze specific file with Claude intelligence
+python scan_issues_subagents.py --file audit_system/tools/complexity_analyzer_tool.py --verbose
+
+# Analyze directory with detailed reporting
+python scan_issues_subagents.py streamlit_extension/ --format json > analysis_report.json
+
+# Find files with complexity issues
+python scan_issues_subagents.py --issues-only --complexity-threshold 30 --verbose
+```
+
+**Code Optimization**:
+```bash
+# Preview optimizations (dry-run)
+python apply_fixes_subagents.py complex_file.py --dry-run --verbose
+
+# Apply real optimizations with backup
+python apply_fixes_subagents.py file.py --force --backup-dir ./backups/
+
+# Optimize entire directory
+python apply_fixes_subagents.py --directory src/ --backup-dir ./backups/ --verbose
+```
+
+**Demonstration**:
+```bash
+# Complete functionality demo showing real optimizations
+python demo_claude_subagents.py
+```
+
+#### **✨ Key Features**
+
+- **🧠 Semantic Analysis**: Real LLM understanding vs. traditional AST parsing
+- **🎯 Intelligent Refactoring**: God method extraction, complexity reduction, pattern optimization
+- **🛡️ Zero Fallback**: System intentionally breaks if Claude subagents unavailable
+- **📊 Proven Results**: 271+ lines optimized in real production code
+- **🔄 Real Transformations**: ComplexityThresholds extraction, magic constants removal
+
+#### **Requirements & Limitations**
+
+✅ **Requirements**:
+- Claude Code environment with Task tool access
+- Python 3.11+
+- No external API keys needed
+
+❌ **Intentional Limitations**:
+- **No legacy fallback**: System fails if Claude subagents unavailable
+- **Claude Code only**: Cannot run in standard Python environments
+- **Task tool dependency**: Requires native Claude Code Task tool
+
+> **Note**: The "system breaks" behavior is intentional per specification: "se nao tiver agentes nativos o codigo deve quebrar"
 
 ## 🐙 **GitHub Integration**
 
