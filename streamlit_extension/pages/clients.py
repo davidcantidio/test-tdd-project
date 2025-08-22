@@ -38,6 +38,8 @@ from streamlit_extension.utils.exception_handler import (
     safe_streamlit_operation,
     get_error_statistics,
 )
+from streamlit_extension.auth.user_model import User, UserRole
+from streamlit_extension.auth.middleware import init_protected_page
 
 # Optional dependencies with clean fallback
 dependency_manager = get_dependency_manager()
@@ -446,26 +448,10 @@ def render_clients_page():
 
 def _initialize_clients_page():
     """Initialize page, check dependencies and authentication."""
-    # Streamlit is now a required dependency - no availability check needed
-    
-    # Database utilities are now required dependencies - no availability check needed
-    
-    # TEMPORARY BYPASS FOR TESTING - Remove in production
     # Initialize protected page with authentication
-    # current_user = init_protected_page("👥 Client Management")
-    # if not current_user:
-    #     return {"error": "Authentication required"}
-    
-    # Temporary mock user for testing
-    current_user = User(
-        id=1,
-        username="test_user",
-        email="test@example.com", 
-        role=UserRole.ADMIN,
-        is_active=True
-    )
-    st.title("👥 Client Management")
-    st.warning("🧪 DEVELOPMENT MODE - Authentication bypassed")
+    current_user = init_protected_page("👥 Client Management")
+    if not current_user:
+        return {"error": "Authentication required"}
     
     # Check rate limit for page load
     page_rate_allowed, page_rate_error = check_rate_limit("page_load") if check_rate_limit else (True, None)
@@ -477,7 +463,7 @@ def _initialize_clients_page():
     st.markdown("Manage your clients, contacts, and business relationships")
     st.markdown("---")
     
-    return {"status": "initialized"}
+    return {"status": "initialized", "user": current_user}
 
 
 def _setup_database_connection():

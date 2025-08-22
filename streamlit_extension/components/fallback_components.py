@@ -100,6 +100,8 @@ class NotificationData:
     type: str = "info"  # info, success, warning, error
     icon: str = "🔔"  # Default notification icon
     timestamp: datetime = field(default_factory=datetime.now)
+    action_label: Optional[str] = None
+    action_callback: Optional[callable] = None
     
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary representation."""

@@ -117,14 +117,35 @@ def show_user_info():
 
 
 def init_protected_page(page_title: str, required_roles: Optional[list[UserRole]] = None):
-    """Refactored method with extracted responsibilities."""
-    init_protected_page_ui_interaction()
-    init_protected_page_validation()
-    init_protected_page_logging()
-    init_protected_page_error_handling()
-    init_protected_page_configuration()
-    init_protected_page_formatting()
-    pass  # TODO: Integrate extracted method results # Tracked: 2025-08-21
+    """Initialize a protected page with authentication checks.
+    
+    Args:
+        page_title: Title to display on the page
+        required_roles: Optional list of required roles
+    
+    Returns:
+        User object if authenticated, None otherwise
+    """
+    # Set page title
+    st.title(page_title)
+    
+    # Check authentication
+    user = auth_middleware()
+    if not user:
+        st.error("🔒 Access denied. Please log in.")
+        st.info("Please authenticate to access this page.")
+        return None
+    
+    # Check role permissions if specified
+    if required_roles and user.role not in required_roles:
+        st.error(f"🔒 Access denied. Required role: {', '.join([role.display_name for role in required_roles])}")
+        st.info(f"Your role: {user.role.display_name}")
+        return None
+    
+    # Show user info in sidebar
+    show_user_info()
+    
+    return user
 
 def init_protected_page_ui_interaction():
     """
