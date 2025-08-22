@@ -66,8 +66,10 @@ except Exception:  # pragma: no cover - minimal environment
 # Legacy DatabaseManager: used ONLY to compose ServiceContainer (until complete migration)
 try:
     from ..utils.database import DatabaseManager  # type: ignore
+    DATABASE_UTILS_AVAILABLE = True
 except Exception:  # pragma: no cover
     DatabaseManager = None  # type: ignore
+    DATABASE_UTILS_AVAILABLE = False
 
 # ======================================================================================
 # Exports
@@ -88,6 +90,8 @@ __all__ = [
     "get_task_service",
     "get_analytics_service",
     "get_timer_service",
+    "STREAMLIT_AVAILABLE",
+    "DATABASE_UTILS_AVAILABLE",
 ]
 
 # ======================================================================================

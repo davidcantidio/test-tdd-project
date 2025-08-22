@@ -98,6 +98,7 @@ class NotificationData:
     title: str = ""
     message: str = ""
     type: str = "info"  # info, success, warning, error
+    icon: str = "🔔"  # Default notification icon
     timestamp: datetime = field(default_factory=datetime.now)
     
     def to_dict(self) -> Dict[str, Any]:
@@ -106,6 +107,7 @@ class NotificationData:
             "title": self.title,
             "message": self.message,
             "type": self.type,
+            "icon": self.icon,
             "timestamp": self.timestamp.isoformat()
         }
 

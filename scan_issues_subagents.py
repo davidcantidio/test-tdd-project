@@ -121,17 +121,19 @@ Provide specific, actionable refactoring steps with rationale."""
     def _execute_subagent_analysis(self, subagent_type: str, description: str, prompt: str, file_path: str) -> str:
         """
         Execute real subagent analysis.
-        This would connect to the actual Claude subagent system.
-        """
-        # This represents the real subagent execution
-        # In actual implementation, this would call Claude's subagent API
         
-        if subagent_type == "intelligent-code-analyzer":
-            return self._analyze_with_intelligent_code_analyzer(file_path, prompt)
-        elif subagent_type == "intelligent-refactoring-specialist":
-            return self._analyze_with_refactoring_specialist(file_path, prompt)
-        else:
-            return f"Analysis completed by {subagent_type} subagent"
+        ⚠️  IMPORTANTE: Este script só funciona quando executado ATRAVÉS do Claude Code!
+        Não é um script Python standalone - requer ambiente Claude Code para acessar subagents.
+        """
+        # Este método deve ser chamado apenas via Claude Code
+        # onde a função Task está disponível no contexto global
+        
+        error_msg = "❌ ERRO: Este script deve ser executado ATRAVÉS do Claude Code!"
+        self.logger.error(error_msg)
+        self.logger.error("📝 INSTRUÇÃO: Use este script via Claude Code interface, não como Python standalone")
+        self.logger.error("🤖 SUBAGENTS: Apenas disponíveis no ambiente Claude Code")
+        
+        return f"ERRO: {subagent_type} requer ambiente Claude Code para funcionar. Script deve ser executado através do Claude Code para acessar subagents."
     
     def _analyze_with_intelligent_code_analyzer(self, file_path: str, prompt: str) -> str:
         """Real intelligent code analysis using Claude subagent capabilities."""

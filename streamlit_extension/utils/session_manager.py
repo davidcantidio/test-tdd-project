@@ -333,6 +333,14 @@ def initialize_page_state() -> None:
     if not get_session_value("page_history"):
         set_session_value("page_history", ["Dashboard"])
 
+def get_current_page() -> str:
+    """Get the current page from session state."""
+    return get_session_value("current_page", "Dashboard")
+
+def set_current_page(page_name: str) -> None:
+    """Set the current page in session state."""
+    set_session_value("current_page", page_name)
+
 # === SESSION STATE INSPECTION =================================================
 
 def get_session_state_summary() -> Dict[str, Any]:
@@ -432,6 +440,8 @@ __all__ = [
     "get_health_status",
     "update_health_status",
     "initialize_page_state",
+    "get_current_page",
+    "set_current_page",
     
     # Session state inspection
     "get_session_state_summary",

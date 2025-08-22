@@ -68,10 +68,11 @@ except ImportError:
                 st.info("🔔 Notificações indisponíveis.")
     
     class NotificationData:
-        def __init__(self, title="", message="", type="info", timestamp=None):
+        def __init__(self, title="", message="", type="info", icon="🔔", timestamp=None):
             self.title = title
             self.message = message
             self.type = type
+            self.icon = icon
             self.timestamp = timestamp or datetime.now()
 
 # Data providers

@@ -156,27 +156,29 @@ python scripts/testing/comprehensive_integrity_test.py  # Production certificati
 > **⚡ FIXED (2025-08-22)**: Scripts corrected to use REAL Claude Code Task interface. Now 100% functional with native Claude subagents.
 
 #### **Code Analysis (scan_issues_subagents.py)**
+
+> **⚠️ REQUIRES CLAUDE CODE**: These scripts only work when executed through Claude Code interface, not as standalone Python scripts.
+
 ```bash
-# Analyze specific file with Claude intelligence
-python scan_issues_subagents.py --file audit_system/tools/complexity_analyzer_tool.py --verbose
+# Execute via Claude Code - NOT directly in terminal
+# Claude Code will internally run:
 
-# Analyze entire directory with detailed reporting
-python scan_issues_subagents.py streamlit_extension/ --format json > analysis_report.json
-
-# Find only files with detected issues (complexity > threshold)
-python scan_issues_subagents.py --issues-only --complexity-threshold 30 --verbose
+scan_issues_subagents.py --file audit_system/tools/complexity_analyzer_tool.py --verbose
+scan_issues_subagents.py streamlit_extension/ --format json
+scan_issues_subagents.py --issues-only --complexity-threshold 30 --verbose
 ```
 
 #### **Code Optimization (apply_fixes_subagents.py)**
+
+> **⚠️ REQUIRES CLAUDE CODE**: These scripts only work when executed through Claude Code interface, not as standalone Python scripts.
+
 ```bash
-# Preview optimizations without applying (dry-run)
-python apply_fixes_subagents.py audit_system/tools/complexity_analyzer_tool.py --dry-run --verbose
+# Execute via Claude Code - NOT directly in terminal
+# Claude Code will internally run:
 
-# Apply real optimizations with backup
-python apply_fixes_subagents.py complex_file.py --force --backup-dir ./backups/
-
-# Optimize entire directory with progress tracking
-python apply_fixes_subagents.py --directory src/ --backup-dir ./backups/ --verbose
+apply_fixes_subagents.py audit_system/tools/complexity_analyzer_tool.py --dry-run --verbose
+apply_fixes_subagents.py complex_file.py --force --backup-dir ./backups/
+apply_fixes_subagents.py --directory src/ --backup-dir ./backups/ --verbose
 ```
 
 #### **System Verification (subagent_verification.py)**

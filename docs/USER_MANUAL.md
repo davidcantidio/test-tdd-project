@@ -102,18 +102,21 @@ export GOOGLE_CLIENT_SECRET="seu_client_secret"
 
 **Propósito**: Análise inteligente de qualidade de código usando Claude subagents
 
+> **⚠️ IMPORTANTE**: Este script funciona APENAS quando executado através do Claude Code interface. Não é um script Python standalone.
+
+**Via Claude Code:**
 ```bash
-# ✨ Análise de arquivo específico
-python scan_issues_subagents.py --file audit_system/tools/complexity_analyzer_tool.py --verbose
+# Execute através do Claude Code interface - NÃO diretamente no terminal
+# O Claude Code irá executar internamente:
+
+# ✨ Análise de arquivo específico  
+scan_issues_subagents.py --file audit_system/tools/complexity_analyzer_tool.py --verbose
 
 # 📊 Análise de diretório completo com relatório JSON
-python scan_issues_subagents.py streamlit_extension/ --format json > analysis_report.json
+scan_issues_subagents.py streamlit_extension/ --format json
 
 # 🎯 Encontrar apenas arquivos com problemas detectados
-python scan_issues_subagents.py --issues-only --complexity-threshold 30 --verbose
-
-# 📋 Análise com debug detalhado
-python scan_issues_subagents.py streamlit_extension/ --debug --verbose
+scan_issues_subagents.py --issues-only --complexity-threshold 30 --verbose
 ```
 
 **Features**:
@@ -128,18 +131,21 @@ python scan_issues_subagents.py streamlit_extension/ --debug --verbose
 
 **Propósito**: Aplicação automática de otimizações inteligentes com backup
 
+> **⚠️ IMPORTANTE**: Este script funciona APENAS quando executado através do Claude Code interface. Não é um script Python standalone.
+
+**Via Claude Code:**
 ```bash
+# Execute através do Claude Code interface - NÃO diretamente no terminal  
+# O Claude Code irá executar internamente:
+
 # 👀 Preview de otimizações (sem aplicar)
-python apply_fixes_subagents.py audit_system/tools/complexity_analyzer_tool.py --dry-run --verbose
+apply_fixes_subagents.py audit_system/tools/complexity_analyzer_tool.py --dry-run --verbose
 
 # ✅ Aplicar otimizações reais com backup
-python apply_fixes_subagents.py complex_file.py --force --backup-dir ./backups/
+apply_fixes_subagents.py complex_file.py --force --backup-dir ./backups/
 
 # 🏗️ Otimizar diretório completo
-python apply_fixes_subagents.py --directory src/ --backup-dir ./backups/ --verbose
-
-# 🎯 Otimização seletiva por tipo
-python apply_fixes_subagents.py file.py --types god_methods,complexity,constants --force
+apply_fixes_subagents.py --directory src/ --backup-dir ./backups/ --verbose
 ```
 
 **Features**:
