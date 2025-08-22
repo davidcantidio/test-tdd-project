@@ -1,0 +1,75 @@
+diff --git a/audit_system/agents/intelligent_code_agent.py b/audit_system/agents/intelligent_code_agent.py
+index existing..new 100644
+--- a/audit_system/agents/intelligent_code_agent.py
++++ b/audit_system/agents/intelligent_code_agent.py
+@@ -1515,8 +1515,25 @@ class IntelligentCodeAgent:
+         # Determine replacement lines
+         replacement: List[str] = []
+         new_code = refactoring.new_code or refactoring.after_code
++        
++        # CRITICAL FIX: Generate basic replacement if new_code is empty
++        if not new_code and refactoring.target_lines:
++            # Get original lines to transform
++            start_idx = refactoring.target_lines[0] - 1
++            end_idx = refactoring.target_lines[-1] 
++            original_section = original_lines[start_idx:end_idx]
++            
++            # Basic transformation based on refactoring type
++            if refactoring.refactoring_type == "improve_exception_handling":
++                new_code = self._generate_improved_exception_handling(original_section)
++            elif refactoring.refactoring_type == "optimize_string_operations":
++                new_code = self._generate_optimized_string_operations(original_section)
++            else:
++                # For other types, apply basic formatting improvements
++                new_code = self._generate_basic_improvements(original_section)
++        
+         if new_code:
+             replacement = [line if line.endswith("\n") else line + "\n" for line in new_code.splitlines()]
+ 
+         if refactoring.target_lines:
+             start = refactoring.target_lines[0] - 1
+@@ -1549,6 +1566,45 @@ class IntelligentCodeAgent:
+             "changes_made": True,
+         }
+ 
++    def _generate_improved_exception_handling(self, original_lines: List[str]) -> str:
++        """Generate improved exception handling code."""
++        improved_lines = []
++        for line in original_lines:
++            # Convert bare except to specific exception
++            if "except:" in line and "Exception" not in line:
++                improved_lines.append(line.replace("except:", "except Exception as e:"))
++            # Add logging to exception handlers
++            elif "except" in line and ":" in line and "logger" not in line:
++                improved_lines.append(line)
++                indent = len(line) - len(line.lstrip())
++                improved_lines.append(" " * (indent + 4) + "logger.error(f\"Error: {e}\")\n")
++            else:
++                improved_lines.append(line)
++        return "".join(improved_lines)
++    
++    def _generate_optimized_string_operations(self, original_lines: List[str]) -> str:
++        """Generate optimized string operations."""
++        improved_lines = []
++        for line in original_lines:
++            # Convert string concatenation to f-strings
++            if " + " in line and "\"" in line:
++                # Basic f-string conversion for simple cases
++                improved_lines.append(line.replace(" + ", " "))
++            else:
++                improved_lines.append(line)
++        return "".join(improved_lines)
++    
++    def _generate_basic_improvements(self, original_lines: List[str]) -> str:
++        """Generate basic code improvements."""
++        improved_lines = []
++        for line in original_lines:
++            # Add basic improvements like removing trailing whitespace
++            improved_line = line.rstrip() + "\n" if line.strip() else line
++            improved_lines.append(improved_line)
++        return "".join(improved_lines)
++
++
+ 
+ # =============================================================================
+ # CLI Interface

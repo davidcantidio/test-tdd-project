@@ -1,0 +1,398 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Complexity Analyzer Tool - Agno tool for code complexity analysis.
+
+This tool provides comprehensive complexity analysis including:
+- Cyclomatic complexity
+- Cognitive complexity  
+- Maintainability index
+- Nesting depth analysis
+"""
+
+from __future__ import annotations
+
+import ast
+import math
+from typing import Any, Dict, List, Tuple
+from dataclasses import dataclass
+
+from .base_refactoring_tool import BaseRefactoringTool, RefactoringTarget
+
+@dataclass
+class ComplexityMetrics:
+    """Complexity metrics for a code element."""
+    cyclomatic_complexity: int
+    cognitive_complexity: int
+    maintainability_index: float
+    max_nesting_depth: int
+    line_count: int
+    parameter_count: int
+    
+class ComplexityAnalyzerTool(BaseRefactoringTool):
+    """
+    Agno tool for analyzing code complexity metrics.
+    
+    Analyzes:
+    - Cyclomatic complexity (McCabe)
+    - Cognitive complexity (SonarQube style)
+    - Maintainability index
+    - Nesting depth
+    - Method/function complexity
+    """
+    
+    def __init__(self):
+        super().__init__()
+        
+        # Complexity thresholds
+        self.cyclomatic_threshold = 10
+        self.cognitive_threshold = 15
+        self.maintainability_threshold = 20
+        self.nesting_threshold = 4
+        self.lines_threshold = 50
+    
+    def get_tool_name(self) -> str:
+        return "complexity_analyzer"
+    
+    def get_tool_description(self) -> str:
+        return (
+            "Analyzes code complexity metrics including cyclomatic complexity, "
+            "cognitive complexity, maintainability index, and nesting depth. "
+            "Identifies methods and functions that exceed complexity thresholds."
+        )
+    
+    def _analyze_ast(self, tree: ast.AST, source_code: str) -> List[RefactoringTarget]:
+        """Analyze AST for complexity issues."""
+        targets = []
+        source_lines = source_code.splitlines()
+        
+        # Analyze all functions and methods
+        for node in ast.walk(tree):
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                metrics = self._calculate_function_complexity(node, source_lines)
+                
+                # Check if any threshold is exceeded
+                if self._exceeds_thresholds(metrics):
+                    target = self._create_complexity_target(node, metrics, source_lines)
+                    targets.append(target)
+        
+        # Analyze classes for overall complexity
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ClassDef):
+                class_metrics = self._calculate_class_complexity(node, source_lines)
+                if class_metrics["total_complexity"] > 50:  # High class complexity
+                    target = self._create_class_complexity_target(node, class_metrics, source_lines)
+                    targets.append(target)
+        
+        return targets
+    
+    def _calculate_function_complexity(self, func_node: ast.AST, source_lines: List[str]) -> ComplexityMetrics:
+        """Calculate complexity metrics for a function."""
+        # Cyclomatic complexity
+        cyclomatic = self._calculate_cyclomatic_complexity(func_node)
+        
+        # Cognitive complexity
+        cognitive = self._calculate_cognitive_complexity(func_node)
+        
+        # Line count
+        start_line = func_node.lineno
+        end_line = getattr(func_node, 'end_lineno', start_line)
+        line_count = end_line - start_line + 1
+        
+        # Parameter count
+        param_count = len(func_node.args.args)
+        if func_node.args.vararg:
+            param_count += 1
+        if func_node.args.kwarg:
+            param_count += 1
+        
+        # Nesting depth
+        max_depth = self._calculate_max_nesting_depth(func_node)
+        
+        # Maintainability index (simplified)
+        maintainability = self._calculate_maintainability_index(
+            cyclomatic, line_count, len(source_lines)
+        )
+        
+        return ComplexityMetrics(
+            cyclomatic_complexity=cyclomatic,
+            cognitive_complexity=cognitive,
+            maintainability_index=maintainability,
+            max_nesting_depth=max_depth,
+            line_count=line_count,
+            parameter_count=param_count
+        )
+    
+    def _calculate_cognitive_complexity(self, node: ast.AST) -> int:
+        """Calculate cognitive complexity (SonarQube style)."""
+        complexity = 0
+        nesting_level = 0
+        
+        for child in ast.walk(node):
+            if isinstance(child, (ast.If, ast.While, ast.For, ast.AsyncFor)):
+                # Base increment + nesting increment
+                complexity += 1 + nesting_level
+                nesting_level += 1
+            elif isinstance(child, (ast.And, ast.Or)):
+                complexity += 1
+            elif isinstance(child, ast.Try):
+                complexity += 1
+                nesting_level += 1
+            elif isinstance(child, ast.ExceptHandler):
+                complexity += 1 + nesting_level
+            elif isinstance(child, (ast.ListComp, ast.DictComp, ast.SetComp, ast.GeneratorExp)):
+                complexity += 1 + nesting_level
+            elif isinstance(child, ast.Lambda):
+                complexity += 1 + nesting_level
+        
+        return complexity
+    
+    def _calculate_max_nesting_depth(self, node: ast.AST) -> int:
+        """Calculate maximum nesting depth."""
+        max_depth = 0
+        current_depth = 0
+        
+        def visit_node(n):
+            nonlocal max_depth, current_depth
+            
+            if isinstance(n, (ast.If, ast.While, ast.For, ast.AsyncFor, ast.With, ast.Try)):
+                current_depth += 1
+                max_depth = max(max_depth, current_depth)
+                
+                # Visit children
+                for child in ast.iter_child_nodes(n):
+                    visit_node(child)
+                
+                current_depth -= 1
+            else:
+                # Visit children
+                for child in ast.iter_child_nodes(n):
+                    visit_node(child)
+        
+        visit_node(node)
+        return max_depth
+    
+    def _calculate_maintainability_index(self, cyclomatic: int, loc: int, total_loc: int) -> float:
+        """Calculate maintainability index (simplified Halstead-based)."""
+        # Simplified formula: higher is better
+        try:
+            # Avoid log(0) errors
+            volume = max(1, loc * math.log2(max(2, cyclomatic + 1)))
+            mi = 171 - 5.2 * math.log(volume) - 0.23 * cyclomatic - 16.2 * math.log(max(1, loc))
+            return max(0, mi)
+        except (ValueError, ZeroDivisionError):
+            return 0.0
+    
+    def _calculate_class_complexity(self, class_node: ast.ClassDef, source_lines: List[str]) -> Dict[str, Any]:
+        """Calculate complexity metrics for a class."""
+        total_complexity = 0
+        method_count = 0
+        total_lines = 0
+        
+        for node in ast.walk(class_node):
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                if node != class_node:  # Don't count the class itself
+                    metrics = self._calculate_function_complexity(node, source_lines)
+                    total_complexity += metrics.cyclomatic_complexity
+                    method_count += 1
+                    total_lines += metrics.line_count
+        
+        return {
+            "total_complexity": total_complexity,
+            "method_count": method_count,
+            "total_lines": total_lines,
+            "average_method_complexity": total_complexity / max(1, method_count),
+            "class_name": class_node.name
+        }
+    
+    def _exceeds_thresholds(self, metrics: ComplexityMetrics) -> bool:
+        """Check if complexity metrics exceed any thresholds."""
+        return (
+            metrics.cyclomatic_complexity > self.cyclomatic_threshold or
+            metrics.cognitive_complexity > self.cognitive_threshold or
+            metrics.maintainability_index < self.maintainability_threshold or
+            metrics.max_nesting_depth > self.nesting_threshold or
+            metrics.line_count > self.lines_threshold
+        )
+    
+    def _create_complexity_target(
+        self, 
+        func_node: ast.AST, 
+        metrics: ComplexityMetrics, 
+        source_lines: List[str]
+    ) -> RefactoringTarget:
+        """Create a refactoring target for complex function."""
+        issues = []
+        severity = 0
+        
+        if metrics.cyclomatic_complexity > self.cyclomatic_threshold:
+            issues.append(f"High cyclomatic complexity: {metrics.cyclomatic_complexity}")
+            severity += metrics.cyclomatic_complexity - self.cyclomatic_threshold
+        
+        if metrics.cognitive_complexity > self.cognitive_threshold:
+            issues.append(f"High cognitive complexity: {metrics.cognitive_complexity}")
+            severity += metrics.cognitive_complexity - self.cognitive_threshold
+        
+        if metrics.maintainability_index < self.maintainability_threshold:
+            issues.append(f"Low maintainability index: {metrics.maintainability_index:.1f}")
+            severity += self.maintainability_threshold - metrics.maintainability_index
+        
+        if metrics.max_nesting_depth > self.nesting_threshold:
+            issues.append(f"Deep nesting: {metrics.max_nesting_depth} levels")
+            severity += metrics.max_nesting_depth - self.nesting_threshold
+        
+        if metrics.line_count > self.lines_threshold:
+            issues.append(f"Long function: {metrics.line_count} lines")
+            severity += (metrics.line_count - self.lines_threshold) * 0.1
+        
+        description = f"Function '{func_node.name}' has complexity issues: {', '.join(issues)}"
+        
+        code_snippet = self._extract_code_snippet(
+            '\n'.join(source_lines), func_node.lineno, getattr(func_node, 'end_lineno', func_node.lineno)
+        )
+        
+        # Calculate confidence based on severity
+        confidence = min(1.0, severity / 20.0)
+        
+        return RefactoringTarget(
+            start_line=func_node.lineno,
+            end_line=getattr(func_node, 'end_lineno', func_node.lineno),
+            target_type="complexity_reduction",
+            complexity_score=severity,
+            confidence=confidence,
+            description=description,
+            code_snippet=code_snippet,
+            suggested_improvement=self._generate_complexity_improvement(func_node, metrics),
+            benefits=[
+                "Improved code readability",
+                "Better testability",
+                "Easier maintenance",
+                "Reduced cognitive load"
+            ],
+            risks=[
+                "May require significant refactoring",
+                "Potential performance overhead from method calls",
+                "Need to ensure test coverage"
+            ]
+        )
+    
+    def _create_class_complexity_target(
+        self, 
+        class_node: ast.ClassDef, 
+        class_metrics: Dict[str, Any], 
+        source_lines: List[str]
+    ) -> RefactoringTarget:
+        """Create a refactoring target for complex class."""
+        description = (
+            f"Class '{class_metrics['class_name']}' has high complexity: "
+            f"{class_metrics['total_complexity']} total complexity across "
+            f"{class_metrics['method_count']} methods"
+        )
+        
+        code_snippet = self._extract_code_snippet(
+            '\n'.join(source_lines), class_node.lineno, getattr(class_node, 'end_lineno', class_node.lineno)
+        )
+        
+        return RefactoringTarget(
+            start_line=class_node.lineno,
+            end_line=getattr(class_node, 'end_lineno', class_node.lineno),
+            target_type="class_decomposition",
+            complexity_score=class_metrics['total_complexity'],
+            confidence=0.8,
+            description=description,
+            code_snippet=code_snippet[:500] + "..." if len(code_snippet) > 500 else code_snippet,
+            suggested_improvement=self._generate_class_improvement(class_node, class_metrics),
+            benefits=[
+                "Better separation of concerns",
+                "Improved testability",
+                "Single responsibility adherence",
+                "Easier code navigation"
+            ],
+            risks=[
+                "Significant refactoring effort",
+                "Potential interface changes",
+                "Need for comprehensive testing"
+            ]
+        )
+    
+    def _generate_complexity_improvement(self, func_node: ast.AST, metrics: ComplexityMetrics) -> str:
+        """Generate improvement suggestions for complex function."""
+        suggestions = []
+        
+        if metrics.line_count > self.lines_threshold:
+            suggestions.append("Consider extracting logical blocks into separate methods")
+        
+        if metrics.max_nesting_depth > self.nesting_threshold:
+            suggestions.append("Reduce nesting by using early returns and guard clauses")
+        
+        if metrics.parameter_count > 5:
+            suggestions.append("Consider using parameter objects or configuration classes")
+        
+        if metrics.cyclomatic_complexity > self.cyclomatic_threshold:
+            suggestions.append("Split complex conditional logic into separate methods")
+        
+        if metrics.cognitive_complexity > self.cognitive_threshold:
+            suggestions.append("Simplify logic by extracting helper methods")
+        
+        return f"""
+Complexity Improvement Plan for '{func_node.name}':
+
+Current Metrics:
+- Cyclomatic Complexity: {metrics.cyclomatic_complexity}
+- Cognitive Complexity: {metrics.cognitive_complexity}
+- Lines of Code: {metrics.line_count}
+- Nesting Depth: {metrics.max_nesting_depth}
+- Maintainability Index: {metrics.maintainability_index:.1f}
+
+Recommended Actions:
+{chr(10).join(f"• {suggestion}" for suggestion in suggestions)}
+
+Target Metrics:
+- Cyclomatic Complexity: < {self.cyclomatic_threshold}
+- Cognitive Complexity: < {self.cognitive_threshold}
+- Nesting Depth: < {self.nesting_threshold}
+- Maintainability Index: > {self.maintainability_threshold}
+"""
+    
+    def _generate_class_improvement(self, class_node: ast.ClassDef, class_metrics: Dict[str, Any]) -> str:
+        """Generate improvement suggestions for complex class."""
+        return f"""
+Class Complexity Improvement Plan for '{class_metrics['class_name']}':
+
+Current Metrics:
+- Total Complexity: {class_metrics['total_complexity']}
+- Method Count: {class_metrics['method_count']}
+- Average Method Complexity: {class_metrics['average_method_complexity']:.1f}
+- Total Lines: {class_metrics['total_lines']}
+
+Recommended Actions:
+• Consider splitting class based on responsibilities
+• Extract related methods into separate classes
+• Use composition over inheritance
+• Apply Single Responsibility Principle
+• Consider facade or adapter patterns
+
+Target: Keep classes focused on single responsibility with < 20 total complexity
+"""
+    
+    def _apply_refactoring(self, code: str, targets: List[RefactoringTarget]) -> Any:
+        """Complexity analyzer doesn't apply refactoring directly."""
+        # This tool only analyzes complexity, doesn't apply refactoring
+        # Return a result indicating analysis only
+        from .base_refactoring_tool import RefactoringResult
+        import time
+        
+        return RefactoringResult(
+            success=True,
+            original_code=code,
+            refactored_code=code,  # No changes made
+            targets_processed=targets,
+            improvements={
+                "complexity_analysis_completed": len(targets),
+                "issues_identified": len(targets)
+            },
+            warnings=["This tool only analyzes complexity - use specific refactoring tools to apply changes"],
+            errors=[],
+            execution_time=0.1,
+            tokens_used=0
+        )

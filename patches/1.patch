@@ -1,1061 +1,229 @@
  (cd "$(git rev-parse --show-toplevel)" && git apply --3way <<'EOF' 
-diff --git a/apply_intelligent_optimizations.sh b/apply_intelligent_optimizations.sh
-index fa3232a49ca6cbfb36c0fa67f19fdc19e1334fc5..1c9faf9e0ebc33fa36b00f52914434cd9ccddfb2 100755
---- a/apply_intelligent_optimizations.sh
-+++ b/apply_intelligent_optimizations.sh
-@@ -351,52 +351,53 @@ EOF
- apply_optimizations() {
-     if [[ $DRY_RUN -eq 1 ]]; then
-         log_info "🔍 DRY-RUN MODE: Showing what would be optimized..."
-         show_optimization_preview
-         return
-     fi
-     
-     if [[ $FORCE_APPLY -eq 0 && $SELECTIVE -eq 0 ]]; then
-         log_warning "⚠️ This will apply optimizations to your code files"
-         echo -n "Are you sure you want to continue? (y/N): "
-         read -r response
-         if [[ ! "$response" =~ ^[Yy]$ ]]; then
-             log_info "Operation cancelled by user"
-             exit 0
-         fi
-     fi
-     
-     log_info "🚀 Applying intelligent optimizations..."
-     
-     # Set environment variables for Python script
-     export SCRIPT_START_TIME
-     export BACKUP_DIR
-     
-     # Apply optimizations using enhanced Python integration
-     python3 - << 'EOF'
--import json, sys, os, shutil
-+import json, sys, os, shutil, time
- from pathlib import Path
-+start_time = time.time()
- 
- # ---------- Helpers ----------
- def load_json(p: Path):
-     with p.open('r', encoding='utf-8') as f:
-         return json.load(f)
- 
- def save_json(p: Path, data: dict):
-     p.parent.mkdir(parents=True, exist_ok=True)
-     tmp = p.with_suffix('.tmp')
-     with tmp.open('w', encoding='utf-8') as f:
-         json.dump(data, f, indent=2, ensure_ascii=False)
-     tmp.replace(p)
- 
- def ensure_backup(file_path: str, backup_root: Path, backup_id: str, metadata_path: Path):
-     """Copia o arquivo para BACKUP_DIR/files_<ID>/<path_relativo> e
-     atualiza o array files_backed_up no metadata."""
-     src = Path(file_path)
-     # Guard: só faz backup de arquivos que existem
-     if not src.exists():
-         return False
- 
-     rel = src.as_posix()
-     # destino
-     dest = backup_root / f"files_{backup_id}" / rel
-     dest.parent.mkdir(parents=True, exist_ok=True)
-@@ -518,53 +519,58 @@ for fr in targets:
-                 shutil.copy2(src_backup, file_path)
-             print(f"   ❌ Syntax error after changes — rolled back {file_path}")
-             failed_files.append(file_path)
-             continue
- 
-         if applied > 0:
-             total_applied += applied
-             total_files_modified += 1
-             msg = f"   ✅ Applied {applied} optimizations successfully"
-             if failed > 0:
-                 msg += f" (⚠️ {failed} failed)"
-             print(msg)
-         else:
-             status = result.get('status', 'unknown')
-             if status == 'completed':
-                 print("   ℹ️ No optimizations to apply (already optimized)")
-             else:
-                 print(f"   ℹ️ No optimizations applied (status: {status})")
- 
-     except Exception as e:
-         failed_files.append(file_path)
-         print(f"   ❌ Error optimizing {file_path}: {e}")
- 
- print(f"\n🎉 Optimization Summary:")
- print(f"   📁 Files modified: {total_files_modified}")
--print(f"   🔧 Total optimizations applied: {total_applied}")
-+print(f"   🔧 Optimizations applied: {total_applied}")
-+elapsed = time.time() - start_time
-+print(f"   ⏱️ Elapsed: {elapsed:.2f}s")
-+if total_applied == 0:
-+    print("ℹ️  Dry-run or no real LLM configured. No destructive changes were written.")
- if failed_files:
-     print(f"   ❗ Files with errors (kept/rolled back): {len(failed_files)}")
-+print(f"[{int(time.time())}] SUCCESS")
- EOF
- }
- 
- show_optimization_preview() {
-     log_info "🔍 Optimization Preview (Dry-Run Mode):"
-     
-     python3 - << 'EOF'
- import json
- import sys
- import os
- from pathlib import Path
- 
- try:
-     audit_dir = Path(os.environ.get('AUDIT_DIR', '.audit_intelligent'))
-     
-     # Load audit results
-     with open(audit_dir / 'intelligent_analysis.json') as f:
-         audit_data = json.load(f)
-     
-     results = audit_data.get('results', [])
-     files_with_optimizations = [r for r in results if r.get('recommended_refactorings_count', 0) > 0]
-     
-     if not files_with_optimizations:
-         print("ℹ️ No optimization opportunities found")
-         sys.exit(0)
-@@ -620,26 +626,26 @@ main() {
-     # Create backup structure (even for dry-run to log operations)
-     create_backup_structure
-     
-     # Load and summarize audit results
-     load_audit_results
-     
-     # Apply optimizations (or show preview)
-     apply_optimizations
-     
-     if [[ $DRY_RUN -eq 0 ]]; then
-         log_success "🎉 Optimization process completed!"
-         log_info "📋 Log file: $OPTIMIZATION_LOG"
-         log_info "💾 Backup location: $BACKUP_DIR/files_$SCRIPT_START_TIME"
-         echo
-         echo "🔄 If you need to rollback:"
-         echo "   ./apply_intelligent_optimizations.sh --rollback $SCRIPT_START_TIME"
-     else
-         log_info "🔍 Dry-run completed - no files were modified"
-         echo
-         echo "🚀 To apply optimizations:"
-         echo "   ./apply_intelligent_optimizations.sh --apply"
-     fi
- }
- 
- # Execute main function with all arguments
--main "$@"
-\ No newline at end of file
-+main "$@"
 diff --git a/audit_system/agents/intelligent_code_agent.py b/audit_system/agents/intelligent_code_agent.py
-index b287c4939d7c842fa132848049467a66ca4ee920..affa859899fd3ff1ccc389732c8477db6d2c51ba 100644
+index 8ae83af49ab75e346dd8dd11e9df6abfd986e6da..55736098e46b2f727cdf584b357efe607cac1881 100644
 --- a/audit_system/agents/intelligent_code_agent.py
 +++ b/audit_system/agents/intelligent_code_agent.py
-@@ -36,50 +36,51 @@ from __future__ import annotations
- import ast
- import inspect
- import re
- import time
- import sys
- import os
- import logging
- import argparse
- from pathlib import Path
- from typing import List, Dict, Any, Optional, Union, Tuple, Set
- from datetime import datetime
- from dataclasses import dataclass, field
- from enum import Enum
- import tokenize
- import keyword
- import builtins
- from collections import defaultdict, Counter
- import statistics
- 
- # Project root setup
- project_root = Path(__file__).resolve().parent.parent.parent
- sys.path.insert(0, str(project_root))
- 
- # Import existing infrastructure
- from streamlit_extension.utils.database import DatabaseManager
-+from audit_system.core.llm_backend import LLMBackend, NullLLMBackend, LLMOverview
- 
- # Real LLM Integration and Context Access
- try:
-     from ..core.intelligent_rate_limiter import IntelligentRateLimiter
-     RATE_LIMITER_AVAILABLE = True
- except ImportError:
-     RATE_LIMITER_AVAILABLE = False
-     
- # Context Integration
- CONTEXT_BASE_PATH = Path(__file__).parent.parent / "context"
- GUIDES_PATH = CONTEXT_BASE_PATH / "guides"
- WORKFLOWS_PATH = CONTEXT_BASE_PATH / "workflows" 
- NAVIGATION_PATH = CONTEXT_BASE_PATH / "navigation"
- 
- # Avoid circular import - use lazy loading for auditor components
- EnhancedSystematicFileAuditor = None
- SetimaDataLoader = None
- 
- def _get_auditor_components():
-     """Lazy loading to avoid circular imports."""
-     global EnhancedSystematicFileAuditor, SetimaDataLoader
-     if EnhancedSystematicFileAuditor is None:
-         try:
-             from audit_system.core.systematic_file_auditor import EnhancedSystematicFileAuditor as ESA, SetimaDataLoader as SDL
-             EnhancedSystematicFileAuditor = ESA
-@@ -871,59 +872,61 @@ class SemanticAnalysisEngine:
-             return "Cleanup code that always executes"
-         elif line.strip().startswith('raise'):
-             return "Raises exception to signal error condition"
-         return "Manages error conditions"
- 
- 
- # =============================================================================
- # Intelligent Code Agent - Main Class
- # =============================================================================
- 
- class IntelligentCodeAgent:
-     """
-     🤖 Real LLM-Powered Intelligent Code Agent with Context Integration
-     
-     Enterprise AI agent that performs true semantic analysis using real LLM 
-     with context integration, intelligent rate limiting, and production-ready
-     token management for comprehensive code understanding.
-     """
-     
-     def __init__(
-         self, 
-         project_root: Path, 
-         analysis_depth: AnalysisDepth = AnalysisDepth.ADVANCED,
-         semantic_mode: SemanticMode = SemanticMode.CONSERVATIVE,
-         dry_run: bool = False,
--        enable_real_llm: bool = True,
--        tokens_budget: int = 8000
-+        enable_real_llm: bool = False,
-+        tokens_budget: int = 8000,
-+        llm_backend: LLMBackend | None = None,
-     ):
-         self.project_root = project_root
-         self.analysis_depth = analysis_depth
-         self.semantic_mode = semantic_mode
-         self.dry_run = dry_run
-         self.enable_real_llm = enable_real_llm
-         self.tokens_budget = tokens_budget
-+        self.llm_backend: LLMBackend = llm_backend or NullLLMBackend()
-         
-         self.logger = logging.getLogger(f"{__name__}.IntelligentCodeAgent")
-         
-         # Initialize intelligent rate limiter
-         if RATE_LIMITER_AVAILABLE and enable_real_llm:
-             project_root = Path(__file__).resolve().parent.parent.parent
-             self.rate_limiter = IntelligentRateLimiter(project_root)
-             self.logger.info("✅ Intelligent Rate Limiter initialized for real LLM usage")
-         else:
-             self.rate_limiter = None
-             self.logger.debug("ℹ️ Rate Limiter not available - using fallback timing")
-         
-         # Load context for enhanced analysis
-         self.analysis_context = self._load_analysis_context()
-         
-         # Real LLM Token Configuration (Updated from pattern-based estimates)
-         self.real_llm_config = {
-             "line_analysis_tokens": 150,       # Per line semantic analysis (vs 10 pattern-based)
-             "file_overview_tokens": 2000,      # File-level understanding (vs 500 pattern-based)
-             "refactoring_tokens": 3000,        # Intelligent refactoring suggestions (vs 800)
-             "security_analysis_tokens": 1500,  # Deep security understanding (vs 300)
-             "performance_tokens": 1500,        # Performance optimization analysis (vs 200)
-             "architecture_tokens": 2000,       # Architectural pattern detection (vs 400)
-         }
-         
-@@ -1064,126 +1067,95 @@ class IntelligentCodeAgent:
-             self.logger.debug(f"Token estimate for {file_path}: {total_estimated} ({line_count} lines)")
+@@ -969,59 +969,59 @@ class IntelligentCodeAgent:
              
-             return total_estimated
+             return result
              
          except Exception as e:
-             self.logger.warning(f"Error estimating tokens for {file_path}: {e}")
-             return self.real_llm_config["file_overview_tokens"]  # Fallback estimate
+             self.logger.error("Error analyzing file %s: %s", file_path, e)
+             raise
      
-     def _create_line_batches(self, lines: List[str], batch_size: int = 10) -> List[List[Tuple[int, str]]]:
-         """Create batches of lines for efficient LLM processing."""
-         batches = []
-         current_batch = []
+     def apply_intelligent_refactorings(
+         self, 
+         analysis: FileSemanticAnalysis, 
+         selected_refactorings: Optional[List[int]] = None
+     ) -> Dict[str, Any]:
+         """Apply selected intelligent refactorings to the file."""
+         if self.dry_run:
+             return {"status": "dry_run", "would_apply": len(analysis.recommended_refactorings)}
          
-         for i, line in enumerate(lines, 1):
-             current_batch.append((i, line))
-             
-             if len(current_batch) >= batch_size:
-                 batches.append(current_batch)
-                 current_batch = []
+         refactorings_to_apply = analysis.recommended_refactorings
+         if selected_refactorings:
+             refactorings_to_apply = [
+                 refactorings_to_apply[i] for i in selected_refactorings 
+                 if i < len(refactorings_to_apply)
+             ]
          
-         if current_batch:  # Add remaining lines
-             batches.append(current_batch)
-         
-         return batches
-     
--    def _perform_real_llm_file_overview(self, file_path: str, content: str, ast_tree: Optional[ast.AST]) -> Dict[str, Any]:
--        """
--        🧠 Perform real LLM file overview analysis with context integration.
--        """
--        # Build context-enhanced prompt
--        context_info = ""
--        if self.analysis_context.get("tdah_guidelines", {}).get("focus_patterns"):
--            context_info += "TDAH-Optimized Analysis: Focus on critical issues first.\n"
--        if self.analysis_context.get("project_patterns", {}).get("tdd_workflows"):
--            context_info += "Project Context: TDD-focused enterprise framework.\n"
+         applied_refactorings = []
+         failed_refactorings = []
 -        
--        # REAL LLM CALL PLACEHOLDER
--        # In production, this would call actual LLM API with the prompt
--        llm_prompt = f"""
--Analyze this Python file for overall purpose and architectural role:
--
--FILE: {file_path}
--CONTEXT: {context_info}
--
--ANALYSIS FOCUS:
--1. Overall purpose and responsibility
--2. Architectural role in the system
--3. Key design patterns used
--4. Major complexity hotspots
--5. Security and performance considerations
--
--Provide structured analysis with confidence scoring.
--"""
--        
--        # Simulate real LLM response with actual understanding
--        overview = {
--            "overall_purpose": f"Code analysis indicates {self._extract_file_purpose(content, ast_tree)}",
--            "architectural_role": self._determine_architectural_role_simple(file_path, content, ast_tree),
--            "design_patterns": self._identify_design_patterns_llm_enhanced(content, ast_tree),
--            "complexity_assessment": "MODERATE with opportunities for optimization",
--            "confidence_score": 82.0
-+    def _perform_real_llm_file_overview(self, content: str, file_path: str, ast_tree: Optional[ast.AST]) -> Dict[str, Any]:
-+        """Delegar visão de arquivo ao backend configurado (real ou nulo)."""
-+        llm_ov: LLMOverview = self.llm_backend.file_overview(
-+            content=content, file_path=file_path, ast_tree=ast_tree
-+        )
-+        return {
-+            "overall_purpose": llm_ov.overall_purpose,
-+            "architectural_role": llm_ov.architectural_role,
-+            "risks": llm_ov.risks,
-+            "notes": llm_ov.notes,
-+            "confidence_score": llm_ov.confidence_score,
-         }
--        
--        return overview
-     
-     def _perform_real_llm_line_batch_analysis(
--        self, 
--        line_batch: List[Tuple[int, str]], 
--        ast_map: Dict[int, ast.AST], 
--        overview_analysis: Dict[str, Any],
--        batch_idx: int
-+        self,
-+        content: str,
-+        file_path: str,
-+        ast_tree: Optional[ast.AST],
-+        line_batch: List[Tuple[int, str]],
-     ) -> List[LineAnalysis]:
--        """
--        🧠 Perform real LLM analysis on a batch of lines with contextual understanding.
--        """
--        # REAL LLM CALL PLACEHOLDER
--        # In production, this would analyze the batch with full context
--        
--        batch_analyses = []
--        for line_num, line_content in line_batch:
--            # Enhanced analysis with LLM understanding
--            semantic_type = self._identify_semantic_type_enhanced(line_content, ast_map.get(line_num))
--            purpose = self._extract_line_purpose_llm(line_content, semantic_type, overview_analysis)
--            
--            analysis = LineAnalysis(
--                line_number=line_num,
--                line_content=line_content,
--                semantic_type=semantic_type,
--                purpose=purpose,
--                complexity_contribution=self._calculate_llm_complexity(line_content, semantic_type),
--                dependencies=self._identify_dependencies_llm(line_content, overview_analysis),
--                side_effects=self._detect_side_effects_llm(line_content, semantic_type),
--                optimization_opportunities=self._find_optimizations_llm(line_content, semantic_type),
--                refactoring_suggestions=self._suggest_refactorings_llm(line_content, semantic_type),
--                security_implications=self._assess_security_llm(line_content, semantic_type),
--                performance_impact=self._evaluate_performance_llm(line_content, semantic_type),
--                maintainability_issues=self._check_maintainability_llm(line_content, semantic_type)
-+        """Delegar análise de linhas ao backend configurado."""
-+        backend_results = self.llm_backend.line_batch_analysis(
-+            content=content, file_path=file_path, ast_tree=ast_tree, line_batch=line_batch
-+        )
-+        analyses: List[LineAnalysis] = []
-+        lines_dict = {ln: txt for ln, txt in line_batch}
-+        for res in backend_results:
-+            ln = res.get("line")
-+            analyses.append(
-+                LineAnalysis(
-+                    line_number=ln,
-+                    line_content=lines_dict.get(ln, ""),
-+                    semantic_type=res.get("semantic_type", "unknown"),
-+                    purpose=res.get("purpose", ""),
-+                    complexity_contribution=0.0,
-+                    dependencies=[],
-+                    side_effects=[],
-+                    optimization_opportunities=[],
-+                    refactoring_suggestions=[],
-+                    security_implications=[],
-+                    performance_impact="low",
-+                    maintainability_issues=[],
-+                )
-             )
--            batch_analyses.append(analysis)
--        
--        return batch_analyses
-+        return analyses
-     
-     def _get_surrounding_context(self, lines: List[str], line_number: int, context_size: int = 5) -> List[str]:
-         """Get surrounding context lines for better analysis."""
-         start = max(0, line_number - context_size - 1)
-         end = min(len(lines), line_number + context_size)
-         return lines[start:end]
-     
-     def _fallback_file_overview(self, file_path: str, content: str, ast_tree: Optional[ast.AST]) -> Dict[str, Any]:
-         """Fallback file overview when real LLM is not available."""
-         return {
-             "overall_purpose": "Pattern-based analysis (fallback mode)",
-             "architectural_role": "utility",
-             "design_patterns": [],
-             "complexity_assessment": "PATTERN-BASED ANALYSIS",
-             "confidence_score": 60.0
-         }
-     
-     # LLM-Enhanced Helper Methods (Simulated for now, would be real LLM calls in production)
-     def _extract_file_purpose(self, content: str, ast_tree: Optional[ast.AST]) -> str:
-         """Extract file purpose using LLM understanding."""
-         if "class" in content.lower() and "def __init__" in content:
-             return "class-based module with initialization and methods"
-         elif "def " in content and "class " not in content:
-             return "function-based utility module"
-         else:
-@@ -1313,89 +1285,78 @@ Provide structured analysis with confidence scoring.
-         
-         # Calculate estimated token usage for this file
-         estimated_tokens = self._estimate_file_tokens(file_path)
-         self.logger.info(f"📊 Estimated token usage: {estimated_tokens} tokens")
-         
-         # Check rate limiting using centralized helper
-         self._rl_guard(estimated_tokens, "file_analysis")
-         
-         try:
-             # Read and parse file
-             with open(file_path, 'r', encoding='utf-8') as f:
-                 content = f.read()
-             
-             lines = content.splitlines()
-             actual_tokens_used = 0
-             
-             # Parse AST for structural understanding
++
+         for refactoring in refactorings_to_apply:
              try:
-                 ast_tree = ast.parse(content)
-                 ast_map = self._create_ast_line_mapping(ast_tree)
-             except SyntaxError as e:
-                 self.logger.warning("⚠️ Syntax error in %s: %s", file_path, e)
-                 ast_tree = None
-                 ast_map = {}
-             
--            # STEP 1: Real LLM File Overview Analysis
-+            # STEP 1: LLM File Overview Analysis (real ou dry-run)
-+            overview_analysis = self._perform_real_llm_file_overview(content, file_path, ast_tree)
-             if self.enable_real_llm:
-                 file_overview_tokens = self.real_llm_config["file_overview_tokens"]
--                overview_analysis = self._perform_real_llm_file_overview(file_path, content, ast_tree)
-                 actual_tokens_used += file_overview_tokens
-                 self.logger.info(f"✅ LLM File Overview: {file_overview_tokens} tokens used")
--            else:
--                overview_analysis = self._fallback_file_overview(file_path, content, ast_tree)
--            
+                 if self._can_safely_apply_refactoring(refactoring, analysis):
+                     result = self._apply_single_refactoring(refactoring, analysis.file_path)
+-                    if result["success"]:
++                    if result.get("success") and result.get("changes_made"):
+                         applied_refactorings.append(refactoring)
+                     else:
+-                        failed_refactorings.append((refactoring, result["error"]))
++                        failed_refactorings.append((refactoring, result.get("error", "No changes made")))
+                 else:
+                     failed_refactorings.append((refactoring, "Safety check failed"))
+             except Exception as e:
+                 failed_refactorings.append((refactoring, str(e)))
+         
+         return {
+             "status": "completed",
+             "applied": len(applied_refactorings),
+             "failed": len(failed_refactorings),
+             "applied_refactorings": applied_refactorings,
+             "failed_refactorings": failed_refactorings
+         }
+     
+     # Helper methods for analysis
+     def _create_ast_line_mapping(self, ast_tree: ast.AST) -> Dict[int, ast.AST]:
+         """Create mapping from line numbers to AST nodes."""
+         line_map = {}
+         for node in ast.walk(ast_tree):
+             if hasattr(node, 'lineno'):
+                 line_map[node.lineno] = node
+         return line_map
+     
+     def _extract_imports(self, lines: List[str]) -> List[str]:
+         """Extract import statements from file."""
+         imports = []
+@@ -1465,68 +1465,114 @@ class IntelligentCodeAgent:
+         
+         return max(score, 0.0)
+     
+     def _can_safely_apply_refactoring(
+         self, 
+         refactoring: IntelligentRefactoring, 
+         analysis: FileSemanticAnalysis
+     ) -> bool:
+         """Check if a refactoring can be safely applied."""
+         # Conservative mode checks
+         if self.semantic_mode == SemanticMode.CONSERVATIVE:
+             if refactoring.confidence_score < 0.8:
+                 return False
+             if any("high" in risk.lower() for risk in refactoring.risks):
+                 return False
+         
+         # Check for conflicting refactorings
+         for other_refactoring in analysis.recommended_refactorings:
+             if (other_refactoring != refactoring and 
+                 set(refactoring.target_lines) & set(other_refactoring.target_lines)):
+                 return False
+         
+         return True
+     
+     def _apply_single_refactoring(
+-        self, 
+-        refactoring: IntelligentRefactoring, 
++        self,
++        refactoring: IntelligentRefactoring,
+         file_path: str
+     ) -> Dict[str, Any]:
+         """Apply a single refactoring to the file."""
+-        # This is a placeholder for actual refactoring implementation
+-        # In a real implementation, this would modify the file according to the refactoring
+-        
+         self.logger.info(
+-            "Would apply %s refactoring to lines %s in %s",
++            "Applying %s refactoring to lines %s in %s",
+             refactoring.refactoring_type, refactoring.target_lines, file_path
+         )
+-        
+-        # For now, just return success
 +
-             # STEP 2: Context-Enhanced Line Analysis
-             line_analyses = []
-             tokens_per_line = self.real_llm_config["line_analysis_tokens"]
--            
++        try:
++            with open(file_path, "r", encoding="utf-8") as f:
++                original_lines = f.readlines()
++        except OSError as e:
++            return {
++                "success": False,
++                "refactoring_type": refactoring.refactoring_type,
++                "lines_modified": 0,
++                "changes_made": False,
++                "error": str(e),
++            }
 +
-             # Batch lines for efficient token usage
-             line_batches = self._create_line_batches(lines, batch_size=10)
-             
-             for batch_idx, line_batch in enumerate(line_batches):
-+                batch_analysis = self._perform_real_llm_line_batch_analysis(
-+                    content, file_path, ast_tree, line_batch
-+                )
-                 if self.enable_real_llm:
-                     batch_tokens = tokens_per_line * len(line_batch)
--                    batch_analysis = self._perform_real_llm_line_batch_analysis(
--                        line_batch, ast_map, overview_analysis, batch_idx
--                    )
-                     actual_tokens_used += batch_tokens
--                    line_analyses.extend(batch_analysis)
--                    
--                    # Progress tracking for TDAH optimization
--                    progress = (batch_idx + 1) / len(line_batches) * 100
--                    self.logger.info(f"📈 Line analysis progress: {progress:.1f}% ({batch_idx + 1}/{len(line_batches)} batches)")
--                else:
--                    # Fallback to pattern-based analysis
--                    for line_info in line_batch:
--                        i, line = line_info
--                        context_lines = self._get_surrounding_context(lines, i)
--                        file_context = {"ast_tree": ast_tree, "file_path": file_path}
--                        
--                        line_analysis = self.semantic_engine.analyze_line_semantically(
--                            i, line, ast_map.get(i), context_lines, file_context
--                        )
--                        line_analyses.append(line_analysis)
-+                line_analyses.extend(batch_analysis)
++        modified_lines = original_lines[:]
 +
-+                # Progress tracking para TDAH otimização
-+                progress = (batch_idx + 1) / len(line_batches) * 100
-+                self.logger.info(
-+                    f"📈 Line analysis progress: {progress:.1f}% ({batch_idx + 1}/{len(line_batches)} batches)"
-+                )
-             
-             # File-level analysis
-             overall_purpose = self._determine_file_purpose(file_path, ast_tree, lines)
-             architectural_role = self._determine_architectural_role(file_path, ast_tree)
-             design_patterns_used = self._identify_design_patterns_used(ast_tree, line_analyses)
-             design_patterns_missing = self._suggest_missing_design_patterns(ast_tree, line_analyses)
-             
-             # Identify hotspots and issues
-             complexity_hotspots = self._identify_complexity_hotspots(line_analyses)
-             performance_bottlenecks = self._identify_performance_bottlenecks(line_analyses)
-             security_vulnerabilities = self._identify_security_vulnerabilities(line_analyses)
-             maintainability_issues = self._assess_maintainability_issues(line_analyses)
-             
-             # Generate intelligent refactorings
-             recommended_refactorings = []
-             if self.analysis_depth in [AnalysisDepth.ADVANCED, AnalysisDepth.DEEP]:
-                 recommended_refactorings = self._generate_intelligent_refactorings(
-                     line_analyses, ast_tree, file_path
-                 )
-             
-             # Calculate quality scores
-             testability_score = self._calculate_testability_score(line_analyses, ast_tree)
-             semantic_quality_score = self._calculate_semantic_quality_score(line_analyses)
-             
-             result = FileSemanticAnalysis(
++        # Determine replacement lines
++        replacement: List[str] = []
++        new_code = refactoring.new_code or refactoring.after_code
++        if new_code:
++            replacement = [line if line.endswith("\n") else line + "\n" for line in new_code.splitlines()]
++
++        if refactoring.target_lines:
++            start = refactoring.target_lines[0] - 1
++            end = refactoring.target_lines[-1]
++            modified_lines[start:end] = replacement
++
++        if modified_lines == original_lines:
++            return {
++                "success": False,
++                "refactoring_type": refactoring.refactoring_type,
++                "lines_modified": 0,
++                "changes_made": False,
++            }
++
++        try:
++            with open(file_path, "w", encoding="utf-8") as f:
++                f.writelines(modified_lines)
++        except OSError as e:
++            return {
++                "success": False,
++                "refactoring_type": refactoring.refactoring_type,
++                "lines_modified": 0,
++                "changes_made": False,
++                "error": str(e),
++            }
++
++        lines_modified = abs(len(modified_lines) - len(original_lines))
++        if lines_modified == 0:
++            lines_modified = 1
++
+         return {
+             "success": True,
+             "refactoring_type": refactoring.refactoring_type,
+-            "lines_modified": len(refactoring.target_lines)
++            "lines_modified": lines_modified,
++            "changes_made": True,
+         }
+ 
+ 
+ # =============================================================================
+ # CLI Interface
+ # =============================================================================
+ 
+ def setup_logging(verbose: bool = False):
+     """Setup logging configuration."""
+     level = logging.DEBUG if verbose else logging.INFO
+     logging.basicConfig(
+         level=level,
+         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+         handlers=[
+             logging.StreamHandler(),
+             logging.FileHandler('intelligent_code_agent.log')
+         ]
+     )
+ 
+ 
+ def main():
+     """Main CLI entry point."""
+     parser = argparse.ArgumentParser(
+         description="Intelligent Code Agent - AI-Powered Line-by-Line Analysis"
+     )
 diff --git a/audit_system/agents/intelligent_refactoring_engine.py b/audit_system/agents/intelligent_refactoring_engine.py
-index 7042b31a2c8fca8fc72fe2beb1805de57fa74fad..be3924a88bacaeb1bd2b63b0a4e782f0688ffda5 100644
+index 0b854a179b5536651a79397da577a3b1d9087556..03136234a0259cf56acb6a81d2ab5c644e0c0976 100644
 --- a/audit_system/agents/intelligent_refactoring_engine.py
 +++ b/audit_system/agents/intelligent_refactoring_engine.py
-@@ -15,89 +15,94 @@ with semantic understanding, context integration, and production-ready rate limi
- - **Safety Validation**: Real semantic understanding of refactoring impact
- 
- 🎯 **ENHANCED REFACTORING FEATURES:**
- - Real semantic understanding of code structure and dependencies
- - Context-aware refactoring recommendations based on project patterns
- - Intelligent rate limiting for LLM API calls with optimal pacing
- - Production-ready refactoring with comprehensive safety validation
- - TDAH-optimized workflow with progress tracking and micro-steps
- 
- 📚 **CONTEXT INTEGRATION:**
- - Loads refactoring patterns from audit_system/context/workflows/
- - Integrates project architecture guidelines from context files
- - Uses TDAH optimization patterns for refactoring workflow management
- 
- 🚀 **USAGE:**
-     python intelligent_refactoring_engine.py --file FILE --real-llm-mode
-                                            --refactoring-type TYPE --tokens-budget 10000
-                                            [--apply] [--dry-run] [--tdah-mode]
- """
- 
- from __future__ import annotations
- 
- import ast
- import re
- import logging
-+import os
- import time
- from pathlib import Path
- from typing import Dict, List, Any, Optional, Tuple, Set
--from dataclasses import dataclass
-+from dataclasses import dataclass, field
- import sys
- import argparse
- 
- # Project setup
- project_root = Path(__file__).resolve().parent.parent.parent
- sys.path.insert(0, str(project_root))
- 
- from audit_system.agents.intelligent_code_agent import IntelligentCodeAgent, FileSemanticAnalysis, IntelligentRefactoring
- from audit_system.agents.god_code_refactoring_agent import GodCodeRefactoringAgent, GodCodeType
- 
- # Real LLM Integration and Context Access
- try:
-     from ..core.intelligent_rate_limiter import IntelligentRateLimiter
-     RATE_LIMITER_AVAILABLE = True
- except ImportError:
-     RATE_LIMITER_AVAILABLE = False
-     
- # Context Integration
- CONTEXT_BASE_PATH = Path(__file__).parent.parent / "context"
- GUIDES_PATH = CONTEXT_BASE_PATH / "guides"
- WORKFLOWS_PATH = CONTEXT_BASE_PATH / "workflows" 
- NAVIGATION_PATH = CONTEXT_BASE_PATH / "navigation"
- 
- 
- @dataclass
- class RefactoringResult:
-     """Result of applying a refactoring."""
-     success: bool
-     refactoring_type: str
-     original_lines: List[str]
-     refactored_lines: List[str]
-     lines_affected: List[int]
--    improvements: Dict[str, float]  # complexity_reduction, readability_improvement, etc.
--    warnings: List[str]
--    errors: List[str]
-+    improvements: Dict[str, float | None] = field(default_factory=dict)
-+    warnings: List[str] = field(default_factory=list)
-+    errors: List[str] = field(default_factory=list)
-+    notes: List[str] = field(default_factory=list)
-+    skipped: bool = False
-+
-+REAL_LLM_ENABLED = os.getenv("REAL_LLM_ENABLED") == "1"
- 
- 
- class IntelligentRefactoringEngine:
-     """
-     🔧 Real LLM-Powered Intelligent Refactoring Engine with Context Integration
-     
-     Enterprise refactoring engine that uses real LLM analysis for intelligent code transformation
-     with semantic understanding, context integration, and production-ready rate limiting.
-     """
-     
-     def __init__(
-         self, 
-         dry_run: bool = False, 
-         enable_real_llm: bool = True,
-         tokens_budget: int = 10000,
-         tdah_mode: bool = False
-     ):
-         self.dry_run = dry_run
-         self.enable_real_llm = enable_real_llm
-         self.tokens_budget = tokens_budget
-         self.tdah_mode = tdah_mode
-         
-         self.logger = logging.getLogger(f"{__name__}.IntelligentRefactoringEngine")
-         
-         # Initialize intelligent rate limiter
-@@ -204,121 +209,123 @@ class IntelligentRefactoringEngine:
-     def _rl_guard(self, estimated_tokens: int, bucket: str) -> None:
-         """
-         Centraliza verificação/espera/registro do rate limiter para reduzir duplicação.
-         No-ops caso o rate limiter não esteja disponível ou o modo LLM esteja desabilitado.
-         """
-         if not (self.enable_real_llm and self.rate_limiter):
-             return
-         should_proceed, sleep_time, estimated_tokens = self.rate_limiter.should_proceed_with_operation(
-             operation_type=bucket,  # Use bucket as operation_type
-             file_path="unknown",    # Default file_path since not available in this context
-             file_size_lines=estimated_tokens // 150  # Aproximação: ~150 tokens por linha
-         )
-         if not should_proceed:
-             # Evita logs ruidosos para sleeps muito curtos
-             if sleep_time >= 0.05:
-                 self.logger.debug("⏰ Rate limiting [%s]: sleeping %.2fs", bucket, sleep_time)
-             time.sleep(sleep_time)
-     
-     def _apply_llm_extract_method(
-         self, 
-         lines: List[str], 
-         refactoring: IntelligentRefactoring, 
-         file_path: str
-     ) -> RefactoringResult:
-         """🧠 LLM-powered method extraction with semantic understanding."""
--        
--        # Real LLM token consumption for semantic method extraction
-+
-+        if not REAL_LLM_ENABLED:
-+            return RefactoringResult(
-+                success=False,
-+                refactoring_type="extract_method",
-+                original_lines=lines,
-+                refactored_lines=lines,
-+                lines_affected=[],
-+                improvements={},
-+                warnings=[],
-+                errors=[],
-+                notes=["Dry-run: LLM desativado. Gerado somente plano, sem métricas ‘mágicas’."],
-+                skipped=True,
-+            )
-+
-         estimated_tokens = self.real_llm_config["extract_method_tokens"]
-         self._rl_guard(estimated_tokens, "extract_method")
--        
-         self.logger.info("🧠 LLM Extract Method: %s (tokens: %d)", file_path, estimated_tokens)
--        
--        # Apply traditional extract method with LLM enhancements
--        result = self._apply_extract_method(lines, refactoring, file_path)
--        
--        # Enhanced improvements with LLM semantic understanding (0-100% scale)
--        if result.success:
--            result.improvements = {
--                "complexity_reduction": min(85.0, result.improvements.get("complexity_reduction", 0) * 100),  # 0-100%
--                "semantic_clarity": 78.0,  # LLM-analyzed semantic improvement
--                "maintainability": 82.0,   # LLM-assessed maintainability gain
--                "readability": min(90.0, result.improvements.get("readability_improvement", 0) * 100)
--            }
--        
--        return result
-+        return self._apply_extract_method(lines, refactoring, file_path)
-     
-     def _apply_llm_improve_exception_handling(
-         self, 
-         lines: List[str], 
-         refactoring: IntelligentRefactoring, 
-         file_path: str
-     ) -> RefactoringResult:
-         """🧠 LLM-powered exception handling improvements."""
--        
-+
-+        if not REAL_LLM_ENABLED:
-+            return RefactoringResult(
-+                success=False,
-+                refactoring_type="improve_exception_handling",
-+                original_lines=lines,
-+                refactored_lines=lines,
-+                lines_affected=[],
-+                improvements={},
-+                warnings=[],
-+                errors=[],
-+                notes=["Dry-run: não aplicar ‘melhorias’ fictícias em exceções."],
-+                skipped=True,
-+            )
-+
-         estimated_tokens = self.real_llm_config["exception_improvement_tokens"]
-         self._rl_guard(estimated_tokens, "exception_handling")
--        
-         self.logger.info("🧠 LLM Exception Enhancement: %s (tokens: %d)", file_path, estimated_tokens)
--        
--        # Apply traditional exception improvements with LLM analysis
--        result = self._apply_improve_exception_handling(lines, refactoring, file_path)
--        
--        if result.success:
--            result.improvements = {
--                "error_resilience": 75.0,      # 0-100% LLM-assessed resilience
--                "debugging_capability": min(88.0, result.improvements.get("debugging_improvement", 0) * 100),
--                "security_posture": min(70.0, result.improvements.get("security_improvement", 0) * 100),
--                "production_readiness": 72.0   # LLM-evaluated production safety
--            }
--        
--        return result
-+        return self._apply_improve_exception_handling(lines, refactoring, file_path)
-     
-     def _apply_llm_optimize_string_operations(
-         self, 
-         lines: List[str], 
-         refactoring: IntelligentRefactoring, 
-         file_path: str
-     ) -> RefactoringResult:
-         """🧠 LLM-powered string operation optimization."""
--        
-+
-+        if not REAL_LLM_ENABLED:
-+            return RefactoringResult(
-+                success=False,
-+                refactoring_type="optimize_string_operations",
-+                original_lines=lines,
-+                refactored_lines=lines,
-+                lines_affected=[],
-+                improvements={},
-+                warnings=[],
-+                errors=[],
-+                notes=["Dry-run: pular otimização de strings sem evidência de ganho real."],
-+                skipped=True,
-+            )
-+
-         estimated_tokens = self.real_llm_config["string_optimization_tokens"]
-         self._rl_guard(estimated_tokens, "string_optimization")
--        
-         self.logger.info("🧠 LLM String Optimization: %s (tokens: %d)", file_path, estimated_tokens)
--        
--        result = self._apply_optimize_string_operations(lines, refactoring, file_path)
--        
--        if result.success:
--            result.improvements = {
--                "performance_gain": min(65.0, result.improvements.get("performance_improvement", 0) * 100),
--                "memory_efficiency": 58.0,     # LLM-analyzed memory usage improvement
--                "code_elegance": min(80.0, result.improvements.get("readability_improvement", 0) * 100),
--                "modern_python_usage": 73.0    # f-string and modern pattern adoption
--            }
--        
--        return result
-+        return self._apply_optimize_string_operations(lines, refactoring, file_path)
-     
-     def _apply_llm_eliminate_god_method(
-         self, 
-         lines: List[str], 
-         refactoring: IntelligentRefactoring, 
-         file_path: str
-     ) -> RefactoringResult:
-         """🧠 LLM-powered god method elimination with intelligent decomposition."""
-         
-         estimated_tokens = self.real_llm_config["god_code_analysis_tokens"]
-         self._rl_guard(estimated_tokens, "god_method_elimination")
-         
-         self.logger.info("🧠 LLM God Method Elimination: %s (tokens: %d)", file_path, estimated_tokens)
-         
-         result = self._apply_eliminate_god_method(lines, refactoring, file_path)
-         
-         if result.success:
-             result.improvements = {
-                 "srp_compliance": 85.0,         # Single Responsibility Principle adherence
-                 "complexity_reduction": min(92.0, result.improvements.get("complexity_reduction", 0)),
-                 "testability": min(88.0, result.improvements.get("testability_improvement", 0) * 100),
-                 "maintainability": min(90.0, result.improvements.get("maintainability_improvement", 0) * 100)
-             }
-         
-         return result
-@@ -334,67 +341,69 @@ class IntelligentRefactoringEngine:
-         estimated_tokens = self.real_llm_config["god_code_analysis_tokens"]
-         self._rl_guard(estimated_tokens, "god_code_refactoring")
-         
-         self.logger.info("🧠 LLM God Code Refactoring: %s (tokens: %d)", file_path, estimated_tokens)
-         
-         result = self._apply_god_code_refactoring(lines, refactoring, file_path)
-         
-         if result.success:
-             # Convert to 0-100% scale with clear semantic meaning
-             result.improvements = {
-                 "architectural_health": min(95.0, result.improvements.get("srp_compliance", 0) * 100),
-                 "complexity_reduction": min(90.0, result.improvements.get("complexity_reduction", 0)),
-                 "maintainability": min(88.0, result.improvements.get("maintainability_improvement", 0)),
-                 "testability": min(85.0, result.improvements.get("testability_improvement", 0) * 100)
-             }
-         
-         return result
-     
-     def _apply_llm_optimize_database_queries(
-         self, 
-         lines: List[str], 
-         refactoring: IntelligentRefactoring, 
-         file_path: str
-     ) -> RefactoringResult:
-         """🧠 LLM-powered N+1 query detection and optimization."""
--        
-+
-+        if not REAL_LLM_ENABLED:
-+            return RefactoringResult(
-+                success=False,
-+                refactoring_type="optimize_database_queries",
-+                original_lines=lines,
-+                refactored_lines=lines,
-+                lines_affected=[],
-+                improvements={},
-+                warnings=[],
-+                errors=[],
-+                notes=["Dry-run: LLM desativado. Gerado somente plano, sem métricas 'mágicas'."],
-+                skipped=True,
-+            )
-+
-         estimated_tokens = self.real_llm_config["query_optimization_tokens"]
-         self._rl_guard(estimated_tokens, "database_optimization")
--        
-         self.logger.info("🧠 LLM Database Query Optimization: %s (tokens: %d)", file_path, estimated_tokens)
--        
--        result = self._apply_optimize_database_queries(lines, refactoring, file_path)
--        
--        if result.success:
--            result.improvements = {
--                "query_performance": min(120.0, result.improvements.get("performance_improvement", 0) * 100),  # Can exceed 100% for major optimizations
--                "database_efficiency": 95.0,    # LLM-assessed DB load reduction
--                "scalability": 78.0,           # Improved scalability under load
--                "n_plus_1_elimination": 100.0  # Complete N+1 pattern elimination
--            }
--        
--        return result
-+        return self._apply_optimize_database_queries(lines, refactoring, file_path)
-     
-     def _apply_llm_extract_constants(
-         self, 
-         lines: List[str], 
-         refactoring: IntelligentRefactoring, 
-         file_path: str
-     ) -> RefactoringResult:
-         """🧠 LLM-powered intelligent constant extraction."""
-         
-         estimated_tokens = self.real_llm_config["constants_extraction_tokens"]
-         self._rl_guard(estimated_tokens, "constants_extraction")
-         
-         self.logger.info("🧠 LLM Constants Extraction: %s (tokens: %d)", file_path, estimated_tokens)
-         
-         result = self._apply_extract_constants(lines, refactoring, file_path)
-         
-         if result.success:
-             result.improvements = {
-                 "maintainability": min(75.0, result.improvements.get("maintainability_improvement", 0) * 100),
-                 "configuration_clarity": 68.0,  # Clear separation of configuration
-                 "magic_number_elimination": 85.0,  # Removal of unclear numeric literals
-                 "code_documentation": 58.0     # Self-documenting constant names
-             }
-         
-         return result
-@@ -878,91 +887,84 @@ class IntelligentRefactoringEngine:
-             }
+@@ -912,65 +912,65 @@ class IntelligentRefactoringEngine:
              
-             return RefactoringResult(
-                 success=True,
-                 refactoring_type="god_code_refactoring",
-                 original_lines=lines,
-                 refactored_lines=refactored_lines,
-                 lines_affected=affected_lines,
-                 improvements=improvements,
-                 warnings=refactoring_result.warnings,
-                 errors=[]
-             )
+             # Get available refactoring strategies
+             strategy_names = list(self.refactoring_strategies.keys())
              
-         except Exception as e:
-             self.logger.error("God code refactoring failed: %s", e)
-             return RefactoringResult(
-                 success=False,
-                 refactoring_type="god_code_refactoring",
-                 original_lines=lines,
-                 refactored_lines=lines,
-                 lines_affected=[],
-                 improvements={},
-                 warnings=[],
-                 errors=[f"God code refactoring failed: {e}"]
-             )
--    
--    def _apply_optimize_database_queries(
--        self, 
--        lines: List[str], 
--        refactoring: IntelligentRefactoring, 
--        file_path: str
--    ) -> RefactoringResult:
--        """Apply database query optimizations to prevent N+1 queries."""
--        
--        refactored_lines = lines.copy()
--        affected_lines = []
--        improvements = {"performance_improvement": 0.0}
--        
--        # Identify potential N+1 query patterns
--        for line_num in refactoring.target_lines:
--            line_idx = line_num - 1
--            line = lines[line_idx]
--            
--            # Look for query patterns inside loops
-+
-+    def _detect_db_query_anti_patterns(self, lines: List[str]) -> List[str]:
-+        plan: List[str] = []
-+        for idx, line in enumerate(lines, start=1):
-             if any(pattern in line for pattern in ['execute(', 'query(', 'get(']):
--                # Check if this is inside a loop
--                loop_context = self._find_loop_context(lines, line_idx)
-+                loop_context = self._find_loop_context(lines, idx - 1)
-                 if loop_context:
--                    # Suggest batch query optimization
-                     optimization = self._generate_batch_query_optimization(line, loop_context)
-                     if optimization:
--                        refactored_lines[line_idx] = f"{line}  # TODO: Optimize with batch query - see comment below"
--                        refactored_lines.insert(line_idx + 1, f"    # {optimization}")
--                        affected_lines.append(line_num)
--                        improvements["performance_improvement"] += 1.0
--        
--        return RefactoringResult(
--            success=True,
-+                        plan.append(f"Line {idx}: {optimization}")
-+        return plan
-+
-+    def _apply_optimize_database_queries(
-+        self,
-+        lines: List[str],
-+        refactoring: IntelligentRefactoring,
-+        file_path: str
-+    ) -> RefactoringResult:
-+        """Gerar plano de otimização de consultas sem modificar arquivo."""
-+
-+        plan = self._detect_db_query_anti_patterns(lines)
-+        result = RefactoringResult(
-+            success=bool(plan),
-             refactoring_type="optimize_database_queries",
-             original_lines=lines,
--            refactored_lines=refactored_lines,
--            lines_affected=affected_lines,
--            improvements=improvements,
--            warnings=["Database optimizations require manual validation"],
--            errors=[]
-+            refactored_lines=lines,
-+            lines_affected=[],
-+            improvements={},
-+            warnings=[],
-+            errors=[],
-         )
-+        result.notes.append("Plano de refatoração gerado. Nenhuma modificação escrita sem LLM real.")
-+        result.notes.extend(plan)
-+        return result
-     
-     def _apply_extract_constants(
-         self, 
-         lines: List[str], 
-         refactoring: IntelligentRefactoring, 
-         file_path: str
-     ) -> RefactoringResult:
-         """Apply constant extraction for magic numbers and strings."""
-         
-         refactored_lines = lines.copy()
-         affected_lines = []
-         constants_to_add = []
-         improvements = {"maintainability_improvement": 0.0}
-         
-         for line_num in refactoring.target_lines:
-             line_idx = line_num - 1
-             line = lines[line_idx]
+             refactorings_applied = []
+             total_tokens_used = 0
              
-             # Find magic numbers
-             magic_numbers = re.findall(r'\b(\d+)\b', line)
-             for number in magic_numbers:
-                 if int(number) > 10:  # Only extract significant numbers
-                     constant_name = f"MAGIC_NUMBER_{number}"
-                     constants_to_add.append((constant_name, number))
-                     
-@@ -1615,56 +1617,55 @@ class IntelligentRefactoringEngine:
+             # Apply selected strategies
+             for strategy_idx in selected_strategies:
                  if strategy_idx >= len(strategy_names):
                      continue
                      
                  strategy_name = strategy_names[strategy_idx]
                  
-                 # **CRITICAL FIX**: Use real analysis instead of hardcoded target_lines=[1]
-                 try:
-                     # Analyze file to get real target lines for this strategy
-                     target_lines, confidence = self._analyze_file_for_strategy(file_path, strategy_name)
-                     
-                     if not target_lines:
-                         # Skip if no applicable lines found
-                         self.logger.debug(f"No applicable lines found for {strategy_name} in {file_path}")
-                         continue
-                     
-                     # Create refactoring with REAL analysis data
-                     refactoring = IntelligentRefactoring(
-                         refactoring_type=strategy_name,
-                         target_lines=target_lines,  # ✅ REAL analysis instead of [1]
-                         description=f"Apply {strategy_name} refactoring",
-                         confidence=confidence
-                     )
-                     
-                 except Exception as e:
-                     self.logger.warning(f"Failed to analyze {file_path} for {strategy_name}: {e}")
--                    # Fallback to minimal analysis
-                     refactoring = IntelligentRefactoring(
-                         refactoring_type=strategy_name,
--                        target_lines=[1],  # Fallback only
--                        description=f"Apply {strategy_name} refactoring (fallback)",
--                        confidence=0.3
-+                        target_lines=[],
-+                        description=f"Skip {strategy_name}: sem análise suficiente",
-+                        confidence=0.0
-                     )
+                 # Create a simple refactoring for this strategy
+                 refactoring = IntelligentRefactoring(
+                     refactoring_type=strategy_name,
+                     target_lines=[1],  # Simplified - would need real analysis
+                     description=f"Apply {strategy_name} refactoring",
+                     confidence=0.8
+                 )
                  
                  # Apply the refactoring
                  try:
                      result = self.apply_refactoring(file_path, refactoring)
-                     
-                     if result.success:
+-                    
+-                    if result.success:
++
++                    if result.success and result.refactored_lines != result.original_lines:
                          refactorings_applied.append({
                              "type": strategy_name,
                              "success": True,
@@ -1068,360 +236,33 @@ index 7042b31a2c8fca8fc72fe2beb1805de57fa74fad..be3924a88bacaeb1bd2b63b0a4e782f0
                          refactorings_applied.append({
                              "type": strategy_name,
                              "success": False,
-                             "errors": result.errors
+-                            "errors": result.errors
++                            "errors": result.errors or ["No changes made"],
                          })
                          
                  except Exception as e:
                      self.logger.error(f"Error applying {strategy_name}: {e}")
                      refactorings_applied.append({
-diff --git a/audit_system/coordination/meta_agent.py b/audit_system/coordination/meta_agent.py
-index 2a7c5b8c62ae6b74aa10545723c885847f2e43ad..0a54d7f087e896e027ebe76dc71198f177025bd3 100644
---- a/audit_system/coordination/meta_agent.py
-+++ b/audit_system/coordination/meta_agent.py
-@@ -899,76 +899,86 @@ class MetaAgent:
-     
-     def _determine_execution_order(self, recommendations: List[AgentRecommendation]) -> List[AgentType]:
-         """Determine optimal execution order for agents."""
-         
-         # Priority order for agent execution
-         priority_order = {
-             AgentType.INTELLIGENT_CODE_AGENT: 1,      # Foundational analysis first
-             AgentType.GOD_CODE_AGENT: 2,              # God code detection early
-             AgentType.REFACTORING_ENGINE: 3,          # Refactoring based on analysis
-             AgentType.TDD_WORKFLOW_AGENT: 4           # TDD optimization last
-         }
-         
-         # Sort by priority and then by recommendation priority
-         sorted_recs = sorted(
-             recommendations,
-             key=lambda r: (
-                 priority_order.get(r.agent_type, 10),
-                 r.priority.value,
-                 -r.confidence
-             )
-         )
-         
-         return [rec.agent_type for rec in sorted_recs]
-     
-     def _identify_dependencies(self, file_path: str) -> List[str]:
--        """Identify file dependencies that might affect analysis."""
--        dependencies = []
--        
--        # TODO: Implement dependency analysis
--        # This could analyze imports to identify related files
--        # that should be analyzed together
--        
--        return dependencies
-+        """Análise simples de dependências via AST (sem placeholders)."""
-+        try:
-+            src = Path(file_path).read_text(encoding="utf-8")
-+        except Exception:
-+            return []
-+        try:
-+            tree = ast.parse(src)
-+        except Exception:
-+            return []
-+        deps: set[str] = set()
-+        for node in ast.walk(tree):
-+            if isinstance(node, ast.Import):
-+                for n in node.names:
-+                    deps.add(n.name.split(".", 1)[0])
-+            elif isinstance(node, ast.ImportFrom):
-+                if node.module:
-+                    deps.add(node.module.split(".", 1)[0])
-+        return sorted(deps)
-     
-     def execute_plan(self, execution_plan: TaskExecution) -> List[ExecutionResult]:
-         """
-         Execute the agent plan for a file.
-         
-         Args:
-             execution_plan: Complete execution plan
+                         "type": strategy_name,
+                         "success": False,
+                         "error": str(e)
+                     })
              
-         Returns:
-             List of execution results from each agent
-         """
-         
-         if not AGENTS_AVAILABLE:
-             logger.error("Cannot execute plan - agents not available")
-             return []
-         
-         results = []
--        start_time = time.time()
-+        start_time = time.perf_counter()
-         
-         logger.info("Executing plan for %s", execution_plan.file_path)
-         logger.info("Agents: %s", [a.value for a in execution_plan.execution_order])
-         logger.info("Estimated tokens: %s", execution_plan.total_estimated_tokens)
-         logger.info("Estimated time: %.1fs", execution_plan.total_estimated_time)
-         
-         # Execute each agent in order
-         for agent_type in execution_plan.execution_order:
-             if agent_type not in self._agents:
-                 logger.warning("Agent %s not available - skipping", agent_type.value)
-                 continue
+             success_count = sum(1 for r in refactorings_applied if r.get("success", False))
              
-             # Find the recommendation for this agent
-             agent_rec = next(
-                 (rec for rec in execution_plan.agents if rec.agent_type == agent_type),
-                 None
-             )
+             return {
+                 "success": success_count > 0,
+                 "file_path": file_path,
+                 "strategies_attempted": len(selected_strategies),
+                 "strategies_successful": success_count,
+                 "refactorings_applied": refactorings_applied,
+                 "tokens_used": total_tokens_used,
+                 "summary": f"Applied {success_count}/{len(selected_strategies)} refactoring strategies successfully"
+             }
              
-             if not agent_rec:
-                 logger.warning("No recommendation found for %s", agent_type.value)
-                 continue
-             
-             # Execute agent with configuration
-             result = self._execute_single_agent(
-                 agent_type, 
-@@ -1060,51 +1070,51 @@ class MetaAgent:
-                     
-             else:
-                 # Execute in analysis-only mode (dry_run)
-                 result_data, success, tokens_used = self._execute_agent_safely(
-                     agent, agent_type, file_path, configuration
-                 )
-                 
          except Exception as e:
-             logger.error("Error executing %s: %s", agent_name, e)
-             errors.append(str(e))
-             
-             # Record failed modification if applicable
-             if not self.dry_run:
-                 try:
-                     self.coordination_manager.record_modification(
-                         file_path=file_path,
-                         agent_name=agent_name,
-                         modification_type=agent_type.value.lower().replace("_", "_"),
-                         backup_path="",
-                         success=False,
-                         error_message=str(e)
-                     )
-                 except Exception:
-                     pass  # Don't let recording errors block execution
-         
--        execution_time = time.time() - start_time
-+        execution_time = time.perf_counter() - start_time
-         
-         return ExecutionResult(
-             agent_type=agent_type,
-             success=success,
-             execution_time=execution_time,
-             tokens_used=tokens_used,
-             result_data=result_data,
-             warnings=warnings,
-             errors=errors
-         )
-                 
-     def _execute_agent_safely(
-         self, agent, agent_type: AgentType, file_path: str, configuration: Dict[str, Any]
-     ) -> Tuple[Dict[str, Any], bool, int]:
-         """Execute individual agent logic safely with error handling."""
-         
-         try:
-             if agent_type == AgentType.INTELLIGENT_CODE_AGENT:
-                 # Execute IntelligentCodeAgent
-                 analysis_result = agent.analyze_file_intelligently(file_path)
-                 if analysis_result is None:
-                     return {"error": "Analysis returned None", "file_path": file_path}, False, 0
-                 
-                 # Apply analysis-based improvements if not dry run
-                 file_modified = False
-diff --git a/audit_system/core/intelligent_rate_limiter.py b/audit_system/core/intelligent_rate_limiter.py
-index 2beee68331908bc92903f14be7baec51d1783547..def3d468cc3713a37ddfbb1d076e0c7fd2469511 100644
---- a/audit_system/core/intelligent_rate_limiter.py
-+++ b/audit_system/core/intelligent_rate_limiter.py
-@@ -72,50 +72,53 @@ class IntelligentRateLimiter:
-             "claude": RateLimitConfig(
-                 provider="claude",
-                 tokens_per_minute=40000,  # Anthropic's rate limit
-                 requests_per_minute=50,
-                 burst_allowance=12000
-             ),
-             "openai": RateLimitConfig(
-                 provider="openai", 
-                 tokens_per_minute=90000,  # OpenAI GPT-4 limit
-                 requests_per_minute=500,
-                 burst_allowance=27000
-             ),
-             "local": RateLimitConfig(
-                 provider="local",
-                 tokens_per_minute=999999,  # No limit for local models
-                 requests_per_minute=999999,
-                 burst_allowance=999999
-             )
-         }
-         
-         # Current session tracking
-         self.session_start = time.time()
-         self.session_tokens = 0
-         self.session_requests = 0
-         self.last_operation_time = 0
-+
-+        self._token_buckets: Dict[str, List[Tuple[float, int]]] = {}
-+        self.window_seconds = 60
-         
-         # Load historical data
-         self._load_usage_history()
-         
-         self.logger.info("Intelligent Rate Limiter initialized: generous tokens, smart pacing")
-     
-     def estimate_tokens_needed(
-         self, 
-         operation_type: str, 
-         file_path: str,
-         file_size_lines: int = None
-     ) -> int:
-         """
-         Estimate tokens needed based on REAL historical usage, not theoretical limits.
-         
-         Args:
-             operation_type: Type of operation ("intelligent_analysis", etc.)
-             file_path: Path to file being analyzed
-             file_size_lines: Number of lines in file (for scaling)
-             
-         Returns:
-             Estimated tokens based on historical data
-         """
-         
-         # Get historical data for this operation type
-@@ -248,57 +251,66 @@ class IntelligentRateLimiter:
-             )
-         
-         return final_delay
-     
-     def should_proceed_with_operation(
-         self, 
-         operation_type: str, 
-         file_path: str,
-         file_size_lines: int = None,
-         api_provider: str = "claude"
-     ) -> Tuple[bool, float, int]:
-         """
-         Determine if operation should proceed and how long to wait.
-         
-         PHILOSOPHY: Always allow operations, just pace them intelligently.
-         
-         Returns:
-             (should_proceed, delay_seconds, estimated_tokens)
-         """
-         
-         # Always estimate generously - we want comprehensive analysis
-         estimated_tokens = self.estimate_tokens_needed(operation_type, file_path, file_size_lines)
-         
-         # Calculate intelligent delay
-         delay = self.calculate_required_delay(estimated_tokens, operation_type, api_provider)
--        
-+
-         # ALWAYS proceed, just with appropriate timing
-         return True, delay, estimated_tokens
--    
-+
-+    def register_consumption(self, operation_type: str, tokens: int) -> None:
-+        """Registra consumo efetivo após a operação (usar em pontos de integração LLM)."""
-+        now = time.time()
-+        bucket = self._token_buckets.setdefault(operation_type, [])
-+        bucket.append((now, max(0, int(tokens))))
-+        cutoff = now - self.window_seconds
-+        while bucket and bucket[0][0] < cutoff:
-+            bucket.pop(0)
-+
-     def record_actual_usage(
--        self, 
--        operation_type: str, 
-+        self,
-+        operation_type: str,
-         file_path: str,
-         tokens_consumed: int, 
-         duration: float,
-         api_provider: str = "claude"
-     ) -> None:
-         """
-         Record actual token usage to improve future estimates.
-         
-         This is crucial for the learning aspect of the rate limiter.
-         """
-         
-         record = TokenUsageRecord(
-             timestamp=time.time(),
-             operation_type=operation_type,
-             file_path=file_path,
-             tokens_consumed=tokens_consumed,
-             duration=duration,
-             api_provider=api_provider
-         )
-         
-         # Add to tracking
-         self.usage_history.append(record)
-         self.recent_usage.append(record)
-         
-         # Update session counters
-diff --git a/audit_system/core/llm_backend.py b/audit_system/core/llm_backend.py
-new file mode 100644
-index 0000000000000000000000000000000000000000..1e07d538a6cd784da659dd5c1e9d23d8b4eaf4b6
---- /dev/null
-+++ b/audit_system/core/llm_backend.py
-@@ -0,0 +1,60 @@
-+# -*- coding: utf-8 -*-
-+"""
-+LLM Backend Interface (real ou nulo)
-+------------------------------------
-+Fornece um ponto único de integração para provedores LLM reais.
-+Se não houver backend configurado, usamos NullLLMBackend (modo dry-run)
-+sem métricas falsas e sem modificar arquivos.
-+"""
-+from __future__ import annotations
-+
-+from dataclasses import dataclass
-+from typing import Any, Dict, Iterable, List, Optional, Tuple
-+
-+
-+@dataclass
-+class LLMOverview:
-+    overall_purpose: str
-+    architectural_role: str
-+    risks: List[str]
-+    notes: List[str]
-+    # Sem score fixo; se um provedor real devolver, use-o explicitamente
-+    confidence_score: Optional[float] = None
-+
-+
-+class LLMBackend:
-+    """Interface mínima para acoplamento fraco com provedores reais."""
-+    def file_overview(self, *, content: str, file_path: str, ast_tree: Any | None) -> LLMOverview:
-+        raise NotImplementedError
-+
-+    def line_batch_analysis(
-+        self, *, content: str, file_path: str, ast_tree: Any | None, line_batch: Iterable[Tuple[int, str]]
-+    ) -> List[Dict[str, Any]]:
-+        raise NotImplementedError
-+
-+
-+class NullLLMBackend(LLMBackend):
-+    """Backend nulo: não inventa números, apenas devolve texto honesto e não destrutivo."""
-+    def file_overview(self, *, content: str, file_path: str, ast_tree: Any | None) -> LLMOverview:
-+        return LLMOverview(
-+            overall_purpose="Dry-run: visão de arquivo baseada em heurísticas locais (sem LLM).",
-+            architectural_role="desconhecido",
-+            risks=[],
-+            notes=["LLM não configurado: nenhuma inferência externa executada.", "Sem métricas/‘scores’ artificiais."],
-+            confidence_score=None,
-+        )
-+
-+    def line_batch_analysis(
-+        self, *, content: str, file_path: str, ast_tree: Any | None, line_batch: Iterable[Tuple[int, str]]
-+    ) -> List[Dict[str, Any]]:
-+        # Retorna estrutura mínima sem “scores” mágicos.
-+        return [
-+            {
-+                "line": ln,
-+                "purpose": "Dry-run: heurística local",
-+                "semantic_type": "unknown",
-+                "notes": ["LLM não configurado"],
-+                "confidence": None,
-+            }
-+            for ln, _ in line_batch
-+        ]
+             self.logger.error(f"Error in apply_intelligent_refactorings: {e}")
+             return {
  
 EOF
 )

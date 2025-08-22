@@ -934,8 +934,8 @@ class IntelligentRefactoringEngine:
                 # Apply the refactoring
                 try:
                     result = self.apply_refactoring(file_path, refactoring)
-                    
-                    if result.success:
+
+                    if result.success and result.refactored_lines != result.original_lines:
                         refactorings_applied.append({
                             "type": strategy_name,
                             "success": True,
@@ -948,7 +948,7 @@ class IntelligentRefactoringEngine:
                         refactorings_applied.append({
                             "type": strategy_name,
                             "success": False,
-                            "errors": result.errors
+                            "errors": result.errors or ["No changes made"],
                         })
                         
                 except Exception as e:
