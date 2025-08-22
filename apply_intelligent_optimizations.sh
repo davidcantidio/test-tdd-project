@@ -436,6 +436,7 @@ metadata_path = backup_dir / "metadata" / f"backup_{backup_id}.json"
 # ---------- Imports do agente ----------
 sys.path.append('.')
 try:
+    from audit_system.agents.intelligent_refactoring_engine import IntelligentRefactoringEngine
     from audit_system.agents.intelligent_code_agent import IntelligentCodeAgent, AnalysisDepth, SemanticMode
 except Exception as e:
     print(f"❌ Error importing optimization agents: {e}")
@@ -457,11 +458,19 @@ if not targets:
 
 print(f"🔧 Found {len(targets)} files with optimization opportunities")
 
-# Single agent instance (optimization) - Agno-only
+# Dual agent setup - Analysis + Real Refactoring
 code_agent = IntelligentCodeAgent(
     project_root=Path('.'),
     analysis_depth=AnalysisDepth.DEEP,
     semantic_mode=SemanticMode.AGGRESSIVE,
+    dry_run=False
+)
+
+# REAL refactoring engine with Claude integration
+refactoring_engine = IntelligentRefactoringEngine(
+    project_root=Path('.'),
+    enable_real_llm=True,
+    llm_provider="claude",
     dry_run=False
 )
 
@@ -502,13 +511,22 @@ for fr in targets:
             print("   ⚠️ File not found for backup; skipping.")
             continue
 
-        # 2) Aplica refatorações
-        result = code_agent.apply_intelligent_refactorings(
-            analysis=analysis,
-            selected_refactorings=None
+        # 2) Aplica refatorações usando REAL refactoring engine
+        # Convert analysis object to dict format expected by IntelligentRefactoringEngine
+        analysis_dict = {
+            "file_path": file_path,
+            "recommended_refactorings": analysis.recommended_refactorings,
+            "semantic_quality_score": getattr(analysis, 'semantic_quality_score', 0)
+        }
+        
+        result = refactoring_engine.apply_intelligent_refactorings(
+            analysis_result=analysis_dict,
+            selected_strategies=[0, 1, 2, 3, 4]  # Apply top 5 strategies
         )
-        applied = int(result.get('applied', 0))
-        failed  = int(result.get('failed', 0))
+        # Extract results from IntelligentRefactoringEngine format
+        applied = int(result.get('strategies_successful', 0))
+        attempted = int(result.get('strategies_attempted', 0))
+        failed = attempted - applied
 
         # 3) Valida sintaxe (.py) — rollback se falhar
         if not validate_python_syntax(file_path):

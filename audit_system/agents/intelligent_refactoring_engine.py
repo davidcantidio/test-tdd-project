@@ -55,9 +55,30 @@ class IntelligentRefactoringEngine:
     Engine that applies intelligent refactorings with full semantic understanding.
     """
     
-    def __init__(self, dry_run: bool = False):
+    def __init__(
+        self, 
+        dry_run: bool = False, 
+        enable_real_llm: bool = True,
+        llm_provider: str = None,
+        project_root: Path = None
+    ):
         self.dry_run = dry_run
+        self.enable_real_llm = enable_real_llm
+        self.llm_provider = llm_provider
+        self.project_root = project_root or Path(".")
         self.logger = logging.getLogger(f"{__name__}.IntelligentRefactoringEngine")
+        
+        # Initialize LLM model if enabled
+        self.llm_model = None
+        if self.enable_real_llm:
+            try:
+                from audit_system.core.model_factory import create_llm_model
+                self.llm_model = create_llm_model(provider=self.llm_provider)
+                self.logger.info(f"✅ LLM model initialized: {self.llm_provider or 'default'}")
+            except Exception as e:
+                self.logger.warning(f"⚠️ LLM initialization failed: {e}")
+                self.logger.warning("Falling back to hardcoded refactoring patterns")
+                self.enable_real_llm = False
         
         # Initialize specialized agents
         self.god_code_agent = GodCodeRefactoringAgent(dry_run=self.dry_run)
@@ -75,6 +96,197 @@ class IntelligentRefactoringEngine:
         }
         
         self.logger.info("Intelligent Refactoring Engine initialized with God Code Agent")
+    
+    def _generate_llm_refactoring(
+        self,
+        code_content: str,
+        refactoring_type: str,
+        target_lines: List[int] = None
+    ) -> str:
+        """Generate refactored code using LLM analysis."""
+        if not self.enable_real_llm or not self.llm_model:
+            return code_content  # Fallback to original
+        
+        try:
+            # Create prompt for Claude
+            prompt = f"""
+You are an expert Python refactoring specialist. Apply {refactoring_type} refactoring to improve this code.
+
+REFACTORING TYPE: {refactoring_type}
+TARGET LINES: {target_lines if target_lines else "Analyze entire code"}
+
+CODE TO REFACTOR:
+```python
+{code_content}
+```
+
+REQUIREMENTS:
+1. Preserve all functionality exactly
+2. Improve code quality, readability, and maintainability
+3. Follow Python best practices
+4. For extract_method: Create well-named methods with proper parameters
+5. For exception_handling: Add specific exception types and logging
+6. For string_operations: Use f-strings and efficient concatenation
+7. For god_method: Break down into logical, cohesive methods
+
+Return ONLY the refactored code without explanation:
+"""
+            
+            # Use Agno to get LLM response
+            if hasattr(self.llm_model, 'run'):
+                response = self.llm_model.run(prompt)
+                
+                # Extract code from response (handle markdown formatting)
+                if "```python" in response:
+                    start = response.find("```python") + 9
+                    end = response.find("```", start)
+                    if end != -1:
+                        return response[start:end].strip()
+                elif "```" in response:
+                    start = response.find("```") + 3
+                    end = response.find("```", start)
+                    if end != -1:
+                        return response[start:end].strip()
+                else:
+                    # If no code blocks, assume entire response is code
+                    return response.strip()
+            
+            return code_content  # Fallback
+            
+        except Exception as e:
+            self.logger.error(f"LLM refactoring failed: {e}")
+            return code_content  # Fallback to original
+    
+    def _apply_llm_refactoring(
+        self, 
+        lines: List[str], 
+        refactoring: IntelligentRefactoring, 
+        file_path: str,
+        refactoring_type: str
+    ) -> RefactoringResult:
+        """Apply LLM-powered refactoring to code lines."""
+        
+        try:
+            # Reconstruct code content from lines
+            code_content = '\n'.join(lines)
+            
+            # Generate refactored code using LLM
+            refactored_content = self._generate_llm_refactoring(
+                code_content=code_content,
+                refactoring_type=refactoring_type,
+                target_lines=refactoring.target_lines
+            )
+            
+            # If LLM refactoring failed or returned unchanged content
+            if refactored_content == code_content:
+                return RefactoringResult(
+                    success=False,
+                    refactoring_type=refactoring_type,
+                    original_lines=lines,
+                    refactored_lines=lines,
+                    lines_affected=[],
+                    improvements={},
+                    warnings=["LLM refactoring returned unchanged code"],
+                    errors=[]
+                )
+            
+            # Split refactored content back into lines
+            refactored_lines = refactored_content.splitlines()
+            
+            # Identify affected lines (lines that changed)
+            affected_lines = []
+            max_lines = max(len(lines), len(refactored_lines))
+            
+            for i in range(max_lines):
+                original_line = lines[i] if i < len(lines) else ""
+                refactored_line = refactored_lines[i] if i < len(refactored_lines) else ""
+                
+                if original_line.strip() != refactored_line.strip():
+                    affected_lines.append(i + 1)  # Convert to 1-based line numbers
+            
+            # Calculate improvements based on refactoring type
+            improvements = self._calculate_llm_improvements(
+                refactoring_type, len(affected_lines), lines, refactored_lines
+            )
+            
+            return RefactoringResult(
+                success=True,
+                refactoring_type=refactoring_type,
+                original_lines=lines,
+                refactored_lines=refactored_lines,
+                lines_affected=affected_lines,
+                improvements=improvements,
+                warnings=[],
+                errors=[]
+            )
+            
+        except Exception as e:
+            self.logger.error(f"LLM refactoring application failed: {e}")
+            return RefactoringResult(
+                success=False,
+                refactoring_type=refactoring_type,
+                original_lines=lines,
+                refactored_lines=lines,
+                lines_affected=[],
+                improvements={},
+                warnings=[],
+                errors=[str(e)]
+            )
+    
+    def _calculate_llm_improvements(
+        self,
+        refactoring_type: str,
+        affected_line_count: int,
+        original_lines: List[str],
+        refactored_lines: List[str]
+    ) -> Dict[str, float]:
+        """Calculate improvement metrics for LLM-powered refactoring."""
+        
+        improvements = {}
+        
+        # Base improvements based on refactoring type
+        if refactoring_type == "extract_method":
+            improvements = {
+                "complexity_reduction": min(40.0, affected_line_count * 2.0),
+                "readability_improvement": min(60.0, affected_line_count * 1.5),
+                "maintainability_improvement": min(50.0, affected_line_count * 1.8)
+            }
+        elif refactoring_type == "improve_exception_handling":
+            improvements = {
+                "reliability_improvement": min(70.0, affected_line_count * 3.0),
+                "debugging_improvement": min(80.0, affected_line_count * 2.5),
+                "error_handling_quality": min(90.0, affected_line_count * 4.0)
+            }
+        elif refactoring_type == "optimize_string_operations":
+            improvements = {
+                "performance_improvement": min(50.0, affected_line_count * 2.2),
+                "readability_improvement": min(40.0, affected_line_count * 1.8),
+                "pythonic_style": min(60.0, affected_line_count * 2.0)
+            }
+        elif refactoring_type == "eliminate_god_method":
+            improvements = {
+                "complexity_reduction": min(80.0, affected_line_count * 1.5),
+                "maintainability_improvement": min(90.0, affected_line_count * 1.2),
+                "single_responsibility": min(100.0, affected_line_count * 1.0)
+            }
+        else:
+            # Generic improvements for other refactoring types
+            improvements = {
+                "code_quality": min(50.0, affected_line_count * 1.5),
+                "maintainability_improvement": min(40.0, affected_line_count * 1.2),
+                "readability_improvement": min(45.0, affected_line_count * 1.3)
+            }
+        
+        # Add line-count-based metrics
+        original_line_count = len(original_lines)
+        refactored_line_count = len(refactored_lines)
+        
+        if original_line_count > refactored_line_count:
+            improvements["code_reduction"] = ((original_line_count - refactored_line_count) / original_line_count) * 100
+        elif refactored_line_count > original_line_count:
+            improvements["code_expansion"] = ((refactored_line_count - original_line_count) / original_line_count) * 100
+        
+        return improvements
     
     def apply_refactoring(
         self, 
@@ -150,9 +362,13 @@ class IntelligentRefactoringEngine:
         refactoring: IntelligentRefactoring, 
         file_path: str
     ) -> RefactoringResult:
-        """Apply extract method refactoring."""
+        """Apply extract method refactoring using LLM intelligence."""
         
-        # Identify the method boundaries
+        # Use LLM-powered refactoring if available
+        if self.enable_real_llm and self.llm_model:
+            return self._apply_llm_refactoring(lines, refactoring, file_path, "extract_method")
+        
+        # Fallback to hardcoded implementation
         target_lines = refactoring.target_lines
         start_line = min(target_lines) - 1  # Convert to 0-based indexing
         end_line = max(target_lines)
@@ -240,8 +456,13 @@ class IntelligentRefactoringEngine:
         refactoring: IntelligentRefactoring, 
         file_path: str
     ) -> RefactoringResult:
-        """Apply exception handling improvements."""
+        """Apply exception handling improvements using LLM intelligence."""
         
+        # Use LLM-powered refactoring if available
+        if self.enable_real_llm and self.llm_model:
+            return self._apply_llm_refactoring(lines, refactoring, file_path, "improve_exception_handling")
+        
+        # Fallback to hardcoded implementation
         refactored_lines = lines.copy()
         affected_lines = []
         improvements = {"security_improvement": 0.0, "debugging_improvement": 0.0}
@@ -307,8 +528,13 @@ class IntelligentRefactoringEngine:
         refactoring: IntelligentRefactoring, 
         file_path: str
     ) -> RefactoringResult:
-        """Apply string operation optimizations."""
+        """Apply string operation optimizations using LLM intelligence."""
         
+        # Use LLM-powered refactoring if available
+        if self.enable_real_llm and self.llm_model:
+            return self._apply_llm_refactoring(lines, refactoring, file_path, "optimize_string_operations")
+        
+        # Fallback to hardcoded implementation
         refactored_lines = lines.copy()
         affected_lines = []
         improvements = {"performance_improvement": 0.0, "readability_improvement": 0.0}
@@ -351,8 +577,13 @@ class IntelligentRefactoringEngine:
         refactoring: IntelligentRefactoring, 
         file_path: str
     ) -> RefactoringResult:
-        """Apply god method elimination by breaking into smaller methods."""
+        """Apply god method elimination by breaking into smaller methods using LLM intelligence."""
         
+        # Use LLM-powered refactoring if available
+        if self.enable_real_llm and self.llm_model:
+            return self._apply_llm_refactoring(lines, refactoring, file_path, "eliminate_god_method")
+        
+        # Fallback to hardcoded implementation
         # This is a complex refactoring - analyze the method structure
         target_lines = refactoring.target_lines
         start_line = min(target_lines) - 1

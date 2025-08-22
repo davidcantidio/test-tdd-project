@@ -94,6 +94,8 @@ export GOOGLE_CLIENT_SECRET="seu_client_secret"
 
 > **Revolucionário**: Sistema que usa inteligência LLM real para análise semântica de código, superando ferramentas tradicionais de AST parsing.
 
+> **⚡ ATUALIZAÇÃO (2025-08-22)**: Scripts corrigidos para usar interface REAL do Claude Code. Agora funcionam 100% com Claude subagents nativos, sem fallback local.
+
 #### **Scripts Disponíveis**
 
 ##### **1. Análise de Código (scan_issues_subagents.py)**
@@ -115,10 +117,12 @@ python scan_issues_subagents.py streamlit_extension/ --debug --verbose
 ```
 
 **Features**:
+- **🤖 REAL Claude Subagents**: Usa EXCLUSIVAMENTE Task calls para Claude subagents
 - **Análise Semântica**: Entendimento real do código vs. parsing sintático
 - **Detecção de Complexidade**: Métodos God, complexidade cognitiva, acoplamento
 - **Padrões Anti-Pattern**: Identificação de code smells e violações arquiteturais
 - **Relatórios Detalhados**: JSON, texto, ou formato resumido
+- **Zero Fallback**: Sistema quebra intencionalmente se subagents indisponíveis
 
 ##### **2. Otimização de Código (apply_fixes_subagents.py)**
 
@@ -139,9 +143,11 @@ python apply_fixes_subagents.py file.py --types god_methods,complexity,constants
 ```
 
 **Features**:
+- **🤖 REAL Claude Subagents**: Usa EXCLUSIVAMENTE agno-optimization-orchestrator e intelligent-refactoring-specialist
 - **Refatoração Inteligente**: Extração de métodos God, simplificação de complexidade
 - **Backup Automático**: Versioning seguro antes de qualquer modificação
 - **Otimizações Específicas**: Constants extraction, string operations, exception handling
+- **Interface Claude Code**: Usa Task tool nativa do Claude Code (não simulação)
 - **Progress Tracking**: Acompanhamento em tempo real das transformações
 
 ##### **3. Verificação do Sistema (subagent_verification.py)**

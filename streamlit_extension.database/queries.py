@@ -706,4 +706,3 @@ def delete_project(manager, project_id: int, soft_delete: bool=True) -> bool:
         if STREAMLIT_AVAILABLE and st:
             st.error(f'❌ Error deleting project: {e}')
         return False
-

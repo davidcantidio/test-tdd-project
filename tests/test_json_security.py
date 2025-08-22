@@ -30,6 +30,23 @@ from duration_system.json_security import (
     enhance_json_handler_security
 )
 
+# Test Constants - Extracted from magic numbers/strings
+TEST_MAX_DEPTH = 3
+TEST_MAX_SIZE = 1000
+TEST_MAX_TOTAL_SIZE = 5000
+TEST_MAX_KEYS = 10
+TEST_MAX_STRING_LENGTH = 100
+TEST_MAX_ARRAY_LENGTH = 10
+LARGE_STRING_SIZE = 200
+LARGE_ARRAY_SIZE = 20
+MANY_KEYS_COUNT = 15
+
+# Dangerous patterns for testing
+DANGEROUS_PROTO_KEY = "__proto__"
+DANGEROUS_CONSTRUCTOR_KEY = "constructor"
+XSS_SCRIPT_PAYLOAD = "<script>alert('XSS')</script>"
+SQL_INJECTION_PAYLOAD = "admin' OR '1'='1"
+
 
 class TestSecureJsonValidator:
     """Test suite for SecureJsonValidator."""
@@ -37,14 +54,25 @@ class TestSecureJsonValidator:
     def setup_method(self):
         """Setup for each test method."""
         self.validator = SecureJsonValidator(
-            max_depth=3,
-            max_size=1000,
-            max_total_size=5000,
-            max_keys=10,
-            max_string_length=100,
-            max_array_length=10,
+            max_depth=TEST_MAX_DEPTH,
+            max_size=TEST_MAX_SIZE,
+            max_total_size=TEST_MAX_TOTAL_SIZE,
+            max_keys=TEST_MAX_KEYS,
+            max_string_length=TEST_MAX_STRING_LENGTH,
+            max_array_length=TEST_MAX_ARRAY_LENGTH,
             strict_mode=True
         )
+    
+    def _assert_validation_fails(self, data, expected_violation_type=None):
+        """Helper method for common validation failure pattern."""
+        is_valid, violations = self.validator.validate_data(data)
+        assert is_valid is False
+        assert len(violations) > 0
+        
+        if expected_violation_type:
+            assert any(v.violation_type == expected_violation_type for v in violations)
+        
+        return violations
     
     def test_valid_json_passes(self):
         """Test that valid JSON passes validation."""
@@ -90,32 +118,20 @@ class TestSecureJsonValidator:
     def test_size_limit_exceeded(self):
         """Test detection of oversized content."""
         # Create string that exceeds limit
-        large_string = "x" * 200  # Exceeds max_string_length of 100
-        
+        large_string = "x" * LARGE_STRING_SIZE
         data = {"large_field": large_string}
         
-        is_valid, violations = self.validator.validate_data(data)
-        
-        assert is_valid is False
-        assert len(violations) > 0
-        # TODO: Consider extracting this block into a separate method
-        # TODO: Consider extracting this block into a separate method
-        assert any(v.violation_type == SecurityViolationType.SIZE_LIMIT_EXCEEDED
-                  for v in violations)
+        self._assert_validation_fails(data, SecurityViolationType.SIZE_LIMIT_EXCEEDED)
     
     def test_dangerous_key_detection(self):
         """Test detection of dangerous keys."""
         dangerous_data = {
-            "__proto__": {"isAdmin": True},
-            "constructor": "malicious",
+            DANGEROUS_PROTO_KEY: {"isAdmin": True},
+            DANGEROUS_CONSTRUCTOR_KEY: "malicious",
             "normal_key": "safe value"
         }
         
-        is_valid, violations = self.validator.validate_data(dangerous_data)
-        
-        assert is_valid is False
-        # TODO: Consider extracting this block into a separate method
-        # TODO: Consider extracting this block into a separate method
+        violations = self._assert_validation_fails(dangerous_data, SecurityViolationType.DANGEROUS_KEY)
         dangerous_violations = [v for v in violations
                                if v.violation_type == SecurityViolationType.DANGEROUS_KEY]
         assert len(dangerous_violations) >= 2  # __proto__ and constructor
@@ -123,16 +139,12 @@ class TestSecureJsonValidator:
     def test_script_injection_detection(self):
         """Test detection of script injection attempts."""
         script_data = {
-            "comment": "<script>alert('XSS')</script>",
+            "comment": XSS_SCRIPT_PAYLOAD,
             "description": "Normal text",
             "onclick": "onclick='doEvil()'"
         }
         
-        is_valid, violations = self.validator.validate_data(script_data)
-        
-        # TODO: Consider extracting this block into a separate method
-        # TODO: Consider extracting this block into a separate method
-        assert is_valid is False
+        violations = self._assert_validation_fails(script_data, SecurityViolationType.SCRIPT_INJECTION)
         script_violations = [v for v in violations
                            if v.violation_type == SecurityViolationType.SCRIPT_INJECTION]
         assert len(script_violations) >= 1
@@ -140,18 +152,12 @@ class TestSecureJsonValidator:
     def test_sql_injection_detection(self):
         """Test detection of SQL injection patterns."""
         sql_data = {
-            "username": "admin' OR '1'='1",
+            "username": SQL_INJECTION_PAYLOAD,
             "query": "'; DROP TABLE users; --",
             "search": "UNION SELECT * FROM passwords"
         }
         
-        is_valid, violations = self.validator.validate_data(sql_data)
-        
-# TODO: Consider extracting this block into a separate method
-        
-# TODO: Consider extracting this block into a separate method
-        
-        assert is_valid is False
+        violations = self._assert_validation_fails(sql_data, SecurityViolationType.SQL_INJECTION)
         sql_violations = [v for v in violations
                          if v.violation_type == SecurityViolationType.SQL_INJECTION]
         assert len(sql_violations) >= 2

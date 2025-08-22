@@ -1,268 +1,146 @@
  (cd "$(git rev-parse --show-toplevel)" && git apply --3way <<'EOF' 
-diff --git a/audit_system/agents/intelligent_code_agent.py b/audit_system/agents/intelligent_code_agent.py
-index 8ae83af49ab75e346dd8dd11e9df6abfd986e6da..55736098e46b2f727cdf584b357efe607cac1881 100644
---- a/audit_system/agents/intelligent_code_agent.py
-+++ b/audit_system/agents/intelligent_code_agent.py
-@@ -969,59 +969,59 @@ class IntelligentCodeAgent:
-             
-             return result
-             
-         except Exception as e:
-             self.logger.error("Error analyzing file %s: %s", file_path, e)
-             raise
-     
-     def apply_intelligent_refactorings(
-         self, 
-         analysis: FileSemanticAnalysis, 
-         selected_refactorings: Optional[List[int]] = None
-     ) -> Dict[str, Any]:
-         """Apply selected intelligent refactorings to the file."""
-         if self.dry_run:
-             return {"status": "dry_run", "would_apply": len(analysis.recommended_refactorings)}
+diff --git a/audit_system/tools/complexity_analyzer_tool.py b/audit_system/tools/complexity_analyzer_tool.py
+index 0334747d399c98081ea10ebc418b9b4cbf638235..c78ca34b1f874c915fbc17bfbb08b1724450ea4d 100644
+--- a/audit_system/tools/complexity_analyzer_tool.py
++++ b/audit_system/tools/complexity_analyzer_tool.py
+@@ -102,72 +102,81 @@ class ComplexityAnalyzerTool(BaseRefactoringTool):
+         # Parameter count
+         param_count = len(func_node.args.args)
+         if func_node.args.vararg:
+             param_count += 1
+         if func_node.args.kwarg:
+             param_count += 1
          
-         refactorings_to_apply = analysis.recommended_refactorings
-         if selected_refactorings:
-             refactorings_to_apply = [
-                 refactorings_to_apply[i] for i in selected_refactorings 
-                 if i < len(refactorings_to_apply)
-             ]
+         # Nesting depth
+         max_depth = self._calculate_max_nesting_depth(func_node)
          
-         applied_refactorings = []
-         failed_refactorings = []
--        
-+
-         for refactoring in refactorings_to_apply:
-             try:
-                 if self._can_safely_apply_refactoring(refactoring, analysis):
-                     result = self._apply_single_refactoring(refactoring, analysis.file_path)
--                    if result["success"]:
-+                    if result.get("success") and result.get("changes_made"):
-                         applied_refactorings.append(refactoring)
-                     else:
--                        failed_refactorings.append((refactoring, result["error"]))
-+                        failed_refactorings.append((refactoring, result.get("error", "No changes made")))
-                 else:
-                     failed_refactorings.append((refactoring, "Safety check failed"))
-             except Exception as e:
-                 failed_refactorings.append((refactoring, str(e)))
-         
-         return {
-             "status": "completed",
-             "applied": len(applied_refactorings),
-             "failed": len(failed_refactorings),
-             "applied_refactorings": applied_refactorings,
-             "failed_refactorings": failed_refactorings
-         }
-     
-     # Helper methods for analysis
-     def _create_ast_line_mapping(self, ast_tree: ast.AST) -> Dict[int, ast.AST]:
-         """Create mapping from line numbers to AST nodes."""
-         line_map = {}
-         for node in ast.walk(ast_tree):
-             if hasattr(node, 'lineno'):
-                 line_map[node.lineno] = node
-         return line_map
-     
-     def _extract_imports(self, lines: List[str]) -> List[str]:
-         """Extract import statements from file."""
-         imports = []
-@@ -1465,68 +1465,114 @@ class IntelligentCodeAgent:
-         
-         return max(score, 0.0)
-     
-     def _can_safely_apply_refactoring(
-         self, 
-         refactoring: IntelligentRefactoring, 
-         analysis: FileSemanticAnalysis
-     ) -> bool:
-         """Check if a refactoring can be safely applied."""
-         # Conservative mode checks
-         if self.semantic_mode == SemanticMode.CONSERVATIVE:
-             if refactoring.confidence_score < 0.8:
-                 return False
-             if any("high" in risk.lower() for risk in refactoring.risks):
-                 return False
-         
-         # Check for conflicting refactorings
-         for other_refactoring in analysis.recommended_refactorings:
-             if (other_refactoring != refactoring and 
-                 set(refactoring.target_lines) & set(other_refactoring.target_lines)):
-                 return False
-         
-         return True
-     
-     def _apply_single_refactoring(
--        self, 
--        refactoring: IntelligentRefactoring, 
-+        self,
-+        refactoring: IntelligentRefactoring,
-         file_path: str
-     ) -> Dict[str, Any]:
-         """Apply a single refactoring to the file."""
--        # This is a placeholder for actual refactoring implementation
--        # In a real implementation, this would modify the file according to the refactoring
--        
-         self.logger.info(
--            "Would apply %s refactoring to lines %s in %s",
-+            "Applying %s refactoring to lines %s in %s",
-             refactoring.refactoring_type, refactoring.target_lines, file_path
+         # Maintainability index (simplified)
+         maintainability = self._calculate_maintainability_index(
+             cyclomatic, line_count, len(source_lines)
          )
+         
+         return ComplexityMetrics(
+             cyclomatic_complexity=cyclomatic,
+             cognitive_complexity=cognitive,
+             maintainability_index=maintainability,
+             max_nesting_depth=max_depth,
+             line_count=line_count,
+             parameter_count=param_count
+         )
+     
+     def _calculate_cognitive_complexity(self, node: ast.AST) -> int:
+-        """Calculate cognitive complexity (SonarQube style)."""
+-        complexity = 0
+-        nesting_level = 0
 -        
--        # For now, just return success
+-        for child in ast.walk(node):
+-            if isinstance(child, (ast.If, ast.While, ast.For, ast.AsyncFor)):
+-                # Base increment + nesting increment
+-                complexity += 1 + nesting_level
+-                nesting_level += 1
+-            elif isinstance(child, (ast.And, ast.Or)):
+-                complexity += 1
+-            elif isinstance(child, ast.Try):
+-                complexity += 1
+-                nesting_level += 1
+-            elif isinstance(child, ast.ExceptHandler):
+-                complexity += 1 + nesting_level
+-            elif isinstance(child, (ast.ListComp, ast.DictComp, ast.SetComp, ast.GeneratorExp)):
+-                complexity += 1 + nesting_level
+-            elif isinstance(child, ast.Lambda):
+-                complexity += 1 + nesting_level
+-        
+-        return complexity
++        """Calculate cognitive complexity (SonarQube style).
 +
-+        try:
-+            with open(file_path, "r", encoding="utf-8") as f:
-+                original_lines = f.readlines()
-+        except OSError as e:
-+            return {
-+                "success": False,
-+                "refactoring_type": refactoring.refactoring_type,
-+                "lines_modified": 0,
-+                "changes_made": False,
-+                "error": str(e),
-+            }
++        The previous implementation relied on ``ast.walk`` and simply increased
++        a ``nesting_level`` counter whenever a branching node was encountered.
++        This approach never decreased the counter, causing subsequent siblings to
++        be treated as if they were nested and inflating the reported complexity.
 +
-+        modified_lines = original_lines[:]
++        Here we perform a depth-aware traversal so that the nesting level is
++        correctly incremented and decremented as we move through the tree.
++        """
 +
-+        # Determine replacement lines
-+        replacement: List[str] = []
-+        new_code = refactoring.new_code or refactoring.after_code
-+        if new_code:
-+            replacement = [line if line.endswith("\n") else line + "\n" for line in new_code.splitlines()]
++        def visit(n: ast.AST, depth: int = 0) -> int:
++            score = 0
++            for child in ast.iter_child_nodes(n):
++                if isinstance(child, (ast.If, ast.While, ast.For, ast.AsyncFor, ast.Try, ast.With)):
++                    score += 1 + depth
++                    score += visit(child, depth + 1)
++                elif isinstance(child, ast.ExceptHandler):
++                    score += 1 + depth
++                    score += visit(child, depth + 1)
++                elif isinstance(child, ast.BoolOp) and len(child.values) > 1:
++                    score += len(child.values) - 1
++                    score += visit(child, depth)
++                elif isinstance(child, (ast.ListComp, ast.DictComp, ast.SetComp, ast.GeneratorExp, ast.Lambda, ast.IfExp)):
++                    score += 1 + depth
++                    score += visit(child, depth + 1)
++                else:
++                    score += visit(child, depth)
++            return score
 +
-+        if refactoring.target_lines:
-+            start = refactoring.target_lines[0] - 1
-+            end = refactoring.target_lines[-1]
-+            modified_lines[start:end] = replacement
-+
-+        if modified_lines == original_lines:
-+            return {
-+                "success": False,
-+                "refactoring_type": refactoring.refactoring_type,
-+                "lines_modified": 0,
-+                "changes_made": False,
-+            }
-+
-+        try:
-+            with open(file_path, "w", encoding="utf-8") as f:
-+                f.writelines(modified_lines)
-+        except OSError as e:
-+            return {
-+                "success": False,
-+                "refactoring_type": refactoring.refactoring_type,
-+                "lines_modified": 0,
-+                "changes_made": False,
-+                "error": str(e),
-+            }
-+
-+        lines_modified = abs(len(modified_lines) - len(original_lines))
-+        if lines_modified == 0:
-+            lines_modified = 1
-+
-         return {
-             "success": True,
-             "refactoring_type": refactoring.refactoring_type,
--            "lines_modified": len(refactoring.target_lines)
-+            "lines_modified": lines_modified,
-+            "changes_made": True,
-         }
- 
- 
- # =============================================================================
- # CLI Interface
- # =============================================================================
- 
- def setup_logging(verbose: bool = False):
-     """Setup logging configuration."""
-     level = logging.DEBUG if verbose else logging.INFO
-     logging.basicConfig(
-         level=level,
-         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-         handlers=[
-             logging.StreamHandler(),
-             logging.FileHandler('intelligent_code_agent.log')
-         ]
-     )
- 
- 
- def main():
-     """Main CLI entry point."""
-     parser = argparse.ArgumentParser(
-         description="Intelligent Code Agent - AI-Powered Line-by-Line Analysis"
-     )
-diff --git a/audit_system/agents/intelligent_refactoring_engine.py b/audit_system/agents/intelligent_refactoring_engine.py
-index 0b854a179b5536651a79397da577a3b1d9087556..03136234a0259cf56acb6a81d2ab5c644e0c0976 100644
---- a/audit_system/agents/intelligent_refactoring_engine.py
-+++ b/audit_system/agents/intelligent_refactoring_engine.py
-@@ -912,65 +912,65 @@ class IntelligentRefactoringEngine:
++        return visit(node, 0)
+     
+     def _calculate_max_nesting_depth(self, node: ast.AST) -> int:
+         """Calculate maximum nesting depth."""
+         max_depth = 0
+         current_depth = 0
+         
+         def visit_node(n):
+             nonlocal max_depth, current_depth
              
-             # Get available refactoring strategies
-             strategy_names = list(self.refactoring_strategies.keys())
-             
-             refactorings_applied = []
-             total_tokens_used = 0
-             
-             # Apply selected strategies
-             for strategy_idx in selected_strategies:
-                 if strategy_idx >= len(strategy_names):
-                     continue
-                     
-                 strategy_name = strategy_names[strategy_idx]
+             if isinstance(n, (ast.If, ast.While, ast.For, ast.AsyncFor, ast.With, ast.Try)):
+                 current_depth += 1
+                 max_depth = max(max_depth, current_depth)
                  
-                 # Create a simple refactoring for this strategy
-                 refactoring = IntelligentRefactoring(
-                     refactoring_type=strategy_name,
-                     target_lines=[1],  # Simplified - would need real analysis
-                     description=f"Apply {strategy_name} refactoring",
-                     confidence=0.8
-                 )
+                 # Visit children
+                 for child in ast.iter_child_nodes(n):
+                     visit_node(child)
                  
-                 # Apply the refactoring
-                 try:
-                     result = self.apply_refactoring(file_path, refactoring)
--                    
--                    if result.success:
+                 current_depth -= 1
+             else:
+                 # Visit children
+                 for child in ast.iter_child_nodes(n):
+                     visit_node(child)
+         
+         visit_node(node)
+         return max_depth
+diff --git a/tests/test_agno_tools/test_complexity_cognitive.py b/tests/test_agno_tools/test_complexity_cognitive.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..ef0d001ca02266ac1c29a107a42a08c1928ff386
+--- /dev/null
++++ b/tests/test_agno_tools/test_complexity_cognitive.py
+@@ -0,0 +1,28 @@
++#!/usr/bin/env python3
++# -*- coding: utf-8 -*-
++import ast
++import textwrap
++import sys
++from pathlib import Path
 +
-+                    if result.success and result.refactored_lines != result.original_lines:
-                         refactorings_applied.append({
-                             "type": strategy_name,
-                             "success": True,
-                             "lines_affected": result.lines_affected,
-                             "improvements": result.improvements
-                         })
-                         # Estimate tokens used for this operation
-                         total_tokens_used += 150  # Rough estimate per refactoring
-                     else:
-                         refactorings_applied.append({
-                             "type": strategy_name,
-                             "success": False,
--                            "errors": result.errors
-+                            "errors": result.errors or ["No changes made"],
-                         })
-                         
-                 except Exception as e:
-                     self.logger.error(f"Error applying {strategy_name}: {e}")
-                     refactorings_applied.append({
-                         "type": strategy_name,
-                         "success": False,
-                         "error": str(e)
-                     })
-             
-             success_count = sum(1 for r in refactorings_applied if r.get("success", False))
-             
-             return {
-                 "success": success_count > 0,
-                 "file_path": file_path,
-                 "strategies_attempted": len(selected_strategies),
-                 "strategies_successful": success_count,
-                 "refactorings_applied": refactorings_applied,
-                 "tokens_used": total_tokens_used,
-                 "summary": f"Applied {success_count}/{len(selected_strategies)} refactoring strategies successfully"
-             }
-             
-         except Exception as e:
-             self.logger.error(f"Error in apply_intelligent_refactorings: {e}")
-             return {
++# Ensure project root is on sys.path
++project_root = Path(__file__).resolve().parent.parent.parent
++sys.path.insert(0, str(project_root))
++
++from audit_system.tools.complexity_analyzer_tool import ComplexityAnalyzerTool
++
++def test_cognitive_complexity_counts_top_level_branches_independently():
++    code = textwrap.dedent(
++        '''
++        def sample(x):
++            if x > 0:
++                pass
++            if x < 0:
++                pass
++            return x
++        '''
++    )
++    tree = ast.parse(code)
++    func = next(n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef))
++    tool = ComplexityAnalyzerTool()
++    assert tool._calculate_cognitive_complexity(func) == 2
  
 EOF
 )
