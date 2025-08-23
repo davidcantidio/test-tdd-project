@@ -38,6 +38,7 @@ render_settings_page, SETTINGS_AVAILABLE = _import_page("settings", "render_sett
 render_clients_page, CLIENTS_AVAILABLE = _import_page("clients", "render_clients_page")
 render_projects_page, PROJECTS_AVAILABLE = _import_page("projects", "render_projects_page")
 render_health_dashboard, HEALTH_AVAILABLE = _import_page("health", "render_health_dashboard")
+render_projeto_wizard_page, PROJETO_WIZARD_AVAILABLE = _import_page("projeto_wizard", "render_projeto_wizard_page")
 
 
 # Page registry for navigation
@@ -98,6 +99,13 @@ PAGE_REGISTRY = {
         "render_func": render_projects_page,
         "available": PROJECTS_AVAILABLE
     },
+    "projeto_wizard": {
+        "title": "🚀 Criar Projeto",
+        "icon": "🚀",
+        "description": "Wizard completo com IA: Visão → Épicos → Stories → Tasks",
+        "render_func": render_projeto_wizard_page,
+        "available": PROJETO_WIZARD_AVAILABLE
+    },
     "health": {
         "title": "🏥 Health",
         "icon": "🏥",
@@ -143,6 +151,7 @@ __all__ = [
     "render_clients_page",
     "render_projects_page",
     "render_health_dashboard",
+    "render_projeto_wizard_page",
     "PAGE_REGISTRY",
     "get_available_pages",
     "render_page",
@@ -153,5 +162,6 @@ __all__ = [
     "SETTINGS_AVAILABLE",
     "CLIENTS_AVAILABLE",
     "PROJECTS_AVAILABLE",
-    "HEALTH_AVAILABLE"
+    "HEALTH_AVAILABLE",
+    "PROJETO_WIZARD_AVAILABLE"
 ]

@@ -37,7 +37,7 @@ class APIRateLimitError(Exception):
 
 def verify_api_key(api_key: str) -> Tuple[bool, Optional[str]]:
     """
-    Verify API key if provided.
+    Verify API key with enhanced security validation.
     
     Args:
         api_key: API key to verify
@@ -48,24 +48,96 @@ def verify_api_key(api_key: str) -> Tuple[bool, Optional[str]]:
     if not api_key:
         return False, None
     
-    # For demo purposes, accept a simple API key format
-    # In production, this would check against a database of API keys
-    if api_key.startswith("tdd_api_"):
-        # Extract user identifier from API key
-        try:
-            # Simple validation - in production use proper key validation
-            key_parts = api_key.split("_")
-            if len(key_parts) >= 3:
-                user_id = key_parts[2]
-                return True, user_id
-        except Exception as e:
-            logger.warning(f"API key validation error: {e}")
+    try:
+        # Enhanced API key format: tdd_api_{user_id}_{timestamp}_{hmac_hash}
+        if not api_key.startswith("tdd_api_"):
+            logger.warning("Invalid API key format: missing prefix")
+            return False, None
+        
+        # Minimum length check (security against brute force)
+        if len(api_key) < 32:
+            logger.warning("Invalid API key format: too short")
+            return False, None
+        
+        # Split key parts
+        key_parts = api_key.split("_")
+        if len(key_parts) != 4:
+            logger.warning("Invalid API key format: incorrect structure")
+            return False, None
+        
+        prefix, api_part, user_id, hash_part = key_parts
+        
+        # Validate user_id format (alphanumeric, reasonable length)
+        if not user_id or len(user_id) < 2 or len(user_id) > 20:
+            logger.warning("Invalid API key format: invalid user ID")
+            return False, None
+        
+        # Validate user_id contains only safe characters
+        if not user_id.replace('_', '').replace('-', '').isalnum():
+            logger.warning("Invalid API key format: user ID contains invalid characters")
+            return False, None
+        
+        # Validate hash part length and format
+        if len(hash_part) < 8 or not all(c in '0123456789abcdef' for c in hash_part.lower()):
+            logger.warning("Invalid API key format: invalid hash")
+            return False, None
+        
+        # For enhanced security, validate the hash (simplified for demo)
+        # In production, this would verify against a stored hash/HMAC
+        expected_hash = hashlib.sha256(f"{user_id}_{api_part}_tdd_secret".encode()).hexdigest()[:8]
+        if hash_part.lower() != expected_hash.lower():
+            logger.warning("Invalid API key: hash verification failed")
+            return False, None
+        
+        # Additional security: check if key format matches expected pattern
+        if not _validate_api_key_format(api_key):
+            logger.warning("Invalid API key: format validation failed")
+            return False, None
+        
+        logger.info(f"API key validation successful for user: {user_id}")
+        return True, user_id
+        
+    except Exception as e:
+        logger.warning(f"API key validation error: {e}")
+        return False, None
+
+def _validate_api_key_format(api_key: str) -> bool:
+    """
+    Additional format validation for API keys.
     
-    return False, None
+    Args:
+        api_key: API key to validate
+        
+    Returns:
+        True if format is valid, False otherwise
+    """
+    try:
+        # Check overall length (should be reasonable)
+        if len(api_key) < 32 or len(api_key) > 100:
+            return False
+        
+        # Check for any dangerous characters that shouldn't be in API keys
+        dangerous_chars = ['<', '>', '"', "'", '&', ';', '|', '`', '$', '(', ')']
+        if any(char in api_key for char in dangerous_chars):
+            return False
+        
+        # Validate structure more strictly
+        parts = api_key.split('_')
+        if len(parts) != 4:
+            return False
+            
+        # Each part should have minimum reasonable length
+        if any(len(part) < 2 for part in parts[1:]):  # Skip 'tdd' prefix
+            return False
+            
+        return True
+        
+    except Exception:
+        return False
 
 def check_api_rate_limit(request_type: str = "api_request", user_id: Optional[str] = None) -> Tuple[bool, Optional[str]]:
     """
-    Check rate limits for API requests with specific limits.
+    Check rate limits for API requests with enhanced user-based tracking.
     
     Args:
         request_type: Type of request (api_request, api_heavy, etc.)
@@ -74,16 +146,181 @@ def check_api_rate_limit(request_type: str = "api_request", user_id: Optional[st
     Returns:
         Tuple of (allowed, error_message)
     """
-    # Use more restrictive rate limits for API calls
-    api_rate_configs = {
-        "api_request": {"requests": 100, "window": 3600},  # 100 per hour
-        "api_heavy": {"requests": 10, "window": 600},      # 10 per 10 minutes
-        "api_execution": {"requests": 20, "window": 3600}  # 20 execution plans per hour
-    }
+    global _rate_limit_cache
     
-    # For now, use the existing rate limiting system
-    # TODO: Implement API-specific rate limiting with user-based limits # Tracked: 2025-08-21
-    return check_rate_limit(request_type)
+    try:
+        # Define API-specific rate limits (more restrictive than UI)
+        api_rate_configs = {
+            "execution": {"requests": 10, "window": 3600},      # 10 execution plans per hour
+            "validate": {"requests": 50, "window": 3600},       # 50 validations per hour
+            "scoring": {"requests": 30, "window": 3600},        # 30 scoring requests per hour
+            "summary": {"requests": 25, "window": 3600},        # 25 summaries per hour
+            "presets": {"requests": 100, "window": 3600},       # 100 preset requests per hour
+            "api_request": {"requests": 50, "window": 3600},    # General API limit
+            "api_heavy": {"requests": 5, "window": 600},        # Heavy operations: 5 per 10 minutes
+        }
+        
+        # Get rate limit configuration
+        config = api_rate_configs.get(request_type, api_rate_configs["api_request"])
+        max_requests = config["requests"]
+        window_seconds = config["window"]
+        
+        # Create cache key (include user_id for user-specific limits)
+        if user_id:
+            cache_key = f"api_rate_limit:{request_type}:{user_id}"
+        else:
+            cache_key = f"api_rate_limit:{request_type}:anonymous"
+        
+        current_time = time.time()
+        
+        # Initialize or get existing cache entry
+        if cache_key not in _rate_limit_cache:
+            _rate_limit_cache[cache_key] = []
+        
+        request_times = _rate_limit_cache[cache_key]
+        
+        # Clean old requests outside the window
+        cutoff_time = current_time - window_seconds
+        request_times = [req_time for req_time in request_times if req_time > cutoff_time]
+        _rate_limit_cache[cache_key] = request_times
+        
+        # Check if limit exceeded
+        if len(request_times) >= max_requests:
+            oldest_request = min(request_times)
+            reset_time = oldest_request + window_seconds
+            remaining_seconds = int(reset_time - current_time)
+            
+            # Enhanced error message for API consumers
+            error_message = _create_rate_limit_error_message(
+                request_type, max_requests, window_seconds, remaining_seconds
+            )
+            
+            logger.warning(f"API rate limit exceeded for {cache_key}: {len(request_times)}/{max_requests}")
+            return False, error_message
+        
+        # Add current request to cache
+        request_times.append(current_time)
+        _rate_limit_cache[cache_key] = request_times
+        
+        # Log successful rate limit check
+        remaining_requests = max_requests - len(request_times)
+        logger.info(f"API rate limit check passed for {cache_key}: {remaining_requests} requests remaining")
+        
+        return True, None
+        
+    except Exception as e:
+        logger.error(f"API rate limit check error: {e}")
+        # Fail open - allow request but log the error
+        return True, None
+
+def _create_rate_limit_error_message(request_type: str, max_requests: int, 
+                                   window_seconds: int, remaining_seconds: int) -> str:
+    """
+    Create user-friendly rate limit error message.
+    
+    Args:
+        request_type: Type of API request
+        max_requests: Maximum requests allowed
+        window_seconds: Time window in seconds
+        remaining_seconds: Seconds until limit resets
+        
+    Returns:
+        Formatted error message
+    """
+    # Convert window to human-readable format
+    if window_seconds >= 3600:
+        window_str = f"{window_seconds // 3600} hour(s)"
+    elif window_seconds >= 60:
+        window_str = f"{window_seconds // 60} minute(s)"
+    else:
+        window_str = f"{window_seconds} second(s)"
+    
+    # Convert remaining time to human-readable format
+    if remaining_seconds >= 3600:
+        remaining_str = f"{remaining_seconds // 3600}h {(remaining_seconds % 3600) // 60}m"
+    elif remaining_seconds >= 60:
+        remaining_str = f"{remaining_seconds // 60}m {remaining_seconds % 60}s"
+    else:
+        remaining_str = f"{remaining_seconds}s"
+    
+    return (
+        f"API rate limit exceeded for '{request_type}' endpoint. "
+        f"Limit: {max_requests} requests per {window_str}. "
+        f"Try again in {remaining_str}."
+    )
+
+def get_api_rate_limit_status(request_type: str = "api_request", user_id: Optional[str] = None) -> Dict[str, Any]:
+    """
+    Get current rate limit status for API monitoring.
+    
+    Args:
+        request_type: Type of request to check
+        user_id: User ID for user-specific limits
+        
+    Returns:
+        Dictionary with rate limit status information
+    """
+    global _rate_limit_cache
+    
+    try:
+        # Get rate limit configuration
+        api_rate_configs = {
+            "execution": {"requests": 10, "window": 3600},
+            "validate": {"requests": 50, "window": 3600},
+            "scoring": {"requests": 30, "window": 3600},
+            "summary": {"requests": 25, "window": 3600},
+            "presets": {"requests": 100, "window": 3600},
+            "api_request": {"requests": 50, "window": 3600},
+            "api_heavy": {"requests": 5, "window": 600},
+        }
+        
+        config = api_rate_configs.get(request_type, api_rate_configs["api_request"])
+        max_requests = config["requests"]
+        window_seconds = config["window"]
+        
+        # Create cache key
+        if user_id:
+            cache_key = f"api_rate_limit:{request_type}:{user_id}"
+        else:
+            cache_key = f"api_rate_limit:{request_type}:anonymous"
+        
+        current_time = time.time()
+        
+        # Get current request times
+        request_times = _rate_limit_cache.get(cache_key, [])
+        
+        # Clean old requests
+        cutoff_time = current_time - window_seconds
+        active_requests = [req_time for req_time in request_times if req_time > cutoff_time]
+        
+        # Calculate status
+        requests_used = len(active_requests)
+        requests_remaining = max(0, max_requests - requests_used)
+        
+        # Calculate reset time
+        reset_time = None
+        if active_requests:
+            oldest_request = min(active_requests)
+            reset_time = oldest_request + window_seconds
+        
+        return {
+            "request_type": request_type,
+            "user_id": user_id,
+            "limit": max_requests,
+            "window_seconds": window_seconds,
+            "requests_used": requests_used,
+            "requests_remaining": requests_remaining,
+            "reset_time": reset_time,
+            "reset_in_seconds": int(reset_time - current_time) if reset_time else None
+        }
+        
+    except Exception as e:
+        logger.error(f"Error getting rate limit status: {e}")
+        return {
+            "error": f"Failed to get rate limit status: {str(e)}",
+            "request_type": request_type,
+            "user_id": user_id
+        }
 
 def add_cors_headers() -> Dict[str, str]:
     """
@@ -128,14 +365,92 @@ def authenticate_api_request(query_params: Dict[str, str]) -> Tuple[bool, Option
     return False, None, None
 
 def validate_api_request(query_params: Dict[str, str]) -> Dict[str, Any]:
-    """Refactored method with extracted responsibilities."""
-    validate_api_request_business_logic()
-    validate_api_request_validation()
-    validate_api_request_logging()
-    validate_api_request_error_handling()
-    validate_api_request_networking()
-    validate_api_request_formatting()
-    pass  # TODO: Integrate extracted method results # Tracked: 2025-08-21
+    """
+    Validate API request with comprehensive security and business logic checks.
+    
+    Args:
+        query_params: Query parameters from the request
+        
+    Returns:
+        Dict with validation results and any errors
+    """
+    validation_results = {
+        'valid': True,
+        'errors': [],
+        'warnings': [],
+        'sanitized_params': {},
+        'required_params_present': True,
+        'rate_limit_status': 'ok'
+    }
+    
+    try:
+        # 1. Check API endpoint parameter
+        api_endpoint = query_params.get('api', '')
+        if not api_endpoint:
+            validation_results['valid'] = False
+            validation_results['errors'].append("Missing required 'api' parameter")
+            return validation_results
+        
+        # 2. Validate required parameters for specific endpoints
+        required_params = get_required_params(api_endpoint)
+        missing_params = []
+        
+        for param in required_params:
+            if param not in query_params:
+                missing_params.append(param)
+        
+        if missing_params:
+            validation_results['valid'] = False
+            validation_results['required_params_present'] = False
+            validation_results['errors'].append(f"Missing required parameters: {', '.join(missing_params)}")
+        
+        # 3. Sanitize and validate parameter values
+        sanitized_params = {}
+        for key, value in query_params.items():
+            # Basic sanitization
+            if isinstance(value, str):
+                sanitized_value = value.strip()
+                # Remove potentially dangerous characters
+                sanitized_value = sanitized_value.replace('<', '').replace('>', '').replace('script', '')
+                sanitized_params[key] = sanitized_value
+            else:
+                sanitized_params[key] = value
+        
+        validation_results['sanitized_params'] = sanitized_params
+        
+        # 4. Validate specific parameter formats
+        if 'epic_id' in sanitized_params:
+            try:
+                epic_id = int(sanitized_params['epic_id'])
+                if epic_id <= 0:
+                    validation_results['valid'] = False
+                    validation_results['errors'].append("epic_id must be a positive integer")
+            except (ValueError, TypeError):
+                validation_results['valid'] = False
+                validation_results['errors'].append("epic_id must be a valid integer")
+        
+        # 5. Check API rate limiting
+        is_allowed, rate_limit_msg = check_api_rate_limit(api_endpoint)
+        if not is_allowed:
+            validation_results['valid'] = False
+            validation_results['rate_limit_status'] = 'exceeded'
+            validation_results['errors'].append(rate_limit_msg or "Rate limit exceeded")
+        
+        # 6. Log validation attempt (but don't log sensitive data)
+        logger.info(f"API validation for endpoint '{api_endpoint}': {'valid' if validation_results['valid'] else 'invalid'}")
+        
+        return validation_results
+        
+    except Exception as e:
+        logger.error(f"API request validation error: {e}")
+        return {
+            'valid': False,
+            'errors': [f"Validation error: {str(e)}"],
+            'warnings': [],
+            'sanitized_params': {},
+            'required_params_present': False,
+            'rate_limit_status': 'error'
+        }
 
 def get_required_params(api_endpoint: str) -> list:
     """
@@ -203,7 +518,6 @@ def generate_request_id(user_id: Optional[str], api_endpoint: str) -> str:
     
     return f"req_{timestamp}_{hash_value}"
 
-@require_auth()
 def create_api_error_response(error_message: str, error_code: str, 
                             details: Optional[Any] = None) -> Dict[str, Any]:
     """
@@ -228,7 +542,6 @@ def create_api_error_response(error_message: str, error_code: str,
     
     return response
 
-@require_auth()
 def create_api_success_response(data: Any, metadata: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     """
     Create standardized API success response.
@@ -279,59 +592,15 @@ __all__ = [
     "authenticate_api_request",
     "validate_api_request", 
     "check_api_rate_limit",
+    "get_api_rate_limit_status",
+    "verify_api_key",
     "add_cors_headers",
     "log_api_request",
     "create_api_error_response",
     "create_api_success_response",
     "generate_dev_api_key",
+    "reset_rate_limits",
     "APIAuthenticationError",
     "APIRateLimitError"
 ]
 
-def validate_api_request_business_logic():
-    """
-    Extracted method handling business_logic operations.
-    Original responsibility: Business Logic operations
-    """
-    # TODO: Extract specific logic from lines [130] # Tracked: 2025-08-21
-    pass
-
-def validate_api_request_validation():
-    """
-    Extracted method handling validation operations.
-    Original responsibility: Validation operations
-    """
-    # TODO: Extract specific logic from lines [130, 151, 162, 163] # Tracked: 2025-08-21
-    pass
-
-def validate_api_request_logging():
-    """
-    Extracted method handling logging operations.
-    Original responsibility: Logging operations
-    """
-    # TODO: Extract specific logic from lines [182] # Tracked: 2025-08-21
-    pass
-
-def validate_api_request_error_handling():
-    """
-    Extracted method handling error_handling operations.
-    Original responsibility: Error Handling operations
-    """
-    # TODO: Extract specific logic from lines [148, 181] # Tracked: 2025-08-21
-    pass
-
-def validate_api_request_networking():
-    """
-    Extracted method handling networking operations.
-    Original responsibility: Networking operations
-    """
-    # TODO: Extract specific logic from lines [130, 150, 159, 160, 162, 170] # Tracked: 2025-08-21
-    pass
-
-def validate_api_request_formatting():
-    """
-    Extracted method handling formatting operations.
-    Original responsibility: Formatting operations
-    """
-    # TODO: Extract specific logic from lines [164, 173, 182, 183] # Tracked: 2025-08-21
-    pass

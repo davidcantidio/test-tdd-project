@@ -1,19 +1,14 @@
 #!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 """
-🏗️ MODELS - SQLAlchemy Base Infrastructure
+🏗️ MODELS - SQLAlchemy Base Infrastructure (consolidated)
 
-SQLAlchemy declarative base e gerenciamento de sessões integrados aos padrões
-existentes do projeto. Fornece a fundação para modelos ORM mantendo
-compatibilidade com o DatabaseManager atual.
+Fundação ORM com Base declarativa e gerenciamento de sessões integrado ao
+módulo central de configuração de banco (models.database). Evita PRAGMAs
+duplicados, garante pooling/URL corretos e mantém compatibilidade.
 
 Uso:
     from streamlit_extension.models.base import Base, get_session, SessionManager
-
-Recursos:
-- Base declarativa com configuração otimizada para TDD/TDAH
-- Gerenciamento de sessão integrado aos padrões de conexão existentes
-- Sessões thread-safe
-- Limpeza automática e conexão com pool
 """
 
 from __future__ import annotations
@@ -24,30 +19,31 @@ import threading
 from contextlib import contextmanager
 from typing import Any, Dict, Iterator, Optional, Type, TypeVar, List
 
-from sqlalchemy import create_engine, event
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import DeclarativeBase, Session, scoped_session, sessionmaker
 
+# >>> Integra com a camada central de DB (pool/PRAGMAs/URL corretos)
+from .database import create_db_engine, get_database_url
+
 # -----------------------------------------------------------------------------#
-# Typing
+# Typing / logger
 # -----------------------------------------------------------------------------#
 ModelType = TypeVar("ModelType", bound="Base")
 logger = logging.getLogger(__name__)
 
 
 # =============================================================================
-# Helper/Mixins
+# Helpers / Mixins
 # =============================================================================
 
 def _camel_to_snake(name: str) -> str:
     """Converte CamelCase para snake_case (para nomes de tabela automáticos)."""
-    s1 = re.sub("(.)([A-Z][a-z]+)", r"\1_\2", name)
-    return re.sub("([a-z0-9])([A-Z])", r"\1_\2", s1).lower()
+    s1 = re.sub(r"(.)([A-Z][a-z]+)", r"\1_\2", name)
+    return re.sub(r"([a-z0-9])([A-Z])", r"\1_\2", s1).lower()
 
 
 class QueryMixin:
-    """Mixin com utilitários de consulta e CRUD comum."""
-
+    """Mixin com utilitários de consulta/CRUD comuns."""
     @classmethod
     def get_by_id(cls: Type[ModelType], session: Session, id: int) -> Optional[ModelType]:
         return session.query(cls).filter(cls.id == id).first()
@@ -57,7 +53,7 @@ class QueryMixin:
         return session.query(cls).all()
 
     @classmethod
-    def create(cls: Type[ModelType], session: Session, **kwargs) -> ModelType:
+    def create(cls: Type[ModelType], session: Session, **kwargs: Any) -> ModelType:
         instance = cls(**kwargs)
         session.add(instance)
         session.flush()  # obtém ID sem commit
@@ -80,13 +76,10 @@ class Base(DeclarativeBase, QueryMixin):
     """
     Base declarativa com utilitários TDD/TDAH.
 
-    - Representação amigável (__repr__)
-    - Serialização para dict
-    - Atualização a partir de dict
-    - Nome de tabela automático (snake_case) quando __tablename__ não for definido
+    - __repr__ amigável
+    - to_dict / update_from_dict
+    - __tablename__ automático (snake_case) se não definido
     """
-
-    # Nome de tabela automático caso a classe filha não defina __tablename__
     def __init_subclass__(cls, **kwargs):  # type: ignore[override]
         super().__init_subclass__(**kwargs)
         if not hasattr(cls, "__tablename__"):
@@ -102,26 +95,24 @@ class Base(DeclarativeBase, QueryMixin):
         for column in self.__table__.columns:  # type: ignore[attr-defined]
             value = getattr(self, column.name)
             if hasattr(value, "isoformat"):
-                value = value.isoformat()  # datas/horários
+                value = value.isoformat()
             result[column.name] = value
         return result
 
     def update_from_dict(self, data: Dict[str, Any]) -> None:
-        """Atualiza atributos a partir de um dict."""
+        """Atualiza atributos a partir de um dict (ignora chaves inexistentes)."""
         for key, value in data.items():
             if hasattr(self, key):
                 setattr(self, key, value)
 
     @classmethod
     def get_table_name(cls) -> str:
-        """Retorna o nome da tabela da classe."""
         return cls.__tablename__  # type: ignore[attr-defined]
 
     def refresh_from_db(self, session: Session) -> None:
-        """Recarrega dados do banco (útil para recuperação pós-interrupção)."""
         session.refresh(self)
 
-    # Pontos de extensão para TDD/TDAH
+    # Hooks TDD/TDAH (extensíveis pelos modelos)
     def validate_tdd_workflow(self) -> bool:  # pragma: no cover - hook
         return True
 
@@ -130,21 +121,22 @@ class Base(DeclarativeBase, QueryMixin):
 
 
 # =============================================================================
-# Session Management
+# Session Management (singleton thread-safe)
 # =============================================================================
 
 class SessionManager:
     """
     Gerenciador de sessões thread-safe.
 
-    - Integração com padrões existentes de conexão (DatabaseManager)
-    - Conexão SQLite com WAL e pool de conexões
-    - Escopo transacional com commit/rollback automáticos
+    - Usa engine central (create_db_engine/get_database_url)
+    - Sessões com escopo por thread (scoped_session)
+    - expire_on_commit=False para melhor DX em Streamlit
+    - Context managers com commit/rollback automáticos
     """
 
     def __init__(self, database_url: Optional[str] = None):
-        # padrão: banco local do framework
-        self._database_url = database_url or "sqlite:///framework.db"
+        # Se não informado, resolve via módulo central (framework.db / env / DatabaseManager)
+        self._database_url = database_url or get_database_url(None)
         self._engine: Optional[Engine] = None
         self._session_factory: Optional[sessionmaker] = None
         self._scoped_session: Optional[scoped_session] = None
@@ -152,42 +144,17 @@ class SessionManager:
         self._initialized = False
 
     def _initialize(self) -> None:
-        """Inicializa lazy os componentes SQLAlchemy."""
+        """Inicializa lazy os componentes SQLAlchemy (idempotente)."""
         if self._initialized:
             return
-
         with self._lock:
             if self._initialized:
                 return
 
-            # Engine
-            # Observação:
-            # - Em SQLAlchemy 2.0, 'future=True' é padrão → não usamos.
-            # - Evitamos StaticPool em arquivo SQLite para permitir pooling real.
-            self._engine = create_engine(
-                self._database_url,
-                pool_pre_ping=True,
-                connect_args={
-                    "check_same_thread": False,  # multi-thread
-                    "timeout": 30,               # paciência p/ TDAH
-                },
-                echo=False,
-            )
+            # Usa a engine unificada (PRAGMAs/pooling corretos por dialeto)
+            self._engine = create_db_engine(self._database_url)
 
-            # PRAGMAs SQLite para concorrência e integridade
-            @event.listens_for(self._engine, "connect")
-            def _set_sqlite_pragmas(dbapi_connection, connection_record):  # noqa: N802
-                try:
-                    cursor = dbapi_connection.cursor()
-                    cursor.execute("PRAGMA foreign_keys=ON")
-                    cursor.execute("PRAGMA journal_mode=WAL")
-                    cursor.execute("PRAGMA busy_timeout=5000")
-                    cursor.execute("PRAGMA synchronous=NORMAL")
-                    cursor.close()
-                except Exception as e:  # pragma: no cover - proteção extra
-                    logger.warning(f"Falha ao aplicar PRAGMAs SQLite: {e}")
-
-            # Session factory (SQLAlchemy 2.x: sem autocommit)
+            # Factory (SQLAlchemy 2.x: sem autocommit)
             self._session_factory = sessionmaker(
                 bind=self._engine,
                 expire_on_commit=False,
@@ -196,13 +163,12 @@ class SessionManager:
 
             # Sessão com escopo por thread
             self._scoped_session = scoped_session(self._session_factory)
-
             self._initialized = True
 
     @property
     def engine(self) -> Engine:
         self._initialize()
-        assert self._engine is not None  # para type-checkers
+        assert self._engine is not None
         return self._engine
 
     def get_session(self) -> Session:
@@ -266,7 +232,6 @@ class SessionManager:
 _session_manager: Optional[SessionManager] = None
 _session_lock = threading.Lock()
 
-
 def get_session_manager(database_url: Optional[str] = None) -> SessionManager:
     """Obtém instância global do SessionManager (singleton thread-safe)."""
     global _session_manager
@@ -276,11 +241,9 @@ def get_session_manager(database_url: Optional[str] = None) -> SessionManager:
                 _session_manager = SessionManager(database_url)
     return _session_manager
 
-
 def get_session() -> Session:
     """Atalho para uma sessão do banco."""
     return get_session_manager().get_session()
-
 
 def get_engine() -> Engine:
     """Atalho para o engine do banco."""
@@ -326,6 +289,9 @@ def init_database(database_url: Optional[str] = None) -> None:
     manager = get_session_manager(database_url)
     manager.create_all_tables()
 
+def create_tables(database_url: Optional[str] = None) -> None:
+    """Alias para init_database() (compat)."""
+    init_database(database_url)
 
 def reset_database(database_url: Optional[str] = None) -> None:
     """Reseta o banco (drop + create). CUIDADO: destrutivo."""
@@ -341,18 +307,20 @@ def reset_database(database_url: Optional[str] = None) -> None:
 def integrate_with_existing_db_manager() -> None:
     """
     Integra a URL do SQLAlchemy com o DatabaseManager existente, quando presente.
+    Usa o resolvedor central para obter a URL correta (sqlite+pysqlite).
     """
     try:
         # Import tardio para evitar dependência forte
         from streamlit_extension.utils.database import DatabaseManager  # type: ignore
 
         db_manager = DatabaseManager()
-        if hasattr(db_manager, "db_path"):
-            database_url = f"sqlite:///{db_manager.db_path}"
-            get_session_manager(database_url)
+        # Se o DatabaseManager expõe .db_path, resolvemos via camada central para não errar o driver.
+        if hasattr(db_manager, "db_path") and db_manager.db_path:
+            database_url = get_database_url(str(db_manager.db_path))
+            get_session_manager(database_url)  # reconfigura singleton com URL correta
 
         logger.info("Integração com DatabaseManager concluída com sucesso.")
     except ImportError:
-        logger.warning("DatabaseManager não disponível para integração.")
+        logger.info("DatabaseManager não disponível para integração.")
     except Exception as e:
         logger.warning(f"Falha na integração com DatabaseManager: {e}")

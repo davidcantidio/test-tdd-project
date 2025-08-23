@@ -11,17 +11,10 @@ Usage:
     GET /?api=scoring&epic_id=1&preset=tdd_workflow
     GET /?api=summary&epic_id=1
     GET /?api=presets
-
-Features:
-- ✅ Integrated with existing Streamlit authentication
-- ✅ Uses ServiceContainer and TaskExecutionPlanner
-- ✅ JSON responses for external API consumers
-- ✅ Parameter validation and error handling
-- ✅ Rate limiting integration
 """
 
-import logging
 import json
+import logging
 from typing import Dict, Any, Optional, Tuple
 from datetime import datetime
 
@@ -36,18 +29,101 @@ from .api_middleware import (
 
 logger = logging.getLogger(__name__)
 
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+def _parse_epic_id(query_params: Dict[str, str]) -> Tuple[Optional[int], Optional[Dict[str, Any]]]:
+    """Parse and validate 'epic_id' from query params."""
+    epic_id_str = query_params.get("epic_id")
+    if not epic_id_str:
+        return None, create_api_error_response("Missing required parameter: epic_id", "MISSING_PARAMETER")
+    try:
+        return int(epic_id_str), None
+    except ValueError:
+        return None, create_api_error_response(
+            f"Invalid epic_id: {epic_id_str}. Must be integer.",
+            "INVALID_PARAMETER",
+        )
+
+
+def _parse_preset(query_params: Dict[str, str], default: str = "balanced") -> str:
+    """Get preset parameter with default."""
+    preset = (query_params.get("preset") or default).strip()
+    return preset or default
+
+
+def _parse_custom_weights(query_params: Dict[str, str]) -> Tuple[Optional[Dict[str, Any]], Optional[Dict[str, Any]]]:
+    """
+    Parse optional custom_weights as JSON string.
+    Returns (weights_dict, error_response_or_none)
+    """
+    raw = query_params.get("custom_weights")
+    if not raw:
+        return None, None
+    try:
+        data = json.loads(raw)
+        if not isinstance(data, dict):
+            return None, create_api_error_response(
+                "Parameter 'custom_weights' must be a JSON object", "INVALID_PARAMETER"
+            )
+        return data, None
+    except json.JSONDecodeError as e:
+        return None, create_api_error_response(
+            f"Invalid JSON in 'custom_weights': {e}", "INVALID_PARAMETER"
+        )
+
+
+def _call_execution_planner(task_service: Any, epic_id: int, preset: str, custom_weights: Optional[Dict[str, Any]]):
+    """
+    Call whichever execution planner method exists on the service.
+    Expected ServiceResult-like object with (.success, .data, .errors).
+    """
+    # Try common method names in a stable order
+    candidates = [
+        "plan_execution",           # preferred
+        "get_execution_plan",       # alternative
+        "plan_task_execution",      # legacy
+    ]
+    method = next((name for name in candidates if hasattr(task_service, name)), None)
+    if not method:
+        raise AttributeError(
+            "Task service does not expose an execution planning method. "
+            f"Tried: {', '.join(candidates)}"
+        )
+    func = getattr(task_service, method)
+
+    # Support both signatures: (epic_id, preset, custom_weights) and (epic_id, preset)
+    try:
+        return func(epic_id, preset, custom_weights)  # type: ignore[arg-type]
+    except TypeError:
+        return func(epic_id, preset)  # type: ignore[misc]
+
+
+# ---------------------------------------------------------------------------
+# Endpoint handlers
+# ---------------------------------------------------------------------------
+
 @handle_streamlit_exceptions(show_error=False, attempt_recovery=False)
 def handle_api_request(api_endpoint: str, query_params: Dict[str, str]) -> Dict[str, Any]:
     """Main API request handler for TaskExecutionPlanner endpoints."""
-    validation = validate_api_request(query_params)
+    validation = {}
+    try:
+        validation = validate_api_request(query_params) or {}
+    except Exception as e:
+        # Tolerância caso a função importada ainda não esteja finalizada
+        logger.warning("validate_api_request raised an exception: %s", e)
+        validation = {"success": False, "errors": ["Validation subsystem error"], "auth_method": None}
+
     if not validation.get("success"):
         return create_api_error_response(
             error_message="; ".join(validation.get("errors", ["Validation failed"])),
             error_code="VALIDATION_ERROR",
             details={"auth_method": validation.get("auth_method")},
         )
-    user_id = validation.get("user_id")
 
+    user_id = validation.get("user_id")
     handlers = {
         "execution": handle_execution_planning,
         "validate": handle_epic_validation,
@@ -64,169 +140,141 @@ def handle_api_request(api_endpoint: str, query_params: Dict[str, str]) -> Dict[
             details={"available_endpoints": list(handlers.keys())},
         )
 
+    started = datetime.now()
     try:
         with streamlit_error_boundary(f"api_handler_{api_endpoint}"):
-            started = datetime.now()
             resp = handler(query_params)
-            try:
-                log_api_request(
-                    query_params,
-                    user_id=user_id,
-                    auth_method=validation.get("auth_method"),
-                    response_time=(datetime.now() - started).total_seconds(),
-                )
-            finally:
-                return resp
     except Exception as e:
         logger.exception("API handler error for %s", api_endpoint)
-        return create_api_error_response(
+        resp = create_api_error_response(
             error_message="Internal server error",
             error_code="INTERNAL_ERROR",
             details=str(e),
         )
 
-def _parse_epic_id(query_params: Dict[str, str]) -> Tuple[Optional[int], Optional[Dict[str, Any]]]:
-    """Helper único para ler/validar epic_id."""
-    epic_id_str = query_params.get("epic_id")
-    if not epic_id_str:
-        return None, create_api_error_response("Missing required parameter: epic_id", "MISSING_PARAMETER")
+    # Log fora de finally/return para não mascarar exceções
     try:
-        return int(epic_id_str), None
-    except ValueError:
-        return None, create_api_error_response(
-            f"Invalid epic_id: {epic_id_str}. Must be integer.",
-            "INVALID_PARAMETER",
+        log_api_request(
+            query_params,
+            user_id=user_id,
+            auth_method=validation.get("auth_method"),
+            response_time=(datetime.now() - started).total_seconds(),
         )
+    except Exception as e:
+        logger.warning("Failed to log API request: %s", e)
+
+    return resp
 
 
 def handle_execution_planning(query_params: Dict[str, str]) -> Dict[str, Any]:
-    """Refactored method with extracted responsibilities."""
-    handle_execution_planning_validation()
-    handle_execution_planning_error_handling()
-    handle_execution_planning_networking()
-    handle_execution_planning_formatting()
-    handle_execution_planning_serialization()
-    pass  # TODO: Integrate extracted method results # Tracked: 2025-08-21
-
-def handle_epic_validation(query_params: Dict[str, str]) -> Dict[str, Any]:
     """
-    Handle epic dependency validation API endpoint.
-    
-    Query params:
-        epic_id (required): Epic ID to validate
-        
-    Returns:
-        JSON response with validation results
+    Plan task execution order with prioritization.
+    Params:
+      - epic_id (int, required)
+      - preset (str, optional; default 'balanced')
+      - custom_weights (json string, optional)
     """
     epic_id, err = _parse_epic_id(query_params)
     if err:
         return err
-    
-    # Get task service and validate dependencies
+
+    preset = _parse_preset(query_params, default="balanced")
+    custom_weights, cw_err = _parse_custom_weights(query_params)
+    if cw_err:
+        return cw_err
+
     task_service = get_task_service()
     if not task_service:
         return create_api_error_response("Task service not available", "SERVICE_UNAVAILABLE")
-    
+
+    try:
+        result = _call_execution_planner(task_service, epic_id, preset, custom_weights)
+    except AttributeError as e:
+        return create_api_error_response("Execution planner not available", "SERVICE_MISSING_METHOD", details=str(e))
+    except Exception as e:
+        logger.exception("Error while calling execution planner")
+        return create_api_error_response("Execution planning failed", "EXECUTION_ERROR", details=str(e))
+
+    # ServiceResult expected
+    if getattr(result, "success", False):
+        return create_api_success_response(getattr(result, "data", {}))
+    errors = getattr(result, "errors", None) or ["Unknown error"]
+    return create_api_error_response("Execution planning failed", "EXECUTION_FAILED", details=errors)
+
+
+def handle_epic_validation(query_params: Dict[str, str]) -> Dict[str, Any]:
+    """Validate epic dependency graph."""
+    epic_id, err = _parse_epic_id(query_params)
+    if err:
+        return err
+
+    task_service = get_task_service()
+    if not task_service:
+        return create_api_error_response("Task service not available", "SERVICE_UNAVAILABLE")
+
     result = task_service.validate_epic_dependencies(epic_id)
-    
     if result.success:
         return create_api_success_response(result.data)
     return create_api_error_response("Dependency validation failed", "VALIDATION_FAILED", details=result.errors)
 
+
 def handle_scoring_analysis(query_params: Dict[str, str]) -> Dict[str, Any]:
-    """
-    Handle task scoring analysis API endpoint.
-    
-    Query params:
-        epic_id (required): Epic ID to analyze
-        preset (optional): Scoring preset (default: balanced)
-        
-    Returns:
-        JSON response with scoring analysis
-    """
+    """Analyze task scoring with a given preset."""
     epic_id, err = _parse_epic_id(query_params)
     if err:
         return err
-    
-    # Optional parameters
-    preset = query_params.get("preset", "balanced")
-    
-    # Get task service and analyze scoring
+
+    preset = _parse_preset(query_params, default="balanced")
+
     task_service = get_task_service()
     if not task_service:
         return create_api_error_response("Task service not available", "SERVICE_UNAVAILABLE")
-    
+
     result = task_service.get_task_scoring_analysis(epic_id, preset)
-    
     if result.success:
         return create_api_success_response(result.data)
     return create_api_error_response("Scoring analysis failed", "ANALYSIS_FAILED", details=result.errors)
 
+
 def handle_execution_summary(query_params: Dict[str, str]) -> Dict[str, Any]:
-    """
-    Handle execution summary API endpoint.
-    
-    Query params:
-        epic_id (required): Epic ID to summarize
-        preset (optional): Scoring preset (default: balanced)
-        
-    Returns:
-        JSON response with execution summary
-    """
+    """Get execution summary for an epic."""
     epic_id, err = _parse_epic_id(query_params)
     if err:
         return err
-    
-    # Optional parameters
-    preset = query_params.get("preset", "balanced")
-    
-    # Get task service and get summary
+
+    preset = _parse_preset(query_params, default="balanced")
+
     task_service = get_task_service()
     if not task_service:
         return create_api_error_response("Task service not available", "SERVICE_UNAVAILABLE")
-    
+
     result = task_service.get_execution_summary(epic_id, preset)
-    
     if result.success:
         return create_api_success_response(result.data)
     return create_api_error_response("Execution summary failed", "SUMMARY_FAILED", details=result.errors)
 
-def handle_presets_list(query_params: Dict[str, str]) -> Dict[str, Any]:
-    """
-    Handle scoring presets listing API endpoint.
-    
-    Query params:
-        None required
-        
-    Returns:
-        JSON response with available scoring presets
-    """
+
+def handle_presets_list(_query_params: Dict[str, str]) -> Dict[str, Any]:
+    """List available scoring presets."""
     from ..models.scoring import ScoringSystem
-    
+
     try:
         scoring_system = ScoringSystem()
         presets = scoring_system.list_presets()
-        
-        return create_api_success_response({
-            "presets": presets,
-            "default_preset": "balanced",
-            "total_presets": len(presets),
-        })
+        return create_api_success_response(
+            {"presets": presets, "default_preset": "balanced", "total_presets": len(presets)}
+        )
     except Exception as e:
         logger.exception("Error listing presets")
         return create_api_error_response("Failed to list presets", "PRESETS_ERROR", details=str(e))
 
+
 def get_api_documentation() -> Dict[str, Any]:
-    """
-    Get API documentation for TaskExecutionPlanner endpoints.
-    
-    Returns:
-        Dict containing API documentation
-    """
+    """Return self-documented interface for the endpoints."""
     return {
         "api_version": "1.0.0",
         "description": "TaskExecutionPlanner API integrated with Streamlit",
-        "authentication": "Streamlit session authentication required",
+        "authentication": "Streamlit session or API Key (see middleware)",
         "base_url": "/?api=<endpoint>",
         "endpoints": {
             "execution": {
@@ -241,7 +289,7 @@ def get_api_documentation() -> Dict[str, Any]:
                 "example": "/?api=execution&epic_id=1&preset=balanced"
             },
             "validate": {
-                "method": "GET", 
+                "method": "GET",
                 "url": "/?api=validate",
                 "description": "Validate epic dependencies and DAG structure",
                 "parameters": {
@@ -251,7 +299,7 @@ def get_api_documentation() -> Dict[str, Any]:
             },
             "scoring": {
                 "method": "GET",
-                "url": "/?api=scoring", 
+                "url": "/?api=scoring",
                 "description": "Analyze task scoring with different presets",
                 "parameters": {
                     "epic_id": {"type": "integer", "required": True, "description": "Epic ID to analyze"},
@@ -278,59 +326,8 @@ def get_api_documentation() -> Dict[str, Any]:
             }
         },
         "response_format": {
-            "success": {
-                "success": True,
-                "data": "...",
-                "timestamp": "ISO 8601 timestamp"
-            },
-            "error": {
-                "error": "Error message",
-                "code": "ERROR_CODE",
-                "details": "Additional details (optional)",
-                "timestamp": "ISO 8601 timestamp"
-            }
+            "success": {"success": True, "data": "...", "timestamp": "ISO 8601 timestamp"},
+            "error": {"error": "Error message", "code": "ERROR_CODE", "details": "Optional", "timestamp": "ISO 8601 timestamp"}
         },
-        "scoring_presets": [
-            "balanced", "critical_path", "tdd_workflow", "business_value"
-        ]
+        "scoring_presets": ["balanced", "critical_path", "tdd_workflow", "business_value"]
     }
-
-def handle_execution_planning_validation():
-    """
-    Extracted method handling validation operations.
-    Original responsibility: Validation operations
-    """
-    # TODO: Extract specific logic from lines [130] # Tracked: 2025-08-21
-    pass
-
-def handle_execution_planning_error_handling():
-    """
-    Extracted method handling error_handling operations.
-    Original responsibility: Error Handling operations
-    """
-    # TODO: Extract specific logic from lines [124, 126, 127, 131, 151] # Tracked: 2025-08-21
-    pass
-
-def handle_execution_planning_networking():
-    """
-    Extracted method handling networking operations.
-    Original responsibility: Networking operations
-    """
-    # TODO: Extract specific logic from lines [104, 119, 120, 127, 131, 150, 151] # Tracked: 2025-08-21
-    pass
-
-def handle_execution_planning_formatting():
-    """
-    Extracted method handling formatting operations.
-    Original responsibility: Formatting operations
-    """
-    # TODO: Extract specific logic from lines [125, 126, 127, 148] # Tracked: 2025-08-21
-    pass
-
-def handle_execution_planning_serialization():
-    """
-    Extracted method handling serialization operations.
-    Original responsibility: Serialization operations
-    """
-    # TODO: Extract specific logic from lines [125, 126] # Tracked: 2025-08-21
-    pass

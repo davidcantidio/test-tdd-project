@@ -154,30 +154,6 @@ class StreamlitError:
 
 
 class GlobalExceptionHandler:
-    # Delegation to GlobalExceptionHandlerUiinteraction
-    def __init__(self):
-        self._globalexceptionhandleruiinteraction = GlobalExceptionHandlerUiinteraction()
-    # Delegation to GlobalExceptionHandlerValidation
-    def __init__(self):
-        self._globalexceptionhandlervalidation = GlobalExceptionHandlerValidation()
-    # Delegation to GlobalExceptionHandlerLogging
-    def __init__(self):
-        self._globalexceptionhandlerlogging = GlobalExceptionHandlerLogging()
-    # Delegation to GlobalExceptionHandlerErrorhandling
-    def __init__(self):
-        self._globalexceptionhandlererrorhandling = GlobalExceptionHandlerErrorhandling()
-    # Delegation to GlobalExceptionHandlerNetworking
-    def __init__(self):
-        self._globalexceptionhandlernetworking = GlobalExceptionHandlerNetworking()
-    # Delegation to GlobalExceptionHandlerFormatting
-    def __init__(self):
-        self._globalexceptionhandlerformatting = GlobalExceptionHandlerFormatting()
-    # Delegation to GlobalExceptionHandlerDataaccess
-    def __init__(self):
-        self._globalexceptionhandlerdataaccess = GlobalExceptionHandlerDataaccess()
-    # Delegation to GlobalExceptionHandlerCalculation
-    def __init__(self):
-        self._globalexceptionhandlercalculation = GlobalExceptionHandlerCalculation()
     """Global exception handler for Streamlit applications."""
     
     def __init__(self):
@@ -349,6 +325,22 @@ class GlobalExceptionHandler:
     def _update_error_stats(self, error: StreamlitError):
         """Update error statistics."""
         with self._stats_lock:
+            # Defensive check: ensure error_stats is properly initialized
+            if not hasattr(self, 'error_stats') or not isinstance(self.error_stats, dict):
+                self.error_stats = {
+                    "total_errors": 0,
+                    "errors_by_category": {},
+                    "errors_by_severity": {},
+                    "recent_errors": deque(maxlen=100),
+                    "last_reset": time.time()
+                }
+            
+            # Defensive check: ensure nested dicts are properly initialized
+            if not isinstance(self.error_stats.get("errors_by_category"), dict):
+                self.error_stats["errors_by_category"] = {}
+            if not isinstance(self.error_stats.get("errors_by_severity"), dict):
+                self.error_stats["errors_by_severity"] = {}
+            
             self.error_stats["total_errors"] += 1
             
             # Update category stats
@@ -373,7 +365,7 @@ class GlobalExceptionHandler:
         """Log error with appropriate level."""
         safe_context = error.get_safe_context()
         
-        # Create log message
+        # Create log message with defensive structure
         log_data = {
             "error_id": error.error_id,
             "category": error.category,
@@ -383,27 +375,56 @@ class GlobalExceptionHandler:
             "context": safe_context
         }
         
+        # Defensive check: ensure log_data structure is valid before logging
+        if not isinstance(log_data, dict):
+            log_data = {
+                "error_id": "malformed_log_data",
+                "category": "SYSTEM",
+                "severity": "HIGH",
+                "message": "Log data structure corrupted during processing"
+            }
+        
         # Log with appropriate level based on severity
+        # Create safe log message string
+        log_message = f"{error.severity} error: {log_data}"
+        
         if error.severity == ErrorSeverity.CRITICAL:
             if LOG_SANITIZATION_AVAILABLE:
-                self.logger.critical(sanitize_log_message(f"Critical error: {log_data}", 'CRITICAL'))
+                try:
+                    sanitized_message = sanitize_log_message(log_message, 'CRITICAL')
+                    self.logger.critical(sanitized_message)
+                except Exception:
+                    # Fallback if sanitization fails
+                    self.logger.critical(f"Critical error: [SANITIZATION_FAILED] {error.error_id}")
             else:
-                self.logger.critical(f"Critical error: {log_data}")
+                self.logger.critical(log_message)
         elif error.severity == ErrorSeverity.HIGH:
             if LOG_SANITIZATION_AVAILABLE:
-                self.logger.error(sanitize_log_message(f"High severity error: {log_data}", 'ERROR'))
+                try:
+                    sanitized_message = sanitize_log_message(log_message, 'ERROR')
+                    self.logger.error(sanitized_message)
+                except Exception:
+                    self.logger.error(f"High error: [SANITIZATION_FAILED] {error.error_id}")
             else:
-                self.logger.error(f"High severity error: {log_data}")
+                self.logger.error(log_message)
         elif error.severity == ErrorSeverity.MEDIUM:
             if LOG_SANITIZATION_AVAILABLE:
-                self.logger.warning(sanitize_log_message(f"Medium severity error: {log_data}", 'WARNING'))
+                try:
+                    sanitized_message = sanitize_log_message(log_message, 'WARNING')
+                    self.logger.warning(sanitized_message)
+                except Exception:
+                    self.logger.warning(f"Medium error: [SANITIZATION_FAILED] {error.error_id}")
             else:
-                self.logger.warning(f"Medium severity error: {log_data}")
+                self.logger.warning(log_message)
         else:  # LOW
             if LOG_SANITIZATION_AVAILABLE:
-                self.logger.info(sanitize_log_message(f"Low severity error: {log_data}", 'INFO'))
+                try:
+                    sanitized_message = sanitize_log_message(log_message, 'INFO')
+                    self.logger.info(sanitized_message)
+                except Exception:
+                    self.logger.info(f"Low error: [SANITIZATION_FAILED] {error.error_id}")
             else:
-                self.logger.info(f"Low severity error: {log_data}")
+                self.logger.info(log_message)
         
         # Also log full traceback for debugging (sanitized)
         if LOG_SANITIZATION_AVAILABLE:
@@ -508,6 +529,16 @@ class GlobalExceptionHandler:
     def get_error_stats(self) -> Dict[str, Any]:
         """Get error statistics."""
         with self._stats_lock:
+            # Defensive check: ensure error_stats is properly initialized
+            if not hasattr(self, 'error_stats') or not isinstance(self.error_stats, dict):
+                self.error_stats = {
+                    "total_errors": 0,
+                    "errors_by_category": {},
+                    "errors_by_severity": {},
+                    "recent_errors": deque(maxlen=100),
+                    "last_reset": time.time()
+                }
+            
             return self.error_stats.copy()
     
     def reset_error_stats(self):

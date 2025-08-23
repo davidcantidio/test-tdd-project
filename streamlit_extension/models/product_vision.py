@@ -1,28 +1,20 @@
 #!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 """
 📋 MODELS - ProductVision ORM Model
 
-SQLAlchemy ORM model for product_visions table - Strategic layer between Projects and Epics.
-Provides comprehensive product vision management with TDD integration and TDAH optimization.
+Camada estratégica entre Projects e Epics.
+Compatibilizada com SQLAlchemy 2.x (typed ORM) e mixins do projeto.
 
 Usage:
-    from streamlit_extension.models.product_vision import ProductVision
-
-    vision = ProductVision(
-        project_id=1,
-        vision_key="auth_system",
-        name="Authentication System Vision",
-        vision_statement="Secure, user-friendly authentication..."
-    )
-
-Hierarchy: Client → Project → ProductVision → Epic → UserStory → Task
+    from streamlit_extension.models.product_vision import ProductVisionORM
 """
 
 from __future__ import annotations
 
 import logging
 from datetime import date, datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 
 from sqlalchemy import (
     Integer,
@@ -32,11 +24,12 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     JSON,
-    Boolean,
-    Float,
     UniqueConstraint,
+    Index,
+    func,
+    text,
 )
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, mapped_column
 
 from .base import Base
 from .mixins import AuditMixin, JSONFieldMixin, TDDWorkflowMixin
@@ -44,21 +37,17 @@ from .mixins import AuditMixin, JSONFieldMixin, TDDWorkflowMixin
 logger = logging.getLogger(__name__)
 
 
-class ProductVision(Base, AuditMixin, JSONFieldMixin, TDDWorkflowMixin):
+JsonObj = Dict[str, Any]
+JsonArr = List[Dict[str, Any]]
+JsonVal = Union[JsonObj, JsonArr, List[Any], Dict[str, Any]]
+
+
+class ProductVisionORM(Base, AuditMixin, JSONFieldMixin, TDDWorkflowMixin):
     """
-    ProductVision ORM model representing strategic product visions.
-
-    Product Visions serve as the strategic layer between Projects and Epics,
-    providing high-level product direction, business context, and success criteria.
-
-    Features:
-    - Complete product vision lifecycle management
-    - Strategic goals and business objectives tracking
-    - User persona and market analysis integration
-    - Success metrics and KPI definition
-    - Stakeholder management and approval workflows
-    - TDD integration for validation and testing strategy
-    - TDAH-friendly progress tracking and visualization
+    Strategic product visions:
+    - Goals, personas, KPIs, risks, market analysis
+    - TDD validation criteria, testing strategy
+    - Aprovação e saúde do roadmap
     """
 
     __tablename__ = "product_visions"
@@ -67,6 +56,7 @@ class ProductVision(Base, AuditMixin, JSONFieldMixin, TDDWorkflowMixin):
     # Primary Key and Relationships
     # -------------------------------------------------------------------------
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+
     project_id: Mapped[int] = mapped_column(
         Integer,
         ForeignKey("framework_projects.id", ondelete="CASCADE"),
@@ -83,22 +73,23 @@ class ProductVision(Base, AuditMixin, JSONFieldMixin, TDDWorkflowMixin):
     problem_statement: Mapped[Optional[str]] = mapped_column(Text)
     target_audience: Mapped[Optional[str]] = mapped_column(Text)
     value_proposition: Mapped[Optional[str]] = mapped_column(Text)
-    # JSON fields stored following project convention (JSON column + string value via JSONFieldMixin)
-    success_metrics: Mapped[Optional[str]] = mapped_column(JSON)  # JSON array
+
+    # JSON fields — armazenados como JSON nativo; mixin provê helpers get/set
+    success_metrics: Mapped[Optional[JsonVal]] = mapped_column(JSON)  # array
 
     # Strategic Goals
-    strategic_goals: Mapped[Optional[str]] = mapped_column(JSON)  # JSON array
-    key_features: Mapped[Optional[str]] = mapped_column(JSON)  # JSON array
-    user_personas: Mapped[Optional[str]] = mapped_column(JSON)  # JSON array (persona objects)
-    market_analysis: Mapped[Optional[str]] = mapped_column(JSON)  # JSON object
-    competitive_landscape: Mapped[Optional[str]] = mapped_column(JSON)  # JSON object
+    strategic_goals: Mapped[Optional[JsonVal]] = mapped_column(JSON)  # array
+    key_features: Mapped[Optional[JsonVal]] = mapped_column(JSON)  # array
+    user_personas: Mapped[Optional[JsonVal]] = mapped_column(JSON)  # array
+    market_analysis: Mapped[Optional[JsonVal]] = mapped_column(JSON)  # object
+    competitive_landscape: Mapped[Optional[JsonVal]] = mapped_column(JSON)  # object
 
     # Business Context
-    business_objectives: Mapped[Optional[str]] = mapped_column(JSON)  # JSON array
+    business_objectives: Mapped[Optional[JsonVal]] = mapped_column(JSON)  # array
     revenue_impact: Mapped[Optional[str]] = mapped_column(Text)
-    cost_benefit_analysis: Mapped[Optional[str]] = mapped_column(JSON)  # JSON object
-    risk_assessment: Mapped[Optional[str]] = mapped_column(JSON)  # JSON object
-    assumptions: Mapped[Optional[str]] = mapped_column(JSON)  # JSON array
+    cost_benefit_analysis: Mapped[Optional[JsonVal]] = mapped_column(JSON)  # object
+    risk_assessment: Mapped[Optional[JsonVal]] = mapped_column(JSON)  # object
+    assumptions: Mapped[Optional[JsonVal]] = mapped_column(JSON)  # array
 
     # Timeline & Planning
     vision_timeline: Mapped[Optional[str]] = mapped_column(Text)
@@ -106,41 +97,51 @@ class ProductVision(Base, AuditMixin, JSONFieldMixin, TDDWorkflowMixin):
     market_readiness_date: Mapped[Optional[date]] = mapped_column(Date)
 
     # Validation & Testing
-    validation_criteria: Mapped[Optional[str]] = mapped_column(JSON)  # JSON array
+    validation_criteria: Mapped[Optional[JsonVal]] = mapped_column(JSON)  # array
     testing_strategy: Mapped[Optional[str]] = mapped_column(Text)
-    feedback_sources: Mapped[Optional[str]] = mapped_column(JSON)  # JSON array
-    iteration_plan: Mapped[Optional[str]] = mapped_column(JSON)  # JSON object
+    feedback_sources: Mapped[Optional[JsonVal]] = mapped_column(JSON)  # array
+    iteration_plan: Mapped[Optional[JsonVal]] = mapped_column(JSON)  # object
 
     # Status & Progress
     status: Mapped[str] = mapped_column(
-        String(50), default="draft"
+        String(50),
+        default="draft",
+        server_default=text("'draft'"),
+        nullable=False,
     )  # draft, review, approved, active, launched, retired
-    priority: Mapped[int] = mapped_column(Integer, default=3)  # 1-5 scale
-    confidence_level: Mapped[int] = mapped_column(Integer, default=5)  # 1-10 scale
+    priority: Mapped[int] = mapped_column(
+        Integer, default=3, server_default=text("3"), nullable=False
+    )  # 1-5
+    confidence_level: Mapped[int] = mapped_column(
+        Integer, default=5, server_default=text("5"), nullable=False
+    )  # 1-10
     approval_status: Mapped[str] = mapped_column(
-        String(50), default="pending"
+        String(50),
+        default="pending",
+        server_default=text("'pending'"),
+        nullable=False,
     )  # pending, approved, rejected
 
     # Stakeholders
     product_owner_id: Mapped[Optional[int]] = mapped_column(
         Integer, ForeignKey("framework_users.id"), index=True
     )
-    stakeholders: Mapped[Optional[str]] = mapped_column(JSON)  # JSON array (objects)
-    approval_committee: Mapped[Optional[str]] = mapped_column(JSON)  # JSON array
+    stakeholders: Mapped[Optional[JsonVal]] = mapped_column(JSON)  # array
+    approval_committee: Mapped[Optional[JsonVal]] = mapped_column(JSON)  # array
 
     # Metrics & KPIs
-    success_kpis: Mapped[Optional[str]] = mapped_column(JSON)  # JSON array (KPI objects)
-    measurement_plan: Mapped[Optional[str]] = mapped_column(JSON)  # JSON object
-    baseline_metrics: Mapped[Optional[str]] = mapped_column(JSON)  # JSON object
-    target_metrics: Mapped[Optional[str]] = mapped_column(JSON)  # JSON object
+    success_kpis: Mapped[Optional[JsonVal]] = mapped_column(JSON)  # array
+    measurement_plan: Mapped[Optional[JsonVal]] = mapped_column(JSON)  # object
+    baseline_metrics: Mapped[Optional[JsonVal]] = mapped_column(JSON)  # object
+    target_metrics: Mapped[Optional[JsonVal]] = mapped_column(JSON)  # object
 
     # Documentation
-    documentation_links: Mapped[Optional[str]] = mapped_column(JSON)  # JSON array
-    reference_materials: Mapped[Optional[str]] = mapped_column(JSON)  # JSON array
-    design_assets: Mapped[Optional[str]] = mapped_column(JSON)  # JSON array
-    prototype_links: Mapped[Optional[str]] = mapped_column(JSON)  # JSON array
+    documentation_links: Mapped[Optional[JsonVal]] = mapped_column(JSON)  # array
+    reference_materials: Mapped[Optional[JsonVal]] = mapped_column(JSON)  # array
+    design_assets: Mapped[Optional[JsonVal]] = mapped_column(JSON)  # array
+    prototype_links: Mapped[Optional[JsonVal]] = mapped_column(JSON)  # array
 
-    # Multi-user Support (AuditMixin already provides created_by, updated_by, deleted_by)
+    # Multi-user Support (AuditMixin já provê created_by/updated_by/deleted_by)
     assigned_to: Mapped[Optional[int]] = mapped_column(
         Integer, ForeignKey("framework_users.id"), index=True
     )
@@ -148,46 +149,30 @@ class ProductVision(Base, AuditMixin, JSONFieldMixin, TDDWorkflowMixin):
         Integer, ForeignKey("framework_users.id"), index=True
     )
 
-    # Additional Audit Trail (beyond AuditMixin)
-    approved_at: Mapped[Optional[datetime]] = mapped_column(
-        DateTime(timezone=True)
-    )
-    launched_at: Mapped[Optional[datetime]] = mapped_column(
-        DateTime(timezone=True)
-    )
-    retired_at: Mapped[Optional[datetime]] = mapped_column(
-        DateTime(timezone=True)
-    )
+    # Additional Audit Trail
+    approved_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    launched_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    retired_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
 
-    # Constraints
     __table_args__ = (
-        UniqueConstraint(
-            "project_id", "vision_key", name="uq_product_visions_project_key"
-        ),
+        UniqueConstraint("project_id", "vision_key", name="uq_product_visions_project_key"),
+        Index("ix_product_visions_project_status", "project_id", "status"),
     )
-
-    # Example relationship stubs (uncomment when mapped)
-    # project = relationship("Project", back_populates="product_visions")
-    # epics = relationship("Epic", back_populates="product_vision")
-    # product_owner = relationship("User", foreign_keys=[product_owner_id])
-    # assigned_user = relationship("User", foreign_keys=[assigned_to])
-    # reviewer = relationship("User", foreign_keys=[reviewed_by])
 
     # -------------------------------------------------------------------------
     # Dunder & Representation
     # -------------------------------------------------------------------------
     def __repr__(self) -> str:
-        """Developer-friendly string representation (null-safe)."""
         vid = getattr(self, "id", None)
         vkey = getattr(self, "vision_key", "") or ""
-        vname = (getattr(self, "name", "") or "")[:50]
-        return f"<ProductVision(id={vid}, key='{vkey}', name='{vname}...')>"
+        vname = getattr(self, "name", "") or ""
+        suffix = "..." if len(vname) > 50 else ""
+        return f"<ProductVision(id={vid}, key='{vkey}', name='{vname[:50]}{suffix}')>"
 
     # -------------------------------------------------------------------------
     # Strategic Goals Management
     # -------------------------------------------------------------------------
     def get_strategic_goals(self) -> List[Dict[str, Any]]:
-        """Get strategic goals as structured list."""
         return self.get_json_field("strategic_goals", [])
 
     def add_strategic_goal(
@@ -196,7 +181,6 @@ class ProductVision(Base, AuditMixin, JSONFieldMixin, TDDWorkflowMixin):
         description: str = "",
         success_criteria: Optional[List[str]] = None,
     ) -> bool:
-        """Add a new strategic goal."""
         goal_obj: Dict[str, Any] = {
             "goal": goal,
             "description": description,
@@ -206,18 +190,17 @@ class ProductVision(Base, AuditMixin, JSONFieldMixin, TDDWorkflowMixin):
         return self.append_to_json_array("strategic_goals", goal_obj)
 
     def get_key_features(self) -> List[Dict[str, Any]]:
-        """Get key features as structured list."""
         return self.get_json_field("key_features", [])
 
     def add_key_feature(
         self, feature: str, description: str = "", priority: str = "medium"
     ) -> bool:
-        """Add a new key feature."""
         feature_obj: Dict[str, Any] = {
             "feature": feature,
             "description": description,
             "priority": priority,  # low, medium, high, critical
             "status": "planned",
+            "created_at": datetime.now(timezone.utc).isoformat(),
         }
         return self.append_to_json_array("key_features", feature_obj)
 
@@ -225,7 +208,6 @@ class ProductVision(Base, AuditMixin, JSONFieldMixin, TDDWorkflowMixin):
     # User Personas Management
     # -------------------------------------------------------------------------
     def get_user_personas(self) -> List[Dict[str, Any]]:
-        """Get user personas as structured list."""
         return self.get_json_field("user_personas", [])
 
     def add_user_persona(
@@ -236,7 +218,6 @@ class ProductVision(Base, AuditMixin, JSONFieldMixin, TDDWorkflowMixin):
         needs: Optional[List[str]] = None,
         pain_points: Optional[List[str]] = None,
     ) -> bool:
-        """Add a new user persona."""
         persona_obj: Dict[str, Any] = {
             "name": name,
             "description": description,
@@ -251,7 +232,6 @@ class ProductVision(Base, AuditMixin, JSONFieldMixin, TDDWorkflowMixin):
     # Success Metrics Management
     # -------------------------------------------------------------------------
     def get_success_metrics(self) -> List[Dict[str, Any]]:
-        """Get success metrics as structured list."""
         return self.get_json_field("success_metrics", [])
 
     def add_success_metric(
@@ -262,7 +242,6 @@ class ProductVision(Base, AuditMixin, JSONFieldMixin, TDDWorkflowMixin):
         measurement_method: str = "",
         frequency: str = "monthly",
     ) -> bool:
-        """Add a new success metric."""
         metric_obj: Dict[str, Any] = {
             "name": name,
             "description": description,
@@ -271,11 +250,11 @@ class ProductVision(Base, AuditMixin, JSONFieldMixin, TDDWorkflowMixin):
             "frequency": frequency,
             "current_value": None,
             "status": "not_started",
+            "created_at": datetime.now(timezone.utc).isoformat(),
         }
         return self.append_to_json_array("success_metrics", metric_obj)
 
     def update_metric_value(self, metric_name: str, current_value: Any) -> bool:
-        """Update current value for a success metric."""
         metrics = self.get_success_metrics()
         for metric in metrics:
             if metric.get("name") == metric_name:
@@ -288,7 +267,6 @@ class ProductVision(Base, AuditMixin, JSONFieldMixin, TDDWorkflowMixin):
     # Market Analysis Management
     # -------------------------------------------------------------------------
     def get_market_analysis(self) -> Dict[str, Any]:
-        """Get market analysis as structured object."""
         return self.get_json_field("market_analysis", {})
 
     def update_market_analysis(
@@ -299,7 +277,6 @@ class ProductVision(Base, AuditMixin, JSONFieldMixin, TDDWorkflowMixin):
         opportunities: Optional[List[str]] = None,
         threats: Optional[List[str]] = None,
     ) -> bool:
-        """Update market analysis data."""
         analysis_data: Dict[str, Any] = {
             "market_size": market_size,
             "growth_rate": growth_rate,
@@ -311,7 +288,6 @@ class ProductVision(Base, AuditMixin, JSONFieldMixin, TDDWorkflowMixin):
         return self.update_json_object("market_analysis", analysis_data)
 
     def get_competitive_landscape(self) -> Dict[str, Any]:
-        """Get competitive landscape as structured object."""
         return self.get_json_field("competitive_landscape", {})
 
     def add_competitor(
@@ -322,11 +298,8 @@ class ProductVision(Base, AuditMixin, JSONFieldMixin, TDDWorkflowMixin):
         market_share: str = "",
         differentiation: str = "",
     ) -> bool:
-        """Add competitor to competitive landscape."""
         landscape = self.get_competitive_landscape()
-        if "competitors" not in landscape:
-            landscape["competitors"] = []
-
+        competitors = landscape.get("competitors") or []
         competitor_obj: Dict[str, Any] = {
             "name": name,
             "strengths": strengths or [],
@@ -335,15 +308,14 @@ class ProductVision(Base, AuditMixin, JSONFieldMixin, TDDWorkflowMixin):
             "differentiation": differentiation,
             "added_at": datetime.now(timezone.utc).isoformat(),
         }
-
-        landscape["competitors"].append(competitor_obj)
+        competitors.append(competitor_obj)
+        landscape["competitors"] = competitors
         return self.set_json_field("competitive_landscape", landscape)
 
     # -------------------------------------------------------------------------
     # Risk Assessment Management
     # -------------------------------------------------------------------------
     def get_risk_assessment(self) -> Dict[str, Any]:
-        """Get risk assessment as structured object."""
         return self.get_json_field("risk_assessment", {})
 
     def add_risk(
@@ -355,11 +327,8 @@ class ProductVision(Base, AuditMixin, JSONFieldMixin, TDDWorkflowMixin):
         mitigation_strategy: str = "",
         owner: str = "",
     ) -> bool:
-        """Add risk to risk assessment."""
         assessment = self.get_risk_assessment()
-        if "risks" not in assessment:
-            assessment["risks"] = []
-
+        risks = assessment.get("risks") or []
         risk_obj: Dict[str, Any] = {
             "type": risk_type,  # technical, market, resource, timeline, financial
             "description": description,
@@ -370,8 +339,8 @@ class ProductVision(Base, AuditMixin, JSONFieldMixin, TDDWorkflowMixin):
             "status": "identified",  # identified, planning, mitigating, resolved
             "created_at": datetime.now(timezone.utc).isoformat(),
         }
-
-        assessment["risks"].append(risk_obj)
+        risks.append(risk_obj)
+        assessment["risks"] = risks
         assessment["last_updated"] = datetime.now(timezone.utc).isoformat()
         return self.set_json_field("risk_assessment", assessment)
 
@@ -379,7 +348,6 @@ class ProductVision(Base, AuditMixin, JSONFieldMixin, TDDWorkflowMixin):
     # Validation and Testing Integration
     # -------------------------------------------------------------------------
     def get_validation_criteria(self) -> List[Dict[str, Any]]:
-        """Get validation criteria as structured list."""
         return self.get_json_field("validation_criteria", [])
 
     def add_validation_criterion(
@@ -389,7 +357,6 @@ class ProductVision(Base, AuditMixin, JSONFieldMixin, TDDWorkflowMixin):
         success_threshold: str,
         responsible_party: str = "",
     ) -> bool:
-        """Add validation criterion."""
         criterion_obj: Dict[str, Any] = {
             "criterion": criterion,
             "validation_method": method,
@@ -404,7 +371,6 @@ class ProductVision(Base, AuditMixin, JSONFieldMixin, TDDWorkflowMixin):
     def update_validation_result(
         self, criterion: str, status: str, results: Optional[Dict[str, Any]] = None
     ) -> bool:
-        """Update validation results for a criterion."""
         criteria = self.get_validation_criteria()
         for item in criteria:
             if item.get("criterion") == criterion:
@@ -418,7 +384,6 @@ class ProductVision(Base, AuditMixin, JSONFieldMixin, TDDWorkflowMixin):
     # Status and Workflow Management
     # -------------------------------------------------------------------------
     def can_transition_to_status(self, new_status: str) -> bool:
-        """Check if transition to new status is valid."""
         valid_transitions = {
             "draft": ["review", "approved"],
             "review": ["draft", "approved", "rejected"],
@@ -426,12 +391,11 @@ class ProductVision(Base, AuditMixin, JSONFieldMixin, TDDWorkflowMixin):
             "rejected": ["draft"],
             "active": ["launched", "retired"],
             "launched": ["retired"],
-            "retired": [],  # Terminal state
+            "retired": [],
         }
         return new_status in valid_transitions.get(self.status, [])
 
     def transition_status(self, new_status: str, user_id: Optional[int] = None) -> bool:
-        """Transition to new status with validation and audit update."""
         if not self.can_transition_to_status(new_status):
             logger.warning(
                 "Invalid status transition for ProductVision %s: %s -> %s",
@@ -444,7 +408,6 @@ class ProductVision(Base, AuditMixin, JSONFieldMixin, TDDWorkflowMixin):
         old_status = self.status
         self.status = new_status
 
-        # Update relevant timestamps (timezone-aware)
         now = datetime.now(timezone.utc)
         if new_status == "approved":
             self.approved_at = now
@@ -454,7 +417,7 @@ class ProductVision(Base, AuditMixin, JSONFieldMixin, TDDWorkflowMixin):
         elif new_status == "retired":
             self.retired_at = now
 
-        # Update audit fields
+        # Audit/update
         self.updated_by = user_id
         self.touch(user_id)
 
@@ -470,7 +433,6 @@ class ProductVision(Base, AuditMixin, JSONFieldMixin, TDDWorkflowMixin):
     # Progress and Analytics
     # -------------------------------------------------------------------------
     def calculate_completion_percentage(self) -> float:
-        """Calculate vision completion percentage based on various criteria."""
         completion_factors: List[tuple[str, float, float]] = []
 
         # Basic information completeness
@@ -485,40 +447,39 @@ class ProductVision(Base, AuditMixin, JSONFieldMixin, TDDWorkflowMixin):
 
         # Strategic goals completeness
         goals = self.get_strategic_goals()
-        goals_completeness = 1.0 if len(goals) >= 3 else len(goals) / 3
+        goals_completeness = 1.0 if len(goals) >= 3 else (len(goals) / 3 if goals else 0.0)
         completion_factors.append(("strategic_goals", goals_completeness, 0.2))
 
         # User personas completeness
         personas = self.get_user_personas()
-        personas_completeness = 1.0 if len(personas) >= 2 else len(personas) / 2
+        personas_completeness = 1.0 if len(personas) >= 2 else (len(personas) / 2 if personas else 0.0)
         completion_factors.append(("user_personas", personas_completeness, 0.15))
 
-        # Market analysis completeness
+        # Market analysis completeness (mínimo 3 chaves)
         market = self.get_market_analysis()
-        market_completeness = 1.0 if len(market) >= 3 else len(market) / 3
+        market_size = len(market.keys()) if isinstance(market, dict) else 0
+        market_completeness = 1.0 if market_size >= 3 else (market_size / 3 if market_size else 0.0)
         completion_factors.append(("market_analysis", market_completeness, 0.15))
 
         # Success metrics completeness
         metrics = self.get_success_metrics()
-        metrics_completeness = 1.0 if len(metrics) >= 3 else len(metrics) / 3
+        metrics_completeness = 1.0 if len(metrics) >= 3 else (len(metrics) / 3 if metrics else 0.0)
         completion_factors.append(("success_metrics", metrics_completeness, 0.15))
 
         # Risk assessment completeness
-        risks = self.get_risk_assessment().get("risks", [])
-        risk_completeness = 1.0 if len(risks) >= 2 else len(risks) / 2
+        risks = (self.get_risk_assessment() or {}).get("risks", [])
+        risk_completeness = 1.0 if len(risks) >= 2 else (len(risks) / 2 if risks else 0.0)
         completion_factors.append(("risk_assessment", risk_completeness, 0.1))
 
         # Validation criteria completeness
         validation = self.get_validation_criteria()
-        validation_completeness = 1.0 if len(validation) >= 2 else len(validation) / 2
+        validation_completeness = 1.0 if len(validation) >= 2 else (len(validation) / 2 if validation else 0.0)
         completion_factors.append(("validation", validation_completeness, 0.05))
 
-        # Weighted average
-        total_score = sum(completeness * weight for _, completeness, weight in completion_factors)
+        total_score = sum(c * w for _, c, w in completion_factors)
         return float(min(total_score * 100, 100.0))
 
     def get_health_score(self) -> Dict[str, Any]:
-        """Get vision health score with detailed breakdown."""
         health_data: Dict[str, Any] = {
             "overall_score": 0.0,
             "completion_percentage": self.calculate_completion_percentage(),
@@ -545,13 +506,12 @@ class ProductVision(Base, AuditMixin, JSONFieldMixin, TDDWorkflowMixin):
             health_data["recommendations"].append("Add more stakeholders for better governance")
 
         # Risk health
-        risks = self.get_risk_assessment().get("risks", [])
+        risks = (self.get_risk_assessment() or {}).get("risks", [])
         high_risk_count = sum(1 for risk in risks if risk.get("impact") == "high")
         health_data["risk_health"] = high_risk_count <= 2
         if high_risk_count > 2:
             health_data["recommendations"].append("Address high-impact risks to improve health")
 
-        # Overall score
         health_factors = [
             health_data["completion_percentage"] / 100,
             1.0 if health_data["status_health"] else 0.5,
@@ -566,25 +526,20 @@ class ProductVision(Base, AuditMixin, JSONFieldMixin, TDDWorkflowMixin):
     # TDD Integration Overrides
     # -------------------------------------------------------------------------
     def validate_tdd_workflow(self) -> bool:
-        """Validate TDD workflow constraints for product vision."""
         if self.is_tdd_exempt:
             return True
-        # For product visions, TDD focuses on validation criteria
         validation_criteria = self.get_validation_criteria()
-        return len(validation_criteria) >= 2  # At least 2 validation criteria
+        return len(validation_criteria) >= 2
 
     def calculate_tdah_complexity(self) -> int:
-        """Calculate TDAH cognitive complexity for this product vision."""
         complexity_score = 1
 
-        # Base complexity from content length
         content_length = len(self.vision_statement or "") + len(self.problem_statement or "")
         if content_length > 1000:
             complexity_score += 2
         elif content_length > 500:
             complexity_score += 1
 
-        # Complexity from number of goals and features
         goals_count = len(self.get_strategic_goals())
         features_count = len(self.get_key_features())
         total = goals_count + features_count
@@ -595,21 +550,18 @@ class ProductVision(Base, AuditMixin, JSONFieldMixin, TDDWorkflowMixin):
         elif total > 2:
             complexity_score += 1
 
-        # Complexity from stakeholder involvement
         stakeholders_count = len(self.get_json_field("stakeholders", []))
         if stakeholders_count > 5:
             complexity_score += 2
         elif stakeholders_count > 2:
             complexity_score += 1
 
-        # Cap at maximum complexity
         return min(complexity_score, 10)
 
     # -------------------------------------------------------------------------
     # Utility Methods
     # -------------------------------------------------------------------------
     def to_summary_dict(self) -> Dict[str, Any]:
-        """Get summary dictionary for API/UI display."""
         return {
             "id": self.id,
             "project_id": self.project_id,
@@ -620,17 +572,14 @@ class ProductVision(Base, AuditMixin, JSONFieldMixin, TDDWorkflowMixin):
             "confidence_level": self.confidence_level,
             "completion_percentage": self.calculate_completion_percentage(),
             "health_score": self.get_health_score()["overall_score"],
-            "target_launch_date": self.target_launch_date.isoformat()
-            if self.target_launch_date
-            else None,
-            "created_at": self.created_at.isoformat() if self.created_at else None,
-            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+            "target_launch_date": self.target_launch_date.isoformat() if self.target_launch_date else None,
+            "created_at": self.created_at.isoformat() if getattr(self, "created_at", None) else None,
+            "updated_at": self.updated_at.isoformat() if getattr(self, "updated_at", None) else None,
         }
 
-    def clone(self, new_vision_key: str, new_name: str) -> "ProductVision":
+    def clone(self, new_vision_key: str, new_name: str) -> "ProductVisionORM":
         """Create a copy of this product vision with new key and name."""
-        # Shallow JSON copy is fine (JSONFieldMixin stores serialized value)
-        new_vision = ProductVision(
+        return ProductVisionORM(
             project_id=self.project_id,
             vision_key=new_vision_key,
             name=new_name,
@@ -638,7 +587,7 @@ class ProductVision(Base, AuditMixin, JSONFieldMixin, TDDWorkflowMixin):
             problem_statement=self.problem_statement,
             target_audience=self.target_audience,
             value_proposition=self.value_proposition,
-            # Copy JSON fields (serialized strings as-is)
+            # JSON fields (copiados como objetos/arrays)
             strategic_goals=self.strategic_goals,
             key_features=self.key_features,
             user_personas=self.user_personas,
@@ -656,6 +605,5 @@ class ProductVision(Base, AuditMixin, JSONFieldMixin, TDDWorkflowMixin):
             status="draft",
             approval_status="pending",
             priority=self.priority,
-            confidence_level=5,  # Reset confidence
+            confidence_level=5,
         )
-        return new_vision

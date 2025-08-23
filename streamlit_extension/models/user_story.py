@@ -14,7 +14,7 @@ Principais ajustes nesta versão:
 - ✅ Tipagem e defaults consistentes
 
 Uso:
-    from streamlit_extension.models.user_story import UserStory
+    from streamlit_extension.models.user_story import UserStoryORM
 """
 
 from __future__ import annotations
@@ -93,7 +93,7 @@ class StoryStatus(Enum):
 # UserStory ORM Model
 # =============================================================================
 
-class UserStory(Base, AuditMixin, JSONFieldMixin, TDDWorkflowMixin, TDAHOptimizationMixin):
+class UserStoryORM(Base, AuditMixin, JSONFieldMixin, TDDWorkflowMixin, TDAHOptimizationMixin):
     """
     UserStory representa requisitos detalhados orientados ao usuário, ligando Epics a Tasks.
 
@@ -232,7 +232,7 @@ class UserStory(Base, AuditMixin, JSONFieldMixin, TDDWorkflowMixin, TDAHOptimiza
     def __repr__(self) -> str:
         key = getattr(self, "story_key", "?")
         title = (getattr(self, "title", "") or "")[:50]
-        return f"<UserStory(id={self.id}, key='{key}', title='{title}...')>"
+        return f"<UserStoryORM(id={self.id}, key='{key}', title='{title}...')>"
 
     # =============================================================================
     # Enum Properties
@@ -768,8 +768,8 @@ class UserStory(Base, AuditMixin, JSONFieldMixin, TDDWorkflowMixin, TDAHOptimiza
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }
 
-    def clone(self, new_story_key: str, new_title: str, target_epic_id: Optional[int] = None) -> "UserStory":
-        return UserStory(
+    def clone(self, new_story_key: str, new_title: str, target_epic_id: Optional[int] = None) -> "UserStoryORM":
+        return UserStoryORM(
             epic_id=target_epic_id or self.epic_id,
             story_key=new_story_key,
             title=new_title,
