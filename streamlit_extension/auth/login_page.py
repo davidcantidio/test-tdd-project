@@ -179,7 +179,7 @@ def _render_login_form(auth_manager: AuthManager):
 
     csrf_token = _csrf_get_or_create(K.CSRF_LOGIN)
 
-    with st.form("login_form", clear_on_submit=False):
+    with st.form(key="login_form", clear_on_submit=False):
         username = st.text_input("Username", key=K.F_LOGIN_USER)
         # Campo oculto para CSRF (valor exibido oculto)
         st.text_input(
@@ -275,7 +275,7 @@ def _render_registration_form(auth_manager: AuthManager):
 
     csrf_token = _csrf_get_or_create(K.CSRF_REG)
 
-    with st.form("register_form", clear_on_submit=False):
+    with st.form(key="register_form", clear_on_submit=False):
         username = st.text_input("Username", key=K.F_REG_USER, help="3–32 chars: letters, numbers, . _ -")
         email = st.text_input("Email", key=K.F_REG_EMAIL)
         # Campo oculto para CSRF
