@@ -1,89 +1,806 @@
  (cd "$(git rev-parse --show-toplevel)" && git apply --3way <<'EOF' 
-diff --git a/streamlit_extension/components/dashboard_widgets.py b/streamlit_extension/components/dashboard_widgets.py
-index a9a0d1435671733ff620fca24e03c43e040daa29..ae3ff91a0eebc9ee8b76f9e9bc5dd6eeebad7be9 100644
---- a/streamlit_extension/components/dashboard_widgets.py
-+++ b/streamlit_extension/components/dashboard_widgets.py
-@@ -321,80 +321,62 @@ class NotificationToast:
-             return
-         
-         # Type to style mapping
-         styles = {
-             "success": {"bg": "#d4edda", "border": "#c3e6cb", "text": "#155724", "icon": "✅"},
-             "error": {"bg": "#f8d7da", "border": "#f5c6cb", "text": "#721c24", "icon": "❌"},
-             "warning": {"bg": "#fff3cd", "border": "#ffeaa7", "text": "#856404", "icon": "⚠️"},
-             "info": {"bg": "#d1ecf1", "border": "#bee5eb", "text": "#0c5460", "icon": "ℹ️"}
+diff --git a/streamlit_extension/pages/analytics.py b/streamlit_extension/pages/analytics.py
+index f4a593820d7deecb0f05d0bfc1b4ec3520b3795f..cbd9a7a25fa4f7ff3738f659dbe06b87cdf742b3 100644
+--- a/streamlit_extension/pages/analytics.py
++++ b/streamlit_extension/pages/analytics.py
+@@ -1,50 +1,52 @@
+ # streamlit_extension/pages/analytics.py
+ """
+ 📊 Analytics Dashboard Page (refatorado)
+ 
+ Exibe métricas e análises para TDD:
+ - Produtividade, foco e tendências
+ - Insights específicos para TDAH
+ - Progresso por épico e tarefas
+ - Export CSV/JSON/Excel
+ 
+ Correções aplicadas:
+ - Remoção de sys.path hack
+ - Decorators no‑op seguros quando ausentes (evita crash em import)
+ - Normalização de user_stats (dict/list → dict)
+ - Filtros aplicados em memória em optimize_database_queries
+ - Tema gráfico por sidebar (chart_settings.theme)
+ - Padrões de auth e init_protected_page consistentes
+ """
+ 
+ from __future__ import annotations
+ 
+ import time
+ from typing import Dict, Any, List, Optional
+ from datetime import datetime, timedelta
+ from collections import defaultdict
++from dataclasses import asdict, is_dataclass
++from collections.abc import Mapping
+ 
+ # --- Graceful imports ---------------------------------------------------------
+ try:
+     import streamlit as st
+     STREAMLIT_AVAILABLE = True
+ except ImportError:
+     STREAMLIT_AVAILABLE = False
+     st = None  # type: ignore
+ 
+ try:
+     import plotly.express as px
+     import plotly.graph_objects as go
+     from plotly.subplots import make_subplots
+     PLOTLY_AVAILABLE = True
+ except ImportError:
+     PLOTLY_AVAILABLE = False
+     px = go = make_subplots = None  # type: ignore
+ 
+ try:
+     import pandas as pd
+     PANDAS_AVAILABLE = True
+ except ImportError:
+     PANDAS_AVAILABLE = False
+     pd = None  # type: ignore
+ 
+@@ -188,113 +190,149 @@ def cached_analytics_data(ttl=300):
+             return func
+ 
+         @functools.wraps(func)  # type: ignore
+         def wrapper(*args, **kwargs):
+             # Disable cache via settings
+             if STREAMLIT_AVAILABLE and hasattr(st.session_state, 'performance_settings') and \
+                not st.session_state.performance_settings.get('use_cache', True):
+                 return func(*args, **kwargs)
+ 
+             cache_key = _analytics_cache.get_cache_key(func.__name__, *args, **kwargs)
+             cached_result = _analytics_cache.get(cache_key, ttl)
+             if cached_result is not None:
+                 return cached_result
+ 
+             result = func(*args, **kwargs)
+             _analytics_cache.set(cache_key, result)
+             return result
+         return wrapper
+     return decorator
+ 
+ 
+ # ==============================
+ #   Data Access & Optimization
+ # ==============================
+ 
++def _ensure_dict_list(data: Any) -> List[Dict[str, Any]]:
++    """Ensure an iterable contains only dictionaries."""
++    if not data:
++        return []
++    try:
++        iterable = data if isinstance(data, list) else list(data)
++    except Exception:
++        iterable = []
++    normalized: List[Dict[str, Any]] = []
++    for item in iterable:
++        if isinstance(item, dict):
++            normalized.append(item)
++        elif hasattr(item, "_asdict"):
++            normalized.append(item._asdict())
++        elif is_dataclass(item):
++            normalized.append(asdict(item))
++        elif isinstance(item, Mapping):
++            normalized.append(dict(item))
++        elif hasattr(item, "__dict__"):
++            normalized.append(vars(item))
++        elif isinstance(item, tuple):
++            normalized.append({f"field_{i}": v for i, v in enumerate(item)})
++    return normalized
++
+ def _normalize_user_stats(raw_stats: Any) -> Dict[str, Any]:
+     """Normaliza user_stats para dict, evitando erros do tipo 'List argument must consist only of dictionaries'."""
+     if isinstance(raw_stats, dict):
+         return raw_stats
+-    if isinstance(raw_stats, list) and raw_stats and isinstance(raw_stats[0], dict):
+-        return raw_stats[0]
++    if isinstance(raw_stats, list) and raw_stats:
++        item = raw_stats[0]
++        if isinstance(item, dict):
++            return item
++        if hasattr(item, "_asdict"):
++            return item._asdict()
++        if is_dataclass(item):
++            return asdict(item)
++        if isinstance(item, Mapping):
++            return dict(item)
++        if hasattr(item, "__dict__"):
++            return vars(item)
+     return {}
+ 
+ def optimize_database_queries(db_manager: "DatabaseManager", days: int, filters: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+     """Consulta dados em batches e aplica filtros em memória (até termos suporte nativo)."""
+     try:
+         query_results: Dict[str, Any] = {}
+ 
+         if STREAMLIT_AVAILABLE:
+             spinner_ctx = st.spinner("Optimizing data queries...")
+         else:
+             # Dummy context manager
+             class _NullCtx:
+                 def __enter__(self): return None
+                 def __exit__(self, exc_type, exc, tb): return False
+             spinner_ctx = _NullCtx()
+ 
+         with spinner_ctx:
+             # --- Sessions -----------------------------------------------------
+-            sessions = db_manager.get_timer_sessions(days)  # type: ignore[arg-type]
++            sessions = _ensure_dict_list(
++                db_manager.get_timer_sessions(days)  # type: ignore[arg-type]
++            )
+             if filters:
+                 fr = filters.get("focus_range")
+                 if fr and fr != (1, 10):
+                     mn, mx = fr
+                     sessions = [s for s in sessions if (s.get("focus_rating") is None or mn <= s.get("focus_rating", 0) <= mx)]
+                 stypes = filters.get("selected_session_types")
+                 if stypes:
+                     allowed = set(stypes)
+                     sessions = [s for s in sessions if s.get("session_type") in allowed]
+             query_results["timer_sessions"] = sessions
+ 
+             # --- Tasks / Epics ------------------------------------------------
+-            tasks = db_manager.get_tasks()
+-            epics = db_manager.get_epics()
++            tasks = _ensure_dict_list(db_manager.get_tasks())
++            epics = _ensure_dict_list(db_manager.get_epics())
+             if filters:
+                 selected_epics = set(filters.get("selected_epics") or [])
+                 if selected_epics:
+                     tasks = [t for t in tasks if t.get("epic_name") in selected_epics]
+                     epics = [e for e in epics if e.get("name") in selected_epics]
+                 tdd = set(filters.get("selected_tdd_phases") or [])
+                 if tdd:
+                     tasks = [t for t in tasks if t.get("tdd_phase") in tdd]
+             query_results["tasks"] = tasks
+             query_results["epics"] = epics
+ 
+             # --- User Stats ---------------------------------------------------
+             raw_stats = db_manager.get_user_stats()
+             query_results["user_stats"] = _normalize_user_stats(raw_stats)
+ 
+         return query_results
+ 
+     except Exception as e:
+         if STREAMLIT_AVAILABLE:
+             st.error(f"Database query optimization failed: {e}")
+         return {
+-            "timer_sessions": db_manager.get_timer_sessions(days),  # type: ignore[arg-type]
+-            "tasks": db_manager.get_tasks(),
+-            "epics": db_manager.get_epics(),
++            "timer_sessions": _ensure_dict_list(db_manager.get_timer_sessions(days)),  # type: ignore[arg-type]
++            "tasks": _ensure_dict_list(db_manager.get_tasks()),
++            "epics": _ensure_dict_list(db_manager.get_epics()),
+             "user_stats": _normalize_user_stats(db_manager.get_user_stats()),
          }
-         
-         style = styles.get(notification.type, styles["info"])
-         icon = notification.icon or style["icon"]
-         
-         # Create columns for layout
-         col1, col2, col3 = st.columns([1, 10, 1])
-         
+ 
+ 
+ # ==============================
+ #   Página principal (render)
+ # ==============================
+ 
+ def _apply_chart_theme(fig) -> None:
+     """Aplica template de tema se definido via sidebar."""
+     if not STREAMLIT_AVAILABLE:
+         return
+     template = getattr(st.session_state, "chart_settings", {}).get("theme", None)
+     if template:
+         fig.update_layout(template=template)
+ 
+ @require_auth()  # Protege a página; em dev, o fallback acima permite acesso
+ @handle_streamlit_exceptions(show_error=True, attempt_recovery=True)
+ def render_analytics_page():
+     """Main analytics page with modular architecture."""
+     if not STREAMLIT_AVAILABLE:
+         return {"error": "Streamlit not available"}
+ 
+     init_protected_page("📊 Analytics Dashboard", layout="wide")
+ 
+@@ -1094,78 +1132,78 @@ def _render_tdah_insights(analytics_data: Dict[str, Any]):
+             avg_interruptions = total_interruptions / len(timer_sessions) if timer_sessions else 0
+             st.metric("🚫 Total Interruptions", total_interruptions, f"{avg_interruptions:.1f} avg/session")
+ 
+             energy_levels = [s.get("energy_level") for s in timer_sessions if s.get("energy_level")]
+             if energy_levels:
+                 avg_energy = sum(energy_levels) / len(energy_levels)
+                 st.metric("⚡ Avg Energy Level", f"{avg_energy:.1f}/10", f"Based on {len(energy_levels)} sessions")
+ 
          with col2:
-             toast_html = f"""
-             <div style="
-                 background-color: {style['bg']};
-                 border: 1px solid {style['border']};
-                 border-radius: 8px;
-                 padding: 12px 15px;
-                 margin: 10px 0;
-                 color: {style['text']};
--                animation: slideIn 0.3s ease;
-             ">
-                 <div style="display: flex; align-items: start;">
-                     <span style="font-size: 20px; margin-right: 10px;">{icon}</span>
-                     <div style="flex-grow: 1;">
-                         <div style="font-weight: bold; margin-bottom: 3px;">{notification.title}</div>
-                         <div style="font-size: 14px;">{notification.message}</div>
-                         <div style="font-size: 11px; color: #888; margin-top: 5px;">
-                             {notification.timestamp.strftime("%H:%M:%S")}
-                         </div>
-                     </div>
-                 </div>
-             </div>
--            
--            <style>
--                @keyframes slideIn {{
--                    from {{
--# Auth imports
--from streamlit_extension.auth.middleware import require_auth, require_admin
--from streamlit_extension.auth.user_model import UserRole
--
--                        transform: translateX(100%);
--                        opacity: 0;
--                    }}
--                    to {{
--                        transform: translateX(0);
--                        opacity: 1;
--                    }}
--                }}
--            </style>
+             focus_ratings = [s.get("focus_rating") for s in timer_sessions if s.get("focus_rating")]
+             if focus_ratings and PLOTLY_AVAILABLE:
+                 fig = px.histogram(x=focus_ratings, nbins=10, title="Focus Rating Distribution", labels={"x": "Focus Rating (1-10)", "y": "Sessions"}, color_discrete_sequence=["lightcoral"])
+                 fig.update_layout(height=300)
+                 _apply_chart_theme(fig)
+                 st.plotly_chart(fig, use_container_width=True)
+ 
+ 
+ # ==============================
+ #   Detailed Tables & Export
+ # ==============================
+ 
+ def _render_detailed_tables(analytics_data: Dict[str, Any]):
+     tab1, tab2, tab3 = st.tabs(["📅 Daily Metrics", "⏱️ Recent Sessions", "📋 Task Details"])
+ 
+     with tab1:
+-        daily_metrics = analytics_data.get("daily_metrics", [])
++        daily_metrics = _ensure_dict_list(analytics_data.get("daily_metrics", []))
+         if daily_metrics and PANDAS_AVAILABLE:
+             df = pd.DataFrame(daily_metrics).sort_values("date", ascending=False)
+             st.dataframe(df, use_container_width=True)
+         else:
+             st.info("No daily metrics available")
+ 
+     with tab2:
+-        timer_sessions = analytics_data.get("timer_sessions", [])
++        timer_sessions = _ensure_dict_list(analytics_data.get("timer_sessions", []))
+         if timer_sessions:
+             recent_sessions = timer_sessions[:10]
+             session_data = [{
+                 "Date": s.get("started_at", "")[:16],
+                 "Duration": f"{s.get('planned_duration_minutes', 0)}min",
+                 "Focus": f"{s.get('focus_rating', 'N/A')}/10",
+                 "Interruptions": s.get('interruptions_count', 0),
+                 "Task": s.get('task_reference', 'N/A'),
+             } for s in recent_sessions]
+             if PANDAS_AVAILABLE:
+                 st.dataframe(pd.DataFrame(session_data), use_container_width=True)
+             else:
+                 for session in session_data[:5]:
+                     st.json(session)
+         else:
+             st.info("No timer sessions available")
+ 
+     with tab3:
+-        tasks = analytics_data.get("tasks", [])
++        tasks = _ensure_dict_list(analytics_data.get("tasks", []))
+         if tasks:
+             rows = [{
+                 "Title": t.get("title", "Unknown"),
+                 "Status": t.get("status", "unknown"),
+                 "TDD Phase": t.get("tdd_phase", "unknown"),
+                 "Epic": t.get("epic_name", "Unknown"),
+                 "Estimate": f"{t.get('estimate_minutes', 0)}min",
+             } for t in tasks[:20]]
+             if PANDAS_AVAILABLE:
+                 st.dataframe(pd.DataFrame(rows), use_container_width=True)
+             else:
+                 for row in rows[:5]:
+                     st.json(row)
+         else:
+             st.info("No task data available")
+ 
+ 
+ def _export_analytics_data(analytics_data: Dict[str, Any], export_format: str):
+     try:
+         import io
+         import json
+ 
+         filename = f"tdd_analytics_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+         export_data = {
+             "export_timestamp": datetime.now().isoformat(),
+diff --git a/streamlit_extension/services/analytics_service.py b/streamlit_extension/services/analytics_service.py
+index 4b7d0e47e5afd3e3e0056e09ca47b046103400da..a49868d4342c02a5d274bede9c43ee560236eb53 100644
+--- a/streamlit_extension/services/analytics_service.py
++++ b/streamlit_extension/services/analytics_service.py
+@@ -1,49 +1,77 @@
+ """
+ 📊 Analytics Service Layer
+ 
+ Business logic for analytics, reporting, and metrics.
+ Provides insights into productivity, progress, and performance across the TDD framework.
+ """
+ 
+ from typing import Dict, List, Optional, Any, Tuple
+ from datetime import datetime, date, timedelta
+ import json
+ from collections import defaultdict
+ import statistics
++from dataclasses import asdict, is_dataclass
++from collections.abc import Iterable, Mapping
+ 
+ from .base import (
+     BaseService, ServiceResult, ServiceError, ServiceErrorType,
+     BaseRepository
+ )
+ from ..utils.database import DatabaseManager
+ from ..config.constants import TaskStatus, EpicStatus, ProjectStatus, TDDPhase
+ # Auth imports
+ from streamlit_extension.auth.middleware import require_auth, require_admin
+ from streamlit_extension.auth.user_model import UserRole
+ 
+ 
++def _ensure_dict_list(data: Any) -> List[Dict[str, Any]]:
++    """Ensure an iterable contains only dictionaries."""
++    if not data:
++        return []
++
++    try:
++        iterable = data if isinstance(data, Iterable) and not isinstance(data, (str, bytes, dict)) else list(data)
++    except Exception:
++        iterable = []
++
++    normalized: List[Dict[str, Any]] = []
++    for item in iterable:
++        if isinstance(item, dict):
++            normalized.append(item)
++        elif hasattr(item, "_asdict"):
++            normalized.append(item._asdict())
++        elif is_dataclass(item):
++            normalized.append(asdict(item))
++        elif isinstance(item, Mapping):
++            normalized.append(dict(item))
++        elif hasattr(item, "__dict__"):
++            normalized.append(vars(item))
++        elif isinstance(item, tuple):
++            normalized.append({f"field_{i}": v for i, v in enumerate(item)})
++    return normalized
++
+ class AnalyticsRepository(BaseRepository):
+     # Delegation to AnalyticsRepositoryDataaccess
+     def __init__(self):
+         self._analyticsrepositorydataaccess = AnalyticsRepositoryDataaccess()
+     # Delegation to AnalyticsRepositoryLogging
+     def __init__(self):
+         self._analyticsrepositorylogging = AnalyticsRepositoryLogging()
+     # Delegation to AnalyticsRepositoryErrorhandling
+     def __init__(self):
+         self._analyticsrepositoryerrorhandling = AnalyticsRepositoryErrorhandling()
+     # Delegation to AnalyticsRepositoryCalculation
+     def __init__(self):
+         self._analyticsrepositorycalculation = AnalyticsRepositoryCalculation()
+     # Delegation to AnalyticsRepositoryFormatting
+     def __init__(self):
+         self._analyticsrepositoryformatting = AnalyticsRepositoryFormatting()
+     """Repository for analytics data access operations."""
+     
+     def __init__(self, db_manager: DatabaseManager):
+         super().__init__(db_manager)
+     
+     def get_client_metrics(self, client_id: Optional[int] = None, days: int = 30) -> Dict[str, Any]:
+         """Get client-level metrics."""
+         try:
+             date_filter = datetime.now() - timedelta(days=days)
+@@ -52,299 +80,315 @@ class AnalyticsRepository(BaseRepository):
+                 where_clause = "WHERE c.id = ? AND p.created_at >= ?"
+                 params = [client_id, date_filter]
+             else:
+                 where_clause = "WHERE p.created_at >= ?"
+                 params = [date_filter]
+             
+             query = f"""
+                 SELECT 
+                     COUNT(DISTINCT c.id) as total_clients,
+                     COUNT(DISTINCT p.id) as total_projects,
+                     COUNT(DISTINCT e.id) as total_epics,
+                     COUNT(DISTINCT t.id) as total_tasks,
+                     SUM(CASE WHEN p.status = 'completed' THEN 1 ELSE 0 END) as completed_projects,
+                     SUM(CASE WHEN e.status = 'completed' THEN 1 ELSE 0 END) as completed_epics,
+                     SUM(CASE WHEN t.status = 'completed' THEN 1 ELSE 0 END) as completed_tasks,
+                     AVG(p.budget) as avg_project_budget,
+                     SUM(p.budget) as total_project_value
+                 FROM framework_clients c
+                 LEFT JOIN framework_projects p ON c.id = p.client_id
+                 LEFT JOIN framework_epics e ON p.id = e.project_id
+                 LEFT JOIN framework_tasks t ON e.id = t.epic_id
+                 {where_clause}
              """
              
-             st.markdown(toast_html, unsafe_allow_html=True)
+             result = self.db_manager.execute_query(query, params)
+-            return result[0] if result else {}
++            result_list = _ensure_dict_list(result)
++            return result_list[0] if result_list else {}
              
-             if notification.action_label and notification.action_callback:
-                 if st.button(notification.action_label, key=f"notif_action_{notification.timestamp}"):
-                     notification.action_callback()
- 
- 
- class QuickActionButton:
-     """Quick action buttons for common tasks."""
+         except Exception as e:
+             self.db_manager.logger.error(f"Error getting client metrics: {e}")
+             return {}
      
-     @staticmethod
-     def render(label: str, icon: str, callback: callable, 
-               color: str = "primary", disabled: bool = False,
-               tooltip: Optional[str] = None) -> bool:
+     def get_project_progress_metrics(self, project_id: Optional[int] = None) -> List[Dict[str, Any]]:
+         """Get project progress metrics."""
+         try:
+             if project_id:
+                 where_clause = "WHERE p.id = ?"
+                 params = [project_id]
+             else:
+                 where_clause = ""
+                 params = []
+             
+             query = f"""
+                 SELECT 
+                     p.id as project_id,
+                     p.name as project_name,
+                     p.status as project_status,
+                     c.name as client_name,
+                     COUNT(DISTINCT e.id) as total_epics,
+                     COUNT(DISTINCT t.id) as total_tasks,
+                     SUM(CASE WHEN e.status = 'completed' THEN 1 ELSE 0 END) as completed_epics,
+                     SUM(CASE WHEN t.status = 'completed' THEN 1 ELSE 0 END) as completed_tasks,
+                     AVG(CASE WHEN t.status = 'completed' THEN 100.0 ELSE 0.0 END) as completion_percentage,
+                     SUM(COALESCE(ws.total_time, 0)) as total_time_minutes,
+                     SUM(t.estimated_hours) as total_estimated_hours
+                 FROM framework_projects p
+                 LEFT JOIN framework_clients c ON p.client_id = c.id
+                 LEFT JOIN framework_epics e ON p.id = e.project_id
+                 LEFT JOIN framework_tasks t ON e.id = t.epic_id
+                 LEFT JOIN (
+                     SELECT task_id, SUM(duration_minutes) as total_time
+                     FROM work_sessions
+                     GROUP BY task_id
+                 ) ws ON t.id = ws.task_id
+                 {where_clause}
+                 GROUP BY p.id, p.name, p.status, c.name
+                 ORDER BY p.created_at DESC
+             """
+             
+-            return self.db_manager.execute_query(query, params)
++            result = self.db_manager.execute_query(query, params)
++            return _ensure_dict_list(result)
+             
+         except Exception as e:
+             self.db_manager.logger.error(f"Error getting project progress metrics: {e}")
+             return []
+     
+     def get_tdd_cycle_metrics(self, days: int = 30) -> Dict[str, Any]:
+         """Get TDD cycle completion metrics."""
+         try:
+             date_filter = datetime.now() - timedelta(days=days)
+             
+             # Tasks by TDD phase
+             phase_query = """
+                 SELECT 
+                     t.tdd_phase,
+                     COUNT(*) as task_count,
+                     AVG(COALESCE(ws.total_time, 0)) as avg_time_minutes
+                 FROM framework_tasks t
+                 LEFT JOIN (
+                     SELECT task_id, SUM(duration_minutes) as total_time
+                     FROM work_sessions
+                     GROUP BY task_id
+                 ) ws ON t.id = ws.task_id
+                 WHERE t.created_at >= ?
+                 GROUP BY t.tdd_phase
+             """
+             
+-            phase_results = self.db_manager.execute_query(phase_query, [date_filter])
++            phase_results = _ensure_dict_list(
++                self.db_manager.execute_query(phase_query, [date_filter])
++            )
+             
+             # TDD cycle completions (tasks that went through full RED -> GREEN -> REFACTOR)
+             cycle_query = """
+                 SELECT 
+                     COUNT(*) as completed_cycles,
+                     AVG(COALESCE(ws.total_time, 0)) as avg_cycle_time
+                 FROM framework_tasks t
+                 LEFT JOIN (
+                     SELECT task_id, SUM(duration_minutes) as total_time
+                     FROM work_sessions
+                     GROUP BY task_id
+                 ) ws ON t.id = ws.task_id
+                 WHERE t.status = 'completed' 
+                 AND t.tdd_phase = 'refactor'
+                 AND t.created_at >= ?
+             """
+             
+-            cycle_results = self.db_manager.execute_query(cycle_query, [date_filter])
++            cycle_results = _ensure_dict_list(
++                self.db_manager.execute_query(cycle_query, [date_filter])
++            )
+             
+             return {
+                 'phase_distribution': {row['tdd_phase']: row['task_count'] for row in phase_results},
+                 'phase_avg_times': {row['tdd_phase']: row['avg_time_minutes'] for row in phase_results},
+                 'completed_cycles': cycle_results[0]['completed_cycles'] if cycle_results else 0,
+                 'avg_cycle_time': cycle_results[0]['avg_cycle_time'] if cycle_results else 0
+             }
+             
+         except Exception as e:
+             self.db_manager.logger.error(f"Error getting TDD cycle metrics: {e}")
+             return {}
+     
+     def get_productivity_metrics(self, days: int = 30) -> Dict[str, Any]:
+         """Get productivity and time tracking metrics."""
+         try:
+             date_filter = datetime.now() - timedelta(days=days)
+             
+             # Daily productivity
+             daily_query = """
+                 SELECT 
+                     DATE(ws.start_time) as work_date,
+                     COUNT(DISTINCT ws.task_id) as tasks_worked,
+                     COUNT(ws.id) as total_sessions,
+                     SUM(ws.duration_minutes) as total_minutes,
+                     AVG(ws.duration_minutes) as avg_session_minutes
+                 FROM work_sessions ws
+                 WHERE ws.start_time >= ?
+                 GROUP BY DATE(ws.start_time)
+                 ORDER BY work_date DESC
+             """
+             
+-            daily_results = self.db_manager.execute_query(daily_query, [date_filter])
++            daily_results = _ensure_dict_list(
++                self.db_manager.execute_query(daily_query, [date_filter])
++            )
+             
+             # Focus patterns (sessions by hour of day)
+             focus_query = """
+                 SELECT 
+                     CAST(strftime('%H', ws.start_time) AS INTEGER) as hour_of_day,
+                     COUNT(*) as session_count,
+                     SUM(ws.duration_minutes) as total_minutes,
+                     AVG(ws.duration_minutes) as avg_session_minutes
+                 FROM work_sessions ws
+                 WHERE ws.start_time >= ?
+                 GROUP BY hour_of_day
+                 ORDER BY hour_of_day
+             """
+             
+-            focus_results = self.db_manager.execute_query(focus_query, [date_filter])
++            focus_results = _ensure_dict_list(
++                self.db_manager.execute_query(focus_query, [date_filter])
++            )
+             
+             # Estimate accuracy
+             accuracy_query = """
+                 SELECT 
+                     t.estimated_hours,
+                     COALESCE(ws.total_time, 0) / 60.0 as actual_hours,
+                     ABS(t.estimated_hours - COALESCE(ws.total_time, 0) / 60.0) as variance_hours
+                 FROM framework_tasks t
+                 LEFT JOIN (
+                     SELECT task_id, SUM(duration_minutes) as total_time
+                     FROM work_sessions
+                     GROUP BY task_id
+                 ) ws ON t.id = ws.task_id
+                 WHERE t.estimated_hours IS NOT NULL 
+                 AND t.estimated_hours > 0
+                 AND t.created_at >= ?
+             """
+             
+-            accuracy_results = self.db_manager.execute_query(accuracy_query, [date_filter])
++            accuracy_results = _ensure_dict_list(
++                self.db_manager.execute_query(accuracy_query, [date_filter])
++            )
+             
+             return {
+                 'daily_productivity': daily_results,
+                 'focus_patterns': focus_results,
+                 'estimate_accuracy': accuracy_results
+             }
+             
+         except Exception as e:
+             self.db_manager.logger.error(f"Error getting productivity metrics: {e}")
+             return {}
+     
+     def get_gamification_metrics(self, days: int = 30) -> Dict[str, Any]:
+         """Get gamification and achievement metrics."""
+         try:
+             date_filter = datetime.now() - timedelta(days=days)
+             
+             # Epic completion and points
+             epic_query = """
+                 SELECT 
+                     e.difficulty,
+                     e.priority,
+                     e.points,
+                     e.status,
+                     COUNT(t.id) as total_tasks,
+                     SUM(CASE WHEN t.status = 'completed' THEN 1 ELSE 0 END) as completed_tasks,
+                     SUM(COALESCE(ws.total_time, 0)) as total_time_minutes
+                 FROM framework_epics e
+                 LEFT JOIN framework_tasks t ON e.id = t.epic_id
+                 LEFT JOIN (
+                     SELECT task_id, SUM(duration_minutes) as total_time
+                     FROM work_sessions
+                     GROUP BY task_id
+                 ) ws ON t.id = ws.task_id
+                 WHERE e.created_at >= ?
+                 GROUP BY e.id, e.difficulty, e.priority, e.points, e.status
+             """
+             
+-            epic_results = self.db_manager.execute_query(epic_query, [date_filter])
++            epic_results = _ensure_dict_list(
++                self.db_manager.execute_query(epic_query, [date_filter])
++            )
+             
+             # Calculate points earned and achievements
+-            total_points = sum(row['points'] or 0 for row in epic_results if row['status'] == 'completed')
++            total_points = sum(row.get('points') or 0 for row in epic_results if row.get('status') == 'completed')
+             
+             # Difficulty distribution
+             difficulty_dist = defaultdict(int)
+             for row in epic_results:
+-                difficulty_dist[row['difficulty']] += 1
++                difficulty_dist[row.get('difficulty')] += 1
+             
+             # Priority completion rates
+             priority_completion = defaultdict(lambda: {'total': 0, 'completed': 0})
+             for row in epic_results:
+-                priority = row['priority']
++                priority = row.get('priority')
+                 priority_completion[priority]['total'] += 1
+-                if row['status'] == 'completed':
++                if row.get('status') == 'completed':
+                     priority_completion[priority]['completed'] += 1
+             
+             return {
+                 'total_points_earned': total_points,
+                 'difficulty_distribution': dict(difficulty_dist),
+                 'priority_completion_rates': dict(priority_completion),
+                 'epic_metrics': epic_results
+             }
+             
+         except Exception as e:
+             self.db_manager.logger.error(f"Error getting gamification metrics: {e}")
+             return {}
+ 
+ 
+ class AnalyticsService(BaseService):
+     """Service for analytics and reporting operations."""
+     
+     def __init__(self, db_manager: DatabaseManager):
+         self.repository = AnalyticsRepository(db_manager)
+         super().__init__(self.repository)
+     
+     def get_dashboard_summary(self, days: int = 30) -> ServiceResult[Dict[str, Any]]:
          """
-         Render a quick action button.
+         Get comprehensive dashboard summary metrics.
          
          Args:
-             label: Button label
-             icon: Icon/emoji for the button
-             callback: Function to call on click
-             color: Button color theme
-             disabled: Whether button is disabled
+             days: Number of days to include in metrics
+             
+         Returns:
+             ServiceResult with dashboard summary data
+         """
+         self.log_operation("get_dashboard_summary", days=days)
+         
+         try:
+             # Validate input
+             if days < 1 or days > 365:
+                 return ServiceResult.validation_error("Days must be between 1 and 365", "days")
+             
+             # Get all metrics
+             client_metrics = self.repository.get_client_metrics(days=days)
+-            project_metrics = self.repository.get_project_progress_metrics()
++            project_metrics = _ensure_dict_list(
++                self.repository.get_project_progress_metrics()
++            )
+             tdd_metrics = self.repository.get_tdd_cycle_metrics(days=days)
+             productivity_metrics = self.repository.get_productivity_metrics(days=days)
+             gamification_metrics = self.repository.get_gamification_metrics(days=days)
+             
+             # Calculate derived metrics
+             completion_rates = self._calculate_completion_rates(client_metrics)
+             productivity_trends = self._analyze_productivity_trends(productivity_metrics)
+             tdd_effectiveness = self._analyze_tdd_effectiveness(tdd_metrics)
+             
+             summary = {
+                 'period_days': days,
+                 # usar UTC para relatórios consistentes
+                 'generated_at': datetime.utcnow().isoformat() + "Z",
+                 'overview': {
+                     'total_clients': client_metrics.get('total_clients', 0),
+                     'total_projects': client_metrics.get('total_projects', 0),
+                     'total_epics': client_metrics.get('total_epics', 0),
+                     'total_tasks': client_metrics.get('total_tasks', 0),
+                     'total_project_value': client_metrics.get('total_project_value', 0)
+                 },
+                 'completion_rates': completion_rates,
+                 'productivity': productivity_trends,
+                 'tdd_effectiveness': tdd_effectiveness,
+                 'gamification': {
+                     'points_earned': gamification_metrics.get('total_points_earned', 0),
+@@ -353,87 +397,91 @@ class AnalyticsService(BaseService):
+                 },
+                 'projects': project_metrics[:10]  # Top 10 projects
+             }
+             
+             return ServiceResult.ok(summary)
+             
+         except Exception as e:
+             logger.warning("Operation failed: %s", str(e))
+     
+     def get_client_analytics(self, client_id: int, days: int = 30) -> ServiceResult[Dict[str, Any]]:
+         """
+         Get analytics for a specific client.
+         
+         Args:
+             client_id: Client ID
+             days: Number of days to include
+             
+         Returns:
+             ServiceResult with client analytics
+         """
+         self.log_operation("get_client_analytics", client_id=client_id, days=days)
+         
+         try:
+             # Get client-specific metrics
+             client_metrics = self.repository.get_client_metrics(client_id=client_id, days=days)
+-            project_metrics = self.repository.get_project_progress_metrics()
++            project_metrics = _ensure_dict_list(
++                self.repository.get_project_progress_metrics()
++            )
+             
+             # Filter projects for this client
+             client_projects = [
+                 p for p in project_metrics 
+                 if p.get('client_name') == client_metrics.get('client_name')
+             ]
+             
+             analytics = {
+                 'client_id': client_id,
+                 'period_days': days,
+                 'metrics': client_metrics,
+                 'projects': client_projects,
+                 'performance_summary': self._calculate_client_performance(client_projects),
+                 'recommendations': self._generate_client_recommendations(client_projects)
+             }
+             
+             return ServiceResult.ok(analytics)
+             
+         except Exception as e:
+             logger.warning("Operation failed: %s", str(e))
+     
+     def get_project_analytics(self, project_id: int) -> ServiceResult[Dict[str, Any]]:
+         """
+         Get analytics for a specific project.
+         
+         Args:
+             project_id: Project ID
+             
+         Returns:
+             ServiceResult with project analytics
+         """
+         self.log_operation("get_project_analytics", project_id=project_id)
+         
+         try:
+             # Get project-specific metrics
+-            project_metrics = self.repository.get_project_progress_metrics(project_id=project_id)
++            project_metrics = _ensure_dict_list(
++                self.repository.get_project_progress_metrics(project_id=project_id)
++            )
+             
+             if not project_metrics:
+                 return ServiceResult.not_found("Project", project_id)
+             
+             project = project_metrics[0]
+             
+             # Calculate project-specific analytics
+             analytics = {
+                 'project_id': project_id,
+                 'project_info': project,
+                 'progress_analysis': self._analyze_project_progress(project),
+                 'time_analysis': self._analyze_project_time(project),
+                 'risk_assessment': self._assess_project_risks(project),
+                 'recommendations': self._generate_project_recommendations(project)
+             }
+             
+             return ServiceResult.ok(analytics)
+             
+         except Exception as e:
+             logger.warning("Operation failed: %s", str(e))
+     
+     def get_productivity_report(self, days: int = 30) -> ServiceResult[Dict[str, Any]]:
+         """
+         Get comprehensive productivity report.
+         
  
 EOF
 )

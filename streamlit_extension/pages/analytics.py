@@ -23,6 +23,8 @@ import time
 from typing import Dict, Any, List, Optional
 from datetime import datetime, timedelta
 from collections import defaultdict
+from dataclasses import asdict, is_dataclass
+from collections.abc import Mapping
 
 # --- Graceful imports ---------------------------------------------------------
 try:
@@ -210,12 +212,46 @@ def cached_analytics_data(ttl=300):
 #   Data Access & Optimization
 # ==============================
 
+def _ensure_dict_list(data: Any) -> List[Dict[str, Any]]:
+    """Ensure an iterable contains only dictionaries."""
+    if not data:
+        return []
+    try:
+        iterable = data if isinstance(data, list) else list(data)
+    except Exception:
+        iterable = []
+    normalized: List[Dict[str, Any]] = []
+    for item in iterable:
+        if isinstance(item, dict):
+            normalized.append(item)
+        elif hasattr(item, "_asdict"):
+            normalized.append(item._asdict())
+        elif is_dataclass(item):
+            normalized.append(asdict(item))
+        elif isinstance(item, Mapping):
+            normalized.append(dict(item))
+        elif hasattr(item, "__dict__"):
+            normalized.append(vars(item))
+        elif isinstance(item, tuple):
+            normalized.append({f"field_{i}": v for i, v in enumerate(item)})
+    return normalized
+
 def _normalize_user_stats(raw_stats: Any) -> Dict[str, Any]:
     """Normaliza user_stats para dict, evitando erros do tipo 'List argument must consist only of dictionaries'."""
     if isinstance(raw_stats, dict):
         return raw_stats
-    if isinstance(raw_stats, list) and raw_stats and isinstance(raw_stats[0], dict):
-        return raw_stats[0]
+    if isinstance(raw_stats, list) and raw_stats:
+        item = raw_stats[0]
+        if isinstance(item, dict):
+            return item
+        if hasattr(item, "_asdict"):
+            return item._asdict()
+        if is_dataclass(item):
+            return asdict(item)
+        if isinstance(item, Mapping):
+            return dict(item)
+        if hasattr(item, "__dict__"):
+            return vars(item)
     return {}
 
 def optimize_database_queries(db_manager: "DatabaseManager", days: int, filters: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
@@ -234,7 +270,9 @@ def optimize_database_queries(db_manager: "DatabaseManager", days: int, filters:
 
         with spinner_ctx:
             # --- Sessions -----------------------------------------------------
-            sessions = db_manager.get_timer_sessions(days)  # type: ignore[arg-type]
+            sessions = _ensure_dict_list(
+                db_manager.get_timer_sessions(days)  # type: ignore[arg-type]
+            )
             if filters:
                 fr = filters.get("focus_range")
                 if fr and fr != (1, 10):
@@ -247,8 +285,8 @@ def optimize_database_queries(db_manager: "DatabaseManager", days: int, filters:
             query_results["timer_sessions"] = sessions
 
             # --- Tasks / Epics ------------------------------------------------
-            tasks = db_manager.get_tasks()
-            epics = db_manager.get_epics()
+            tasks = _ensure_dict_list(db_manager.get_tasks())
+            epics = _ensure_dict_list(db_manager.get_epics())
             if filters:
                 selected_epics = set(filters.get("selected_epics") or [])
                 if selected_epics:
@@ -270,9 +308,9 @@ def optimize_database_queries(db_manager: "DatabaseManager", days: int, filters:
         if STREAMLIT_AVAILABLE:
             st.error(f"Database query optimization failed: {e}")
         return {
-            "timer_sessions": db_manager.get_timer_sessions(days),  # type: ignore[arg-type]
-            "tasks": db_manager.get_tasks(),
-            "epics": db_manager.get_epics(),
+            "timer_sessions": _ensure_dict_list(db_manager.get_timer_sessions(days)),  # type: ignore[arg-type]
+            "tasks": _ensure_dict_list(db_manager.get_tasks()),
+            "epics": _ensure_dict_list(db_manager.get_epics()),
             "user_stats": _normalize_user_stats(db_manager.get_user_stats()),
         }
 
@@ -1116,7 +1154,7 @@ def _render_detailed_tables(analytics_data: Dict[str, Any]):
     tab1, tab2, tab3 = st.tabs(["📅 Daily Metrics", "⏱️ Recent Sessions", "📋 Task Details"])
 
     with tab1:
-        daily_metrics = analytics_data.get("daily_metrics", [])
+        daily_metrics = _ensure_dict_list(analytics_data.get("daily_metrics", []))
         if daily_metrics and PANDAS_AVAILABLE:
             df = pd.DataFrame(daily_metrics).sort_values("date", ascending=False)
             st.dataframe(df, use_container_width=True)
@@ -1124,7 +1162,7 @@ def _render_detailed_tables(analytics_data: Dict[str, Any]):
             st.info("No daily metrics available")
 
     with tab2:
-        timer_sessions = analytics_data.get("timer_sessions", [])
+        timer_sessions = _ensure_dict_list(analytics_data.get("timer_sessions", []))
         if timer_sessions:
             recent_sessions = timer_sessions[:10]
             session_data = [{
@@ -1143,7 +1181,7 @@ def _render_detailed_tables(analytics_data: Dict[str, Any]):
             st.info("No timer sessions available")
 
     with tab3:
-        tasks = analytics_data.get("tasks", [])
+        tasks = _ensure_dict_list(analytics_data.get("tasks", []))
         if tasks:
             rows = [{
                 "Title": t.get("title", "Unknown"),

@@ -10,6 +10,8 @@ from datetime import datetime, date, timedelta
 import json
 from collections import defaultdict
 import statistics
+from dataclasses import asdict, is_dataclass
+from collections.abc import Iterable, Mapping
 
 from .base import (
     BaseService, ServiceResult, ServiceError, ServiceErrorType,
@@ -21,6 +23,32 @@ from ..config.constants import TaskStatus, EpicStatus, ProjectStatus, TDDPhase
 from streamlit_extension.auth.middleware import require_auth, require_admin
 from streamlit_extension.auth.user_model import UserRole
 
+
+def _ensure_dict_list(data: Any) -> List[Dict[str, Any]]:
+    """Ensure an iterable contains only dictionaries."""
+    if not data:
+        return []
+
+    try:
+        iterable = data if isinstance(data, Iterable) and not isinstance(data, (str, bytes, dict)) else list(data)
+    except Exception:
+        iterable = []
+
+    normalized: List[Dict[str, Any]] = []
+    for item in iterable:
+        if isinstance(item, dict):
+            normalized.append(item)
+        elif hasattr(item, "_asdict"):
+            normalized.append(item._asdict())
+        elif is_dataclass(item):
+            normalized.append(asdict(item))
+        elif isinstance(item, Mapping):
+            normalized.append(dict(item))
+        elif hasattr(item, "__dict__"):
+            normalized.append(vars(item))
+        elif isinstance(item, tuple):
+            normalized.append({f"field_{i}": v for i, v in enumerate(item)})
+    return normalized
 
 class AnalyticsRepository(BaseRepository):
     # Delegation to AnalyticsRepositoryDataaccess
@@ -74,7 +102,8 @@ class AnalyticsRepository(BaseRepository):
             """
             
             result = self.db_manager.execute_query(query, params)
-            return result[0] if result else {}
+            result_list = _ensure_dict_list(result)
+            return result_list[0] if result_list else {}
             
         except Exception as e:
             self.db_manager.logger.error(f"Error getting client metrics: {e}")
@@ -117,7 +146,8 @@ class AnalyticsRepository(BaseRepository):
                 ORDER BY p.created_at DESC
             """
             
-            return self.db_manager.execute_query(query, params)
+            result = self.db_manager.execute_query(query, params)
+            return _ensure_dict_list(result)
             
         except Exception as e:
             self.db_manager.logger.error(f"Error getting project progress metrics: {e}")
@@ -144,7 +174,9 @@ class AnalyticsRepository(BaseRepository):
                 GROUP BY t.tdd_phase
             """
             
-            phase_results = self.db_manager.execute_query(phase_query, [date_filter])
+            phase_results = _ensure_dict_list(
+                self.db_manager.execute_query(phase_query, [date_filter])
+            )
             
             # TDD cycle completions (tasks that went through full RED -> GREEN -> REFACTOR)
             cycle_query = """
@@ -162,7 +194,9 @@ class AnalyticsRepository(BaseRepository):
                 AND t.created_at >= ?
             """
             
-            cycle_results = self.db_manager.execute_query(cycle_query, [date_filter])
+            cycle_results = _ensure_dict_list(
+                self.db_manager.execute_query(cycle_query, [date_filter])
+            )
             
             return {
                 'phase_distribution': {row['tdd_phase']: row['task_count'] for row in phase_results},
@@ -194,7 +228,9 @@ class AnalyticsRepository(BaseRepository):
                 ORDER BY work_date DESC
             """
             
-            daily_results = self.db_manager.execute_query(daily_query, [date_filter])
+            daily_results = _ensure_dict_list(
+                self.db_manager.execute_query(daily_query, [date_filter])
+            )
             
             # Focus patterns (sessions by hour of day)
             focus_query = """
@@ -209,7 +245,9 @@ class AnalyticsRepository(BaseRepository):
                 ORDER BY hour_of_day
             """
             
-            focus_results = self.db_manager.execute_query(focus_query, [date_filter])
+            focus_results = _ensure_dict_list(
+                self.db_manager.execute_query(focus_query, [date_filter])
+            )
             
             # Estimate accuracy
             accuracy_query = """
@@ -228,7 +266,9 @@ class AnalyticsRepository(BaseRepository):
                 AND t.created_at >= ?
             """
             
-            accuracy_results = self.db_manager.execute_query(accuracy_query, [date_filter])
+            accuracy_results = _ensure_dict_list(
+                self.db_manager.execute_query(accuracy_query, [date_filter])
+            )
             
             return {
                 'daily_productivity': daily_results,
@@ -266,22 +306,24 @@ class AnalyticsRepository(BaseRepository):
                 GROUP BY e.id, e.difficulty, e.priority, e.points, e.status
             """
             
-            epic_results = self.db_manager.execute_query(epic_query, [date_filter])
+            epic_results = _ensure_dict_list(
+                self.db_manager.execute_query(epic_query, [date_filter])
+            )
             
             # Calculate points earned and achievements
-            total_points = sum(row['points'] or 0 for row in epic_results if row['status'] == 'completed')
+            total_points = sum(row.get('points') or 0 for row in epic_results if row.get('status') == 'completed')
             
             # Difficulty distribution
             difficulty_dist = defaultdict(int)
             for row in epic_results:
-                difficulty_dist[row['difficulty']] += 1
+                difficulty_dist[row.get('difficulty')] += 1
             
             # Priority completion rates
             priority_completion = defaultdict(lambda: {'total': 0, 'completed': 0})
             for row in epic_results:
-                priority = row['priority']
+                priority = row.get('priority')
                 priority_completion[priority]['total'] += 1
-                if row['status'] == 'completed':
+                if row.get('status') == 'completed':
                     priority_completion[priority]['completed'] += 1
             
             return {
@@ -322,7 +364,9 @@ class AnalyticsService(BaseService):
             
             # Get all metrics
             client_metrics = self.repository.get_client_metrics(days=days)
-            project_metrics = self.repository.get_project_progress_metrics()
+            project_metrics = _ensure_dict_list(
+                self.repository.get_project_progress_metrics()
+            )
             tdd_metrics = self.repository.get_tdd_cycle_metrics(days=days)
             productivity_metrics = self.repository.get_productivity_metrics(days=days)
             gamification_metrics = self.repository.get_gamification_metrics(days=days)
@@ -375,7 +419,9 @@ class AnalyticsService(BaseService):
         try:
             # Get client-specific metrics
             client_metrics = self.repository.get_client_metrics(client_id=client_id, days=days)
-            project_metrics = self.repository.get_project_progress_metrics()
+            project_metrics = _ensure_dict_list(
+                self.repository.get_project_progress_metrics()
+            )
             
             # Filter projects for this client
             client_projects = [
@@ -411,7 +457,9 @@ class AnalyticsService(BaseService):
         
         try:
             # Get project-specific metrics
-            project_metrics = self.repository.get_project_progress_metrics(project_id=project_id)
+            project_metrics = _ensure_dict_list(
+                self.repository.get_project_progress_metrics(project_id=project_id)
+            )
             
             if not project_metrics:
                 return ServiceResult.not_found("Project", project_id)
