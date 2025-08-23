@@ -151,6 +151,12 @@ def render_current_page(user: Dict[str, Any]) -> None:
         return
 
     try:
+        # Check for login page via query params first
+        query_params = st.query_params or {}
+        if query_params.get("page") == "login":
+            _render_login_page()
+            return
+        
         current_page = (get_current_page() or "Dashboard").strip()  # robusto a None/"" 
         add_to_page_history(current_page)
 

@@ -9,21 +9,23 @@ Visual project timeline and scheduling:
 - Resource allocation views
 """
 
+from __future__ import annotations
+
 import sys
 from pathlib import Path
 from typing import Dict, Any, List, Optional
 from datetime import datetime, timedelta
 
-# Add parent directory to path
-sys.path.append(str(Path(__file__).parent.parent.parent))
+# --- Path bootstrap (apenas para execução direta fora do Streamlit) -----------
+sys.path.append(str(Path(__file__).resolve().parents[2]))
 
-# Graceful imports
+# --- Imports tolerantes --------------------------------------------------------
 try:
     import streamlit as st
     STREAMLIT_AVAILABLE = True
 except ImportError:
-    STREAMLIT_AVAILABLE = False
-    st = None
+    STREAMLIT_AVAILABLE = False  # type: ignore
+    st = None  # type: ignore
 
 try:
     import plotly.express as px
@@ -32,818 +34,581 @@ try:
     import plotly.figure_factory as ff
     PLOTLY_AVAILABLE = True
 except ImportError:
-    PLOTLY_AVAILABLE = False
-    px = go = make_subplots = ff = None
+    PLOTLY_AVAILABLE = False  # type: ignore
+    px = go = make_subplots = ff = None  # type: ignore
 
 try:
     import pandas as pd
     PANDAS_AVAILABLE = True
 except ImportError:
-    PANDAS_AVAILABLE = False
-    pd = None
+    PANDAS_AVAILABLE = False  # type: ignore
+    pd = None  # type: ignore
 
-# Local imports
+# --- Dependências locais -------------------------------------------------------
 try:
-    from streamlit_extension.utils.database import DatabaseManager
+    # Config & DB (usar assinatura consistente com Analytics)
     from streamlit_extension.config import load_config
+    from streamlit_extension.utils.database import DatabaseManager
     from streamlit_extension.utils.security import (
-        create_safe_client, sanitize_display, validate_form, check_rate_limit,
-        security_manager
+        check_rate_limit,  # pode ser None em fallback
     )
-    # Import authentication middleware
-    from streamlit_extension.auth.middleware import init_protected_page
-    DATABASE_UTILS_AVAILABLE = True
+    from streamlit_extension.utils.exception_handler import (
+        handle_streamlit_exceptions,
+        streamlit_error_boundary,
+        safe_streamlit_operation,
+        get_error_statistics,
+    )
+    DB_STACK_AVAILABLE = True
 except ImportError:
-    DatabaseManager = load_config = None
-    create_safe_client = sanitize_display = validate_form = None
-    check_rate_limit = security_manager = None
-    init_protected_page = None
-    DATABASE_UTILS_AVAILABLE = False
+    load_config = DatabaseManager = None  # type: ignore
+    handle_streamlit_exceptions = lambda **_: (  # type: ignore
+        (lambda f: f) if STREAMLIT_AVAILABLE else (lambda f: f)
+    )
+    def streamlit_error_boundary(_name: str):  # type: ignore
+        def _decorator(fn):
+            def _inner(*a, **k):
+                return fn(*a, **k)
+            return _inner
+        return _decorator
+    def safe_streamlit_operation(fn, *a, default_return=None, **k):  # type: ignore
+        try:
+            return fn(*a, **k)
+        except Exception:
+            return default_return
+    def get_error_statistics():  # type: ignore
+        return {"errors": []}
+    check_rate_limit = None  # type: ignore
+    DB_STACK_AVAILABLE = False
 
+# --- Autenticação -------------------------------------------------------------
+# Import absoluto (corrige erro crítico do relatório):
 try:
-    from gantt_tracker import GanttTracker
+    from streamlit_extension.auth.middleware import init_protected_page, require_auth
+except ImportError:
+    # Fallback seguro em desenvolvimento: mantém página acessível
+    def init_protected_page(title: str, *, layout: str = "wide") -> None:
+        st.set_page_config(page_title=title, layout=layout)
+
+    def require_auth(role: Optional[str] = None):  # type: ignore
+        def _decorator(fn):
+            def _inner(*args, **kwargs):
+                # Em produção real, este fallback não deve ser usado.
+                return fn(*args, **kwargs)
+            return _inner
+        return _decorator
+
+# --- (Opcional) Gantt tracker especializado -----------------------------------
+try:
+    from gantt_tracker import GanttTracker  # type: ignore
     GANTT_TRACKER_AVAILABLE = True
 except ImportError:
-    GanttTracker = None
     GANTT_TRACKER_AVAILABLE = False
+    GanttTracker = None  # type: ignore
 
-from streamlit_extension.utils.exception_handler import (
-    handle_streamlit_exceptions,
-    streamlit_error_boundary,
-    safe_streamlit_operation,
-    get_error_statistics,
-)
 
-# DRY Chart Components - Reusable visualization components
-class DRYChartComponents:
-    """Reusable chart and filter components for Gantt views."""
-    
-    @staticmethod
-    def render_view_selector(label: str = "View Mode", options: list = None, 
-                           default_index: int = 0, session_key: str = None):
-        """Render standardized view mode selector."""
-        if options is None:
-            options = ["Epic View", "Task View", "Combined View"]
-        
-        view_mode = st.sidebar.selectbox(label, options, index=default_index)
-        if session_key:
-            st.session_state[session_key] = view_mode
-        return view_mode
-    
-    @staticmethod  
-    def render_time_range_selector(label: str = "Time Range", 
-                                 session_key: str = None):
-        """Render standardized time range selector with custom date support."""
-        time_options = ["Last 30 days", "Last 90 days", "All time", "Custom range"]
-        time_range = st.sidebar.selectbox(label, time_options, index=1)
-        
-        if session_key:
-            st.session_state[f"{session_key}_range"] = time_range
-        
-        # Handle custom range
-        if time_range == "Custom range":
-            col1, col2 = st.sidebar.columns(2)
-            with col1:
-                start_date = st.date_input("Start Date", 
-                                         value=datetime.now() - timedelta(days=90))
-            with col2:
-                end_date = st.date_input("End Date", 
-                                       value=datetime.now() + timedelta(days=30))
-            
-            if session_key:
-                st.session_state[f"{session_key}_custom_start"] = start_date
-                st.session_state[f"{session_key}_custom_end"] = end_date
-            
-            return time_range, start_date, end_date
-        
-        return time_range, None, None
-    
-    @staticmethod
-    def render_chart_settings_section(title: str = "📊 Chart Settings"):
-        """Render standardized chart settings section header."""
-        st.sidebar.markdown(f"## {title}")
-    
-    @staticmethod
-    def render_filter_options(filters: dict, session_prefix: str = "gantt"):
-        """Render standardized filter options for charts."""
-        for filter_name, filter_config in filters.items():
-            options = filter_config.get("options", [])
-            default_index = filter_config.get("default", 0)
-            label = filter_config.get("label", filter_name.title())
-            
-            value = st.sidebar.selectbox(label, options, index=default_index)
-            st.session_state[f"{session_prefix}_{filter_name}"] = value
+# ==============================================================================
+# Página
+# ==============================================================================
 
+@require_auth()
 @handle_streamlit_exceptions(show_error=True, attempt_recovery=True)
-def render_gantt_page():
-    """Render the Gantt chart page."""
+def render_gantt_page() -> Optional[Dict[str, Any]]:
+    """Entrada principal da página Gantt."""
     if not STREAMLIT_AVAILABLE:
         return {"error": "Streamlit not available"}
-    
-    # Initialize protected page with authentication
-    current_user = init_protected_page("📊 Gantt Chart - Project Timeline")
-    if not current_user:
-        return {"error": "Authentication required"}
-    
-    # Check rate limit for page load
-    page_rate_allowed, page_rate_error = check_rate_limit("page_load") if check_rate_limit else (True, None)
-    if not page_rate_allowed:
-        st.error(f"🚦 {page_rate_error}")
-        st.info("Please wait before reloading the page.")
-        return {"error": "Rate limited"}
-    
-    st.markdown("---")
-    
-    # Check dependencies
-    missing_deps = []
-    if not PLOTLY_AVAILABLE:
-        missing_deps.append("plotly")
-    if not DATABASE_UTILS_AVAILABLE:
-        missing_deps.append("database utilities")
-    
-    if missing_deps:
-        st.error(f"❌ Missing dependencies: {', '.join(missing_deps)}")
-        st.info("Install with: `pip install plotly`")
-        return
-    
-    # Initialize database manager
-    with streamlit_error_boundary("database_initialization"):
-        config = safe_streamlit_operation(
-            load_config,
-            default_return=None,
-            operation_name="load_config",
-        )
-        if config is None:
-            st.error("❌ Configuration loading failed")
-            return
 
-        db_manager = safe_streamlit_operation(
-            DatabaseManager,
-            str(config.get_database_path()),
-            default_return=None,
-            operation_name="database_manager_init",
-        )
-        if db_manager is None:
-            st.error("❌ Database connection failed")
-            return
-    
-    # Sidebar controls
-    _render_sidebar_controls()
-    
-    # Load data
+    init_protected_page("📊 Gantt Chart - Project Timeline", layout="wide")
+    st.title("📊 Gantt Chart - Project Timeline")
+    st.markdown("---")
+
+    if not _check_dependencies():
+        return {"error": "Missing dependencies"}
+
+    if not _check_rate_limit("page_load"):
+        return {"error": "Rate limited"}
+
+    db = _init_db()
+    if not db:
+        return {"error": "DB unavailable"}
+
+    _render_sidebar()
+
     with streamlit_error_boundary("gantt_data_loading"):
         with st.spinner("Loading project data..."):
-            gantt_data = _get_gantt_data(db_manager)
-    
-    if not gantt_data or not gantt_data.get("tasks"):
+            data = _load_gantt_data(db)
+
+    if not data or not data.get("tasks"):
         st.warning("📝 No project data available for timeline view.")
-        _render_data_setup_help()
-        return
-    
-    # Render main Gantt chart
+        _render_setup_help()
+        return {"warning": "no_data"}
+
     with streamlit_error_boundary("gantt_chart_rendering"):
-        _render_gantt_chart(gantt_data)
-    
+        _render_gantt(data)
+
     st.markdown("---")
-    
-    # Render additional views
     col1, col2 = st.columns(2)
-    
     with col1:
         with streamlit_error_boundary("epic_timeline"):
-            _render_epic_timeline(gantt_data)
-
+            _render_epic_cards(data)
     with col2:
-        with streamlit_error_boundary("milestone_tracker"):
-            _render_milestone_tracker(gantt_data)
-    
-    # Detailed tables
+        with streamlit_error_boundary("milestones"):
+            _render_milestones(data)
+
     with st.expander("📋 Detailed Timeline Data"):
         with streamlit_error_boundary("timeline_tables"):
-            _render_timeline_tables(gantt_data)
+            _render_tables(data)
 
     if st.session_state.get("show_debug_info", False):
         with st.expander("🔧 Error Statistics", expanded=False):
             st.json(get_error_statistics())
+    return data
 
 
-def _render_sidebar_controls():
-    """Render sidebar controls for Gantt chart customization using DRY components."""
-    
-    # Using DRY chart components
-    DRYChartComponents.render_chart_settings_section("📊 Chart Settings")
-    
-    # View mode with DRY component
-    view_mode = DRYChartComponents.render_view_selector(
-        "View Mode",
-        ["Epic View", "Task View", "Combined View"],
-        default_index=2,  # Default to Combined
-        session_key="gantt_view_mode"
-    )
-    
-    # Time range with DRY component
-    time_result = DRYChartComponents.render_time_range_selector(
-        "Time Range",
-        session_key="gantt"
-    )
-    
-    if len(time_result) == 3:
-        time_range, start_date, end_date = time_result
-        # Custom dates are automatically stored in session state by DRY component
-    else:
-        time_range = time_result
-    
-    # Display options
-    st.sidebar.markdown("## 🎨 Display Options")
-    
-    st.session_state.gantt_show_progress = st.sidebar.checkbox(
-        "Show Progress Bars", 
-        value=st.session_state.get("gantt_show_progress", True)
-    )
-    
-    st.session_state.gantt_show_milestones = st.sidebar.checkbox(
-        "Show Milestones", 
-        value=st.session_state.get("gantt_show_milestones", True)
-    )
-    
-    st.session_state.gantt_color_by = st.sidebar.selectbox(
-        "Color By",
-        ["Epic", "Status", "TDD Phase", "Priority"],
-        index=0
-    )
-    
-    # Grouping options
-    st.sidebar.markdown("## 📁 Grouping")
-    
-    st.session_state.gantt_group_by = st.sidebar.selectbox(
-        "Group Tasks By",
-        ["Epic", "Status", "TDD Phase", "None"],
-        index=0
-    )
+# ==============================================================================
+# UI Helpers
+# ==============================================================================
+
+def _check_dependencies() -> bool:
+    missing = []
+    if not PLOTLY_AVAILABLE:
+        missing.append("plotly")
+    if not DB_STACK_AVAILABLE:
+        missing.append("database utils")
+    if missing:
+        st.error(f"❌ Missing dependencies: {', '.join(missing)}")
+        st.info("Install with: `pip install plotly pandas`")
+        return False
+    return True
 
 
-def _get_gantt_data(db_manager: DatabaseManager) -> Dict[str, Any]:
-    """Get data for Gantt chart visualization."""
-    
-    # Try to use existing gantt_tracker first
-    if GANTT_TRACKER_AVAILABLE:
-        data = safe_streamlit_operation(
-            lambda: GanttTracker().generate_gantt_data(),
+def _check_rate_limit(bucket: str) -> bool:
+    allowed, err = (check_rate_limit(bucket) if check_rate_limit else (True, None))
+    if not allowed:
+        st.error(f"🚦 {err}")
+        st.info("Please wait before reloading the page.")
+        return False
+    return True
+
+
+def _init_db() -> Optional[DatabaseManager]:  # type: ignore[name-defined]
+    """Inicializa DatabaseManager com assinatura alinhada ao Analytics."""
+    with streamlit_error_boundary("database_initialization"):
+        cfg = safe_streamlit_operation(load_config, default_return=None, operation_name="load_config")
+        if not cfg:
+            st.error("❌ Configuration loading failed")
+            return None
+        db = safe_streamlit_operation(
+            DatabaseManager,
+            framework_db_path=str(cfg.get_database_path()),
+            timer_db_path=str(cfg.get_timer_database_path()),
             default_return=None,
-            operation_name="gantt_tracker_generate",
+            operation_name="database_manager_init",
         )
-        if data is not None:
+        if not db:
+            st.error("❌ Database connection failed")
+        return db
+
+
+def _render_sidebar() -> None:
+    st.sidebar.markdown("## 📊 Chart Settings")
+
+    st.session_state.gantt_view_mode = st.sidebar.selectbox(
+        "View Mode", ["Epic View", "Task View", "Combined View"], index=2
+    )
+
+    st.sidebar.markdown("## 🎨 Display")
+    st.session_state.gantt_show_progress = st.sidebar.checkbox(
+        "Show Progress Bars", value=st.session_state.get("gantt_show_progress", True)
+    )
+    st.session_state.gantt_show_milestones = st.sidebar.checkbox(
+        "Show Milestones", value=st.session_state.get("gantt_show_milestones", True)
+    )
+    st.session_state.gantt_color_by = st.sidebar.selectbox(
+        "Color By", ["Epic", "Status", "TDD Phase", "Priority"], index=0
+    )
+
+    st.sidebar.markdown("## 📁 Grouping")
+    st.session_state.gantt_group_by = st.sidebar.selectbox(
+        "Group Tasks By", ["Epic", "Status", "TDD Phase", "None"], index=0
+    )
+
+
+# ==============================================================================
+# Data
+# ==============================================================================
+
+def _load_gantt_data(db) -> Dict[str, Any]:
+    """Carrega dados via GanttTracker (se disponível) ou via DB."""
+    if GANTT_TRACKER_AVAILABLE:
+        data = safe_streamlit_operation(lambda: GanttTracker().generate_gantt_data(), default_return=None)
+        if data:
             return data
         st.warning("⚠️ Gantt tracker failed. Using database fallback.")
-    
-    # Fallback to database queries
-    # Check rate limit for database read
-    db_read_allowed, db_read_error = check_rate_limit("db_read") if check_rate_limit else (True, None)
-    if not db_read_allowed:
-        st.error(f"🚦 Database {db_read_error}")
-        return {"error": "Database rate limited"}
-    
-    epics = db_manager.get_epics()
-    tasks = db_manager.get_tasks()
-    
-    # Process data for Gantt chart
-    gantt_tasks = []
-    
-    for task in tasks:
-        # Calculate dates
-        start_date = _parse_date(task.get("created_at"))
-        end_date = _parse_date(task.get("completed_at"))
-        
-        # If task is not completed, estimate end date
-        if not end_date:
-            estimate_minutes = task.get("estimate_minutes", 60)
-            if start_date:
-                end_date = start_date + timedelta(minutes=estimate_minutes)
-            else:
-                start_date = datetime.now()
-                end_date = start_date + timedelta(minutes=estimate_minutes)
-        
-        # Calculate progress
-        progress = _calculate_task_progress(task)
-        
+
+    if not _check_rate_limit("db_read"):
+        return {"tasks": [], "epics": []}
+
+    epics = db.get_epics()
+    tasks = db.get_tasks()
+
+    gantt_tasks: List[Dict[str, Any]] = []
+    for t in tasks:
+        start = _parse_date(t.get("created_at"))
+        end = _parse_date(t.get("completed_at"))
+
+        if not end:
+            est = t.get("estimate_minutes", 60) or 60
+            start = start or datetime.now()
+            end = start + timedelta(minutes=est)
+
         gantt_tasks.append({
-            "id": task.get("id"),
-            "title": task.get("title", "Untitled Task"),
-            "epic_name": task.get("epic_name", "No Epic"),
-            "epic_key": task.get("epic_key", ""),
-            "status": task.get("status", "todo"),
-            "tdd_phase": task.get("tdd_phase", ""),
-            "priority": task.get("priority", 2),
-            "start_date": start_date,
-            "end_date": end_date,
-            "progress": progress,
-            "estimate_minutes": task.get("estimate_minutes", 60),
-            "description": task.get("description", "")
+            "id": t.get("id"),
+            "title": t.get("title", "Untitled Task"),
+            "epic_name": t.get("epic_name", "No Epic"),
+            "status": (t.get("status") or "todo").lower(),
+            "tdd_phase": (t.get("tdd_phase") or "").lower(),
+            "priority": t.get("priority", 2),
+            "start_date": start,
+            "end_date": end,
+            "progress": _progress_from_status(t.get("status")),
+            "estimate_minutes": t.get("estimate_minutes", 60),
+            "description": t.get("description", ""),
         })
-    
-    # Process epics
-    gantt_epics = []
-    for epic in epics:
-        # Get tasks for this epic
-        epic_tasks = [t for t in gantt_tasks if t["epic_name"] == epic.get("name")]
-        
-        if epic_tasks:
-            # Calculate epic timeline from tasks
-            start_dates = [t["start_date"] for t in epic_tasks if t["start_date"]]
-            end_dates = [t["end_date"] for t in epic_tasks if t["end_date"]]
-            
-            epic_start = min(start_dates) if start_dates else datetime.now()
-            epic_end = max(end_dates) if end_dates else datetime.now()
-            
-            # Calculate epic progress
-            epic_progress = _calculate_epic_progress(epic, epic_tasks)
-            
-            gantt_epics.append({
-                "id": epic.get("id"),
-                "name": epic.get("name", "Untitled Epic"),
-                "epic_key": epic.get("epic_key", ""),
-                "status": epic.get("status", "planning"),
-                "start_date": epic_start,
-                "end_date": epic_end,
-                "progress": epic_progress,
-                "points_earned": epic.get("points_earned", 0),
-                "task_count": len(epic_tasks)
-            })
-    
-    return {
-        "tasks": gantt_tasks,
-        "epics": gantt_epics,
-        "generated_at": datetime.now()
-    }
+
+    gantt_epics: List[Dict[str, Any]] = []
+    for e in epics:
+        e_tasks = [x for x in gantt_tasks if x["epic_name"] == e.get("name")]
+        if not e_tasks:
+            continue
+
+        e_start = min([x["start_date"] for x in e_tasks if x["start_date"]], default=datetime.now())
+        e_end = max([x["end_date"] for x in e_tasks if x["end_date"]], default=datetime.now())
+
+        gantt_epics.append({
+            "id": e.get("id"),
+            "name": e.get("name", "Untitled Epic"),
+            "status": (e.get("status") or "planning").lower(),
+            "start_date": e_start,
+            "end_date": e_end,
+            "progress": sum(x["progress"] for x in e_tasks) / max(len(e_tasks), 1),
+            "points_earned": e.get("points_earned", 0),
+            "task_count": len(e_tasks),
+        })
+
+    return {"tasks": gantt_tasks, "epics": gantt_epics, "generated_at": datetime.now()}
 
 
-def _render_gantt_chart(gantt_data: Dict[str, Any]):
-    """Render the main Gantt chart."""
-    
-    st.markdown("### 📊 Project Timeline")
-    
-    view_mode = st.session_state.get("gantt_view_mode", "Combined View")
-    
-    if view_mode == "Epic View":
-        _render_epic_gantt(gantt_data["epics"])
-    elif view_mode == "Task View":
-        _render_task_gantt(gantt_data["tasks"])
-    else:  # Combined View
-        _render_combined_gantt(gantt_data)
+# ==============================================================================
+# Render
+# ==============================================================================
+
+def _render_gantt(data: Dict[str, Any]) -> None:
+    st.markdown("### 🗂️ Project Timeline")
+
+    mode = st.session_state.get("gantt_view_mode", "Combined View")
+    if mode == "Epic View":
+        _render_epic_gantt(data["epics"])
+    elif mode == "Task View":
+        _render_task_gantt(data["tasks"])
+    else:
+        _render_combined_gantt(data)
 
 
-def _render_epic_gantt(epics: List[Dict[str, Any]]):
-    """Render Gantt chart for epics only."""
-    
-    if not epics or not PLOTLY_AVAILABLE:
+def _render_epic_gantt(epics: List[Dict[str, Any]]) -> None:
+    if not (epics and PLOTLY_AVAILABLE and PANDAS_AVAILABLE):
         st.info("No epic data available for timeline view")
         return
-    
-    # Prepare data for Plotly
-    df_data = []
-    for epic in epics:
-        df_data.append({
-            "Task": epic["name"],
-            "Start": epic["start_date"],
-            "Finish": epic["end_date"],
-            "Resource": epic["status"],
-            "Progress": epic["progress"],
-            "Description": f"Tasks: {epic['task_count']}, Points: {epic['points_earned']}"
-        })
-    
-    if PANDAS_AVAILABLE and df_data:
-        df = pd.DataFrame(df_data)
-        
-        # Create Gantt chart using plotly figure_factory
-        with streamlit_error_boundary("epic_gantt_rendering"):
-            fig = safe_streamlit_operation(
-                ff.create_gantt,
-                df,
-                colors=_get_status_colors(),
-                index_col="Resource",
-                show_colorbar=True,
-                group_tasks=True,
-                showgrid_x=True,
-                showgrid_y=True,
-                title="Epic Timeline",
-                default_return=None,
-                operation_name="create_epic_gantt",
-            )
 
-            if fig:
-                fig.update_layout(
-                    height=max(400, len(epics) * 40),
-                    xaxis_title="Timeline",
-                    yaxis_title="Epics",
-                )
+    df = pd.DataFrame([{
+        "Task": e["name"],
+        "Start": e["start_date"],
+        "Finish": e["end_date"],
+        "Resource": e["status"],
+        "Progress": e["progress"],
+        "Description": f"Tasks: {e['task_count']}, Points: {e['points_earned']}",
+    } for e in epics])
 
-                st.plotly_chart(fig, use_container_width=True)
-            else:
-                _render_fallback_timeline(epics, "Epic")
+    fig = safe_streamlit_operation(
+        ff.create_gantt, df,
+        colors=_status_colors(),
+        index_col="Resource",
+        show_colorbar=True,
+        group_tasks=True,
+        showgrid_x=True,
+        showgrid_y=True,
+        title="Epic Timeline",
+        default_return=None,
+    )
+    if fig:
+        fig.update_layout(
+            height=max(400, len(epics) * 40),
+            xaxis_title="Timeline",
+            yaxis_title="Epics",
+        )
+        st.plotly_chart(fig, use_container_width=True)
+    else:
+        _render_fallback_list(epics, "Epic")
 
 
-def _render_task_gantt(tasks: List[Dict[str, Any]]):
-    """Render Gantt chart for tasks only."""
-    
-    if not tasks or not PLOTLY_AVAILABLE:
+def _render_task_gantt(tasks: List[Dict[str, Any]]) -> None:
+    if not (tasks and PLOTLY_AVAILABLE and PANDAS_AVAILABLE):
         st.info("No task data available for timeline view")
         return
-    
-    # Limit to recent tasks to avoid overcrowding
-    recent_tasks = sorted(tasks, key=lambda x: x["start_date"], reverse=True)[:20]
-    
-    # Prepare data
-    df_data = []
+
+    recent = sorted(tasks, key=lambda x: x["start_date"], reverse=True)[:20]
     color_by = st.session_state.get("gantt_color_by", "Epic")
-    
-    for task in recent_tasks:
-        color_value = task.get(color_by.lower().replace(" ", "_"), "Unknown")
-        
-        df_data.append({
-            "Task": task["title"][:30] + ("..." if len(task["title"]) > 30 else ""),
-            "Start": task["start_date"],
-            "Finish": task["end_date"],
-            "Resource": str(color_value),
-            "Progress": task["progress"],
-            "Description": f"Epic: {task['epic_name']}, Status: {task['status']}"
-        })
-    
-    if PANDAS_AVAILABLE and df_data:
-        df = pd.DataFrame(df_data)
+    key = color_by.lower().replace(" ", "_")
 
-        with streamlit_error_boundary("task_gantt_rendering"):
-            colors = safe_streamlit_operation(
-                _get_dynamic_colors,
-                color_by,
-                [task[color_by.lower().replace(" ", "_")] for task in recent_tasks],
-                default_return={},
-                operation_name="get_dynamic_colors",
-            )
+    df = pd.DataFrame([{
+        "Task": (t["title"][:30] + "...") if len(t["title"]) > 30 else t["title"],
+        "Start": t["start_date"],
+        "Finish": t["end_date"],
+        "Resource": str(t.get(key, "Unknown")),
+        "Progress": t["progress"],
+        "Description": f"Epic: {t['epic_name']}, Status: {t['status']}",
+    } for t in recent])
 
-            fig = safe_streamlit_operation(
-                ff.create_gantt,
-                df,
-                colors=colors,
-                index_col="Resource",
-                show_colorbar=True,
-                group_tasks=True,
-                showgrid_x=True,
-                showgrid_y=True,
-                title=f"Task Timeline (Recent 20, Colored by {color_by})",
-                default_return=None,
-                operation_name="create_task_gantt",
-            )
-
-            if fig:
-                fig.update_layout(
-                    height=max(600, len(recent_tasks) * 25),
-                    xaxis_title="Timeline",
-                    yaxis_title="Tasks",
-                )
-
-                st.plotly_chart(fig, use_container_width=True)
-            else:
-                _render_fallback_timeline(recent_tasks, "Task")
+    colors = _dynamic_colors([t.get(key, "Unknown") for t in recent])
+    fig = safe_streamlit_operation(
+        ff.create_gantt, df,
+        colors=colors,
+        index_col="Resource",
+        show_colorbar=True,
+        group_tasks=True,
+        showgrid_x=True,
+        showgrid_y=True,
+        title=f"Task Timeline (Recent 20, Colored by {color_by})",
+        default_return=None,
+    )
+    if fig:
+        fig.update_layout(
+            height=max(600, len(recent) * 25),
+            xaxis_title="Timeline",
+            yaxis_title="Tasks",
+        )
+        st.plotly_chart(fig, use_container_width=True)
+    else:
+        _render_fallback_list(recent, "Task")
 
 
-def _render_combined_gantt(gantt_data: Dict[str, Any]):
-    """Render combined view with epics and key tasks."""
-    
-    if not PLOTLY_AVAILABLE:
-        st.info("Combined view requires Plotly")
+def _render_combined_gantt(data: Dict[str, Any]) -> None:
+    if not (PLOTLY_AVAILABLE and PANDAS_AVAILABLE):
+        st.info("Combined view requires Plotly + Pandas")
         return
-    
-    epics = gantt_data["epics"]
-    tasks = gantt_data["tasks"]
-    
-    # Combine epics and priority tasks
-    combined_data = []
-    
-    # Add epics
-    for epic in epics:
-        combined_data.append({
-            "Task": f"📊 {epic['name']}",
-            "Start": epic["start_date"],
-            "Finish": epic["end_date"],
+
+    epics, tasks = data["epics"], data["tasks"]
+    combined: List[Dict[str, Any]] = []
+
+    for e in epics:
+        combined.append({
+            "Task": f"📊 {e['name']}",
+            "Start": e["start_date"],
+            "Finish": e["end_date"],
             "Resource": "Epic",
-            "Progress": epic["progress"],
+            "Progress": e["progress"],
             "Type": "Epic",
-            "Description": f"Epic: {epic['task_count']} tasks, {epic['points_earned']} points"
+            "Description": f"{e['task_count']} tasks • {e['points_earned']} pts",
         })
-    
-    # Add high-priority or in-progress tasks
-    priority_tasks = [t for t in tasks if t["priority"] == 1 or t["status"] == "in_progress"]
-    priority_tasks = sorted(priority_tasks, key=lambda x: (x["priority"], x["start_date"]))[:10]
-    
-    for task in priority_tasks:
-        combined_data.append({
-            "Task": f"   └─ {task['title'][:25]}{'...' if len(task['title']) > 25 else ''}",
-            "Start": task["start_date"],
-            "Finish": task["end_date"],
-            "Resource": task["status"],
-            "Progress": task["progress"],
+
+    prio = [t for t in tasks if t["priority"] == 1 or t["status"] == "in_progress"]
+    prio = sorted(prio, key=lambda x: (x["priority"], x["start_date"]))[:10]
+    for t in prio:
+        combined.append({
+            "Task": f"   └─ {t['title'][:25]}{'...' if len(t['title']) > 25 else ''}",
+            "Start": t["start_date"],
+            "Finish": t["end_date"],
+            "Resource": t["status"],
+            "Progress": t["progress"],
             "Type": "Task",
-            "Description": f"Task: {task['epic_name']}, {task['status']}"
+            "Description": f"{t['epic_name']} • {t['status']}",
         })
-    
-    if PANDAS_AVAILABLE and combined_data:
-        df = pd.DataFrame(combined_data)
 
-        with streamlit_error_boundary("combined_gantt_rendering"):
-            colors = {
-                "Epic": "#1f77b4",
-                "todo": "#ff7f0e",
-                "in_progress": "#ffbb78",
-                "completed": "#2ca02c",
-            }
+    df = pd.DataFrame(combined)
+    colors = {"Epic": "#1f77b4", "todo": "#ff7f0e", "in_progress": "#ffbb78", "completed": "#2ca02c"}
 
-            fig = safe_streamlit_operation(
-                ff.create_gantt,
-                df,
-                colors=colors,
-                index_col="Resource",
-                show_colorbar=True,
-                group_tasks=True,
-                showgrid_x=True,
-                showgrid_y=True,
-                title="Combined Project Timeline (Epics + Priority Tasks)",
-                default_return=None,
-                operation_name="create_combined_gantt",
-            )
-
-            if fig:
-                fig.update_layout(
-                    height=max(500, len(combined_data) * 30),
-                    xaxis_title="Timeline",
-                    yaxis_title="Project Items",
-                )
-
-                st.plotly_chart(fig, use_container_width=True)
-            else:
-                _render_fallback_combined_timeline(gantt_data)
+    fig = safe_streamlit_operation(
+        ff.create_gantt, df,
+        colors=colors,
+        index_col="Resource",
+        show_colorbar=True,
+        group_tasks=True,
+        showgrid_x=True,
+        showgrid_y=True,
+        title="Combined Project Timeline (Epics + Priority Tasks)",
+        default_return=None,
+    )
+    if fig:
+        fig.update_layout(
+            height=max(500, len(combined) * 30),
+            xaxis_title="Timeline",
+            yaxis_title="Items",
+        )
+        st.plotly_chart(fig, use_container_width=True)
+    else:
+        _render_fallback_combined(data)
 
 
-def _render_epic_timeline(gantt_data: Dict[str, Any]):
-    """Render simplified epic timeline view."""
-    
+def _render_epic_cards(data: Dict[str, Any]) -> None:
     st.markdown("### 📋 Epic Timeline Overview")
-    
-    epics = gantt_data["epics"]
+    epics = data.get("epics", [])
     if not epics:
         st.info("No epics available")
         return
-    
-    for epic in epics[:5]:  # Show top 5 epics
-        with st.container():
-            col1, col2, col3 = st.columns([3, 1, 1])
-            
-            with col1:
-                st.markdown(f"**{epic['name']}**")
-                progress = epic["progress"]
-                st.progress(progress / 100)
-                
-                # Timeline info
-                duration = epic["end_date"] - epic["start_date"]
-                st.caption(f"Duration: {duration.days} days")
-            
-            with col2:
-                st.metric("Progress", f"{progress:.0f}%")
-                st.caption(f"Status: {epic['status']}")
-            
-            with col3:
-                st.metric("Tasks", epic["task_count"])
-                st.metric("Points", epic["points_earned"])
+
+    for e in epics[:5]:
+        col1, col2, col3 = st.columns([3, 1, 1])
+        with col1:
+            st.markdown(f"**{e['name']}**")
+            st.progress(min(max(e["progress"] / 100, 0), 1))
+            duration = e["end_date"] - e["start_date"]
+            st.caption(f"Duration: {duration.days} days")
+        with col2:
+            st.metric("Progress", f"{e['progress']:.0f}%")
+            st.caption(f"Status: {e['status']}")
+        with col3:
+            st.metric("Tasks", e["task_count"])
+            st.metric("Points", e["points_earned"])
 
 
-def _render_milestone_tracker(gantt_data: Dict[str, Any]):
-    """Render milestone tracking."""
-    
+def _render_milestones(data: Dict[str, Any]) -> None:
     st.markdown("### 🎯 Milestones & Deadlines")
-    
-    # Calculate milestones from epics
-    epics = gantt_data["epics"]
-    milestones = []
-    
-    for epic in epics:
-        if epic["status"] == "completed":
-            milestones.append({
-                "name": f"✅ {epic['name']} Completed",
-                "date": epic["end_date"],
-                "type": "completed",
-                "description": f"{epic['task_count']} tasks, {epic['points_earned']} points"
-            })
+    items = []
+    for e in data.get("epics", []):
+        if e["status"] == "completed":
+            items.append({"name": f"✅ {e['name']} Completed", "date": e["end_date"], "type": "done",
+                          "description": f"{e['task_count']} tasks • {e['points_earned']} pts"})
         else:
-            milestones.append({
-                "name": f"🎯 {epic['name']} Target",
-                "date": epic["end_date"],
-                "type": "upcoming",
-                "description": f"Target completion date"
-            })
-    
-    # Sort by date
-    milestones.sort(key=lambda x: x["date"])
-    
-    if milestones:
-        for milestone in milestones[:8]:  # Show top 8 milestones
-            date_str = milestone["date"].strftime("%Y-%m-%d")
-            days_diff = (milestone["date"] - datetime.now()).days
-            
-            if days_diff < 0:
-                date_info = f"{abs(days_diff)} days ago"
-                status_color = "🟢"
-            elif days_diff == 0:
-                date_info = "Today"
-                status_color = "🟡"
-            else:
-                date_info = f"In {days_diff} days"
-                status_color = "🔴" if days_diff <= 7 else "🔵"
-            
-            with st.container():
-                col1, col2 = st.columns([3, 1])
-                
-                with col1:
-                    st.markdown(f"{status_color} **{milestone['name']}**")
-                    st.caption(milestone["description"])
-                
-                with col2:
-                    st.markdown(f"**{date_str}**")
-                    st.caption(date_info)
-    else:
+            items.append({"name": f"🎯 {e['name']} Target", "date": e["end_date"], "type": "upcoming",
+                          "description": "Target completion date"})
+    items.sort(key=lambda x: x["date"])
+
+    if not items:
         st.info("No milestones available")
+        return
+
+    today = datetime.now()
+    for m in items[:8]:
+        diff = (m["date"] - today).days
+        status = "🟢" if diff < 0 else ("🟡" if diff == 0 else ("🔴" if diff <= 7 else "🔵"))
+        col1, col2 = st.columns([3, 1])
+        with col1:
+            st.markdown(f"{status} **{m['name']}**")
+            st.caption(m["description"])
+        with col2:
+            st.markdown(f"**{m['date'].strftime('%Y-%m-%d')}**")
+            st.caption("Today" if diff == 0 else (f"In {diff} days" if diff > 0 else f"{abs(diff)} days ago"))
 
 
-def _render_timeline_tables(gantt_data: Dict[str, Any]):
-    """Render detailed timeline tables."""
-    
+def _render_tables(data: Dict[str, Any]) -> None:
     tab1, tab2 = st.tabs(["📊 Epic Timeline", "📋 Task Timeline"])
-    
     with tab1:
-        epics = gantt_data["epics"]
+        epics = data.get("epics", [])
         if epics and PANDAS_AVAILABLE:
-            epic_df = pd.DataFrame([
-                {
-                    "Epic": epic["name"],
-                    "Status": epic["status"],
-                    "Start": epic["start_date"].strftime("%Y-%m-%d"),
-                    "End": epic["end_date"].strftime("%Y-%m-%d"),
-                    "Progress": f"{epic['progress']:.1f}%",
-                    "Tasks": epic["task_count"],
-                    "Points": epic["points_earned"]
-                }
-                for epic in epics
-            ])
-            st.dataframe(epic_df, use_container_width=True)
+            df = pd.DataFrame([{
+                "Epic": e["name"],
+                "Status": e["status"],
+                "Start": e["start_date"].strftime("%Y-%m-%d"),
+                "End": e["end_date"].strftime("%Y-%m-%d"),
+                "Progress": f"{e['progress']:.1f}%",
+                "Tasks": e["task_count"],
+                "Points": e["points_earned"],
+            } for e in epics])
+            st.dataframe(df, use_container_width=True)
         else:
             st.info("No epic timeline data available")
-    
     with tab2:
-        tasks = gantt_data["tasks"][:20]  # Limit to recent 20 tasks
+        tasks = data.get("tasks", [])[:20]
         if tasks and PANDAS_AVAILABLE:
-            task_df = pd.DataFrame([
-                {
-                    "Task": task["title"],
-                    "Epic": task["epic_name"],
-                    "Status": task["status"],
-                    "TDD Phase": task["tdd_phase"] or "N/A",
-                    "Start": task["start_date"].strftime("%Y-%m-%d"),
-                    "End": task["end_date"].strftime("%Y-%m-%d"),
-                    "Progress": f"{task['progress']:.1f}%",
-                    "Estimate": f"{task['estimate_minutes']}min"
-                }
-                for task in tasks
-            ])
-            st.dataframe(task_df, use_container_width=True)
+            df = pd.DataFrame([{
+                "Task": t["title"],
+                "Epic": t["epic_name"],
+                "Status": t["status"],
+                "TDD Phase": t["tdd_phase"] or "N/A",
+                "Start": t["start_date"].strftime("%Y-%m-%d"),
+                "End": t["end_date"].strftime("%Y-%m-%d"),
+                "Progress": f"{t['progress']:.1f}%",
+                "Estimate": f"{t['estimate_minutes']}min",
+            } for t in tasks])
+            st.dataframe(df, use_container_width=True)
         else:
             st.info("No task timeline data available")
 
 
-def _render_data_setup_help():
-    """Render help for setting up timeline data."""
-    
-    st.info("""
-    📋 **Timeline Setup Help**
-    
-    To see project timelines, you need:
-    1. **Epics** with tasks assigned
-    2. **Tasks** with creation dates
-    3. **Time estimates** for better planning
-    
-    **Quick Start:**
-    - Create epics in your epics/ directory
-    - Add tasks with estimates
-    - Use the timer to track actual progress
-    """)
-    
+def _render_setup_help() -> None:
+    st.info(
+        "📋 **Timeline Setup Help**\n\n"
+        "To see project timelines, you need:\n"
+        "1) Epics with tasks • 2) Tasks with creation dates • 3) Time estimates\n\n"
+        "**Quick Start:** Create epics → add tasks → track with timer."
+    )
     if st.button("🔄 Refresh Data"):
-        # Check rate limit for form submission
-        rate_allowed, rate_error = check_rate_limit("form_submit") if check_rate_limit else (True, None)
-        if not rate_allowed:
-            st.error(f"🚦 {rate_error}")
-            return
-        
-        st.rerun()
+        if _check_rate_limit("form_submit"):
+            st.rerun()
 
 
-def _render_fallback_timeline(items: List[Dict[str, Any]], item_type: str):
-    """Render fallback timeline view when Gantt chart fails."""
-    
-    st.markdown(f"### 📋 {item_type} Timeline (Simplified)")
-    
-    for item in items[:10]:  # Show top 10 items
-        name = item.get("name", item.get("title", "Unknown"))
-        start_date = item["start_date"].strftime("%Y-%m-%d")
-        end_date = item["end_date"].strftime("%Y-%m-%d")
-        progress = item.get("progress", 0)
-        
-        with st.container():
-            col1, col2, col3 = st.columns([2, 1, 1])
-            
-            with col1:
-                st.markdown(f"**{name}**")
-                st.progress(progress / 100)
-            
-            with col2:
-                st.markdown(f"**Start:** {start_date}")
-                st.markdown(f"**End:** {end_date}")
-            
-            with col3:
-                st.metric("Progress", f"{progress:.0f}%")
+def _render_fallback_list(items: List[Dict[str, Any]], label: str) -> None:
+    st.markdown(f"### 📋 {label} Timeline (Simplified)")
+    for it in items[:10]:
+        name = it.get("name", it.get("title", "Unknown"))
+        start = it["start_date"].strftime("%Y-%m-%d")
+        end = it["end_date"].strftime("%Y-%m-%d")
+        progress = max(0.0, min(100.0, it.get("progress", 0.0)))
+        col1, col2, col3 = st.columns([2, 1, 1])
+        with col1:
+            st.markdown(f"**{name}**")
+            st.progress(progress / 100)
+        with col2:
+            st.markdown(f"**Start:** {start}")
+            st.markdown(f"**End:** {end}")
+        with col3:
+            st.metric("Progress", f"{progress:.0f}%")
 
 
-def _render_fallback_combined_timeline(gantt_data: Dict[str, Any]):
-    """Render fallback combined timeline."""
-    
+def _render_fallback_combined(data: Dict[str, Any]) -> None:
     st.markdown("### 📊 Combined Timeline (Simplified)")
-    
-    # Show epics first
-    epics = gantt_data["epics"][:3]  # Top 3 epics
-    tasks = gantt_data["tasks"][:5]  # Top 5 tasks
-    
     st.markdown("#### 📊 Epics")
-    for epic in epics:
+    for e in data.get("epics", [])[:3]:
         col1, col2 = st.columns([3, 1])
         with col1:
-            st.markdown(f"**{epic['name']}**")
-            st.progress(epic["progress"] / 100)
+            st.markdown(f"**{e['name']}**")
+            st.progress(e["progress"] / 100)
         with col2:
-            st.metric("Tasks", epic["task_count"])
-    
+            st.metric("Tasks", e["task_count"])
     st.markdown("#### 📋 Priority Tasks")
-    for task in tasks:
+    for t in data.get("tasks", [])[:5]:
         col1, col2 = st.columns([3, 1])
         with col1:
-            st.markdown(f"**{task['title']}**")
-            st.caption(f"Epic: {task['epic_name']}")
+            st.markdown(f"**{t['title']}**")
+            st.caption(f"Epic: {t['epic_name']}")
         with col2:
-            st.metric("Status", task["status"])
+            st.metric("Status", t["status"])
 
 
-# Helper functions
+# ==============================================================================
+# Utilitários
+# ==============================================================================
 
-def _parse_date(date_string: Optional[str]) -> Optional[datetime]:
-    """Parse date string into datetime object."""
-    if not date_string:
+def _parse_date(s: Optional[str]) -> Optional[datetime]:
+    if not s:
         return None
-    
-    formats = [
-        "%Y-%m-%d %H:%M:%S",
-        "%Y-%m-%dT%H:%M:%S",
-        "%Y-%m-%d",
-        "%Y/%m/%d",
-        "%m/%d/%Y"
-    ]
-
-    for fmt in formats:
+    for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%dT%H:%M:%S", "%Y-%m-%d", "%Y/%m/%d", "%m/%d/%Y"):
         try:
-            return datetime.strptime(date_string, fmt)
+            return datetime.strptime(s, fmt)
         except ValueError:
             continue
     return None
 
 
-def _calculate_task_progress(task: Dict[str, Any]) -> float:
-    """Calculate task progress percentage."""
-    status = task.get("status", "todo")
-    
-    if status == "completed":
+def _progress_from_status(status: Optional[str]) -> float:
+    s = (status or "todo").lower()
+    if s == "completed":
         return 100.0
-    elif status == "in_progress":
+    if s == "in_progress":
         return 50.0
-    else:
-        return 0.0
+    return 0.0
 
 
-def _calculate_epic_progress(epic: Dict[str, Any], epic_tasks: List[Dict[str, Any]]) -> float:
-    """Calculate epic progress from its tasks."""
-    if not epic_tasks:
-        return 0.0
-    
-    total_progress = sum(task["progress"] for task in epic_tasks)
-    return total_progress / len(epic_tasks)
-
-
-def _get_status_colors() -> Dict[str, str]:
-    """Get color mapping for status values."""
+def _status_colors() -> Dict[str, str]:
     return {
         "planning": "#FFA500",
         "active": "#1E90FF",
@@ -851,21 +616,21 @@ def _get_status_colors() -> Dict[str, str]:
         "on_hold": "#FFD700",
         "cancelled": "#DC143C",
         "todo": "#FF7F50",
-        "in_progress": "#FFD700"
+        "in_progress": "#FFD700",
+        "Epic": "#1f77b4",
     }
 
 
-def _get_dynamic_colors(color_by: str, values: List[Any]) -> Dict[str, str]:
-    """Generate dynamic color mapping based on unique values."""
-    unique_values = list(set(str(v) for v in values))
-    colors = ["#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd", "#8c564b", "#e377c2", "#7f7f7f"]
-    
-    color_map = {}
-    for i, value in enumerate(unique_values):
-        color_map[value] = colors[i % len(colors)]
-    
-    return color_map
+def _dynamic_colors(values: List[Any]) -> Dict[str, str]:
+    palette = ["#1f77b4", "#ff7f0e", "#2ca02c", "#d62728",
+               "#9467bd", "#8c564b", "#e377c2", "#7f7f7f"]
+    uniq = list(dict.fromkeys([str(v) for v in values]))  # preserva ordem
+    return {val: palette[i % len(palette)] for i, val in enumerate(uniq)}
 
+
+# ==============================================================================
+# Main
+# ==============================================================================
 
 if __name__ == "__main__":
     render_gantt_page()

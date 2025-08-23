@@ -47,6 +47,12 @@ def render_sidebar(user_id: int = 1) -> Dict[str, Any]:
             except ImportError:
                 st.error("Navigation not available")
         
+        # Add login link
+        if st.button("🔐 Login", use_container_width=True):
+            st.query_params.clear()
+            st.query_params["page"] = "login"
+            st.rerun()
+        
         st.markdown("---")
         
         # Basic timer controls (placeholder for now)

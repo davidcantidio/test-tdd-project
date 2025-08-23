@@ -1,30 +1,36 @@
+# streamlit_extension/pages/analytics.py
 """
-📊 Analytics Dashboard Page
+📊 Analytics Dashboard Page (refatorado)
 
-Displays comprehensive analytics and metrics for TDD development:
-- Productivity metrics and trends
-- Focus time analysis
-- TDAH-specific insights
-- Epic and task completion statistics
-- Performance over time
+Exibe métricas e análises para TDD:
+- Produtividade, foco e tendências
+- Insights específicos para TDAH
+- Progresso por épico e tarefas
+- Export CSV/JSON/Excel
+
+Correções aplicadas:
+- Remoção de sys.path hack
+- Decorators no‑op seguros quando ausentes (evita crash em import)
+- Normalização de user_stats (dict/list → dict)
+- Filtros aplicados em memória em optimize_database_queries
+- Tema gráfico por sidebar (chart_settings.theme)
+- Padrões de auth e init_protected_page consistentes
 """
 
-import sys
+from __future__ import annotations
+
 import time
-from pathlib import Path
 from typing import Dict, Any, List, Optional
 from datetime import datetime, timedelta
+from collections import defaultdict
 
-# Add parent directory to path
-sys.path.append(str(Path(__file__).parent.parent.parent))
-
-# Graceful imports
+# --- Graceful imports ---------------------------------------------------------
 try:
     import streamlit as st
     STREAMLIT_AVAILABLE = True
 except ImportError:
     STREAMLIT_AVAILABLE = False
-    st = None
+    st = None  # type: ignore
 
 try:
     import plotly.express as px
@@ -33,107 +39,124 @@ try:
     PLOTLY_AVAILABLE = True
 except ImportError:
     PLOTLY_AVAILABLE = False
-    px = go = make_subplots = None
+    px = go = make_subplots = None  # type: ignore
 
 try:
     import pandas as pd
     PANDAS_AVAILABLE = True
 except ImportError:
     PANDAS_AVAILABLE = False
-    pd = None
+    pd = None  # type: ignore
+
+# --- Autenticação -------------------------------------------------------------
+# Import absoluto (corrige erro crítico do relatório):
+try:
+    from streamlit_extension.auth.middleware import init_protected_page, require_auth
+except ImportError:
+    # Fallback seguro em desenvolvimento: mantém página acessível
+    def init_protected_page(title: str, *, layout: str = "wide") -> None:
+        st.set_page_config(page_title=title, layout=layout)
+
+    def require_auth(role: Optional[str] = None):  # type: ignore
+        def _decorator(fn):
+            def _inner(*args, **kwargs):
+                # Em produção real, este fallback não deve ser usado.
+                return fn(*args, **kwargs)
+            return _inner
+        return _decorator
 
 # Local imports
 try:
     from streamlit_extension.utils.database import DatabaseManager
     from streamlit_extension.utils.security import (
         create_safe_client, sanitize_display, validate_form, check_rate_limit,
-        security_manager
+        security_manager,
     )
     from streamlit_extension.utils.exception_handler import (
-        handle_streamlit_exceptions, streamlit_error_boundary, safe_streamlit_operation
+        handle_streamlit_exceptions, streamlit_error_boundary, safe_streamlit_operation,
     )
     from streamlit_extension.config import load_config
-    # Import authentication middleware
-    from streamlit_extension.auth.middleware import init_protected_page
     DATABASE_UTILS_AVAILABLE = True
 except ImportError:
-    DatabaseManager = load_config = None
-    create_safe_client = sanitize_display = validate_form = None
-    check_rate_limit = security_manager = None
-    init_protected_page = handle_streamlit_exceptions = streamlit_error_boundary = safe_streamlit_operation = None
+    DatabaseManager = load_config = None  # type: ignore
+    create_safe_client = sanitize_display = validate_form = None  # type: ignore
+    check_rate_limit = security_manager = None  # type: ignore
+
+    # Fallbacks seguros: no-op decorators/utilitários
+    def handle_streamlit_exceptions(*args, **kwargs):  # type: ignore
+        def _wrap(func):
+            return func
+        return _wrap
+
+    def streamlit_error_boundary(*args, **kwargs):  # type: ignore
+        def _wrap(func):
+            return func
+        return _wrap
+
+    def safe_streamlit_operation(func):  # type: ignore
+        return func
+
     DATABASE_UTILS_AVAILABLE = False
 
 try:
     from tdah_tools.analytics_engine import AnalyticsEngine, TDDAHAnalytics
     ANALYTICS_ENGINE_AVAILABLE = True
 except ImportError:
-    AnalyticsEngine = TDDAHAnalytics = None
+    AnalyticsEngine = TDDAHAnalytics = None  # type: ignore
     ANALYTICS_ENGINE_AVAILABLE = False
 
-# Performance optimization imports
+# Performance utils
 try:
     import functools
     import hashlib
     PERFORMANCE_UTILS_AVAILABLE = True
 except ImportError:
-    functools = hashlib = None
+    functools = hashlib = None  # type: ignore
     PERFORMANCE_UTILS_AVAILABLE = False
 
 
-# Authentication middleware integration handled in imports above
+# ==============================
+#   Cache & Performance Helpers
+# ==============================
 
-# Performance optimization functions
 class AnalyticsCache:
     """Simple in-memory cache for analytics data with TTL support."""
-
     def __init__(self):
-        self.cache = {}
-        self.cache_timestamps = {}
+        self.cache: Dict[str, Any] = {}
+        self.cache_timestamps: Dict[str, float] = {}
         self.default_ttl = 300  # 5 minutes
 
-    def get_cache_key(self, *args, **kwargs):
-        """Generate a cache key from arguments."""
+    def get_cache_key(self, *args, **kwargs) -> Optional[str]:
         if not PERFORMANCE_UTILS_AVAILABLE:
             return None
-
         key_data = str(args) + str(sorted(kwargs.items()))
-        return hashlib.sha256(key_data.encode()).hexdigest()
+        return hashlib.sha256(key_data.encode()).hexdigest()  # type: ignore
 
-    def get(self, key, ttl=None):
-        """Get cached data if still valid."""
+    def get(self, key: Optional[str], ttl: Optional[int] = None):
         if not key or key not in self.cache:
             return None
-
         ttl = ttl or self.default_ttl
         cache_time = self.cache_timestamps.get(key, 0)
-
         if time.time() - cache_time > ttl:
-            # Expired, remove from cache
             self.cache.pop(key, None)
             self.cache_timestamps.pop(key, None)
             return None
-
         return self.cache[key]
 
-    def set(self, key, value):
-        """Cache data with timestamp."""
+    def set(self, key: Optional[str], value: Any) -> None:
         if not key:
             return
-
         self.cache[key] = value
         self.cache_timestamps[key] = time.time()
 
-    def clear(self):
-        """Clear all cached data."""
+    def clear(self) -> None:
         self.cache.clear()
         self.cache_timestamps.clear()
 
-    def size(self):
-        """Get current cache size."""
+    def size(self) -> int:
         return len(self.cache)
 
 
-# Global cache instance
 _analytics_cache = AnalyticsCache()
 
 
@@ -142,21 +165,18 @@ def performance_monitor(func):
     if not PERFORMANCE_UTILS_AVAILABLE:
         return func
 
-    @functools.wraps(func)
+    @functools.wraps(func)  # type: ignore
     def wrapper(*args, **kwargs):
         start_time = time.time()
         result = func(*args, **kwargs)
         execution_time = time.time() - start_time
-
-        # Store performance metrics in session state
-        if 'performance_metrics' not in st.session_state:
-            st.session_state.performance_metrics = {}
-
-        st.session_state.performance_metrics[func.__name__] = {
-            'execution_time': execution_time,
-            'timestamp': time.time()
-        }
-
+        if STREAMLIT_AVAILABLE:
+            if 'performance_metrics' not in st.session_state:
+                st.session_state.performance_metrics = {}
+            st.session_state.performance_metrics[func.__name__] = {
+                'execution_time': execution_time,
+                'timestamp': time.time(),
+            }
         return result
     return wrapper
 
@@ -167,112 +187,142 @@ def cached_analytics_data(ttl=300):
         if not PERFORMANCE_UTILS_AVAILABLE:
             return func
 
-        @functools.wraps(func)
+        @functools.wraps(func)  # type: ignore
         def wrapper(*args, **kwargs):
-            # Check if caching is enabled
-            if hasattr(st.session_state, 'performance_settings') and not st.session_state.performance_settings.get('use_cache', True):
+            # Disable cache via settings
+            if STREAMLIT_AVAILABLE and hasattr(st.session_state, 'performance_settings') and \
+               not st.session_state.performance_settings.get('use_cache', True):
                 return func(*args, **kwargs)
 
-            # Generate cache key
             cache_key = _analytics_cache.get_cache_key(func.__name__, *args, **kwargs)
-
-            # Try to get from cache
             cached_result = _analytics_cache.get(cache_key, ttl)
             if cached_result is not None:
                 return cached_result
 
-            # Execute function and cache result
             result = func(*args, **kwargs)
             _analytics_cache.set(cache_key, result)
-
             return result
         return wrapper
     return decorator
 
 
-def optimize_database_queries(db_manager: DatabaseManager, days: int, filters: Dict[str, Any] = None) -> Dict[str, Any]:
-    """Optimized database queries with intelligent batching and filtering."""
+# ==============================
+#   Data Access & Optimization
+# ==============================
 
+def _normalize_user_stats(raw_stats: Any) -> Dict[str, Any]:
+    """Normaliza user_stats para dict, evitando erros do tipo 'List argument must consist only of dictionaries'."""
+    if isinstance(raw_stats, dict):
+        return raw_stats
+    if isinstance(raw_stats, list) and raw_stats and isinstance(raw_stats[0], dict):
+        return raw_stats[0]
+    return {}
+
+def optimize_database_queries(db_manager: "DatabaseManager", days: int, filters: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    """Consulta dados em batches e aplica filtros em memória (até termos suporte nativo)."""
     try:
-        # Batch multiple queries for efficiency
-        query_results = {}
+        query_results: Dict[str, Any] = {}
 
-        # Get all data in optimized batches
-        with st.spinner("Optimizing data queries..."):
-            # Query 1: Get timer sessions with pre-filtering
-            session_query_filters = {}
+        if STREAMLIT_AVAILABLE:
+            spinner_ctx = st.spinner("Optimizing data queries...")
+        else:
+            # Dummy context manager
+            class _NullCtx:
+                def __enter__(self): return None
+                def __exit__(self, exc_type, exc, tb): return False
+            spinner_ctx = _NullCtx()
+
+        with spinner_ctx:
+            # --- Sessions -----------------------------------------------------
+            sessions = db_manager.get_timer_sessions(days)  # type: ignore[arg-type]
             if filters:
-                if filters.get("focus_range") and filters["focus_range"] != (1, 10):
-                    min_focus, max_focus = filters["focus_range"]
-                    session_query_filters["focus_range"] = (min_focus, max_focus)
+                fr = filters.get("focus_range")
+                if fr and fr != (1, 10):
+                    mn, mx = fr
+                    sessions = [s for s in sessions if (s.get("focus_rating") is None or mn <= s.get("focus_rating", 0) <= mx)]
+                stypes = filters.get("selected_session_types")
+                if stypes:
+                    allowed = set(stypes)
+                    sessions = [s for s in sessions if s.get("session_type") in allowed]
+            query_results["timer_sessions"] = sessions
 
-                if filters.get("selected_session_types"):
-                    session_query_filters["session_types"] = filters["selected_session_types"]
-
-            # Check rate limit for database read
-            db_read_allowed, db_read_error = check_rate_limit("db_read") if check_rate_limit else (True, None)
-            if not db_read_allowed:
-                st.error(f"🚦 Database {db_read_error}")
-                return {"error": "Database rate limited"}
-            
-            query_results["timer_sessions"] = db_manager.get_timer_sessions(days)
-
-            # Query 2: Get tasks with pre-filtering
-            task_query_filters = {}
+            # --- Tasks / Epics ------------------------------------------------
+            tasks = db_manager.get_tasks()
+            epics = db_manager.get_epics()
             if filters:
-                if filters.get("selected_epics"):
-                    task_query_filters["epic_names"] = filters["selected_epics"]
+                selected_epics = set(filters.get("selected_epics") or [])
+                if selected_epics:
+                    tasks = [t for t in tasks if t.get("epic_name") in selected_epics]
+                    epics = [e for e in epics if e.get("name") in selected_epics]
+                tdd = set(filters.get("selected_tdd_phases") or [])
+                if tdd:
+                    tasks = [t for t in tasks if t.get("tdd_phase") in tdd]
+            query_results["tasks"] = tasks
+            query_results["epics"] = epics
 
-                if filters.get("selected_tdd_phases"):
-                    task_query_filters["tdd_phases"] = filters["selected_tdd_phases"]
-
-            query_results["tasks"] = db_manager.get_tasks()
-            query_results["epics"] = db_manager.get_epics()
-            query_results["user_stats"] = db_manager.get_user_stats()
+            # --- User Stats ---------------------------------------------------
+            raw_stats = db_manager.get_user_stats()
+            query_results["user_stats"] = _normalize_user_stats(raw_stats)
 
         return query_results
 
     except Exception as e:
-        st.error(f"Database query optimization failed: {e}")
-        # Fallback to individual queries
+        if STREAMLIT_AVAILABLE:
+            st.error(f"Database query optimization failed: {e}")
         return {
-            "timer_sessions": db_manager.get_timer_sessions(days),
+            "timer_sessions": db_manager.get_timer_sessions(days),  # type: ignore[arg-type]
             "tasks": db_manager.get_tasks(),
             "epics": db_manager.get_epics(),
-            "user_stats": db_manager.get_user_stats()
+            "user_stats": _normalize_user_stats(db_manager.get_user_stats()),
         }
 
 
-@handle_streamlit_exceptions(show_error=True, attempt_recovery=True)
+# ==============================
+#   Página principal (render)
+# ==============================
 
+def _apply_chart_theme(fig) -> None:
+    """Aplica template de tema se definido via sidebar."""
+    if not STREAMLIT_AVAILABLE:
+        return
+    template = getattr(st.session_state, "chart_settings", {}).get("theme", None)
+    if template:
+        fig.update_layout(template=template)
+
+@require_auth()  # Protege a página; em dev, o fallback acima permite acesso
+@handle_streamlit_exceptions(show_error=True, attempt_recovery=True)
 def render_analytics_page():
     """Main analytics page with modular architecture."""
     if not STREAMLIT_AVAILABLE:
         return {"error": "Streamlit not available"}
-    current_user = init_protected_page("📊 Analytics Dashboard")
-    if not current_user:
-        return {"error": "Authentication required"}
+
+    init_protected_page("📊 Analytics Dashboard", layout="wide")
+
     if not _check_rate_limit():
         return {"error": "Rate limited"}
+
     st.title("📊 Analytics Dashboard")
     st.markdown("---")
+
     if not _check_dependencies():
         return
+
     db_manager, analytics_engine = _initialize_analytics_engine()
     if not db_manager:
         return
+
     filters = _render_analytics_filters(db_manager)
     analytics_data = _fetch_analytics_data(db_manager, analytics_engine, filters)
     if not analytics_data:
         st.warning("📝 No data available for the selected time range.")
         return
+
     _render_analytics_header(analytics_data)
     _render_analytics_tabs(analytics_data)
     _render_analytics_footer(analytics_data)
 
 
 def _check_rate_limit() -> bool:
-    """Check rate limit for page load."""
     page_rate_allowed, page_rate_error = check_rate_limit("page_load") if check_rate_limit else (True, None)
     if not page_rate_allowed:
         st.error(f"🚦 {page_rate_error}")
@@ -282,7 +332,6 @@ def _check_rate_limit() -> bool:
 
 
 def _check_dependencies() -> bool:
-    """Verify required dependencies are available."""
     missing_deps = []
     if not PLOTLY_AVAILABLE:
         missing_deps.append("plotly")
@@ -298,7 +347,6 @@ def _check_dependencies() -> bool:
 
 
 def _initialize_analytics_engine():
-    """Initialize analytics engine and database manager."""
     try:
         config = load_config()
         db_manager = DatabaseManager(
@@ -306,7 +354,7 @@ def _initialize_analytics_engine():
             timer_db_path=str(config.get_timer_database_path()),
         )
         if ANALYTICS_ENGINE_AVAILABLE:
-            analytics_engine = TDDAHAnalytics(db_path=str(config.get_timer_database_path()))
+            analytics_engine = TDDAHAnalytics(db_path=str(config.get_timer_database_path()))  # type: ignore[arg-type]
             st.sidebar.success("🧠 Advanced analytics enabled")
         else:
             analytics_engine = None
@@ -317,69 +365,18 @@ def _initialize_analytics_engine():
         return None, None
 
 
-def _render_analytics_filters(db_manager: DatabaseManager) -> Dict[str, Any]:
-    """Render filter sidebar and return selected filters."""
+# ==============================
+#   Sidebar & Filtros
+# ==============================
+
+def _render_analytics_filters(db_manager: "DatabaseManager") -> Dict[str, Any]:
     days = _render_time_range_selector()
     filters = _render_advanced_filters(db_manager, days)
     _render_sidebar_utilities()
     return filters
 
 
-def _fetch_analytics_data(db_manager: DatabaseManager, analytics_engine: Any, filters: Dict[str, Any]) -> Dict[str, Any]:
-    """Fetch and process analytics data based on filters."""
-    days = filters.get("days", 7)
-    with st.spinner("Loading analytics data..."):
-        if analytics_engine:
-            data = _get_enhanced_analytics_data(analytics_engine, db_manager, days)
-        else:
-            data = _get_analytics_data(db_manager, days)
-        if filters:
-            data = _apply_data_filters(data, filters)
-    st.session_state.last_analytics = data
-    return data
-
-
-def _render_analytics_header(analytics_data: Dict[str, Any]):
-    """Render analytics page header with key metrics."""
-    filters = getattr(st.session_state, "analytics_filters", {})
-    active_filters = []
-    if filters.get("selected_epics"):
-        active_filters.append(f"Epics: {len(filters['selected_epics'])}")
-    if filters.get("focus_range") and filters.get("focus_range") != (1, 10):
-        active_filters.append(f"Focus: {filters['focus_range'][0]}-{filters['focus_range'][1]}")
-    if filters.get("selected_tdd_phases"):
-        active_filters.append(f"TDD: {len(filters['selected_tdd_phases'])}")
-    if filters.get("selected_session_types"):
-        active_filters.append(f"Sessions: {len(filters['selected_session_types'])}")
-    if active_filters:
-        st.info(f"🔍 **Active filters:** {' | '.join(active_filters)}")
-    _render_overview_metrics(analytics_data)
-    st.markdown("---")
-
-
-def _render_analytics_tabs(analytics_data: Dict[str, Any]):
-    """Render tabbed interface for different analytics views."""
-    col1, col2 = st.columns(2)
-    with col1:
-        _render_productivity_chart(analytics_data)
-        _render_tdd_phase_distribution(analytics_data)
-    with col2:
-        _render_focus_time_chart(analytics_data)
-        _render_epic_progress_chart(analytics_data)
-    st.markdown("---")
-    _render_tdah_insights(analytics_data)
-    st.markdown("---")
-
-
-def _render_analytics_footer(analytics_data: Dict[str, Any]):
-    """Render analytics page footer with export options."""
-    _render_advanced_tdah_metrics(analytics_data)
-    with st.expander("📋 Detailed Data"):
-        _render_detailed_tables(analytics_data)
-
-
 def _render_time_range_selector() -> int:
-    """Render time range selector and return number of days."""
     st.sidebar.markdown("## 📅 Time Range")
     time_options = {
         "Today": 1,
@@ -404,13 +401,12 @@ def _render_time_range_selector() -> int:
         st.sidebar.caption(f"Period: {days} days")
     else:
         days = time_options[selected_range]
-        start_date = end_date = None
     return days
 
 
-def _render_advanced_filters(db_manager: DatabaseManager, days: int) -> Dict[str, Any]:
-    """Render advanced sidebar filters."""
+def _render_advanced_filters(db_manager: "DatabaseManager", days: int) -> Dict[str, Any]:
     st.sidebar.markdown("## 🔍 Advanced Filters")
+
     selected_epics: List[str] = []
     if st.sidebar.checkbox("Filter by Epic", value=False):
         try:
@@ -419,17 +415,21 @@ def _render_advanced_filters(db_manager: DatabaseManager, days: int) -> Dict[str
             selected_epics = st.sidebar.multiselect("Select Epics", epic_names)
         except Exception:
             st.sidebar.warning("Could not load epics")
+
     focus_range = (1, 10)
     if st.sidebar.checkbox("Filter by Focus Level", value=False):
         focus_range = st.sidebar.slider("Focus Rating Range", min_value=1, max_value=10, value=(1, 10), step=1)
+
     selected_tdd_phases: List[str] = []
     if st.sidebar.checkbox("Filter by TDD Phase", value=False):
         tdd_phases = ["red", "green", "refactor"]
         selected_tdd_phases = st.sidebar.multiselect("Select TDD Phases", tdd_phases)
+
     selected_session_types: List[str] = []
     if st.sidebar.checkbox("Filter by Session Type", value=False):
         session_types = ["focus_session", "short_break", "long_break", "custom"]
         selected_session_types = st.sidebar.multiselect("Select Session Types", session_types)
+
     filters = {
         "days": days,
         "selected_epics": selected_epics,
@@ -442,7 +442,6 @@ def _render_advanced_filters(db_manager: DatabaseManager, days: int) -> Dict[str
 
 
 def _render_sidebar_utilities():
-    """Render sidebar utilities like refresh and export options."""
     st.sidebar.markdown("## ⚡ Interactive Controls")
     auto_refresh = st.sidebar.checkbox("Auto-refresh every minute", value=False)
     if auto_refresh:
@@ -454,65 +453,110 @@ def _render_sidebar_utilities():
             st.sidebar.caption(f"Last refresh: {datetime.now().strftime('%H:%M:%S')}")
             time.sleep(1)
             st.rerun()
+
     if st.sidebar.button("🔄 Refresh Data", type="primary"):
         st.rerun()
+
     st.sidebar.markdown("## 📊 Export Options")
     export_format = st.sidebar.selectbox("Export Format", ["CSV", "JSON", "Excel"], help="Choose format for exporting analytics data")
     if st.sidebar.button("📥 Export Data"):
         _export_analytics_data(getattr(st.session_state, 'last_analytics', {}), export_format)
+
     st.sidebar.markdown("## 📈 Chart Settings")
     chart_theme = st.sidebar.selectbox("Chart Theme", ["plotly", "plotly_white", "plotly_dark", "presentation"], index=0)
     show_animations = st.sidebar.checkbox("Chart Animations", value=True)
     show_tooltips = st.sidebar.checkbox("Enhanced Tooltips", value=True)
     st.session_state.chart_settings = {"theme": chart_theme, "animations": show_animations, "tooltips": show_tooltips}
+
     st.sidebar.markdown("## ⚙️ Performance")
     use_cache = st.sidebar.checkbox("Use Data Caching", value=True, help="Cache data for faster loading")
     chart_quality = st.sidebar.selectbox("Chart Quality", ["High", "Medium", "Fast"], index=1)
     st.session_state.performance_settings = {"use_cache": use_cache, "chart_quality": chart_quality}
+
     if st.sidebar.checkbox("Show Performance Metrics", value=False):
         _render_performance_metrics()
 
 
-@cached_analytics_data(ttl=300)  # Cache for 5 minutes
+# ==============================
+#   Data Fetch + Header/Tabs
+# ==============================
+
+def _fetch_analytics_data(db_manager: "DatabaseManager", analytics_engine: Any, filters: Dict[str, Any]) -> Dict[str, Any]:
+    days = filters.get("days", 7)
+    with st.spinner("Loading analytics data..."):
+        if analytics_engine:
+            data = _get_enhanced_analytics_data(analytics_engine, db_manager, days)
+        else:
+            data = _get_analytics_data(db_manager, days)
+        if filters:
+            data = _apply_data_filters(data, filters)
+    st.session_state.last_analytics = data
+    return data
+
+
+def _render_analytics_header(analytics_data: Dict[str, Any]):
+    filters = getattr(st.session_state, "analytics_filters", {})
+    active_filters = []
+    if filters.get("selected_epics"):
+        active_filters.append(f"Epics: {len(filters['selected_epics'])}")
+    if filters.get("focus_range") and filters.get("focus_range") != (1, 10):
+        active_filters.append(f"Focus: {filters['focus_range'][0]}-{filters['focus_range'][1]}")
+    if filters.get("selected_tdd_phases"):
+        active_filters.append(f"TDD: {len(filters['selected_tdd_phases'])}")
+    if filters.get("selected_session_types"):
+        active_filters.append(f"Sessions: {len(filters['selected_session_types'])}")
+    if active_filters:
+        st.info(f"🔍 **Active filters:** {' | '.join(active_filters)}")
+    _render_overview_metrics(analytics_data)
+    st.markdown("---")
+
+
+def _render_analytics_tabs(analytics_data: Dict[str, Any]):
+    col1, col2 = st.columns(2)
+    with col1:
+        _render_productivity_chart(analytics_data)
+        _render_tdd_phase_distribution(analytics_data)
+    with col2:
+        _render_focus_time_chart(analytics_data)
+        _render_epic_progress_chart(analytics_data)
+    st.markdown("---")
+    _render_tdah_insights(analytics_data)
+    st.markdown("---")
+
+
+def _render_analytics_footer(analytics_data: Dict[str, Any]):
+    with st.expander("📋 Detailed Data"):
+        _render_detailed_tables(analytics_data)
+
+
+# ==============================
+#   Enhanced & Basic Data
+# ==============================
+
+@cached_analytics_data(ttl=300)
 @performance_monitor
-def _get_enhanced_analytics_data(analytics_engine: Any, db_manager: DatabaseManager, days: int) -> Dict[str, Any]:
-    """Get enhanced analytics data using the analytics engine."""
-
+def _get_enhanced_analytics_data(analytics_engine: Any, db_manager: "DatabaseManager", days: int) -> Dict[str, Any]:
     try:
-        # Get productivity metrics from analytics engine
-        productivity_metrics = analytics_engine.generate_productivity_metrics(days)
-
-        # Get time patterns analysis
-        time_patterns = analytics_engine.analyze_time_patterns(days)
-
-        # Get session data
-        session_data = analytics_engine.load_session_data(days)
-
-        # Get basic database data for supplemental info
+        productivity_metrics = analytics_engine.generate_productivity_metrics(days)  # type: ignore[attr-defined]
+        time_patterns = analytics_engine.analyze_time_patterns(days)  # type: ignore[attr-defined]
+        session_data = analytics_engine.load_session_data(days)  # type: ignore[attr-defined]
         basic_data = _get_analytics_data(db_manager, days)
-
-        # Combine enhanced analytics with basic data
         enhanced_data = {
             **basic_data,
             "productivity_metrics": productivity_metrics,
             "time_patterns": time_patterns,
             "session_data": session_data,
-            "analytics_engine_enabled": True
+            "analytics_engine_enabled": True,
         }
-
         return enhanced_data
-
     except Exception as e:
         st.warning(f"⚠️ Analytics engine error, falling back to basic mode: {e}")
         return _get_analytics_data(db_manager, days)
 
 
-@cached_analytics_data(ttl=180)  # Cache for 3 minutes  
+@cached_analytics_data(ttl=180)
 @performance_monitor
-def _get_analytics_data(db_manager: DatabaseManager, days: int) -> Dict[str, Any]:
-    """Get basic analytics data from database (fallback mode) with optimized queries."""
-
-    # Use optimized database queries
+def _get_analytics_data(db_manager: "DatabaseManager", days: int) -> Dict[str, Any]:
     filters = getattr(st.session_state, 'analytics_filters', {})
     query_results = optimize_database_queries(db_manager, days, filters)
 
@@ -521,15 +565,12 @@ def _get_analytics_data(db_manager: DatabaseManager, days: int) -> Dict[str, Any
     tasks = query_results.get("tasks", [])
     user_stats = query_results.get("user_stats", {})
 
-    # Calculate basic metrics
     total_focus_time = sum(s.get("planned_duration_minutes", 0) for s in timer_sessions)
     completed_tasks = [t for t in tasks if t.get("status") == "completed"]
 
-    # Focus ratings analysis
     focus_ratings = [s.get("focus_rating") for s in timer_sessions if s.get("focus_rating")]
     avg_focus = sum(focus_ratings) / len(focus_ratings) if focus_ratings else 0
 
-    # Daily productivity
     daily_data = _calculate_daily_metrics(timer_sessions, tasks)
 
     return {
@@ -543,45 +584,37 @@ def _get_analytics_data(db_manager: DatabaseManager, days: int) -> Dict[str, Any
         "timer_sessions": timer_sessions,
         "epics": epics,
         "tasks": tasks,
-        "daily_metrics": daily_data
+        "daily_metrics": daily_data,
     }
 
 
 def _calculate_daily_metrics(timer_sessions: List[Dict], tasks: List[Dict]) -> List[Dict]:
-    """Calculate daily productivity metrics."""
-    from collections import defaultdict
-
     daily_data = defaultdict(lambda: {
         "date": "",
         "focus_minutes": 0,
         "sessions": 0,
         "tasks_completed": 0,
         "avg_focus_rating": 0,
-        "interruptions": 0
+        "interruptions": 0,
     })
 
-    # Process timer sessions
     for session in timer_sessions:
         if not session.get("started_at"):
             continue
-
         try:
-            date_str = session["started_at"][:10]  # YYYY-MM-DD
-            daily_data[date_str]["date"] = date_str
-            daily_data[date_str]["focus_minutes"] += session.get("planned_duration_minutes", 0)
-            daily_data[date_str]["sessions"] += 1
-            daily_data[date_str]["interruptions"] += session.get("interruptions_count", 0)
-
-            # Focus rating
+            date_str = session["started_at"][:10]
+            dd = daily_data[date_str]
+            dd["date"] = date_str
+            dd["focus_minutes"] += session.get("planned_duration_minutes", 0)
+            dd["sessions"] += 1
+            dd["interruptions"] += session.get("interruptions_count", 0)
             if session.get("focus_rating"):
-                current_avg = daily_data[date_str]["avg_focus_rating"]
-                sessions_count = daily_data[date_str]["sessions"]
-                new_avg = ((current_avg * (sessions_count - 1)) + session["focus_rating"]) / sessions_count
-                daily_data[date_str]["avg_focus_rating"] = new_avg
+                current_avg = dd["avg_focus_rating"]
+                sessions_count = dd["sessions"]
+                dd["avg_focus_rating"] = ((current_avg * (sessions_count - 1)) + session["focus_rating"]) / sessions_count
         except (KeyError, IndexError, ValueError):
             continue
 
-    # Process completed tasks
     for task in tasks:
         if task.get("status") == "completed" and task.get("completed_at"):
             try:
@@ -594,91 +627,62 @@ def _calculate_daily_metrics(timer_sessions: List[Dict], tasks: List[Dict]) -> L
     return list(daily_data.values())
 
 
-def _render_overview_metrics(analytics_data: Dict[str, Any]):
-    """Render overview metrics cards with enhanced analytics engine data."""
+# ==============================
+#   Overview & Charts
+# ==============================
 
+def _render_overview_metrics(analytics_data: Dict[str, Any]):
     col1, col2, col3, col4 = st.columns(4)
 
-    # Check if analytics engine is enabled for enhanced metrics
     engine_enabled = analytics_data.get("analytics_engine_enabled", False)
     productivity_metrics = analytics_data.get("productivity_metrics", {})
 
     with col1:
         if engine_enabled and productivity_metrics:
-            # Use enhanced productivity metrics
             total_time = productivity_metrics.get("total_focus_time_minutes", 0)
             efficiency_score = productivity_metrics.get("focus_efficiency_score", 0)
             delta_text = f"Efficiency: {efficiency_score:.1f}%" if efficiency_score > 0 else None
         else:
-            # Fallback to basic metrics
             total_time = analytics_data.get("total_focus_time", 0)
             delta_text = f"{analytics_data.get('total_sessions', 0)} sessions"
-
         hours = total_time // 60
         minutes = total_time % 60
-        st.metric(
-            "🕐 Total Focus Time",
-            f"{hours}h {minutes}m",
-            delta_text
-        )
+        st.metric("🕐 Total Focus Time", f"{hours}h {minutes}m", delta_text)
 
     with col2:
         if engine_enabled and productivity_metrics:
-            # Enhanced task completion metrics
             completed = productivity_metrics.get("tasks_completed", analytics_data.get("completed_tasks", 0))
             velocity = productivity_metrics.get("daily_velocity", 0)
             delta_text = f"Velocity: {velocity:.1f}/day" if velocity > 0 else None
         else:
-            # Basic metrics
             completed = analytics_data.get("completed_tasks", 0)
             avg_per_day = completed / analytics_data.get("period_days", 1) if completed > 0 else 0
             delta_text = f"{avg_per_day:.1f}/day avg"
-
-        st.metric(
-            "✅ Tasks Completed",
-            completed,
-            delta_text
-        )
+        st.metric("✅ Tasks Completed", completed, delta_text)
 
     with col3:
         if engine_enabled and productivity_metrics:
-            # Enhanced focus metrics with trend
             focus_rating = productivity_metrics.get("average_focus_rating", 0)
             focus_trend = productivity_metrics.get("focus_trend", "stable")
             trend_emoji = {"improving": "📈", "declining": "📉", "stable": "➡️"}.get(focus_trend, "➡️")
             delta_text = f"{trend_emoji} {focus_trend}"
         else:
-            # Basic focus rating
             focus_rating = analytics_data.get("average_focus_rating", 0)
             delta_text = "TDAH metric"
-
-        st.metric(
-            "🎯 Avg Focus Rating",
-            f"{focus_rating:.1f}/10",
-            delta_text
-        )
+        st.metric("🎯 Avg Focus Rating", f"{focus_rating:.1f}/10", delta_text)
 
     with col4:
         if engine_enabled and productivity_metrics:
-            # Enhanced points with streak info
             points = productivity_metrics.get("total_points", analytics_data.get("total_points", 0))
             streak = productivity_metrics.get("current_streak", 0)
             delta_text = f"🔥 {streak} day streak" if streak > 1 else f"{analytics_data.get('active_epics', 0)} active epics"
         else:
-            # Basic points
             points = analytics_data.get("total_points", 0)
             delta_text = f"{analytics_data.get('active_epics', 0)} active epics"
-
-        st.metric(
-            "🌟 Total Points",
-            f"{points:,}",
-            delta_text
-        )
-
+        st.metric("🌟 Total Points", f"{points:,}", delta_text)
 
 
 def _render_productivity_chart(analytics_data: Dict[str, Any]):
-    """Render productivity charts with modular data processing."""
     if not PLOTLY_AVAILABLE:
         st.warning("Charts require plotly installation")
         return
@@ -687,18 +691,16 @@ def _render_productivity_chart(analytics_data: Dict[str, Any]):
     if chart_data.get("df") is None:
         st.info("No productivity data available")
         return
-    config = _get_productivity_chart_config()
+    config = {"enhanced_height": 600, "basic_height": 400}
     _display_productivity_charts(chart_data, config)
     _display_productivity_metrics(chart_data)
 
+
 def _process_productivity_data(analytics_data: Dict[str, Any]) -> Dict[str, Any]:
-    """Process raw analytics data for productivity visualization."""
     engine_enabled = analytics_data.get("analytics_engine_enabled", False)
     productivity_metrics = analytics_data.get("productivity_metrics", {})
     if engine_enabled and productivity_metrics:
-        daily_productivity = productivity_metrics.get("daily_productivity", [])
-        if not daily_productivity:
-            daily_productivity = analytics_data.get("daily_metrics", [])
+        daily_productivity = productivity_metrics.get("daily_productivity", []) or analytics_data.get("daily_metrics", [])
         if daily_productivity and PANDAS_AVAILABLE:
             df_data = []
             for day_data in daily_productivity:
@@ -713,29 +715,27 @@ def _process_productivity_data(analytics_data: Dict[str, Any]) -> Dict[str, Any]
             df = pd.DataFrame(df_data).sort_values("date")
             return {"df": df, "insights": productivity_metrics.get("insights", []), "enhanced": True}
         return {"df": None, "insights": [], "enhanced": True}
+
     daily_metrics = analytics_data.get("daily_metrics", [])
     if daily_metrics and PANDAS_AVAILABLE:
         df = pd.DataFrame(sorted(daily_metrics, key=lambda x: x["date"]))
         return {"df": df, "insights": [], "enhanced": False}
     return {"df": None, "insights": [], "enhanced": False}
 
-def _get_productivity_chart_config() -> Dict[str, Any]:
-    """Get chart configuration for productivity visualizations."""
-    return {"enhanced_height": 600, "basic_height": 400}
 
 def _display_productivity_metrics(chart_data: Dict[str, Any]):
-    """Display key productivity metrics in cards."""
     insights = chart_data.get("insights", [])
     if insights:
         st.markdown("#### 💡 Productivity Insights")
         for insight in insights[:3]:
             st.info(f"• {insight}")
 
+
 def _display_productivity_charts(chart_data: Dict[str, Any], config: Dict[str, Any]):
-    """Display productivity charts with given configuration."""
     df = chart_data.get("df")
     if df is None:
         return
+
     if chart_data.get("enhanced"):
         fig = make_subplots(
             rows=2,
@@ -744,55 +744,31 @@ def _display_productivity_charts(chart_data: Dict[str, Any], config: Dict[str, A
             specs=[[{"secondary_y": True}], [{"secondary_y": True}]],
             vertical_spacing=0.12,
         )
-        fig.add_trace(
-            go.Bar(x=df["date"], y=df["focus_minutes"], name="Focus Minutes", marker_color="lightblue", opacity=0.7),
-            row=1,
-            col=1,
-            secondary_y=False,
-        )
-        fig.add_trace(
-            go.Scatter(x=df["date"], y=df["tasks_completed"], mode="lines+markers", name="Tasks Completed", line=dict(color="orange", width=2), marker=dict(size=6)),
-            row=1,
-            col=1,
-            secondary_y=True,
-        )
-        fig.add_trace(
-            go.Scatter(x=df["date"], y=df["productivity_score"], mode="lines+markers", name="Productivity Score", line=dict(color="green", width=3), marker=dict(size=8)),
-            row=2,
-            col=1,
-            secondary_y=False,
-        )
-        fig.add_trace(
-            go.Scatter(x=df["date"], y=df["focus_efficiency"], mode="lines+markers", name="Focus Efficiency %", line=dict(color="purple", width=2, dash="dash"), marker=dict(size=6)),
-            row=2,
-            col=1,
-            secondary_y=True,
-        )
+        fig.add_trace(go.Bar(x=df["date"], y=df["focus_minutes"], name="Focus Minutes", marker_color="lightblue", opacity=0.7), row=1, col=1, secondary_y=False)
+        fig.add_trace(go.Scatter(x=df["date"], y=df["tasks_completed"], mode="lines+markers", name="Tasks Completed", line=dict(color="orange", width=2), marker=dict(size=6)), row=1, col=1, secondary_y=True)
+        fig.add_trace(go.Scatter(x=df["date"], y=df["productivity_score"], mode="lines+markers", name="Productivity Score", line=dict(color="green", width=3), marker=dict(size=8)), row=2, col=1, secondary_y=False)
+        fig.add_trace(go.Scatter(x=df["date"], y=df["focus_efficiency"], mode="lines+markers", name="Focus Efficiency %", line=dict(color="purple", width=2, dash="dash"), marker=dict(size=6)), row=2, col=1, secondary_y=True)
         fig.update_xaxes(title_text="Date", row=2, col=1)
         fig.update_yaxes(title_text="Focus Minutes", row=1, col=1, secondary_y=False)
         fig.update_yaxes(title_text="Tasks Completed", row=1, col=1, secondary_y=True)
         fig.update_yaxes(title_text="Productivity Score", row=2, col=1, secondary_y=False)
         fig.update_yaxes(title_text="Focus Efficiency %", row=2, col=1, secondary_y=True)
         fig.update_layout(height=config["enhanced_height"], showlegend=True, title=None)
+        _apply_chart_theme(fig)
         st.plotly_chart(fig, use_container_width=True)
     else:
         fig = make_subplots(specs=[[{"secondary_y": True}]])
-        fig.add_trace(
-            go.Bar(x=df["date"], y=df["focus_minutes"], name="Focus Minutes", marker_color="lightblue", opacity=0.7),
-            secondary_y=False,
-        )
-        fig.add_trace(
-            go.Scatter(x=df["date"], y=df["tasks_completed"], mode="lines+markers", name="Tasks Completed", line=dict(color="orange", width=2), marker=dict(size=6)),
-            secondary_y=True,
-        )
+        fig.add_trace(go.Bar(x=df["date"], y=df["focus_minutes"], name="Focus Minutes", marker_color="lightblue", opacity=0.7), secondary_y=False)
+        fig.add_trace(go.Scatter(x=df["date"], y=df["tasks_completed"], mode="lines+markers", name="Tasks Completed", line=dict(color="orange", width=2), marker=dict(size=6)), secondary_y=True)
         fig.update_xaxes(title_text="Date")
         fig.update_yaxes(title_text="Focus Minutes", secondary_y=False)
         fig.update_yaxes(title_text="Tasks Completed", secondary_y=True)
         fig.update_layout(height=config["basic_height"], showlegend=True, title=None)
+        _apply_chart_theme(fig)
         st.plotly_chart(fig, use_container_width=True)
 
+
 def _render_focus_time_chart(analytics_data: Dict[str, Any]):
-    """Render focus time analysis charts."""
     if not PLOTLY_AVAILABLE:
         st.warning("Charts require plotly installation")
         return
@@ -805,8 +781,8 @@ def _render_focus_time_chart(analytics_data: Dict[str, Any]):
     _render_focus_summary(focus_data)
     _render_focus_patterns(focus_data)
 
+
 def _aggregate_focus_time_data(analytics_data: Dict[str, Any]) -> Dict[str, Any]:
-    """Aggregate and calculate focus time metrics."""
     engine_enabled = analytics_data.get("analytics_engine_enabled", False)
     time_patterns = analytics_data.get("time_patterns", {})
     if engine_enabled and time_patterns:
@@ -828,11 +804,11 @@ def _aggregate_focus_time_data(analytics_data: Dict[str, Any]) -> Dict[str, Any]
             "total_focus_time": total_focus_time,
             "avg_session_quality": avg_session_quality,
         }
-    # Fallback to basic hourly analysis
+
+    # Basic fallback
     timer_sessions = analytics_data.get("timer_sessions", [])
     if not timer_sessions:
         return {}
-    from collections import defaultdict
     hourly_data = defaultdict(int)
     for session in timer_sessions:
         if session.get("started_at"):
@@ -848,8 +824,8 @@ def _aggregate_focus_time_data(analytics_data: Dict[str, Any]) -> Dict[str, Any]
     minutes = [hourly_data.get(h, 0) for h in hours]
     return {"type": "basic", "hours": hours, "minutes": minutes}
 
+
 def _render_focus_summary(focus_data: Dict[str, Any]):
-    """Render focus time summary metrics."""
     if focus_data.get("type") != "enhanced":
         return
     peak_hours = focus_data.get("peak_hours", [])
@@ -859,8 +835,8 @@ def _render_focus_summary(focus_data: Dict[str, Any]):
     st.info(f"⏱️ **Total Focus:** {focus_data.get('total_focus_time', 0):.0f} minutes")
     st.info(f"🎯 **Avg Quality:** {focus_data.get('avg_session_quality', 0):.1f}/10")
 
+
 def _render_focus_trends(focus_data: Dict[str, Any]):
-    """Render focus time trend charts."""
     hours = focus_data.get("hours", [])
     minutes = focus_data.get("minutes", [])
     if focus_data.get("type") == "enhanced":
@@ -869,19 +845,21 @@ def _render_focus_trends(focus_data: Dict[str, Any]):
         fig = make_subplots(rows=2, cols=1, subplot_titles=["Focus Time by Hour", "Focus Quality by Hour"], vertical_spacing=0.15)
         colors = ['rgba(255, 99, 132, 0.8)' if h in peak_hours else 'rgba(54, 162, 235, 0.6)' for h in hours]
         fig.add_trace(go.Bar(x=hours, y=minutes, name="Focus Minutes", marker_color=colors, text=[f"{m:.0f}min" if m > 0 else "" for m in minutes], textposition="outside"), row=1, col=1)
-        fig.add_trace(go.Scatter(x=hours, y=focus_quality, mode="lines+markers", name="Focus Quality", line=dict(color="green", width=3), marker=dict(size=8, color=focus_quality, colorscale="RdYlGn", cmin=0, cmax=10), fill="tonexty" if focus_quality else None), row=2, col=1)
+        fig.add_trace(go.Scatter(x=hours, y=focus_quality, mode="lines+markers", name="Focus Quality", line=dict(color="green", width=3), marker=dict(size=8, color=focus_quality, colorscale="RdYlGn", cmin=0, cmax=10)), row=2, col=1)
         fig.update_xaxes(title_text="Hour of Day", row=2, col=1, dtick=2)
         fig.update_yaxes(title_text="Minutes", row=1, col=1)
         fig.update_yaxes(title_text="Quality (1-10)", row=2, col=1, range=[0, 10])
         fig.update_layout(height=500, showlegend=False, title=None)
+        _apply_chart_theme(fig)
         st.plotly_chart(fig, use_container_width=True)
     else:
         fig = px.bar(x=hours, y=minutes, title="Focus Time by Hour of Day", labels={"x": "Hour", "y": "Minutes"}, color=minutes, color_continuous_scale="Blues")
         fig.update_layout(height=400, showlegend=False)
+        _apply_chart_theme(fig)
         st.plotly_chart(fig, use_container_width=True)
 
+
 def _render_focus_patterns(focus_data: Dict[str, Any]):
-    """Render focus pattern analysis."""
     if focus_data.get("type") != "enhanced":
         return
     patterns = focus_data.get("patterns", [])
@@ -892,7 +870,6 @@ def _render_focus_patterns(focus_data: Dict[str, Any]):
 
 
 def _render_tdd_phase_distribution(analytics_data: Dict[str, Any]):
-    """Render TDD phase distribution analysis."""
     if not PLOTLY_AVAILABLE:
         st.warning("Charts require plotly installation")
         return
@@ -900,60 +877,32 @@ def _render_tdd_phase_distribution(analytics_data: Dict[str, Any]):
     if not tdd_data.get("phase_counts"):
         st.info("No task data available")
         return
-    _render_tdd_overview(tdd_data)
+    st.markdown("### 🔴🟢🔵 TDD Phase Distribution")
     _render_tdd_phase_chart(tdd_data)
-    _render_tdd_recommendations(tdd_data)
 
 
 def _calculate_tdd_metrics(analytics_data: Dict[str, Any]) -> Dict[str, Any]:
-    """Calculate TDD phase metrics and balance scores."""
     tasks = analytics_data.get("tasks", [])
     phase_counts = {"red": 0, "green": 0, "refactor": 0, "unknown": 0}
     for task in tasks:
         phase = task.get("tdd_phase") or "unknown"
         phase = phase.lower() if isinstance(phase, str) else "unknown"
-        if phase in phase_counts:
-            phase_counts[phase] += 1
-        else:
-            phase_counts["unknown"] += 1
-    phase_counts = {k: v for k, v in phase_counts.items() if v > 0}
-    return {"phase_counts": phase_counts}
-
-
-def _render_tdd_overview(tdd_data: Dict[str, Any]):
-    """Render TDD overview metrics."""
-    st.markdown("### 🔴🟢🔵 TDD Phase Distribution")
+        phase_counts[phase] = phase_counts.get(phase, 0) + 1
+    return {"phase_counts": {k: v for k, v in phase_counts.items() if v > 0}}
 
 
 def _render_tdd_phase_chart(tdd_data: Dict[str, Any]):
-    """Render TDD phase distribution chart."""
     phase_counts = tdd_data.get("phase_counts", {})
     if not phase_counts:
         return
-    colors = {
-        "red": "#FF6B6B",
-        "green": "#51CF66",
-        "refactor": "#339AF0",
-        "unknown": "#ADB5BD",
-    }
-    fig = px.pie(
-        values=list(phase_counts.values()),
-        names=list(phase_counts.keys()),
-        title="Tasks by TDD Phase",
-        color_discrete_map=colors,
-    )
+    colors = {"red": "#FF6B6B", "green": "#51CF66", "refactor": "#339AF0", "unknown": "#ADB5BD"}
+    fig = px.pie(values=list(phase_counts.values()), names=list(phase_counts.keys()), title="Tasks by TDD Phase", color_discrete_map=colors)
     fig.update_layout(height=400)
+    _apply_chart_theme(fig)
     st.plotly_chart(fig, use_container_width=True)
 
 
-def _render_tdd_recommendations(tdd_data: Dict[str, Any]):
-    """Render TDD improvement recommendations."""
-    return
-
-
-
 def _render_epic_progress_chart(analytics_data: Dict[str, Any]):
-    """Render epic progress visualization."""
     if not PLOTLY_AVAILABLE:
         st.warning("Charts require plotly installation")
         return
@@ -962,12 +911,11 @@ def _render_epic_progress_chart(analytics_data: Dict[str, Any]):
     if not progress_data:
         _render_basic_epic_progress(analytics_data)
         return
-    _render_progress_overview(progress_data)
     _render_progress_charts(progress_data)
     _render_progress_details(progress_data)
 
+
 def _calculate_epic_progress(analytics_data: Dict[str, Any]) -> Dict[str, Any]:
-    """Calculate epic progress metrics and completion rates."""
     engine_enabled = analytics_data.get("analytics_engine_enabled", False)
     productivity_metrics = analytics_data.get("productivity_metrics", {})
     if engine_enabled and productivity_metrics:
@@ -978,120 +926,85 @@ def _calculate_epic_progress(analytics_data: Dict[str, Any]) -> Dict[str, Any]:
             return {"df": df, "analysis": epic_analysis}
     return {}
 
-def _render_progress_overview(progress_data: Dict[str, Any]):
-    """Render epic progress overview."""
-    df = progress_data.get("df")
-    if df is None:
-        return
 
 def _render_progress_charts(progress_data: Dict[str, Any]):
-    """Render epic progress charts."""
     df = progress_data.get("df")
     if df is None:
         return
     fig = make_subplots(
-        rows=2,
-        cols=2,
+        rows=2, cols=2,
         subplot_titles=["Points Earned by Epic", "Epic Velocity (Tasks/Week)", "Epic Efficiency Score", "Progress vs Target"],
         specs=[[{"type": "bar"}, {"type": "bar"}], [{"type": "scatter"}, {"type": "bar"}]],
     )
-    fig.add_trace(
-        go.Bar(x=df["epic_name"] if "epic_name" in df.columns else df.get("name", []),
-               y=df["points_earned"] if "points_earned" in df.columns else df.get("points", []),
-               name="Points", marker_color="lightblue", text=df["points_earned"] if "points_earned" in df.columns else df.get("points", []), textposition="outside"),
-        row=1, col=1,
-    )
+    x_epic = df["epic_name"] if "epic_name" in df.columns else df.get("name", [])
+    fig.add_trace(go.Bar(x=x_epic, y=df["points_earned"] if "points_earned" in df.columns else df.get("points", []), name="Points", marker_color="lightblue"), row=1, col=1)
     if "velocity" in df.columns:
-        fig.add_trace(
-            go.Bar(x=df["epic_name"] if "epic_name" in df.columns else df.get("name", []), y=df["velocity"], name="Velocity", marker_color="orange", text=[f"{v:.1f}" for v in df["velocity"]], textposition="outside"),
-            row=1, col=2,
-        )
+        fig.add_trace(go.Bar(x=x_epic, y=df["velocity"], name="Velocity", marker_color="orange"), row=1, col=2)
     if "efficiency_score" in df.columns:
-        fig.add_trace(
-            go.Scatter(x=df["epic_name"] if "epic_name" in df.columns else df.get("name", []), y=df["efficiency_score"], mode="markers+lines", name="Efficiency", marker=dict(size=12, color=df["efficiency_score"], colorscale="RdYlGn", cmin=0, cmax=100), line=dict(color="green", width=2)),
-            row=2, col=1,
-        )
+        fig.add_trace(go.Scatter(x=x_epic, y=df["efficiency_score"], mode="markers+lines", name="Efficiency", marker=dict(size=10, color=df["efficiency_score"], colorscale="RdYlGn", cmin=0, cmax=100)), row=2, col=1)
     if "progress_percentage" in df.columns:
-        fig.add_trace(
-            go.Bar(x=df["epic_name"] if "epic_name" in df.columns else df.get("name", []), y=df["progress_percentage"], name="Actual Progress", marker_color="lightgreen", opacity=0.7),
-            row=2, col=2,
-        )
+        fig.add_trace(go.Bar(x=x_epic, y=df["progress_percentage"], name="Actual Progress", marker_color="lightgreen", opacity=0.7), row=2, col=2)
         if "target_percentage" in df.columns:
-            fig.add_trace(
-                go.Scatter(x=df["epic_name"] if "epic_name" in df.columns else df.get("name", []), y=df["target_percentage"], mode="markers+lines", name="Target", line=dict(color="red", dash="dash", width=2), marker=dict(size=8, color="red")),
-                row=2, col=2,
-            )
+            fig.add_trace(go.Scatter(x=x_epic, y=df["target_percentage"], mode="markers+lines", name="Target", line=dict(color="red", dash="dash", width=2), marker=dict(size=8, color="red")), row=2, col=2)
     fig.update_layout(height=600, showlegend=False)
     fig.update_xaxes(tickangle=-45)
     fig.update_yaxes(title_text="Points", row=1, col=1)
     fig.update_yaxes(title_text="Tasks/Week", row=1, col=2)
     fig.update_yaxes(title_text="Efficiency %", range=[0, 100], row=2, col=1)
     fig.update_yaxes(title_text="Progress %", range=[0, 100], row=2, col=2)
+    _apply_chart_theme(fig)
     st.plotly_chart(fig, use_container_width=True)
 
+
 def _render_progress_details(progress_data: Dict[str, Any]):
-    """Render detailed epic progress information."""
     df = progress_data.get("df")
-    if df is None:
+    if df is None or len(df) == 0:
         return
     col1, col2, col3 = st.columns(3)
     with col1:
-        if "velocity" in df.columns and len(df) > 0:
+        if "velocity" in df.columns:
             top_velocity_epic = df.loc[df["velocity"].idxmax()]
             epic_name = top_velocity_epic.get("epic_name", top_velocity_epic.get("name", "Unknown"))
             st.success(f"🚀 **Fastest Epic:** {epic_name}")
             st.caption(f"Velocity: {top_velocity_epic['velocity']:.1f} tasks/week")
     with col2:
-        if "efficiency_score" in df.columns and len(df) > 0:
+        if "efficiency_score" in df.columns:
             most_efficient_epic = df.loc[df["efficiency_score"].idxmax()]
             epic_name = most_efficient_epic.get("epic_name", most_efficient_epic.get("name", "Unknown"))
             st.success(f"⚙️ **Most Efficient:** {epic_name}")
             st.caption(f"Efficiency: {most_efficient_epic['efficiency_score']:.1f}%")
     with col3:
-        points_col = "points_earned" if "points_earned" in df.columns else "points"
-        total_points = df[points_col].sum() if points_col in df.columns else 0
+        points_col = "points_earned" if "points_earned" in df.columns else ("points" if "points" in df.columns else None)
+        total_points = df[points_col].sum() if points_col else 0
         avg_progress = df["progress_percentage"].mean() if "progress_percentage" in df.columns else 0
         st.metric("Total Points", f"{total_points:,}", f"Avg Progress: {avg_progress:.1f}%")
 
 
 def _render_basic_epic_progress(analytics_data: Dict[str, Any]):
-    """Render basic epic progress (fallback)."""
     epics = analytics_data.get("epics", [])
     if not epics:
         st.info("No epic data available")
         return
-
-    # Get progress for each epic (simplified)
     epic_progress = []
-    for epic in epics[:10]:  # Limit to 10 epics
-        epic_name = epic.get("name", "Unknown")[:20] + "..."
-        points = epic.get("points_earned", 0)
+    for epic in epics[:10]:
+        epic_name = epic.get("name", "Unknown")
+        points = epic.get("points_earned", epic.get("points", 0))
         status = epic.get("status", "unknown")
-
-        epic_progress.append({
-            "epic": epic_name,
-            "points": points,
-            "status": status
-        })
+        epic_progress.append({"epic": epic_name, "points": points, "status": status})
 
     if epic_progress and PANDAS_AVAILABLE:
         df = pd.DataFrame(epic_progress)
-
-        fig = px.bar(
-            df,
-            x="epic",
-            y="points",
-            color="status",
-            title="Points by Epic",
-            labels={"epic": "Epic", "points": "Points Earned"}
-        )
-
+        fig = px.bar(df, x="epic", y="points", color="status", title="Points by Epic", labels={"epic": "Epic", "points": "Points Earned"})
         fig.update_layout(height=400, xaxis_tickangle=-45)
+        _apply_chart_theme(fig)
         st.plotly_chart(fig, use_container_width=True)
 
 
+# ==============================
+#   TDAH Insights
+# ==============================
+
 def _render_tdah_insights(analytics_data: Dict[str, Any]):
-    """Render enhanced TDAH-specific insights using analytics engine data."""
     st.markdown("### 🧠 TDAH Insights")
 
     engine_enabled = analytics_data.get("analytics_engine_enabled", False)
@@ -1100,97 +1013,56 @@ def _render_tdah_insights(analytics_data: Dict[str, Any]):
     productivity_metrics = analytics_data.get("productivity_metrics", {})
 
     if engine_enabled and session_data:
-        # Enhanced TDAH analysis from analytics engine
         tdah_metrics = session_data.get("tdah_metrics", {})
         focus_patterns = session_data.get("focus_patterns", {})
         interruption_analysis = session_data.get("interruption_analysis", {})
         energy_patterns = session_data.get("energy_patterns", {})
 
-        # Main metrics row
         col1, col2, col3, col4 = st.columns(4)
-
         with col1:
-            # Enhanced interruption analysis
             avg_interruptions = interruption_analysis.get("average_per_session", 0)
             interruption_trend = interruption_analysis.get("trend", "stable")
             trend_color = "red" if interruption_trend == "increasing" else "green" if interruption_trend == "decreasing" else "blue"
-
-            st.metric(
-                "🚫 Avg Interruptions",
-                f"{avg_interruptions:.1f}",
-                f"{interruption_trend}",
-                delta_color=trend_color
-            )
+            st.metric("🚫 Avg Interruptions", f"{avg_interruptions:.1f}", f"{interruption_trend}", delta_color=trend_color)
 
         with col2:
-            # Energy pattern analysis
             avg_energy = energy_patterns.get("average_level", 0)
-            optimal_energy_time = energy_patterns.get("peak_hours", [])
             energy_consistency = energy_patterns.get("consistency_score", 0)
-
-            st.metric(
-                "⚡ Energy Level",
-                f"{avg_energy:.1f}/10",
-                f"Consistency: {energy_consistency:.0f}%"
-            )
+            st.metric("⚡ Energy Level", f"{avg_energy:.1f}/10", f"Consistency: {energy_consistency:.0f}%")
 
         with col3:
-            # Focus sustainability
             focus_sustainability = focus_patterns.get("sustainability_score", 0)
             optimal_session_length = focus_patterns.get("optimal_duration", 0)
-
-            st.metric(
-                "🎯 Focus Sustainability",
-                f"{focus_sustainability:.0f}%",
-                f"Optimal: {optimal_session_length}min"
-            )
+            st.metric("🎯 Focus Sustainability", f"{focus_sustainability:.0f}%", f"Optimal: {optimal_session_length}min")
 
         with col4:
-            # TDAH adaptation score
             adaptation_score = tdah_metrics.get("adaptation_score", 0)
             improvement_trend = tdah_metrics.get("improvement_trend", "stable")
-
-            st.metric(
-                "🧠 TDAH Adaptation",
-                f"{adaptation_score:.0f}%",
-                improvement_trend
-            )
+            st.metric("🧠 TDAH Adaptation", f"{adaptation_score:.0f}%", improvement_trend)
 
         st.markdown("---")
 
-        # Detailed insights
         col1, col2 = st.columns(2)
-
         with col1:
             st.markdown("#### 📈 Focus Patterns")
-
-            # Focus quality distribution
             focus_distribution = focus_patterns.get("quality_distribution", {})
             if focus_distribution and PLOTLY_AVAILABLE:
                 labels = list(focus_distribution.keys())
                 values = list(focus_distribution.values())
-
-                fig = px.pie(
-                    values=values,
-                    names=labels,
-                    title="Focus Quality Distribution",
-                    color_discrete_sequence=px.colors.qualitative.Set3
-                )
+                fig = px.pie(values=values, names=labels, title="Focus Quality Distribution", color_discrete_sequence=px.colors.qualitative.Set3)
                 fig.update_layout(height=300)
+                _apply_chart_theme(fig)
                 st.plotly_chart(fig, use_container_width=True)
 
-            # Best performance times
             best_times = focus_patterns.get("best_performance_times", [])
             if best_times:
                 st.success(f"🌟 **Best focus times:** {', '.join(best_times)}")
 
         with col2:
             st.markdown("#### 💡 Personalized Recommendations")
-
-            # Get recommendations from analytics engine
             recommendations = tdah_metrics.get("recommendations", [])
             if recommendations:
-                for i, rec in enumerate(recommendations[:5]):
+                for rec in recommendations[:5]:
                     priority = rec.get("priority", "medium")
                     emoji = "🔴" if priority == "high" else "🟡" if priority == "medium" else "🟢"
                     st.markdown(f"{emoji} **{rec.get('title', 'Recommendation')}**")
@@ -1198,13 +1070,10 @@ def _render_tdah_insights(analytics_data: Dict[str, Any]):
             else:
                 st.info("Keep tracking sessions to get personalized recommendations!")
 
-        # Energy vs Focus correlation
         if energy_patterns and focus_patterns:
             st.markdown("#### ⚡ Energy vs Focus Correlation")
-
             correlation_data = session_data.get("energy_focus_correlation", {})
             correlation_score = correlation_data.get("correlation_coefficient", 0)
-
             if abs(correlation_score) > 0.3:
                 if correlation_score > 0:
                     st.success(f"📈 Strong positive correlation ({correlation_score:.2f}) - Higher energy = better focus")
@@ -1214,60 +1083,42 @@ def _render_tdah_insights(analytics_data: Dict[str, Any]):
                 st.info(f"➡️ Weak correlation ({correlation_score:.2f}) - Energy and focus vary independently")
 
     else:
-        # Fallback to basic TDAH analysis
         timer_sessions = analytics_data.get("timer_sessions", [])
         if not timer_sessions:
             st.info("No TDAH data available")
             return
 
         col1, col2 = st.columns(2)
-
         with col1:
-            # Basic interruption analysis
             total_interruptions = sum(s.get("interruptions_count", 0) for s in timer_sessions)
             avg_interruptions = total_interruptions / len(timer_sessions) if timer_sessions else 0
+            st.metric("🚫 Total Interruptions", total_interruptions, f"{avg_interruptions:.1f} avg/session")
 
-            st.metric(
-                "🚫 Total Interruptions",
-                total_interruptions,
-                f"{avg_interruptions:.1f} avg per session"
-            )
-
-            # Basic energy level analysis
             energy_levels = [s.get("energy_level") for s in timer_sessions if s.get("energy_level")]
             if energy_levels:
                 avg_energy = sum(energy_levels) / len(energy_levels)
-                st.metric(
-                    "⚡ Avg Energy Level",
-                    f"{avg_energy:.1f}/10",
-                    f"Based on {len(energy_levels)} sessions"
-                )
+                st.metric("⚡ Avg Energy Level", f"{avg_energy:.1f}/10", f"Based on {len(energy_levels)} sessions")
 
         with col2:
-            # Basic focus rating distribution
             focus_ratings = [s.get("focus_rating") for s in timer_sessions if s.get("focus_rating")]
             if focus_ratings and PLOTLY_AVAILABLE:
-                fig = px.histogram(
-                    x=focus_ratings,
-                    nbins=10,
-                    title="Focus Rating Distribution",
-                    labels={"x": "Focus Rating (1-10)", "y": "Sessions"},
-                    color_discrete_sequence=["lightcoral"]
-                )
+                fig = px.histogram(x=focus_ratings, nbins=10, title="Focus Rating Distribution", labels={"x": "Focus Rating (1-10)", "y": "Sessions"}, color_discrete_sequence=["lightcoral"])
                 fig.update_layout(height=300)
+                _apply_chart_theme(fig)
                 st.plotly_chart(fig, use_container_width=True)
 
 
-def _render_detailed_tables(analytics_data: Dict[str, Any]):
-    """Render detailed data tables."""
+# ==============================
+#   Detailed Tables & Export
+# ==============================
 
+def _render_detailed_tables(analytics_data: Dict[str, Any]):
     tab1, tab2, tab3 = st.tabs(["📅 Daily Metrics", "⏱️ Recent Sessions", "📋 Task Details"])
 
     with tab1:
         daily_metrics = analytics_data.get("daily_metrics", [])
         if daily_metrics and PANDAS_AVAILABLE:
-            df = pd.DataFrame(daily_metrics)
-            df = df.sort_values("date", ascending=False)
+            df = pd.DataFrame(daily_metrics).sort_values("date", ascending=False)
             st.dataframe(df, use_container_width=True)
         else:
             st.info("No daily metrics available")
@@ -1275,22 +1126,16 @@ def _render_detailed_tables(analytics_data: Dict[str, Any]):
     with tab2:
         timer_sessions = analytics_data.get("timer_sessions", [])
         if timer_sessions:
-            # Show recent 10 sessions
             recent_sessions = timer_sessions[:10]
-            session_data = []
-
-            for session in recent_sessions:
-                session_data.append({
-                    "Date": session.get("started_at", "")[:16],
-                    "Duration": f"{session.get('planned_duration_minutes', 0)}min",
-                    "Focus": f"{session.get('focus_rating', 'N/A')}/10",
-                    "Interruptions": session.get('interruptions_count', 0),
-                    "Task": session.get('task_reference', 'N/A')
-                })
-
+            session_data = [{
+                "Date": s.get("started_at", "")[:16],
+                "Duration": f"{s.get('planned_duration_minutes', 0)}min",
+                "Focus": f"{s.get('focus_rating', 'N/A')}/10",
+                "Interruptions": s.get('interruptions_count', 0),
+                "Task": s.get('task_reference', 'N/A'),
+            } for s in recent_sessions]
             if PANDAS_AVAILABLE:
-                df = pd.DataFrame(session_data)
-                st.dataframe(df, use_container_width=True)
+                st.dataframe(pd.DataFrame(session_data), use_container_width=True)
             else:
                 for session in session_data[:5]:
                     st.json(session)
@@ -1300,34 +1145,28 @@ def _render_detailed_tables(analytics_data: Dict[str, Any]):
     with tab3:
         tasks = analytics_data.get("tasks", [])
         if tasks:
-            task_data = []
-            for task in tasks[:20]:  # Recent 20 tasks
-                task_data.append({
-                    "Title": task.get("title", "Unknown"),
-                    "Status": task.get("status", "unknown"),
-                    "TDD Phase": task.get("tdd_phase", "unknown"),
-                    "Epic": task.get("epic_name", "Unknown"),
-                    "Estimate": f"{task.get('estimate_minutes', 0)}min"
-                })
-
+            rows = [{
+                "Title": t.get("title", "Unknown"),
+                "Status": t.get("status", "unknown"),
+                "TDD Phase": t.get("tdd_phase", "unknown"),
+                "Epic": t.get("epic_name", "Unknown"),
+                "Estimate": f"{t.get('estimate_minutes', 0)}min",
+            } for t in tasks[:20]]
             if PANDAS_AVAILABLE:
-                df = pd.DataFrame(task_data)
-                st.dataframe(df, use_container_width=True)
+                st.dataframe(pd.DataFrame(rows), use_container_width=True)
             else:
-                for task in task_data[:5]:
-                    st.json(task)
+                for row in rows[:5]:
+                    st.json(row)
         else:
             st.info("No task data available")
 
 
 def _export_analytics_data(analytics_data: Dict[str, Any], export_format: str):
-    """Export analytics data in the specified format."""
-
     try:
         import io
-        from datetime import datetime
+        import json
 
-        # Prepare export data
+        filename = f"tdd_analytics_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
         export_data = {
             "export_timestamp": datetime.now().isoformat(),
             "period_days": analytics_data.get("period_days", 0),
@@ -1336,578 +1175,137 @@ def _export_analytics_data(analytics_data: Dict[str, Any], export_format: str):
                 "total_sessions": analytics_data.get("total_sessions", 0),
                 "completed_tasks": analytics_data.get("completed_tasks", 0),
                 "average_focus_rating": analytics_data.get("average_focus_rating", 0),
-                "total_points": analytics_data.get("total_points", 0)
+                "total_points": analytics_data.get("total_points", 0),
             },
             "daily_metrics": analytics_data.get("daily_metrics", []),
             "timer_sessions": analytics_data.get("timer_sessions", []),
             "tasks": analytics_data.get("tasks", []),
-            "epics": analytics_data.get("epics", [])
+            "epics": analytics_data.get("epics", []),
         }
 
-        # Add enhanced data if available
         if analytics_data.get("analytics_engine_enabled"):
             export_data["enhanced_metrics"] = {
                 "productivity_metrics": analytics_data.get("productivity_metrics", {}),
                 "time_patterns": analytics_data.get("time_patterns", {}),
-                "session_data": analytics_data.get("session_data", {})
+                "session_data": analytics_data.get("session_data", {}),
             }
 
-        filename = f"tdd_analytics_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-
         if export_format == "JSON":
-            import json
             json_data = json.dumps(export_data, indent=2, default=str)
-            st.download_button(
-                label="📥 Download JSON",
-                data=json_data,
-                file_name=f"{filename}.json",
-                mime="application/json"
-            )
+            st.download_button("📥 Download JSON", data=json_data, file_name=f"{filename}.json", mime="application/json")
 
         elif export_format == "CSV" and PANDAS_AVAILABLE:
-            # Create CSV from daily metrics
             if export_data["daily_metrics"]:
                 df = pd.DataFrame(export_data["daily_metrics"])
                 csv_buffer = io.StringIO()
                 df.to_csv(csv_buffer, index=False)
-
-                st.download_button(
-                    label="📥 Download CSV",
-                    data=csv_buffer.getvalue(),
-                    file_name=f"{filename}.csv",
-                    mime="text/csv"
-                )
+                st.download_button("📥 Download CSV", data=csv_buffer.getvalue(), file_name=f"{filename}.csv", mime="text/csv")
             else:
                 st.warning("No daily metrics available for CSV export")
 
         elif export_format == "Excel" and PANDAS_AVAILABLE:
-            # Create Excel with multiple sheets
             buffer = io.BytesIO()
             with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
-                # Overview sheet
-                overview_df = pd.DataFrame([export_data["overview_metrics"]])
-                overview_df.to_excel(writer, sheet_name='Overview', index=False)
-
-                # Daily metrics
+                pd.DataFrame([export_data["overview_metrics"]]).to_excel(writer, sheet_name='Overview', index=False)
                 if export_data["daily_metrics"]:
-                    daily_df = pd.DataFrame(export_data["daily_metrics"])
-                    daily_df.to_excel(writer, sheet_name='Daily_Metrics', index=False)
-
-                # Sessions
+                    pd.DataFrame(export_data["daily_metrics"]).to_excel(writer, sheet_name='Daily_Metrics', index=False)
                 if export_data["timer_sessions"]:
-                    sessions_df = pd.DataFrame(export_data["timer_sessions"])
-                    sessions_df.to_excel(writer, sheet_name='Sessions', index=False)
-
-                # Tasks
+                    pd.DataFrame(export_data["timer_sessions"]).to_excel(writer, sheet_name='Sessions', index=False)
                 if export_data["tasks"]:
-                    tasks_df = pd.DataFrame(export_data["tasks"])
-                    tasks_df.to_excel(writer, sheet_name='Tasks', index=False)
+                    pd.DataFrame(export_data["tasks"]).to_excel(writer, sheet_name='Tasks', index=False)
+                if export_data["epics"]:
+                    pd.DataFrame(export_data["epics"]).to_excel(writer, sheet_name='Epics', index=False)
 
-            st.download_button(
-                label="📥 Download Excel",
-                data=buffer.getvalue(),
-                file_name=f"{filename}.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            )
+            st.download_button("📥 Download Excel", data=buffer.getvalue(), file_name=f"{filename}.xlsx",
+                               mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
         st.success(f"✅ Export ready! Download your {export_format} file above.")
-
     except Exception as e:
         st.error(f"❌ Export failed: {e}")
 
 
-def _apply_data_filters(data: Dict[str, Any], filters: Dict[str, Any]) -> Dict[str, Any]:
-    """Apply filters to analytics data."""
+# ==============================
+#   Filters & Recalc
+# ==============================
 
+def _apply_data_filters(data: Dict[str, Any], filters: Dict[str, Any]) -> Dict[str, Any]:
     if not filters:
         return data
 
-    filtered_data = data.copy()
+    filtered = dict(data)
 
-    # Apply epic filter
     if filters.get("selected_epics"):
-        selected_epics = filters["selected_epics"]
+        selected_epics = set(filters["selected_epics"])
+        if "tasks" in filtered:
+            filtered["tasks"] = [t for t in filtered["tasks"] if t.get("epic_name") in selected_epics]
+        if "epics" in filtered:
+            filtered["epics"] = [e for e in filtered["epics"] if e.get("name") in selected_epics]
 
-        # Filter tasks
-        if "tasks" in filtered_data:
-            filtered_data["tasks"] = [
-                task for task in filtered_data["tasks"]
-                if task.get("epic_name") in selected_epics
-            ]
-
-        # Filter epics
-        if "epics" in filtered_data:
-            filtered_data["epics"] = [
-                epic for epic in filtered_data["epics"]
-                if epic.get("name") in selected_epics
-            ]
-
-    # Apply focus level filter
     if filters.get("focus_range") and filters["focus_range"] != (1, 10):
-        min_focus, max_focus = filters["focus_range"]
-
-        # Filter timer sessions
-        if "timer_sessions" in filtered_data:
-            filtered_data["timer_sessions"] = [
-                session for session in filtered_data["timer_sessions"]
-                if (session.get("focus_rating") is None or 
-                    min_focus <= session.get("focus_rating", 0) <= max_focus)
+        mn, mx = filters["focus_range"]
+        if "timer_sessions" in filtered:
+            filtered["timer_sessions"] = [
+                s for s in filtered["timer_sessions"]
+                if (s.get("focus_rating") is None or mn <= s.get("focus_rating", 0) <= mx)
             ]
 
-    # Apply TDD phase filter
     if filters.get("selected_tdd_phases"):
-        selected_phases = filters["selected_tdd_phases"]
+        selected = set(filters["selected_tdd_phases"])
+        if "tasks" in filtered:
+            filtered["tasks"] = [t for t in filtered["tasks"] if t.get("tdd_phase") in selected]
 
-        # Filter tasks
-        if "tasks" in filtered_data:
-            filtered_data["tasks"] = [
-                task for task in filtered_data["tasks"]
-                if task.get("tdd_phase") in selected_phases
-            ]
-
-    # Apply session type filter
     if filters.get("selected_session_types"):
-        selected_types = filters["selected_session_types"]
+        selected = set(filters["selected_session_types"])
+        if "timer_sessions" in filtered:
+            filtered["timer_sessions"] = [s for s in filtered["timer_sessions"] if s.get("session_type") in selected]
 
-        # Filter timer sessions
-        if "timer_sessions" in filtered_data:
-            filtered_data["timer_sessions"] = [
-                session for session in filtered_data["timer_sessions"]
-                if session.get("session_type") in selected_types
-            ]
-
-    # Recalculate metrics after filtering
-    filtered_data = _recalculate_metrics(filtered_data)
-
-    return filtered_data
+    return _recalculate_metrics(filtered)
 
 
 def _recalculate_metrics(data: Dict[str, Any]) -> Dict[str, Any]:
-    """Recalculate metrics after applying filters."""
-
     timer_sessions = data.get("timer_sessions", [])
     tasks = data.get("tasks", [])
 
-    # Recalculate basic metrics
     data["total_sessions"] = len(timer_sessions)
     data["total_focus_time"] = sum(s.get("planned_duration_minutes", 0) for s in timer_sessions)
     data["completed_tasks"] = len([t for t in tasks if t.get("status") == "completed"])
 
-    # Recalculate focus rating
     focus_ratings = [s.get("focus_rating") for s in timer_sessions if s.get("focus_rating")]
     data["average_focus_rating"] = sum(focus_ratings) / len(focus_ratings) if focus_ratings else 0
 
-    # Recalculate daily metrics
     data["daily_metrics"] = _calculate_daily_metrics(timer_sessions, tasks)
-
     return data
 
 
-def _render_advanced_tdah_metrics(analytics_data: Dict[str, Any]):
-    """Render advanced TDAH-specific metrics dashboard."""
-
-    st.markdown("### 🧠 Advanced TDAH Performance Dashboard")
-
-    engine_enabled = analytics_data.get("analytics_engine_enabled", False)
-    session_data = analytics_data.get("session_data", {})
-    time_patterns = analytics_data.get("time_patterns", {})
-    productivity_metrics = analytics_data.get("productivity_metrics", {})
-
-    if engine_enabled and session_data:
-        # Advanced TDAH analysis from analytics engine
-        tdah_advanced = session_data.get("tdah_advanced_metrics", {})
-
-        # Key TDAH performance indicators
-        col1, col2, col3, col4 = st.columns(4)
-
-        with col1:
-            # Attention span indicator
-            attention_span = tdah_advanced.get("average_attention_span", 0)
-            optimal_span = tdah_advanced.get("optimal_attention_span", 25)
-            span_efficiency = min(100, (attention_span / optimal_span) * 100) if optimal_span > 0 else 0
-
-            st.metric(
-                "🎯 Attention Span",
-                f"{attention_span:.0f}min",
-                f"{span_efficiency:.0f}% efficiency"
-            )
-
-        with col2:
-            # Hyperfocus detection
-            hyperfocus_sessions = tdah_advanced.get("hyperfocus_sessions", 0)
-            total_sessions = analytics_data.get("total_sessions", 1)
-            hyperfocus_rate = (hyperfocus_sessions / total_sessions) * 100 if total_sessions > 0 else 0
-
-            st.metric(
-                "⚡ Hyperfocus Rate",
-                f"{hyperfocus_rate:.1f}%",
-                f"{hyperfocus_sessions} sessions"
-            )
-
-        with col3:
-            # Distraction resilience
-            resilience_score = tdah_advanced.get("distraction_resilience", 0)
-            resilience_trend = tdah_advanced.get("resilience_trend", "stable")
-
-            st.metric(
-                "🛡️ Distraction Resilience", 
-                f"{resilience_score:.0f}%",
-                resilience_trend
-            )
-
-        with col4:
-            # Task switching frequency
-            task_switches = tdah_advanced.get("avg_task_switches_per_hour", 0)
-            switch_efficiency = max(0, 100 - (task_switches * 10))  # Penalize frequent switching
-
-            st.metric(
-                "🔄 Task Switching",
-                f"{task_switches:.1f}/hour",
-                f"{switch_efficiency:.0f}% efficiency"
-            )
-
-        # Advanced visualizations
-        tab1, tab2, tab3 = st.tabs(["🎯 Focus Patterns", "⚡ Energy Analysis", "🧠 Cognitive Load"])
-
-        with tab1:
-            _render_focus_patterns_analysis(tdah_advanced, time_patterns)
-
-        with tab2:
-            _render_energy_analysis(tdah_advanced, session_data)
-
-        with tab3:
-            _render_cognitive_load_analysis(tdah_advanced, productivity_metrics)
-
-    else:
-        # Fallback TDAH metrics using basic session data
-        _render_basic_tdah_metrics(analytics_data)
-
-
-def _render_focus_patterns_analysis(tdah_advanced: Dict[str, Any], time_patterns: Dict[str, Any]):
-    """Render detailed focus patterns analysis."""
-
-    st.markdown("#### 🎯 Focus Patterns & Optimization")
-
-    focus_patterns = tdah_advanced.get("focus_patterns", {})
-
-    if focus_patterns and PLOTLY_AVAILABLE:
-        # Focus quality heatmap by hour and day
-        heatmap_data = focus_patterns.get("weekly_focus_heatmap", {})
-
-        if heatmap_data:
-            col1, col2 = st.columns([2, 1])
-
-            with col1:
-                # Create focus quality heatmap
-                days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
-                hours = list(range(6, 24))  # 6 AM to 11 PM
-
-                # Convert data to matrix format
-                z_data = []
-                for day in days:
-                    day_data = []
-                    for hour in hours:
-                        focus_quality = heatmap_data.get(f"{day}_{hour}", 0)
-                        day_data.append(focus_quality)
-                    z_data.append(day_data)
-
-                fig = go.Figure(data=go.Heatmap(
-                    z=z_data,
-                    x=[f"{h}:00" for h in hours],
-                    y=days,
-                    colorscale="RdYlGn",
-                    zmin=0, zmax=10,
-                    colorbar=dict(title="Focus Quality")
-                ))
-
-                fig.update_layout(
-                    title="Weekly Focus Quality Heatmap",
-                    xaxis_title="Hour of Day",
-                    yaxis_title="Day of Week",
-                    height=300
-                )
-
-                st.plotly_chart(fig, use_container_width=True)
-
-            with col2:
-                # Focus optimization recommendations
-                st.markdown("**🎯 Optimization Tips:**")
-
-                peak_times = focus_patterns.get("peak_focus_times", [])
-                low_times = focus_patterns.get("low_focus_times", [])
-
-                if peak_times:
-                    st.success(f"✨ **Best times:** {', '.join(peak_times[:3])}")
-                    st.info("Schedule important tasks during these hours")
-
-                if low_times:
-                    st.warning(f"⚠️ **Challenging times:** {', '.join(low_times[:2])}")
-                    st.info("Use these for routine/administrative tasks")
-
-                # Focus duration insights
-                optimal_duration = focus_patterns.get("optimal_session_duration", 25)
-                st.success(f"🎯 **Optimal session:** {optimal_duration} minutes")
-
-        # Attention span trends
-        attention_trends = focus_patterns.get("attention_span_trends", [])
-        if attention_trends:
-            st.markdown("**📈 Attention Span Trends**")
-
-            # Create line chart for attention span over time
-            if PANDAS_AVAILABLE:
-                df = pd.DataFrame(attention_trends)
-
-                fig = px.line(
-                    df,
-                    x="date",
-                    y="attention_span",
-                    title="Attention Span Over Time",
-                    labels={"attention_span": "Minutes", "date": "Date"}
-                )
-
-                fig.add_hline(y=df["attention_span"].mean(), line_dash="dash", line_color="red",
-                             annotation_text=f"Average: {df['attention_span'].mean():.1f}min")
-
-                fig.update_layout(height=250)
-                st.plotly_chart(fig, use_container_width=True)
-
-
-def _render_energy_analysis(tdah_advanced: Dict[str, Any], session_data: Dict[str, Any]):
-    """Render energy level analysis specific to TDAH."""
-
-    st.markdown("#### ⚡ Energy Patterns & Management")
-
-    energy_analysis = tdah_advanced.get("energy_analysis", {})
-
-    if energy_analysis and PLOTLY_AVAILABLE:
-        col1, col2 = st.columns(2)
-
-        with col1:
-            # Energy vs Focus correlation
-            correlation_data = energy_analysis.get("energy_focus_correlation", [])
-
-            if correlation_data and PANDAS_AVAILABLE:
-                df = pd.DataFrame(correlation_data)
-
-                fig = px.scatter(
-                    df,
-                    x="energy_level",
-                    y="focus_rating",
-                    size="session_duration",
-                    color="time_of_day",
-                    title="Energy vs Focus Correlation",
-                    labels={
-                        "energy_level": "Energy Level (1-10)",
-                        "focus_rating": "Focus Rating (1-10)",
-                        "session_duration": "Session Duration (min)"
-                    }
-                )
-
-                # Add trend line
-                if len(df) > 1:
-                    correlation_coef = df["energy_level"].corr(df["focus_rating"])
-                    fig.add_annotation(
-                        text=f"Correlation: {correlation_coef:.2f}",
-                        xref="paper", yref="paper",
-                        x=0.02, y=0.98, showarrow=False,
-                        bgcolor="rgba(255,255,255,0.8)"
-                    )
-
-                fig.update_layout(height=300)
-                st.plotly_chart(fig, use_container_width=True)
-
-        with col2:
-            # Energy depletion patterns
-            depletion_patterns = energy_analysis.get("energy_depletion", {})
-
-            if depletion_patterns:
-                # Show energy drop rates
-                morning_drop = depletion_patterns.get("morning_drop_rate", 0)
-                afternoon_drop = depletion_patterns.get("afternoon_drop_rate", 0)
-                evening_drop = depletion_patterns.get("evening_drop_rate", 0)
-
-                periods = ["Morning", "Afternoon", "Evening"]
-                drop_rates = [morning_drop, afternoon_drop, evening_drop]
-
-                fig = px.bar(
-                    x=periods,
-                    y=drop_rates,
-                    title="Energy Depletion Rates",
-                    labels={"x": "Time Period", "y": "Drop Rate (%/hour)"},
-                    color=drop_rates,
-                    color_continuous_scale="Reds"
-                )
-
-                fig.update_layout(height=300, showlegend=False)
-                st.plotly_chart(fig, use_container_width=True)
-
-        # Energy management recommendations
-        st.markdown("**💡 Energy Management Strategies:**")
-
-        energy_tips = energy_analysis.get("management_strategies", [])
-        if energy_tips:
-            for tip in energy_tips[:4]:
-                st.info(f"• {tip}")
-        else:
-            st.info("• Take breaks every 25-30 minutes")
-            st.info("• Schedule demanding tasks during high-energy periods")
-            st.info("• Use physical activity to boost energy")
-            st.info("• Monitor caffeine intake timing")
-
-
-def _render_cognitive_load_analysis(tdah_advanced: Dict[str, Any], productivity_metrics: Dict[str, Any]):
-    """Render cognitive load analysis for TDAH management."""
-
-    st.markdown("#### 🧠 Cognitive Load & Task Complexity")
-
-    cognitive_analysis = tdah_advanced.get("cognitive_analysis", {})
-
-    if cognitive_analysis:
-        col1, col2 = st.columns(2)
-
-        with col1:
-            # Cognitive load by task type
-            load_by_type = cognitive_analysis.get("load_by_task_type", {})
-
-            if load_by_type and PLOTLY_AVAILABLE:
-                task_types = list(load_by_type.keys())
-                load_scores = list(load_by_type.values())
-
-                fig = px.bar(
-                    x=task_types,
-                    y=load_scores,
-                    title="Cognitive Load by Task Type",
-                    labels={"x": "Task Type", "y": "Cognitive Load (1-10)"},
-                    color=load_scores,
-                    color_continuous_scale="Viridis"
-                )
-
-                fig.update_layout(height=300, xaxis_tickangle=-45)
-                st.plotly_chart(fig, use_container_width=True)
-
-        with col2:
-            # Multitasking impact
-            multitasking_data = cognitive_analysis.get("multitasking_impact", {})
-
-            if multitasking_data:
-                single_task_performance = multitasking_data.get("single_task_score", 0)
-                multi_task_performance = multitasking_data.get("multi_task_score", 0)
-                impact_percentage = ((single_task_performance - multi_task_performance) / single_task_performance * 100) if single_task_performance > 0 else 0
-
-                st.metric(
-                    "🎯 Single-Task Focus",
-                    f"{single_task_performance:.1f}/10",
-                    "Optimal performance"
-                )
-
-                st.metric(
-                    "🔄 Multi-Task Performance", 
-                    f"{multi_task_performance:.1f}/10",
-                    f"-{impact_percentage:.1f}% impact"
-                )
-
-                # Recommendation
-                if impact_percentage > 20:
-                    st.warning("💡 **Tip:** Focus on single tasks for better performance")
-                else:
-                    st.success("✅ **Good:** Multitasking impact is manageable")
-
-        # Cognitive load management
-        st.markdown("**🧠 Cognitive Load Management:**")
-
-        complexity_recommendations = cognitive_analysis.get("complexity_recommendations", [])
-        if complexity_recommendations:
-            for rec in complexity_recommendations[:3]:
-                st.info(f"• {rec}")
-        else:
-            st.info("• Break complex tasks into smaller chunks")
-            st.info("• Use time-boxing for demanding cognitive work")
-            st.info("• Alternate between high and low cognitive load tasks")
-
-
-def _render_basic_tdah_metrics(analytics_data: Dict[str, Any]):
-    """Render basic TDAH metrics when analytics engine is not available."""
-
-    st.markdown("#### 🧠 Basic TDAH Metrics")
-    st.info("💡 Enable the analytics engine for advanced TDAH insights and personalized recommendations.")
-
-    timer_sessions = analytics_data.get("timer_sessions", [])
-    if not timer_sessions:
-        st.warning("No session data available for TDAH analysis.")
-        return
-
-    # Basic TDAH indicators
-    col1, col2, col3 = st.columns(3)
-
-    with col1:
-        # Average session length
-        session_durations = [s.get("planned_duration_minutes", 0) for s in timer_sessions]
-        avg_duration = sum(session_durations) / len(session_durations) if session_durations else 0
-
-        st.metric("⏱️ Avg Session Length", f"{avg_duration:.0f}min")
-
-    with col2:
-        # Interruption rate
-        total_interruptions = sum(s.get("interruptions_count", 0) for s in timer_sessions)
-        avg_interruptions = total_interruptions / len(timer_sessions) if timer_sessions else 0
-
-        st.metric("🚫 Avg Interruptions", f"{avg_interruptions:.1f}/session")
-
-    with col3:
-        # Focus consistency
-        focus_ratings = [s.get("focus_rating") for s in timer_sessions if s.get("focus_rating")]
-        if focus_ratings:
-            focus_std = pd.Series(focus_ratings).std() if PANDAS_AVAILABLE else 0
-            consistency = max(0, 100 - (focus_std * 10))
-            st.metric("🎯 Focus Consistency", f"{consistency:.0f}%")
-        else:
-            st.metric("🎯 Focus Consistency", "No data")
-
+# ==============================
+#   Performance Monitor (sidebar)
+# ==============================
 
 def _render_performance_metrics():
-    """Render performance monitoring metrics in sidebar."""
-
     st.sidebar.markdown("### ⚡ Performance Monitor")
-
-    # Cache statistics
     cache_size = _analytics_cache.size()
     st.sidebar.metric("Cache Size", f"{cache_size} items")
 
-    # Performance metrics
     if hasattr(st.session_state, 'performance_metrics') and st.session_state.performance_metrics:
         metrics = st.session_state.performance_metrics
-
         st.sidebar.markdown("**Function Performance:**")
         for func_name, data in metrics.items():
             exec_time = data.get('execution_time', 0)
-
-            # Color code based on performance
-            if exec_time < 0.1:
-                status = "🟢"
-            elif exec_time < 0.5:
-                status = "🟡"
-            else:
-                status = "🔴"
-
+            status = "🟢" if exec_time < 0.1 else ("🟡" if exec_time < 0.5 else "🔴")
             st.sidebar.caption(f"{status} {func_name}: {exec_time:.3f}s")
 
-    # Cache management
     col1, col2 = st.sidebar.columns(2)
-
     with col1:
         if st.button("🗑️ Clear Cache", key="clear_cache"):
             _analytics_cache.clear()
             st.sidebar.success("Cache cleared")
-
     with col2:
         if st.button("🔄 Refresh", key="perf_refresh"):
             st.rerun()
 
-    # Performance optimization tips
     if cache_size == 0:
         st.sidebar.info("💡 **Tip:** Enable caching for faster performance")
 
-    # Show optimization level
     chart_quality = getattr(st.session_state, 'performance_settings', {}).get('chart_quality', 'Medium')
     use_cache = getattr(st.session_state, 'performance_settings', {}).get('use_cache', True)
 
@@ -1925,5 +1323,11 @@ def _render_performance_metrics():
     st.sidebar.caption(f"Optimization: {optimization_score}%")
 
 
+# ==============================
+#   Entrypoint
+# ==============================
+
 if __name__ == "__main__":
+    render_analytics_page()
+else:
     render_analytics_page()

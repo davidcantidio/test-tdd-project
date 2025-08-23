@@ -10,13 +10,29 @@ Comprehensive project management interface with CRUD operations:
 
 from __future__ import annotations
 
-from typing import Dict, Any, List, Tuple, Union
+from typing import Dict, Any, List, Tuple, Union, Optional
 import logging
 
 import streamlit as st
 
 # ===== Project imports (no sys.path hacks) =====
-from streamlit_extension.auth.middleware import init_protected_page
+# --- Autenticação -------------------------------------------------------------
+# Import absoluto (corrige erro crítico do relatório):
+try:
+    from streamlit_extension.auth.middleware import init_protected_page, require_auth
+except ImportError:
+    # Fallback seguro em desenvolvimento: mantém página acessível
+    def init_protected_page(title: str, *, layout: str = "wide") -> None:
+        st.set_page_config(page_title=title, layout=layout)
+
+    def require_auth(role: Optional[str] = None):  # type: ignore
+        def _decorator(fn):
+            def _inner(*args, **kwargs):
+                # Em produção real, este fallback não deve ser usado.
+                return fn(*args, **kwargs)
+            return _inner
+        return _decorator
+
 from streamlit_extension.auth.user_model import User
 from streamlit_extension.utils.exception_handler import (
     handle_streamlit_exceptions,
@@ -176,20 +192,14 @@ def render_wizard_call_to_action() -> None:
 # Main Page
 # ============================================================================ #
 
+@require_auth()  # Protege a página; em dev, o fallback acima permite acesso
 @handle_streamlit_exceptions(show_error=True, attempt_recovery=True)
 def render_projects_page() -> Dict[str, Any]:
     """Render the main projects management page with auth, filters and pagination."""
+    init_protected_page(UIConstants.PROJECTS_PAGE_TITLE or "📁 Project Management", layout="wide")
 
-    # --- Auth (no bypass in production) ---
-    current_user: User | None = init_protected_page(UIConstants.PROJECTS_PAGE_TITLE)
-    if not current_user:
-        # Mensagem amigável para ambientes sem login
-        st.info("🔒 Faça login para acessar a gestão de projetos.")
-        return {"error": "Authentication required"}
-
-    # --- Rate limit (por página+usuário) ---
-    rl_key = f"projects_page_load_user_{getattr(current_user, 'id', 'anon')}"
-    allowed, msg = check_rate_limit(rl_key) if check_rate_limit else (True, None)
+    # --- Rate limit (por página) ---
+    allowed, msg = check_rate_limit("projects_page_load") if check_rate_limit else (True, None)
     if not allowed:
         st.error(f"🚦 {msg}")
         st.info("Please wait before reloading the page.")
@@ -254,9 +264,8 @@ def render_projects_page() -> Dict[str, Any]:
 
     # --- Projects load ---
     with streamlit_error_boundary("loading_projects"):
-        # rate limit para leitura de DB (granular)
-        rl_db_key = f"projects_db_read_user_{getattr(current_user, 'id', 'anon')}"
-        ok_db, err_db = check_rate_limit(rl_db_key) if check_rate_limit else (True, None)
+        # rate limit para leitura de DB
+        ok_db, err_db = check_rate_limit("projects_db_read") if check_rate_limit else (True, None)
         if not ok_db:
             st.error(f"🚦 Database {err_db}")
             return {"error": "Database rate limited"}
