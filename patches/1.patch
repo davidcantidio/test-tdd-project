@@ -70,7 +70,7 @@ index e5dc1db0960bfba1eced1f9630f0cb46005951cb..1cb1b1dd9f676788bb66d120b214c5c7
          # Top bar (saudação, status, etc.)
          render_topbar(user)
 diff --git a/streamlit_extension/utils/auth.py b/streamlit_extension/utils/auth.py
-index 7a4fbc825c7e26a638bdebc4de9a910f7cb8eac0..da9b8945856460026ceea22c6f0d2f6d1fa57a2b 100644
+index 7a4fbc825c7e26a638bdebc4de9a910f7cb8eac0..a864511c717429fbf08b9dd40131888552670cd6 100644
 --- a/streamlit_extension/utils/auth.py
 +++ b/streamlit_extension/utils/auth.py
 @@ -282,86 +282,99 @@ class GoogleOAuthManager:
@@ -173,7 +173,82 @@ index 7a4fbc825c7e26a638bdebc4de9a910f7cb8eac0..da9b8945856460026ceea22c6f0d2f6d
                      credentials.id_token,
                      Request(),
                      audience=self.cfg.client_id,
-@@ -671,54 +684,65 @@ def require_authentication(page_func):
+@@ -568,62 +581,67 @@ class GoogleOAuthManager:
+                     retries=1,
+                 )
+         except Exception as e:
+             _json_log(self.logger, "revoke_failed", error=str(e))
+ 
+         for key in ("authenticated", "user_session", "oauth_state", "oauth_nonce", "oauth_code_verifier", "oauth_flow_id"):
+             self.store.delete(key)
+ 
+     # ---- UI helpers (opcionais) ----------------------------------------------
+     def _safe_redirect(self, path: str):
+         """Redirect interno com allowlist para evitar open redirect."""
+         if not DEPS:
+             return
+         if path not in self.cfg.allowed_redirect_paths:
+             path = "/"
+         st.markdown(f'<meta http-equiv="refresh" content="0; url={path}">', unsafe_allow_html=True)
+ 
+     def render_login_page(self) -> None:
+         if not DEPS:
+             raise RuntimeError("Sem Streamlit disponível")
+         st.title("🔐 TDD Framework - Login necessário")
+         st.write("Entre com sua conta Google para continuar.")
+ 
+         qp = st.query_params or {}
+         if "code" in qp and "state" in qp:
++            # After rerun, finalize login by clearing params and showing message
++            if st.session_state.get("_oauth_authenticated"):
++                user = (self.get_current_user() or {}).get("name", "")
++                st.query_params.clear()
++                st.session_state.pop("_oauth_authenticated", None)
++                if user:
++                    st.success(f"✅ Bem-vindo(a), {user}!")
++                return
++
+             with st.spinner("Autenticando..."):
+                 try:
+-                    data = self.handle_callback(qp["code"], qp["state"])
+-                    # Clear OAuth parameters and show success
+-                    st.query_params.clear()
+-                    st.success(f"✅ Bem-vindo(a), {data['user_info']['name']}!")
+-                    # Directly rerun to preserve session state
+-                    # No redirect needed - let Streamlit handle the refresh
++                    self.handle_callback(qp["code"], qp["state"])
++                    # Flag so next run can clean query params without losing session state
++                    st.session_state["_oauth_authenticated"] = True
+                     st.rerun()
+                 except Exception as e:
+                     st.error(f"❌ Falha na autenticação: {e}")
+-                    # Limpa artefatos para evitar stuck em multi-aba
+                     for k in ("oauth_state", "oauth_nonce", "oauth_code_verifier", "oauth_flow_id"):
+                         self.store.delete(k)
+                     st.query_params.clear()
+                     st.rerun()
+             return
+ 
+         if st.button("🔗 Entrar com Google", type="primary", use_container_width=True):
+             try:
+                 url, _ = self.get_authorization_url()
+                 st.markdown(f'<meta http-equiv="refresh" content="0; url={url}">', unsafe_allow_html=True)
+             except Exception as e:
+                 st.error(f"Não foi possível iniciar OAuth: {e}")
+ 
+     def render_user_menu(self) -> None:
+         if not (DEPS and self.is_authenticated()):
+             return
+         user = self.get_current_user() or {}
+         with st.sidebar:
+             st.markdown("---")
+             st.markdown("### 👤 Usuário")
+             c1, c2 = st.columns([1, 2])
+             with c1:
+                 if user.get("picture"):
+                     st.image(user["picture"], width=48)
+                 else:
+@@ -671,54 +689,65 @@ def require_authentication(page_func):
  
  
  # =============================================================================

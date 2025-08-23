@@ -304,11 +304,6 @@ class GoogleOAuthManager:
         """Troca code por tokens, valida state/nonce/iss/aud/azp e popula sessão autenticada."""
         flow_id = self.store.get("oauth_flow_id")
 
-        # Debug session state before processing callback
-        try:
-            print(f"DEBUG: Session before callback: {list(st.session_state.keys())}")
-        except Exception:
-            pass
 
         if not self._pop_if_valid("oauth_state", state):
             # limpa resíduos para evitar multi-aba confusa
