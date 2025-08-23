@@ -53,7 +53,7 @@ render_timer_page, TIMER_AVAILABLE = _import_page("timer", "render_timer_page")
 render_settings_page, SETTINGS_AVAILABLE = _import_page("settings", "render_settings_page")
 render_clients_page, CLIENTS_AVAILABLE = _import_page("clients", "render_clients_page")
 render_projects_page, PROJECTS_AVAILABLE = _import_page("projects", "render_projects_page")
-render_health_dashboard, HEALTH_AVAILABLE = _import_page("health", "render_health_dashboard")
+render_health_page, HEALTH_AVAILABLE = _import_page("health", "render_health_page")
 render_projeto_wizard_page, PROJETO_WIZARD_AVAILABLE = _import_page("projeto_wizard", "render_projeto_wizard_page")
 
 
@@ -180,7 +180,7 @@ PAGE_REGISTRY: Dict[str, PageSpec] = {
         title="🏥 Health",
         icon="🏥",
         description="System health monitoring and diagnostics",
-        render_func=render_health_dashboard,
+        render_func=render_health_page,
         available=HEALTH_AVAILABLE,
     ),
 }
@@ -290,7 +290,7 @@ __all__ = [
     "render_settings_page",
     "render_clients_page",
     "render_projects_page",
-    "render_health_dashboard",
+    "render_health_page",
     "render_projeto_wizard_page",
     "render_login_page",
 

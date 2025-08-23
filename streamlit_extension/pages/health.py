@@ -1,64 +1,45 @@
-"""
-🏥 Health Check Endpoint Page
+"""Minimal health check page for Streamlit app.
 
-Provides:
-- REST-like health endpoint for orchestration
-- Detailed health dashboard for administrators
-- Real-time component monitoring
-- Health history and trends
+Provides a lightweight endpoint that can be used as a liveness signal.
+It reports the application status, database connectivity and current
+package version.  The implementation intentionally avoids heavy
+dependencies – it only performs a simple database health check using the
+existing helper and surfaces the results on a Streamlit page.
 """
 
 from __future__ import annotations
 
 from typing import Dict
 
-from streamlit_extension.utils.health_check import HealthChecker
-from streamlit_extension.utils.exception_handler import handle_streamlit_exceptions
-
-# Authentication middleware
-try:
-    from streamlit_extension.auth.middleware import init_protected_page
-except ImportError:
-    init_protected_page = None
-
-_health_checker = HealthChecker()
+from streamlit_extension import __version__
+from streamlit_extension.database import check_health
 
 
-def get_health_json() -> Dict[str, object]:
-    """Return JSON health status for API consumption."""
+def get_health_status() -> Dict[str, object]:
+    """Return minimal health status information.
 
-    return _health_checker.get_health_endpoint_response()
+    Returns
+    -------
+    Dict[str, object]
+        Dictionary containing service status, database health details and
+        the current package version.
+    """
 
-
-@handle_streamlit_exceptions(show_error=True, attempt_recovery=True)
-def render_health_endpoint() -> None:  # pragma: no cover - requires streamlit
-    """Render health check endpoint for monitoring tools."""
-
-    import streamlit as st
-    
-    # Initialize protected page with authentication
-    current_user = init_protected_page("🏥 Health Check")
-    if not current_user:
-        st.error("Authentication required")
-        return
-
-    st.json(get_health_json())
+    return {
+        "status": "OK",
+        "database": check_health(),
+        "version": __version__,
+    }
 
 
-@handle_streamlit_exceptions(show_error=True, attempt_recovery=True)
-def render_health_dashboard() -> None:  # pragma: no cover - requires streamlit
-    """Render detailed health dashboard for administrators."""
+def render_health_page() -> None:  # pragma: no cover - requires streamlit
+    """Render Streamlit page exposing basic health information."""
 
     import streamlit as st
-    
-    # Initialize protected page with authentication
-    current_user = init_protected_page("🏥 Health Dashboard")
-    if not current_user:
-        st.error("Authentication required")
-        return
 
-    st.title("Health Dashboard")
-    data = get_health_json()
-    for component in data["components"]:
-        st.subheader(component["name"])
-        st.write(component)
+    st.success("OK")
+    st.json(get_health_status())
+
+
+__all__ = ["get_health_status", "render_health_page"]
+

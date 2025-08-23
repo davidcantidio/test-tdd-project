@@ -1,114 +1,289 @@
  (cd "$(git rev-parse --show-toplevel)" && git apply --3way <<'EOF' 
-diff --git a/streamlit_extension/auth/login_page.py b/streamlit_extension/auth/login_page.py
-index d5556e83aae09192d5c75470a2164110ada1a4cf..b117271dd56fa3359086e7429ce1d6492bbf53c5 100644
---- a/streamlit_extension/auth/login_page.py
-+++ b/streamlit_extension/auth/login_page.py
-@@ -157,51 +157,51 @@ def render_login_page():
-     active = st.selectbox(
-         "Choose action:",
-         ["Login", "Register"],
-         index=0 if SS.get(K.ACTIVE_TAB, "Login") == "Login" else 1,
-         key=K.MODE_SELECT,
-         help="Switch between login and registration",
+diff --git a/streamlit_extension/pages/__init__.py b/streamlit_extension/pages/__init__.py
+index 4aee6748ff9e705d7a905600b93a5481064888e6..bec2dd79d420f10253748f708c91438ff5daeb9d 100644
+--- a/streamlit_extension/pages/__init__.py
++++ b/streamlit_extension/pages/__init__.py
+@@ -31,51 +31,51 @@ RenderFunc = Callable[[], Optional[object]]  # páginas podem retornar dict/None
+ 
+ def _import_page(module_name: str, func_name: str) -> Tuple[Optional[RenderFunc], bool]:
+     """Importa módulo/func dinamicamente com proteção e retorna (callable, disponível)."""
+     module = safe_streamlit_operation(
+         import_module,
+         f"{__name__}.{module_name}",
+         default_return=None,
+         operation_name=f"import_{module_name}",
      )
-     SS[K.ACTIVE_TAB] = active
- 
-     if active == "Login":
-         _render_login_form(auth_manager)
-     else:
-         _render_registration_form(auth_manager)
+     if module and hasattr(module, func_name):
+         return getattr(module, func_name), True
+     return None, False
  
  
- def _render_login_form(auth_manager: AuthManager):
-     st.subheader("Login")
+ # =============================================================================
+ # Import das páginas (lazy-friendly via safe_streamlit_operation)
+ # =============================================================================
  
-     allowed, msg = _ratelimit_login()
-     if not allowed:
-         st.error(msg)
-         return
- 
-     csrf_token = _csrf_get_or_create(K.CSRF_LOGIN)
- 
--    with st.form("login_form", clear_on_submit=False):
-+    with st.form(key="login_form", clear_on_submit=False):
-         username = st.text_input("Username", key=K.F_LOGIN_USER)
-         # Campo oculto para CSRF (valor exibido oculto)
-         st.text_input(
-             "csrf",
-             key=K.F_LOGIN_CSRF,
-             value=csrf_token,
-             type="password",
-             label_visibility="collapsed",
-         )
- 
-         pw_col1, pw_col2 = st.columns([4, 1])
-         with pw_col1:
-             show_pw = st.checkbox("Show password", key=K.F_LOGIN_SHOW, value=False)
-         with pw_col2:
-             st.empty()
- 
-         password = st.text_input(
-             "Password",
-             type="default" if SS.get(K.F_LOGIN_SHOW) else "password",
-             key=K.F_LOGIN_PW,
-         )
- 
-         col_a, col_b = st.columns([1, 1])
-         with col_a:
-             remember = st.checkbox("Remember this device", key=K.F_LOGIN_REMEMBER, value=False)
-@@ -253,51 +253,51 @@ def _render_login_form(auth_manager: AuthManager):
-                 try:
-                     auth_manager.issue_persistent_session(result.user)
-                 except Exception as e:
-                     if AUTH_DEBUG:
-                         st.warning(f"Persistent session not issued: {e}")
-         else:
-             SS[K.EXTENDED] = False
-             SS[K.DURATION] = 2 * 60 * 60  # 2 hours
-             session_info = "Your session will last 2 hours"
- 
-         _register_attempt(failed=False)
-         st.success(f"Welcome back, {result.user.username}!")
-         st.info(f"💡 **{session_info}** with gentle reminders before expiring.")
-         _clear_login_fields()
-         st.rerun()
-     else:
-         st.error(getattr(result, "message", "Invalid credentials."))
-         _register_attempt(failed=True)
+ render_analytics_page, ANALYTICS_AVAILABLE = _import_page("analytics", "render_analytics_page")
+ render_kanban_page, KANBAN_AVAILABLE = _import_page("kanban", "render_kanban_page")
+ render_gantt_page, GANTT_AVAILABLE = _import_page("gantt", "render_gantt_page")
+ render_timer_page, TIMER_AVAILABLE = _import_page("timer", "render_timer_page")
+ render_settings_page, SETTINGS_AVAILABLE = _import_page("settings", "render_settings_page")
+ render_clients_page, CLIENTS_AVAILABLE = _import_page("clients", "render_clients_page")
+ render_projects_page, PROJECTS_AVAILABLE = _import_page("projects", "render_projects_page")
+-render_health_dashboard, HEALTH_AVAILABLE = _import_page("health", "render_health_dashboard")
++render_health_page, HEALTH_AVAILABLE = _import_page("health", "render_health_page")
+ render_projeto_wizard_page, PROJETO_WIZARD_AVAILABLE = _import_page("projeto_wizard", "render_projeto_wizard_page")
  
  
- def _render_registration_form(auth_manager: AuthManager):
-     st.subheader("Register New Account")
+ def _import_auth_page() -> Tuple[Optional[RenderFunc], bool]:
+     try:
+         from streamlit_extension.auth.login_page import render_login_page  # type: ignore
+         return render_login_page, True
+     except Exception:
+         return None, False
  
-     csrf_token = _csrf_get_or_create(K.CSRF_REG)
  
--    with st.form("register_form", clear_on_submit=False):
-+    with st.form(key="register_form", clear_on_submit=False):
-         username = st.text_input("Username", key=K.F_REG_USER, help="3–32 chars: letters, numbers, . _ -")
-         email = st.text_input("Email", key=K.F_REG_EMAIL)
-         # Campo oculto para CSRF
-         st.text_input(
-             "csrf",
-             key=K.F_REG_CSRF,
-             value=csrf_token,
-             type="password",
-             label_visibility="collapsed",
-         )
+ render_login_page, LOGIN_AVAILABLE = _import_auth_page()
  
-         pw_col1, pw_col2 = st.columns([3, 2])
-         with pw_col1:
-             password = st.text_input("Password", type="password", key=K.F_REG_PW)
-         with pw_col2:
-             ok_tmp, _, score = _password_ok(SS.get(K.F_REG_PW) or "")
-             st.progress(min(score, 4) / 4)
  
-         confirm_password = st.text_input("Confirm Password", type="password", key=K.F_REG_CONFIRM)
-         submit = st.form_submit_button("Register")
+ # =============================================================================
+ # Definição tipada do registro de páginas
+ # =============================================================================
  
-     if not submit:
-         return
+ @dataclass(frozen=True)
+ class PageSpec:
+     id: str
+     title: str
+     icon: str
+     description: str
+     render_func: Optional[RenderFunc]
+@@ -158,51 +158,51 @@ PAGE_REGISTRY: Dict[str, PageSpec] = {
+         description="Client management and contacts",
+         render_func=render_clients_page,
+         available=CLIENTS_AVAILABLE,
+     ),
+     "projects": PageSpec(
+         id="projects",
+         title="📁 Projects",
+         icon="📁",
+         description="Project management and tracking",
+         render_func=render_projects_page,
+         available=PROJECTS_AVAILABLE,
+     ),
+     "projeto_wizard": PageSpec(
+         id="projeto_wizard",
+         title="🚀 Criar Projeto",
+         icon="🚀",
+         description="Wizard completo com IA: Visão → Épicos → Stories → Tasks",
+         render_func=render_projeto_wizard_page,
+         available=PROJETO_WIZARD_AVAILABLE,
+     ),
+     "health": PageSpec(
+         id="health",
+         title="🏥 Health",
+         icon="🏥",
+         description="System health monitoring and diagnostics",
+-        render_func=render_health_dashboard,
++        render_func=render_health_page,
+         available=HEALTH_AVAILABLE,
+     ),
+ }
  
-     # CSRF
+ 
+ # =============================================================================
+ # API pública utilitária
+ # =============================================================================
+ 
+ def get_page_specs() -> Dict[str, PageSpec]:
+     """Retorna o registry completo (imutável por contrato)."""
+     return PAGE_REGISTRY
+ 
+ 
+ def get_available_pages(show_all: bool = False) -> Dict[str, PageSpec]:
+     """
+     Páginas disponíveis para navegação, preservando a ordem do registro.
+ 
+     - show_all=False: retorna apenas páginas `is_navigable()`.
+     - show_all=True: retorna todas as páginas `available=True` (login continua oculto por padrão).
+     """
+     out: Dict[str, PageSpec] = {}
+     for pid, spec in PAGE_REGISTRY.items():
+         if show_all:
+             if spec.available:
+@@ -268,49 +268,49 @@ def render_page(page_id: str):
+     if not spec.available:
+         return {"error": f"Page '{resolved}' is not available"}
+ 
+     if spec.render_func is None:
+         # Por contrato, sempre teremos algo — dashboard usa _noop_render
+         return {"error": f"No render function for page: {resolved}"}
+ 
+     # Protege UX: se a página quebrar, o app segue vivo
+     with streamlit_error_boundary(f"Error rendering page '{resolved}'"):
+         return spec.render_func()
+ 
+ 
+ # =============================================================================
+ # Back-compat: exporta símbolos esperados pelo restante do projeto
+ # =============================================================================
+ 
+ __all__ = [
+     # render functions
+     "render_analytics_page",
+     "render_kanban_page",
+     "render_gantt_page",
+     "render_timer_page",
+     "render_settings_page",
+     "render_clients_page",
+     "render_projects_page",
+-    "render_health_dashboard",
++    "render_health_page",
+     "render_projeto_wizard_page",
+     "render_login_page",
+ 
+     # registry & flags
+     "PAGE_REGISTRY",
+     "get_available_pages",
+     "render_page",
+     "ANALYTICS_AVAILABLE",
+     "KANBAN_AVAILABLE",
+     "GANTT_AVAILABLE",
+     "TIMER_AVAILABLE",
+     "SETTINGS_AVAILABLE",
+     "CLIENTS_AVAILABLE",
+     "PROJECTS_AVAILABLE",
+     "HEALTH_AVAILABLE",
+     "PROJETO_WIZARD_AVAILABLE",
+     "LOGIN_AVAILABLE",
+ 
+     # utilitários extras
+     "list_pages_for_nav",
+     "get_page_specs",
+     "resolve_page_id",
+ ]
+diff --git a/streamlit_extension/pages/health.py b/streamlit_extension/pages/health.py
+index 477a043daa463eb0f28855aa6ff2fe811790c256..d68a76b53046e98a7d18f201774917cd46e8d148 100644
+--- a/streamlit_extension/pages/health.py
++++ b/streamlit_extension/pages/health.py
+@@ -1,64 +1,45 @@
+-"""
+-🏥 Health Check Endpoint Page
++"""Minimal health check page for Streamlit app.
+ 
+-Provides:
+-- REST-like health endpoint for orchestration
+-- Detailed health dashboard for administrators
+-- Real-time component monitoring
+-- Health history and trends
++Provides a lightweight endpoint that can be used as a liveness signal.
++It reports the application status, database connectivity and current
++package version.  The implementation intentionally avoids heavy
++dependencies – it only performs a simple database health check using the
++existing helper and surfaces the results on a Streamlit page.
+ """
+ 
+ from __future__ import annotations
+ 
+ from typing import Dict
+ 
+-from streamlit_extension.utils.health_check import HealthChecker
+-from streamlit_extension.utils.exception_handler import handle_streamlit_exceptions
+-
+-# Authentication middleware
+-try:
+-    from streamlit_extension.auth.middleware import init_protected_page
+-except ImportError:
+-    init_protected_page = None
++from streamlit_extension import __version__
++from streamlit_extension.database import check_health
+ 
+-_health_checker = HealthChecker()
+ 
++def get_health_status() -> Dict[str, object]:
++    """Return minimal health status information.
+ 
+-def get_health_json() -> Dict[str, object]:
+-    """Return JSON health status for API consumption."""
++    Returns
++    -------
++    Dict[str, object]
++        Dictionary containing service status, database health details and
++        the current package version.
++    """
+ 
+-    return _health_checker.get_health_endpoint_response()
++    return {
++        "status": "OK",
++        "database": check_health(),
++        "version": __version__,
++    }
+ 
+ 
+-@handle_streamlit_exceptions(show_error=True, attempt_recovery=True)
+-def render_health_endpoint() -> None:  # pragma: no cover - requires streamlit
+-    """Render health check endpoint for monitoring tools."""
++def render_health_page() -> None:  # pragma: no cover - requires streamlit
++    """Render Streamlit page exposing basic health information."""
+ 
+     import streamlit as st
+-    
+-    # Initialize protected page with authentication
+-    current_user = init_protected_page("🏥 Health Check")
+-    if not current_user:
+-        st.error("Authentication required")
+-        return
+ 
+-    st.json(get_health_json())
++    st.success("OK")
++    st.json(get_health_status())
+ 
+ 
+-@handle_streamlit_exceptions(show_error=True, attempt_recovery=True)
+-def render_health_dashboard() -> None:  # pragma: no cover - requires streamlit
+-    """Render detailed health dashboard for administrators."""
+-
+-    import streamlit as st
+-    
+-    # Initialize protected page with authentication
+-    current_user = init_protected_page("🏥 Health Dashboard")
+-    if not current_user:
+-        st.error("Authentication required")
+-        return
++__all__ = ["get_health_status", "render_health_page"]
+ 
+-    st.title("Health Dashboard")
+-    data = get_health_json()
+-    for component in data["components"]:
+-        st.subheader(component["name"])
+-        st.write(component)
+diff --git a/tests/test_health_page_basic.py b/tests/test_health_page_basic.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..49c6c93432b27d53537fc0e29d26773deb1c0bb6
+--- /dev/null
++++ b/tests/test_health_page_basic.py
+@@ -0,0 +1,23 @@
++import sys
++from pathlib import Path
++
++sys.path.append(str(Path(__file__).resolve().parents[1]))
++
++
++def test_get_health_status(monkeypatch):
++    from streamlit_extension.pages.health import get_health_status
++    from streamlit_extension import __version__
++
++    # Fake database health to make the test deterministic
++    def fake_health():
++        return {"status": "ok"}
++
++    monkeypatch.setattr(
++        "streamlit_extension.pages.health.check_health", fake_health, raising=False
++    )
++
++    data = get_health_status()
++    assert data["status"] == "OK"
++    assert data["database"] == {"status": "ok"}
++    assert data["version"] == __version__
++
  
 EOF
 )

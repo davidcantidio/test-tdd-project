@@ -593,11 +593,11 @@ class GoogleOAuthManager:
             with st.spinner("Autenticando..."):
                 try:
                     data = self.handle_callback(qp["code"], qp["state"])
-                    # redireciona para caminho seguro (se fornecido)
-                    next_path = qp.get("next", "/")
+                    # Clear OAuth parameters and show success
                     st.query_params.clear()
                     st.success(f"✅ Bem-vindo(a), {data['user_info']['name']}!")
-                    self._safe_redirect(str(next_path))
+                    # Directly rerun to preserve session state
+                    # No redirect needed - let Streamlit handle the refresh
                     st.rerun()
                 except Exception as e:
                     st.error(f"❌ Falha na autenticação: {e}")
@@ -693,9 +693,17 @@ def is_user_authenticated() -> bool:
     if not DEPS:
         return _is_traditional_auth_active()
     auth = GoogleOAuthManager()
+    
+    # Always check OAuth session first, even if not configured
+    # This ensures OAuth sessions persist correctly after reruns
+    if auth.is_authenticated():
+        return True
+        
+    # Only use fallback if no OAuth session exists
     if not auth.configured and auth.cfg.allow_dev_fallback:
         return _is_traditional_auth_active()
-    return auth.is_authenticated()
+        
+    return False
 
 # ---- Fallbacks para middleware legado (quando existir) -----------------------
 
