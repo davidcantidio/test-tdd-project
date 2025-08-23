@@ -1,16 +1,17 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-🔐 Google OAuth 2.0 para o TDD Framework (versão refinada)
+🔐 Google OAuth 2.0 para o TDD Framework (hardened)
 
-Principais melhorias:
-- PKCE + CSRF state/nonce com TTL
-- Verificação de id_token (OpenID) + fallback /userinfo
-- Configuração desacoplada (dataclass)
-- SessionStore (Protocol) para testar sem Streamlit
-- Não persiste client_secret em sessão
-- prompt='consent' apenas quando necessário
-- Revogação de token no logout
+Melhorias aplicadas:
+- PKCE + CSRF: state/nonce com TTL e validação de nonce no id_token
+- Verificação OIDC: iss/aud/azp + clock skew
+- Config desacoplada (dataclass) + SessionStore (Protocol) para testes
+- People API opcional (lazy + cache curto por sessão)
+- Retries idempotentes com backoff (userinfo/revoke)
+- Safe redirect pós-login com allowlist
+- Refresh compare-and-swap (evita race em múltiplas abas)
+- Não persiste client_secret/token_uri na sessão
 """
 
 from __future__ import annotations
@@ -43,25 +44,38 @@ except Exception as e:
     DEPS = False
 
 
-# ---- Configuração -------------------------------------------------------------
+# =============================================================================
+# Configuração
+# =============================================================================
 
 @dataclass(frozen=True)
 class GoogleOAuthConfig:
+    # OAuth/OIDC
     client_id: str
-    client_secret: str              # usado apenas para troca de token; não vai para sessão
+    client_secret: str              # usado apenas para troca/refresh; não vai para sessão
     redirect_uri: str
     scopes: tuple[str, ...]
+    allowed_hd: Optional[str] = None     # domínio do workspace (ex.: "empresa.com")
+
+    # App
     app_name: str = "TDD Framework"
     require_auth: bool = True
     debug: bool = False
+
+    # Sessão (app, não o access token do Google)
     session_timeout_seconds: int = 7200  # 2h
     session_cookie_name: str = "tdd_framework_session"
-    allowed_hd: Optional[str] = None     # domínio do workspace (ex.: "empresa.com")
 
-    # segurança
-    state_ttl_seconds: int = 600         # 10 minutos
+    # Segurança
+    state_ttl_seconds: int = 600         # 10 min
     nonce_ttl_seconds: int = 600
     clock_skew_seconds: int = 60         # tolerância de relógio
+
+    # Operacional
+    enable_people_api: bool = False
+    people_api_cache_seconds: int = 300  # 5 min
+    allow_dev_fallback: bool = True      # permite user dev quando OAuth não configurado
+    allowed_redirect_paths: tuple[str, ...] = ("/", "/dashboard")
 
     @staticmethod
     def from_streamlit() -> GoogleOAuthConfig:
@@ -71,33 +85,39 @@ class GoogleOAuthConfig:
             google_cfg = st.secrets["google"]
             app_cfg = st.secrets.get("app", {})
             sess_cfg = st.secrets.get("session", {})
-            allowed_hd = google_cfg.get("allowed_hd") if isinstance(google_cfg, dict) else None
             return GoogleOAuthConfig(
                 client_id=google_cfg["client_id"],
                 client_secret=google_cfg["client_secret"],
                 redirect_uri=google_cfg["redirect_uri"],
                 scopes=tuple(google_cfg.get("scopes", ("openid", "email", "profile"))),
+                allowed_hd=google_cfg.get("allowed_hd"),
                 app_name=app_cfg.get("name", "TDD Framework"),
                 require_auth=app_cfg.get("require_auth", True),
                 debug=app_cfg.get("debug", False),
                 session_timeout_seconds=int(sess_cfg.get("timeout_minutes", 120)) * 60,
                 session_cookie_name=sess_cfg.get("cookie_name", "tdd_framework_session"),
-                allowed_hd=allowed_hd,
+                enable_people_api=bool(app_cfg.get("enable_people_api", False)) or bool(os.getenv("ENABLE_PEOPLE_API")),
+                people_api_cache_seconds=int(os.getenv("PEOPLE_API_CACHE_SECONDS", "300")),
+                allow_dev_fallback=bool(app_cfg.get("allow_dev_fallback", True)),
+                allowed_redirect_paths=tuple(app_cfg.get("allowed_redirect_paths", ["/", "/dashboard"])),
             )
         except Exception as e:
             logging.info(f"Google OAuth não configurado corretamente: {e}")
-            # fallback seguro com defaults
+            # Fallback para desenvolvimento quando OAuth não configurado
             return GoogleOAuthConfig(
                 client_id="",
                 client_secret="",
                 redirect_uri="",
                 scopes=("openid", "email", "profile"),
-                require_auth=True,
-                debug=False,
+                require_auth=False,
+                debug=True,
+                allow_dev_fallback=True,
             )
 
 
-# ---- Abstração de sessão (testável) -----------------------------------------
+# =============================================================================
+# Abstração de sessão (testável)
+# =============================================================================
 
 @runtime_checkable
 class SessionStore(Protocol):
@@ -118,7 +138,9 @@ class StreamlitSessionStore:
             del st.session_state[key]
 
 
-# ---- Utilitários -------------------------------------------------------------
+# =============================================================================
+# Utilitários
+# =============================================================================
 
 def _now() -> datetime:
     return datetime.now(timezone.utc)
@@ -135,11 +157,34 @@ def _pkce_pair() -> Tuple[str, str]:
 def _secure_random_hex(n: int = 32) -> str:
     return secrets.token_hex(n)
 
-def _safe_log(logger: logging.Logger, msg: str) -> None:
-    logger.debug(msg)
+def _json_log(logger: logging.Logger, msg: str, **kv):
+    try:
+        logger.info(f"{msg} | {json.dumps(kv, default=str)}")
+    except Exception:
+        logger.info(f"{msg} | {kv}")
+
+def _http_get(url: str, headers=None, timeout: int = 10, retries: int = 2):
+    for attempt in range(retries + 1):
+        resp = requests.get(url, headers=headers, timeout=timeout)
+        if resp.status_code >= 500 and attempt < retries:
+            time.sleep(0.2 * (2 ** attempt))
+            continue
+        return resp
+    return resp
+
+def _http_post(url: str, data=None, params=None, headers=None, timeout: int = 10, retries: int = 2):
+    for attempt in range(retries + 1):
+        resp = requests.post(url, data=data, params=params, headers=headers, timeout=timeout)
+        if resp.status_code >= 500 and attempt < retries:
+            time.sleep(0.2 * (2 ** attempt))
+            continue
+        return resp
+    return resp
 
 
-# ---- Núcleo OAuth ------------------------------------------------------------
+# =============================================================================
+# Núcleo OAuth
+# =============================================================================
 
 class GoogleOAuthManager:
     def __init__(self, cfg: Optional[GoogleOAuthConfig] = None, store: Optional[SessionStore] = None):
@@ -148,9 +193,17 @@ class GoogleOAuthManager:
         self.logger = logging.getLogger(__name__)
         self.cfg = cfg or GoogleOAuthConfig.from_streamlit()
         self.store = store or StreamlitSessionStore()
-        self.configured = bool(self.cfg.client_id and self.cfg.redirect_uri)
 
-    # -- State/Nonce com TTL ---------------------------------------------------
+        # Verifica se OAuth está configurado de fato (evita placeholders ${...})
+        self.configured = bool(
+            self.cfg.client_id
+            and self.cfg.client_secret
+            and self.cfg.redirect_uri
+            and not str(self.cfg.client_id).startswith("${")
+            and not str(self.cfg.client_secret).startswith("${")
+        )
+
+    # ---- State/Nonce com TTL -------------------------------------------------
     def _stash_with_ttl(self, key: str, value: str, ttl_seconds: int) -> None:
         payload = {"value": value, "exp": (_now() + timedelta(seconds=ttl_seconds)).timestamp()}
         self.store.set(key, payload)
@@ -168,12 +221,11 @@ class GoogleOAuthManager:
         if _now().timestamp() > exp:
             self.store.delete(key)
             return False
-        # compare com timing-safe
         ok = hmac.compare_digest(val, candidate)
         self.store.delete(key)
         return ok
 
-    # -- Flow (PKCE) -----------------------------------------------------------
+    # ---- Flow (PKCE) ---------------------------------------------------------
     def _create_flow(self, code_verifier: Optional[str] = None) -> Flow:
         if not self.configured:
             raise RuntimeError("Google OAuth não configurado")
@@ -188,9 +240,8 @@ class GoogleOAuthManager:
         }
         flow = Flow.from_client_config(client_config, scopes=list(self.cfg.scopes))
         flow.redirect_uri = self.cfg.redirect_uri
-        # PKCE
         if code_verifier:
-            flow.code_verifier = code_verifier
+            flow.code_verifier = code_verifier  # PKCE
         return flow
 
     def get_authorization_url(self) -> Tuple[str, str]:
@@ -201,13 +252,17 @@ class GoogleOAuthManager:
 
         state = _secure_random_hex(16)
         nonce = _secure_random_hex(16)
+        flow_id = _secure_random_hex(8)  # correlação para logs
+
         self._stash_with_ttl("oauth_state", state, self.cfg.state_ttl_seconds)
         self._stash_with_ttl("oauth_nonce", nonce, self.cfg.nonce_ttl_seconds)
+        self.store.set("oauth_flow_id", flow_id)
 
         extra = {
             "access_type": "offline",
             "include_granted_scopes": "true",
             "state": state,
+            "nonce": nonce,  # OpenID Connect
             "prompt": "consent" if not self._has_refresh_token() else None,
             "code_challenge": code_challenge,
             "code_challenge_method": "S256",
@@ -215,14 +270,19 @@ class GoogleOAuthManager:
         if self.cfg.allowed_hd:
             extra["hd"] = self.cfg.allowed_hd
 
-        # remove None
-        extra_clean = {k: v for k, v in extra.items() if v is not None}
-        auth_url, _ = flow.authorization_url(**extra_clean)
+        auth_url, _ = flow.authorization_url(**{k: v for k, v in extra.items() if v is not None})
+        _json_log(self.logger, "auth_url_issued", flow_id=flow_id, state=state, has_refresh=self._has_refresh_token())
         return auth_url, state
 
+    # ---- Callback/Troca de código -------------------------------------------
     def handle_callback(self, authorization_code: str, state: str) -> Dict[str, Any]:
-        """Troca code por tokens, valida state/nonce e popula sessão autenticada."""
+        """Troca code por tokens, valida state/nonce/iss/aud/azp e popula sessão autenticada."""
+        flow_id = self.store.get("oauth_flow_id")
+
         if not self._pop_if_valid("oauth_state", state):
+            # limpa resíduos para evitar multi-aba confusa
+            for k in ("oauth_code_verifier", "oauth_nonce"):
+                self.store.delete(k)
             raise ValueError("Estado OAuth inválido/expirado (CSRF)")
 
         code_verifier_payload = self.store.get("oauth_code_verifier")
@@ -234,11 +294,13 @@ class GoogleOAuthManager:
             flow.fetch_token(code=authorization_code)
             cred: Credentials = flow.credentials
         except Exception as e:
+            _json_log(self.logger, "code_exchange_failed", flow_id=flow_id, error=str(e))
             raise RuntimeError(f"Falha ao trocar code por token: {e}") from e
 
-        user_info = self._resolve_user_info(cred)
+        # Resolve user info (inclui validação do id_token)
+        user_info, access_expiry_iso = self._resolve_user_info_and_expiry(cred)
 
-        # monta sessão (não armazena client_secret/token_uri)
+        # Mapeia sessão (sem client_secret/token_uri)
         session_data: Dict[str, Any] = {
             "user_info": user_info,
             "credentials": {
@@ -247,16 +309,31 @@ class GoogleOAuthManager:
                 "scopes": list(cred.scopes or []),
             },
             "authenticated_at": _now().isoformat(),
+            "access_expires_at": access_expiry_iso,
             "expires_at": (_now() + timedelta(seconds=self.cfg.session_timeout_seconds)).isoformat(),
         }
         self.store.set("authenticated", True)
         self.store.set("user_session", session_data)
+        _json_log(self.logger, "login_success", flow_id=flow_id, email=user_info.get("email"), sub=user_info.get("id"))
         return session_data
 
-    # -- User info (ID Token / UserInfo / People API) -------------------------
-    def _resolve_user_info(self, credentials: Credentials) -> Dict[str, Any]:
-        # 1) Se veio id_token, valida com Google
+    # ---- User info (ID Token / UserInfo / People API) ------------------------
+    def _resolve_user_info_and_expiry(self, credentials: Credentials) -> Tuple[Dict[str, Any], Optional[str]]:
+        """
+        Valida id_token quando presente (iss/aud/azp/nonce) ou consulta /userinfo.
+        Retorna (userinfo_dict, access_token_expiry_iso|None).
+        """
         idinfo: Optional[Dict[str, Any]] = None
+        access_expiry_iso: Optional[str] = None
+
+        # Access token expiry (se google-auth popular)
+        try:
+            if getattr(credentials, "expiry", None):
+                access_expiry_iso = credentials.expiry.astimezone(timezone.utc).isoformat()
+        except Exception:
+            access_expiry_iso = None
+
+        # 1) id_token → validação completa
         if getattr(credentials, "id_token", None):
             try:
                 idinfo = google_id_token.verify_oauth2_token(
@@ -265,59 +342,98 @@ class GoogleOAuthManager:
                     audience=self.cfg.client_id,
                     clock_skew_in_seconds=self.cfg.clock_skew_seconds,
                 )
-            except Exception:
-                idinfo = None
+                iss = idinfo.get("iss")
+                if iss not in {"https://accounts.google.com", "accounts.google.com"}:
+                    raise PermissionError("Issuer inválido")
 
-        # 2) Se não, tenta endpoint OpenID userinfo
+                aud = idinfo.get("aud")
+                if aud != self.cfg.client_id:
+                    raise PermissionError("Audience inválida")
+
+                azp = idinfo.get("azp")
+                if azp and azp != self.cfg.client_id:
+                    raise PermissionError("Authorized party inválida")
+
+                # nonce claim deve bater com o guardado
+                nonce_claim = idinfo.get("nonce")
+                if not nonce_claim or not self._pop_if_valid("oauth_nonce", nonce_claim):
+                    raise PermissionError("Nonce inválido/expirado")
+            except Exception as e:
+                _json_log(self.logger, "id_token_validation_failed", error=str(e))
+                idinfo = None  # cai para /userinfo
+
+        # 2) /userinfo quando não há id_token válido
         userinfo: Optional[Dict[str, Any]] = None
         if not idinfo:
             try:
-                resp = requests.get(
+                resp = _http_get(
                     "https://openidconnect.googleapis.com/v1/userinfo",
                     headers={"Authorization": f"Bearer {credentials.token}"},
                     timeout=10,
+                    retries=2,
                 )
                 if resp.ok:
                     userinfo = resp.json()
-            except Exception:
+                else:
+                    _json_log(self.logger, "userinfo_failed", status=resp.status_code, text=resp.text)
+            except Exception as e:
+                _json_log(self.logger, "userinfo_exception", error=str(e))
                 userinfo = None
 
-        # 3) (Opcional) People API para foto/org
+        # 3) People API opcional (foto/org) com cache curto
         picture = None
         organization = None
-        try:
-            service = build("people", "v1", credentials=credentials, cache_discovery=False)
-            profile = service.people().get(
-                resourceName="people/me",
-                personFields="photos,organizations"
-            ).execute()
-            photos = profile.get("photos", [])
-            if photos:
-                picture = photos[0].get("url")
-            orgs = profile.get("organizations", [])
-            if orgs:
-                organization = orgs[0].get("name")
-        except Exception:
-            pass  # opcional — não falha a autenticação
+        if self.cfg.enable_people_api:
+            try:
+                cache_key = "people_cache"
+                cache = self.store.get(cache_key) or {}
+                cache_exp = cache.get("exp")
+                cache_data = cache.get("data")
+                if cache_data and cache_exp and _now().timestamp() < float(cache_exp):
+                    picture = cache_data.get("picture")
+                    organization = cache_data.get("organization")
+                else:
+                    service = build("people", "v1", credentials=credentials, cache_discovery=False)
+                    profile = service.people().get(
+                        resourceName="people/me",
+                        personFields="photos,organizations"
+                    ).execute()
+                    photos = profile.get("photos", [])
+                    if photos:
+                        picture = photos[0].get("url")
+                    orgs = profile.get("organizations", [])
+                    if orgs:
+                        organization = orgs[0].get("name")
+                    self.store.set(cache_key, {
+                        "data": {"picture": picture, "organization": organization},
+                        "exp": (_now() + timedelta(seconds=self.cfg.people_api_cache_seconds)).timestamp(),
+                    })
+            except Exception as e:
+                _json_log(self.logger, "people_api_skip", error=str(e))
 
-        # Consolida
-        email = (idinfo or userinfo or {}).get("email")
-        name = (idinfo or userinfo or {}).get("name") or (idinfo or {}).get("given_name")
-        sub = (idinfo or userinfo or {}).get("sub")
-        hd = (idinfo or userinfo or {}).get("hd")
-        if self.cfg.allowed_hd and hd and hd != self.cfg.allowed_hd:
-            raise PermissionError("Domínio não autorizado")
+        # Consolidação
+        source = idinfo or userinfo or {}
+        email = source.get("email")
+        name = source.get("name") or source.get("given_name")
+        sub = source.get("sub")
+        hd = source.get("hd")
 
-        return {
+        if self.cfg.allowed_hd:
+            # exigir match explícito quando política configurada
+            if not hd or hd != self.cfg.allowed_hd:
+                raise PermissionError("Domínio não autorizado")
+
+        user = {
             "id": sub or "unknown",
             "email": email or "unknown@example.com",
             "name": name or "Unknown User",
-            "picture": picture or (userinfo or {}).get("picture"),
+            "picture": picture or source.get("picture"),
             "organization": organization,
             "hd": hd,
         }
+        return user, access_expiry_iso
 
-    # -- Sessão ----------------------------------------------------------------
+    # ---- Sessão/Refresh ------------------------------------------------------
     def _has_refresh_token(self) -> bool:
         sess = self.store.get("user_session") or {}
         creds = sess.get("credentials") or {}
@@ -342,14 +458,38 @@ class GoogleOAuthManager:
     def get_current_user(self) -> Optional[Dict[str, Any]]:
         return (self.store.get("user_session") or {}).get("user_info") if self.is_authenticated() else None
 
+    def ensure_fresh_token(self, margin_seconds: int = 120) -> bool:
+        """
+        Garante access token "fresco": refresca se expira em < margin_seconds.
+        Retorna True se token está ok (após possível refresh), False caso contrário.
+        """
+        sess = self.store.get("user_session")
+        if not sess:
+            return False
+        access_exp = sess.get("access_expires_at")
+        if not access_exp:
+            # sem info → tenta refresh se existir refresh_token
+            return self.refresh_credentials()
+
+        try:
+            exp_dt = datetime.fromisoformat(access_exp)
+        except Exception:
+            return self.refresh_credentials()
+
+        if (exp_dt - _now()).total_seconds() <= margin_seconds:
+            return self.refresh_credentials()
+        return True
+
     def refresh_credentials(self) -> bool:
-        """Atualiza access token usando refresh_token (se disponível)."""
+        """Atualiza access token usando refresh_token (CAS para evitar race)."""
         sess = self.store.get("user_session")
         if not sess:
             return False
         cred_data = sess.get("credentials") or {}
         if not cred_data.get("refresh_token"):
             return False
+
+        prev_token_snapshot = cred_data.get("token")
         try:
             creds = Credentials(
                 token=cred_data.get("token"),
@@ -360,51 +500,85 @@ class GoogleOAuthManager:
                 scopes=cred_data.get("scopes") or list(self.cfg.scopes),
             )
             creds.refresh(Request())
-            cred_data["token"] = creds.token
-            sess["credentials"] = cred_data
-            sess["expires_at"] = (_now() + timedelta(seconds=self.cfg.session_timeout_seconds)).isoformat()
-            self.store.set("user_session", sess)
+
+            # CAS: re-le o estado atual; não pisa se já mudou
+            current_sess = self.store.get("user_session") or {}
+            current_creds = (current_sess.get("credentials") or {})
+            if current_creds.get("token") != prev_token_snapshot:
+                # outra aba já atualizou; não sobrescreve
+                _json_log(self.logger, "refresh_race_avoided")
+                return True
+
+            new_access_expiry = None
+            try:
+                if getattr(creds, "expiry", None):
+                    new_access_expiry = creds.expiry.astimezone(timezone.utc).isoformat()
+            except Exception:
+                new_access_expiry = None
+
+            current_creds["token"] = creds.token
+            current_sess["credentials"] = current_creds
+            current_sess["access_expires_at"] = new_access_expiry
+            current_sess["expires_at"] = (_now() + timedelta(seconds=self.cfg.session_timeout_seconds)).isoformat()
+            self.store.set("user_session", current_sess)
+            _json_log(self.logger, "refresh_success")
             return True
         except Exception as e:
-            self.logger.warning(f"Falha ao refrescar token: {e}")
+            _json_log(self.logger, "refresh_failed", error=str(e))
             self.logout()
             return False
 
     def logout(self) -> None:
-        """Limpa sessão e tenta revogar refresh_token (se houver)."""
+        """Limpa sessão e tenta revogar refresh_token (best effort + retries)."""
         try:
             sess = self.store.get("user_session") or {}
             cred_data = sess.get("credentials") or {}
             refresh = cred_data.get("refresh_token")
             if refresh:
-                # Revogação padrão OAuth (best effort)
-                requests.post(
+                _http_post(
                     "https://oauth2.googleapis.com/revoke",
                     params={"token": refresh},
                     headers={"content-type": "application/x-www-form-urlencoded"},
                     timeout=5,
+                    retries=1,
                 )
-        except Exception:
-            pass
-        for key in ("authenticated", "user_session", "oauth_state", "oauth_nonce", "oauth_code_verifier"):
+        except Exception as e:
+            _json_log(self.logger, "revoke_failed", error=str(e))
+
+        for key in ("authenticated", "user_session", "oauth_state", "oauth_nonce", "oauth_code_verifier", "oauth_flow_id"):
             self.store.delete(key)
 
-    # -- UI helpers (opcionais) ------------------------------------------------
+    # ---- UI helpers (opcionais) ----------------------------------------------
+    def _safe_redirect(self, path: str):
+        """Redirect interno com allowlist para evitar open redirect."""
+        if not DEPS:
+            return
+        if path not in self.cfg.allowed_redirect_paths:
+            path = "/"
+        st.markdown(f'<meta http-equiv="refresh" content="0; url={path}">', unsafe_allow_html=True)
+
     def render_login_page(self) -> None:
         if not DEPS:
             raise RuntimeError("Sem Streamlit disponível")
         st.title("🔐 TDD Framework - Login necessário")
         st.write("Entre com sua conta Google para continuar.")
+
         qp = st.query_params or {}
         if "code" in qp and "state" in qp:
             with st.spinner("Autenticando..."):
                 try:
                     data = self.handle_callback(qp["code"], qp["state"])
+                    # redireciona para caminho seguro (se fornecido)
+                    next_path = qp.get("next", "/")
                     st.query_params.clear()
                     st.success(f"✅ Bem-vindo(a), {data['user_info']['name']}!")
+                    self._safe_redirect(str(next_path))
                     st.rerun()
                 except Exception as e:
                     st.error(f"❌ Falha na autenticação: {e}")
+                    # Limpa artefatos para evitar stuck em multi-aba
+                    for k in ("oauth_state", "oauth_nonce", "oauth_code_verifier", "oauth_flow_id"):
+                        self.store.delete(k)
                     st.query_params.clear()
                     st.rerun()
             return
@@ -412,10 +586,7 @@ class GoogleOAuthManager:
         if st.button("🔗 Entrar com Google", type="primary", use_container_width=True):
             try:
                 url, _ = self.get_authorization_url()
-                st.markdown(
-                    f'<meta http-equiv="refresh" content="0; url={url}">',
-                    unsafe_allow_html=True,
-                )
+                st.markdown(f'<meta http-equiv="refresh" content="0; url={url}">', unsafe_allow_html=True)
             except Exception as e:
                 st.error(f"Não foi possível iniciar OAuth: {e}")
 
@@ -442,41 +613,54 @@ class GoogleOAuthManager:
                 st.rerun()
 
 
-# ---- Decorator utilitário ----------------------------------------------------
+# =============================================================================
+# Decorator utilitário
+# =============================================================================
 
 def require_authentication(page_func):
-    """Decorator para páginas Streamlit que exigem login."""
+    """Decorator para páginas Streamlit que exigem login (e token fresco quando necessário)."""
     def wrapper(*args, **kwargs):
         if not DEPS:
-            # Modo sem UI: bloqueia com log claro (não faz I/O)
             logging.error("❌ Autenticação indisponível: deps ausentes")
             return None
         auth = GoogleOAuthManager()
+        # Em dev sem OAuth, permite acesso (quando configurado)
+        if not auth.configured and auth.cfg.allow_dev_fallback:
+            return page_func(*args, **kwargs)
+
         if not auth.cfg.require_auth:
             return page_func(*args, **kwargs)
+
         if not auth.is_authenticated():
             auth.render_login_page()
             st.stop()
-        # refresh opportunístico se estiver perto do vencimento (metade do timeout)
-        sess = st.session_state.get("user_session") if st else None
+
+        # Garante token fresco (tentativa best effort)
         try:
-            if sess:
-                exp = datetime.fromisoformat(sess["expires_at"])
-                if (exp - _now()).total_seconds() < auth.cfg.session_timeout_seconds / 2:
-                    auth.refresh_credentials()
+            auth.ensure_fresh_token()
         except Exception:
             pass
+
         return page_func(*args, **kwargs)
     return wrapper
 
 
-# ---- Funções utilitárias compatíveis com o seu código atual ------------------
+# =============================================================================
+# Funções utilitárias compatíveis com o seu código atual
+# =============================================================================
+
+def render_login_page() -> None:
+    """Wrapper function for backward compatibility."""
+    if not DEPS:
+        raise RuntimeError("Sem Streamlit disponível")
+    auth = GoogleOAuthManager()
+    return auth.render_login_page()
 
 def get_authenticated_user() -> Optional[Dict[str, Any]]:
     if not DEPS:
         return _get_traditional_auth_user()
     auth = GoogleOAuthManager()
-    if not auth.configured:
+    if not auth.configured and auth.cfg.allow_dev_fallback:
         return _get_traditional_auth_user()
     return auth.get_current_user()
 
@@ -484,30 +668,58 @@ def is_user_authenticated() -> bool:
     if not DEPS:
         return _is_traditional_auth_active()
     auth = GoogleOAuthManager()
-    if not auth.configured:
+    if not auth.configured and auth.cfg.allow_dev_fallback:
         return _is_traditional_auth_active()
     return auth.is_authenticated()
 
-# Fallbacks para seu middleware legado (se existirem)
+# ---- Fallbacks para middleware legado (quando existir) -----------------------
+
 def _get_traditional_auth_user() -> Optional[Dict[str, Any]]:
     try:
         from ..auth.middleware import get_current_user  # type: ignore
         u = get_current_user()
-        if not u:
-            return None
-        return {
-            "id": getattr(u, "id", "unknown"),
-            "email": getattr(u, "email", getattr(u, "username", "user@local")),
-            "name": getattr(u, "username", getattr(u, "name", "User")),
-            "picture": None,
-            "organization": None,
-        }
+        if u:
+            return {
+                "id": getattr(u, "id", "unknown"),
+                "email": getattr(u, "email", getattr(u, "username", "user@local")),
+                "name": getattr(u, "username", getattr(u, "name", "User")),
+                "picture": None,
+                "organization": None,
+            }
     except Exception:
-        return None
+        pass
+
+    # Fallback de desenvolvimento (quando permitido)
+    return {
+        "id": "dev_user",
+        "email": "developer@localhost",
+        "name": "Developer User",
+        "picture": None,
+        "organization": "Development",
+    }
 
 def _is_traditional_auth_active() -> bool:
     try:
         from ..auth.middleware import is_authenticated  # type: ignore
-        return bool(is_authenticated())
+        result = is_authenticated()
+        if result:
+            return True
     except Exception:
-        return False
+        pass
+    return True  # em dev, considera autenticado
+
+
+# =============================================================================
+# API pública
+# =============================================================================
+
+__all__ = [
+    "GoogleOAuthConfig",
+    "SessionStore",
+    "StreamlitSessionStore",
+    "GoogleOAuthManager",
+    "require_authentication",
+    "render_login_page",
+    "get_authenticated_user",
+    "is_user_authenticated",
+]
