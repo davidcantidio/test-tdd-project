@@ -58,13 +58,20 @@ enable_correlation_ids = false  # Simpler logging
 log_file_path = ""  # Console logging only
 
 [google_oauth]
-# These will be overridden by environment variables in production
-# Development values (configure actual values in .streamlit/secrets.toml)
-client_id = "${GOOGLE_CLIENT_ID}"  # Set via environment variable or secrets.toml
-client_secret = "${GOOGLE_CLIENT_SECRET}"  # Set via environment variable or secrets.toml
+# OAuth credentials loaded from environment variables (GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET)
+# OAuth will be automatically enabled/disabled based on credential availability
+# 
+# To enable OAuth in development:
+# 1. Set environment variables: export GOOGLE_CLIENT_ID="your_id" && export GOOGLE_CLIENT_SECRET="your_secret"  
+# 2. OR create .streamlit/secrets.toml with credentials
+# 3. OAuth will auto-enable when credentials are detected
+#
+# Without credentials: OAuth is disabled, development fallback authentication is used
+client_id = "${GOOGLE_CLIENT_ID}"  # Auto-loaded from environment
+client_secret = "${GOOGLE_CLIENT_SECRET}"  # Auto-loaded from environment  
 redirect_uri = "http://localhost:8501"
-enabled = true  # Enable Google OAuth for development
+# enabled = dynamic  # Automatically set based on credential availability
 scopes = [
-    "https://www.googleapis.com/auth/userinfo.email",
+    "https://www.googleapis.com/auth/userinfo.email", 
     "https://www.googleapis.com/auth/userinfo.profile"
 ]

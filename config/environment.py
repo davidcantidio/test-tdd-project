@@ -29,6 +29,7 @@ class GoogleOAuthConfig:
     client_id: str = ""
     client_secret: str = ""
     redirect_uri: str = "http://localhost:8501"
+    enabled: bool = False  # Dynamic enablement based on credential availability
     scopes: List[str] = field(default_factory=lambda: [
         "https://www.googleapis.com/auth/userinfo.email",
         "https://www.googleapis.com/auth/userinfo.profile"
@@ -211,12 +212,22 @@ class EnvironmentConfigLoader:
         google_client_id = os.getenv("GOOGLE_CLIENT_ID")
         google_client_secret = os.getenv("GOOGLE_CLIENT_SECRET")
         
+        # Smart OAuth configuration - enable only if credentials are available
         if google_client_id and google_client_secret:
             config.google_oauth.client_id = google_client_id
             config.google_oauth.client_secret = google_client_secret
-            logger.info("Loaded Google OAuth credentials from environment")
+            # Enable OAuth only if we have valid credentials
+            config.google_oauth.enabled = True
+            logger.info("Loaded Google OAuth credentials from environment - OAuth enabled")
         else:
-            logger.warning("Google OAuth credentials not found in environment variables")
+            # In development, disable OAuth if no credentials are available
+            if self.environment == "development":
+                config.google_oauth.enabled = False
+                logger.info("Google OAuth disabled in development - no credentials found")
+            else:
+                # In production/staging, warn but don't disable (may be intentional)
+                config.google_oauth.enabled = False
+                logger.warning("Google OAuth credentials not found in environment variables - OAuth disabled")
         
         # Database paths from environment
         if db_path := os.getenv("FRAMEWORK_DB_PATH"):
@@ -359,6 +370,27 @@ def get_security_config() -> SecurityConfig:
 def get_google_oauth_config() -> GoogleOAuthConfig:
     """Get Google OAuth configuration."""
     return get_config().google_oauth
+
+
+def has_oauth_credentials() -> bool:
+    """Check if Google OAuth credentials are available and valid."""
+    try:
+        config = get_config()
+        return (
+            bool(config.google_oauth.client_id) and 
+            bool(config.google_oauth.client_secret) and
+            config.google_oauth.enabled
+        )
+    except Exception:
+        return False
+
+
+def is_oauth_enabled() -> bool:
+    """Check if OAuth is enabled in current configuration."""
+    try:
+        return get_config().google_oauth.enabled
+    except Exception:
+        return False
 
 
 if __name__ == "__main__":

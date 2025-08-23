@@ -81,6 +81,30 @@ class GoogleOAuthConfig:
     def from_streamlit() -> GoogleOAuthConfig:
         if not DEPS:
             raise ImportError("Dependências de autenticação ausentes")
+        
+        # First, try to load from new config system
+        try:
+            from config.environment import get_config
+            config = get_config()
+            oauth_config = config.google_oauth
+            
+            # Use the new config system if OAuth is enabled and has credentials
+            if oauth_config.enabled and oauth_config.client_id and oauth_config.client_secret:
+                return GoogleOAuthConfig(
+                    client_id=oauth_config.client_id,
+                    client_secret=oauth_config.client_secret,
+                    redirect_uri=oauth_config.redirect_uri,
+                    scopes=tuple(oauth_config.scopes),
+                    app_name="TDD Framework",
+                    require_auth=config.security.require_auth,
+                    debug=config.debug,
+                    allow_dev_fallback=config.environment == "development",
+                )
+                
+        except Exception as e:
+            logging.info(f"Config system not available, trying Streamlit secrets: {e}")
+        
+        # Fallback to Streamlit secrets
         try:
             google_cfg = st.secrets["google"]
             app_cfg = st.secrets.get("app", {})
@@ -201,6 +225,7 @@ class GoogleOAuthManager:
             and self.cfg.redirect_uri
             and not str(self.cfg.client_id).startswith("${")
             and not str(self.cfg.client_secret).startswith("${")
+            and getattr(self.cfg, 'enabled', True)  # Check if OAuth is enabled
         )
 
     # ---- State/Nonce com TTL -------------------------------------------------

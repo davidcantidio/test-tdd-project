@@ -174,6 +174,117 @@ def render_current_page(user: Dict[str, Any]) -> None:
         st.error("⚠️ Page rendering temporarily unavailable")
         _render_return_to_dashboard()
 
+def _render_login_page() -> None:
+    """Render the login page with adaptive UI based on OAuth availability."""
+    if not STREAMLIT_AVAILABLE:
+        return
+    
+    # Check OAuth configuration availability
+    try:
+        from config.environment import has_oauth_credentials, is_oauth_enabled, is_development
+    except ImportError:
+        has_oauth_credentials = lambda: False
+        is_oauth_enabled = lambda: False  
+        is_development = lambda: True
+    
+    oauth_available = has_oauth_credentials()
+    is_dev_mode = is_development()
+    
+    if oauth_available:
+        # Full OAuth login available
+        _render_oauth_login_page()
+    elif is_dev_mode:
+        # Development mode without OAuth - show fallback
+        _render_development_login_page()
+    else:
+        # Production without OAuth - show error
+        _render_oauth_unavailable_page()
+
+
+def _render_oauth_login_page() -> None:
+    """Render full Google OAuth login page."""
+    try:
+        from ..utils.auth import render_login_page
+        render_login_page()
+    except ImportError:
+        st.error("❌ Sistema de autenticação OAuth não disponível")
+        _render_fallback_navigation()
+
+
+def _render_development_login_page() -> None:
+    """Render development mode login with fallback authentication.""" 
+    st.title("🛠️ Login - Modo Desenvolvimento")
+    
+    st.info(
+        "**OAuth não configurado** - Executando em modo desenvolvimento.\n\n"
+        "O sistema está funcionando sem autenticação Google OAuth."
+    )
+    
+    # Development mode options
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.markdown("### 🔓 Acesso Desenvolvimento")
+        if st.button("🚀 Entrar sem Autenticação", use_container_width=True, type="primary"):
+            # Clear login params and return to main app
+            st.query_params.clear()
+            st.success("✅ Acesso liberado para desenvolvimento")
+            st.rerun()
+    
+    with col2:
+        st.markdown("### ⚙️ Configurar OAuth")
+        st.markdown(
+            """
+            Para habilitar Google OAuth:
+            
+            ```bash
+            export GOOGLE_CLIENT_ID="your_client_id"
+            export GOOGLE_CLIENT_SECRET="your_secret"  
+            ```
+            
+            Ou crie `.streamlit/secrets.toml` com as credenciais.
+            """
+        )
+        
+        if st.button("🔄 Recarregar Configuração", use_container_width=True):
+            # Force config reload to check for new credentials
+            try:
+                from config.environment import reload_config
+                reload_config()
+                st.rerun()
+            except ImportError:
+                st.warning("Reinicie a aplicação para carregar novas configurações")
+    
+    _render_fallback_navigation()
+
+
+def _render_oauth_unavailable_page() -> None:
+    """Render OAuth unavailable page for production environments."""
+    st.title("🔐 Autenticação Necessária") 
+    
+    st.error(
+        "**Sistema de autenticação não configurado**\n\n"
+        "Entre em contato com o administrador para configurar as credenciais OAuth."
+    )
+    
+    st.info(
+        "**Para administradores**: Configure as variáveis de ambiente "
+        "`GOOGLE_CLIENT_ID` e `GOOGLE_CLIENT_SECRET` e reinicie a aplicação."
+    )
+    
+    _render_fallback_navigation()
+
+
+def _render_fallback_navigation() -> None:
+    """Render navigation options to return to main app."""
+    st.markdown("---")
+    col1, col2, col3 = st.columns([1, 2, 1])
+    
+    with col2:
+        if st.button("🏠 Voltar ao Dashboard", use_container_width=True):
+            st.query_params.clear()
+            st.rerun()
+
 def _render_pages_system_page(current_page: str) -> None:
     """Render a page using the pages system."""
     if not STREAMLIT_AVAILABLE:
