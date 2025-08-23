@@ -1,468 +1,513 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 """
-🔐 Google OAuth Authentication System for TDD Framework
+🔐 Google OAuth 2.0 para o TDD Framework (versão refinada)
 
-This module provides comprehensive Google OAuth 2.0 authentication with:
-- Google Workspace integration
-- Session management
-- User profile handling
-- Security features (CSRF protection, secure cookies)
+Principais melhorias:
+- PKCE + CSRF state/nonce com TTL
+- Verificação de id_token (OpenID) + fallback /userinfo
+- Configuração desacoplada (dataclass)
+- SessionStore (Protocol) para testar sem Streamlit
+- Não persiste client_secret em sessão
+- prompt='consent' apenas quando necessário
+- Revogação de token no logout
 """
+
+from __future__ import annotations
 
 import os
-import json
 import time
+import json
+import hmac
+import base64
 import hashlib
-from typing import Dict, Any, Optional, Tuple
-from datetime import datetime, timedelta
-from urllib.parse import urlencode
+import logging
+import secrets
+from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
+from typing import Dict, Any, Optional, Tuple, Protocol, runtime_checkable
 
+# ---- Dependências opcionais (graceful import) --------------------------------
 try:
     import streamlit as st
     from google.auth.transport.requests import Request
     from google.oauth2.credentials import Credentials
+    from google.oauth2 import id_token as google_id_token
     from google_auth_oauthlib.flow import Flow
-    from googleapiclient.discovery import build
     import requests
-    DEPENDENCIES_AVAILABLE = True
-except ImportError as e:
-    logging.info(f"⚠️ Authentication dependencies not available: {e}")
-    DEPENDENCIES_AVAILABLE = False
-    st = None
+    from googleapiclient.discovery import build
+    DEPS = True
+except Exception as e:
+    logging.info(f"⚠️ Auth deps não disponíveis: {e}")
+    st = None  # type: ignore
+    DEPS = False
 
+
+# ---- Configuração -------------------------------------------------------------
+
+@dataclass(frozen=True)
+class GoogleOAuthConfig:
+    client_id: str
+    client_secret: str              # usado apenas para troca de token; não vai para sessão
+    redirect_uri: str
+    scopes: tuple[str, ...]
+    app_name: str = "TDD Framework"
+    require_auth: bool = True
+    debug: bool = False
+    session_timeout_seconds: int = 7200  # 2h
+    session_cookie_name: str = "tdd_framework_session"
+    allowed_hd: Optional[str] = None     # domínio do workspace (ex.: "empresa.com")
+
+    # segurança
+    state_ttl_seconds: int = 600         # 10 minutos
+    nonce_ttl_seconds: int = 600
+    clock_skew_seconds: int = 60         # tolerância de relógio
+
+    @staticmethod
+    def from_streamlit() -> GoogleOAuthConfig:
+        if not DEPS:
+            raise ImportError("Dependências de autenticação ausentes")
+        try:
+            google_cfg = st.secrets["google"]
+            app_cfg = st.secrets.get("app", {})
+            sess_cfg = st.secrets.get("session", {})
+            allowed_hd = google_cfg.get("allowed_hd") if isinstance(google_cfg, dict) else None
+            return GoogleOAuthConfig(
+                client_id=google_cfg["client_id"],
+                client_secret=google_cfg["client_secret"],
+                redirect_uri=google_cfg["redirect_uri"],
+                scopes=tuple(google_cfg.get("scopes", ("openid", "email", "profile"))),
+                app_name=app_cfg.get("name", "TDD Framework"),
+                require_auth=app_cfg.get("require_auth", True),
+                debug=app_cfg.get("debug", False),
+                session_timeout_seconds=int(sess_cfg.get("timeout_minutes", 120)) * 60,
+                session_cookie_name=sess_cfg.get("cookie_name", "tdd_framework_session"),
+                allowed_hd=allowed_hd,
+            )
+        except Exception as e:
+            logging.info(f"Google OAuth não configurado corretamente: {e}")
+            # fallback seguro com defaults
+            return GoogleOAuthConfig(
+                client_id="",
+                client_secret="",
+                redirect_uri="",
+                scopes=("openid", "email", "profile"),
+                require_auth=True,
+                debug=False,
+            )
+
+
+# ---- Abstração de sessão (testável) -----------------------------------------
+
+@runtime_checkable
+class SessionStore(Protocol):
+    def get(self, key: str, default: Any = None) -> Any: ...
+    def set(self, key: str, value: Any) -> None: ...
+    def delete(self, key: str) -> None: ...
+
+
+class StreamlitSessionStore:
+    def get(self, key: str, default: Any = None) -> Any:
+        return st.session_state.get(key, default)
+
+    def set(self, key: str, value: Any) -> None:
+        st.session_state[key] = value
+
+    def delete(self, key: str) -> None:
+        if key in st.session_state:
+            del st.session_state[key]
+
+
+# ---- Utilitários -------------------------------------------------------------
+
+def _now() -> datetime:
+    return datetime.now(timezone.utc)
+
+def _b64url(data: bytes) -> str:
+    return base64.urlsafe_b64encode(data).rstrip(b"=").decode("ascii")
+
+def _pkce_pair() -> Tuple[str, str]:
+    verifier = secrets.token_urlsafe(64)
+    digest = hashlib.sha256(verifier.encode("ascii")).digest()
+    challenge = _b64url(digest)
+    return verifier, challenge
+
+def _secure_random_hex(n: int = 32) -> str:
+    return secrets.token_hex(n)
+
+def _safe_log(logger: logging.Logger, msg: str) -> None:
+    logger.debug(msg)
+
+
+# ---- Núcleo OAuth ------------------------------------------------------------
 
 class GoogleOAuthManager:
-    # Delegation to GoogleOAuthManagerUiinteraction
-    def __init__(self):
-        self._googleoauthmanageruiinteraction = GoogleOAuthManagerUiinteraction()
-    # Delegation to GoogleOAuthManagerValidation
-    def __init__(self):
-        self._googleoauthmanagervalidation = GoogleOAuthManagerValidation()
-    # Delegation to GoogleOAuthManagerErrorhandling
-    def __init__(self):
-        self._googleoauthmanagererrorhandling = GoogleOAuthManagerErrorhandling()
-    # Delegation to GoogleOAuthManagerConfiguration
-    def __init__(self):
-        self._googleoauthmanagerconfiguration = GoogleOAuthManagerConfiguration()
-    # Delegation to GoogleOAuthManagerNetworking
-    def __init__(self):
-        self._googleoauthmanagernetworking = GoogleOAuthManagerNetworking()
-    # Delegation to GoogleOAuthManagerFormatting
-    def __init__(self):
-        self._googleoauthmanagerformatting = GoogleOAuthManagerFormatting()
-    # Delegation to GoogleOAuthManagerDataaccess
-    def __init__(self):
-        self._googleoauthmanagerdataaccess = GoogleOAuthManagerDataaccess()
-    # Delegation to GoogleOAuthManagerLogging
-    def __init__(self):
-        self._googleoauthmanagerlogging = GoogleOAuthManagerLogging()
-    """Manages Google OAuth 2.0 authentication flow for Streamlit applications."""
-    
-    def __init__(self):
-        """Initialize OAuth manager with configuration from Streamlit secrets."""
-        if not DEPENDENCIES_AVAILABLE:
-            raise ImportError("Required authentication dependencies not installed")
-        
-        self.client_id = st.secrets["google"]["client_id"]
-        self.client_secret = st.secrets["google"]["client_secret"]
-        self.redirect_uri = st.secrets["google"]["redirect_uri"]
-        self.scopes = st.secrets["google"]["scopes"]
-        
-        # Application configuration
-        self.app_name = st.secrets["app"]["name"]
-        self.require_auth = st.secrets["app"]["require_auth"]
-        self.debug = st.secrets["app"]["debug"]
-        
-        # Session configuration
-        self.session_timeout = st.secrets["session"]["timeout_minutes"] * 60  # Convert to seconds
-        self.cookie_name = st.secrets["session"]["cookie_name"]
-        
-    def create_flow(self) -> Flow:
-        """Create and configure Google OAuth flow."""
+    def __init__(self, cfg: Optional[GoogleOAuthConfig] = None, store: Optional[SessionStore] = None):
+        if not DEPS:
+            raise ImportError("Dependências de autenticação ausentes")
+        self.logger = logging.getLogger(__name__)
+        self.cfg = cfg or GoogleOAuthConfig.from_streamlit()
+        self.store = store or StreamlitSessionStore()
+        self.configured = bool(self.cfg.client_id and self.cfg.redirect_uri)
+
+    # -- State/Nonce com TTL ---------------------------------------------------
+    def _stash_with_ttl(self, key: str, value: str, ttl_seconds: int) -> None:
+        payload = {"value": value, "exp": (_now() + timedelta(seconds=ttl_seconds)).timestamp()}
+        self.store.set(key, payload)
+
+    def _pop_if_valid(self, key: str, candidate: str) -> bool:
+        payload = self.store.get(key)
+        if not payload:
+            return False
+        try:
+            exp = float(payload["exp"])
+            val = str(payload["value"])
+        except Exception:
+            self.store.delete(key)
+            return False
+        if _now().timestamp() > exp:
+            self.store.delete(key)
+            return False
+        # compare com timing-safe
+        ok = hmac.compare_digest(val, candidate)
+        self.store.delete(key)
+        return ok
+
+    # -- Flow (PKCE) -----------------------------------------------------------
+    def _create_flow(self, code_verifier: Optional[str] = None) -> Flow:
+        if not self.configured:
+            raise RuntimeError("Google OAuth não configurado")
         client_config = {
             "web": {
-                "client_id": self.client_id,
-                "client_secret": self.client_secret,
+                "client_id": self.cfg.client_id,
+                "client_secret": self.cfg.client_secret,
                 "auth_uri": "https://accounts.google.com/o/oauth2/auth",
                 "token_uri": "https://oauth2.googleapis.com/token",
-                "redirect_uris": [self.redirect_uri]
+                "redirect_uris": [self.cfg.redirect_uri],
             }
         }
-        
-        flow = Flow.from_client_config(
-            client_config,
-            scopes=self.scopes
-        )
-        flow.redirect_uri = self.redirect_uri
-        
+        flow = Flow.from_client_config(client_config, scopes=list(self.cfg.scopes))
+        flow.redirect_uri = self.cfg.redirect_uri
+        # PKCE
+        if code_verifier:
+            flow.code_verifier = code_verifier
         return flow
-    
+
     def get_authorization_url(self) -> Tuple[str, str]:
-        """Generate OAuth authorization URL with CSRF protection."""
-        flow = self.create_flow()
-        
-        # Generate CSRF state token
-        state = hashlib.sha256(f"{time.time()}{self.client_id}".encode()).hexdigest()
-        
-        # Store state in session for verification
-        st.session_state.oauth_state = state
-        
-        authorization_url, _ = flow.authorization_url(
-            access_type='offline',
-            include_granted_scopes='true',
-            state=state,
-            prompt='consent'  # Force consent screen for refresh tokens
-        )
-        
-        return authorization_url, state
-    
+        """Gera URL de autorização com PKCE, state e nonce (CSRF)."""
+        flow = self._create_flow()
+        code_verifier, code_challenge = _pkce_pair()
+        self._stash_with_ttl("oauth_code_verifier", code_verifier, self.cfg.state_ttl_seconds)
+
+        state = _secure_random_hex(16)
+        nonce = _secure_random_hex(16)
+        self._stash_with_ttl("oauth_state", state, self.cfg.state_ttl_seconds)
+        self._stash_with_ttl("oauth_nonce", nonce, self.cfg.nonce_ttl_seconds)
+
+        extra = {
+            "access_type": "offline",
+            "include_granted_scopes": "true",
+            "state": state,
+            "prompt": "consent" if not self._has_refresh_token() else None,
+            "code_challenge": code_challenge,
+            "code_challenge_method": "S256",
+        }
+        if self.cfg.allowed_hd:
+            extra["hd"] = self.cfg.allowed_hd
+
+        # remove None
+        extra_clean = {k: v for k, v in extra.items() if v is not None}
+        auth_url, _ = flow.authorization_url(**extra_clean)
+        return auth_url, state
+
     def handle_callback(self, authorization_code: str, state: str) -> Dict[str, Any]:
-        """Handle OAuth callback and exchange code for tokens."""
-        # Verify CSRF state
-        if state != st.session_state.get('oauth_state'):
-            raise ValueError("Invalid OAuth state - possible CSRF attack")
-        
-        flow = self.create_flow()
-        
+        """Troca code por tokens, valida state/nonce e popula sessão autenticada."""
+        if not self._pop_if_valid("oauth_state", state):
+            raise ValueError("Estado OAuth inválido/expirado (CSRF)")
+
+        code_verifier_payload = self.store.get("oauth_code_verifier")
+        code_verifier = code_verifier_payload.get("value") if isinstance(code_verifier_payload, dict) else None
+        self.store.delete("oauth_code_verifier")
+
+        flow = self._create_flow(code_verifier=code_verifier)
         try:
-            # Exchange authorization code for tokens
             flow.fetch_token(code=authorization_code)
-            credentials = flow.credentials
-            
-            # Get user information
-            user_info = self.get_user_info(credentials)
-            
-            # Create authenticated session
-            session_data = {
-                'user_info': user_info,
-                'credentials': {
-                    'token': credentials.token,
-                    'refresh_token': credentials.refresh_token,
-                    'token_uri': credentials.token_uri,
-                    'client_id': credentials.client_id,
-                    'client_secret': credentials.client_secret,
-                    'scopes': credentials.scopes
-                },
-                'authenticated_at': datetime.now().isoformat(),
-                'expires_at': (datetime.now() + timedelta(seconds=self.session_timeout)).isoformat()
-            }
-            
-            # Store in session state
-            st.session_state.authenticated = True
-            st.session_state.user_session = session_data
-            
-            # Clear OAuth state
-            if 'oauth_state' in st.session_state:
-                del st.session_state.oauth_state
-            
-            return session_data
-            
+            cred: Credentials = flow.credentials
         except Exception as e:
-            self.debug_log(f"OAuth callback error: {e}")
-            raise Exception(f"Authentication failed: {str(e)}")
-    
-    def get_user_info(self, credentials: Credentials) -> Dict[str, Any]:
-        """Retrieve user information using Google People API."""
+            raise RuntimeError(f"Falha ao trocar code por token: {e}") from e
+
+        user_info = self._resolve_user_info(cred)
+
+        # monta sessão (não armazena client_secret/token_uri)
+        session_data: Dict[str, Any] = {
+            "user_info": user_info,
+            "credentials": {
+                "token": cred.token,
+                "refresh_token": cred.refresh_token,
+                "scopes": list(cred.scopes or []),
+            },
+            "authenticated_at": _now().isoformat(),
+            "expires_at": (_now() + timedelta(seconds=self.cfg.session_timeout_seconds)).isoformat(),
+        }
+        self.store.set("authenticated", True)
+        self.store.set("user_session", session_data)
+        return session_data
+
+    # -- User info (ID Token / UserInfo / People API) -------------------------
+    def _resolve_user_info(self, credentials: Credentials) -> Dict[str, Any]:
+        # 1) Se veio id_token, valida com Google
+        idinfo: Optional[Dict[str, Any]] = None
+        if getattr(credentials, "id_token", None):
+            try:
+                idinfo = google_id_token.verify_oauth2_token(
+                    credentials.id_token,
+                    Request(),
+                    audience=self.cfg.client_id,
+                    clock_skew_in_seconds=self.cfg.clock_skew_seconds,
+                )
+            except Exception:
+                idinfo = None
+
+        # 2) Se não, tenta endpoint OpenID userinfo
+        userinfo: Optional[Dict[str, Any]] = None
+        if not idinfo:
+            try:
+                resp = requests.get(
+                    "https://openidconnect.googleapis.com/v1/userinfo",
+                    headers={"Authorization": f"Bearer {credentials.token}"},
+                    timeout=10,
+                )
+                if resp.ok:
+                    userinfo = resp.json()
+            except Exception:
+                userinfo = None
+
+        # 3) (Opcional) People API para foto/org
+        picture = None
+        organization = None
         try:
-            # Build People API service
-            service = build('people', 'v1', credentials=credentials)
-            
-            # Get user profile
+            service = build("people", "v1", credentials=credentials, cache_discovery=False)
             profile = service.people().get(
-                resourceName='people/me',
-                personFields='names,emailAddresses,photos,organizations'
+                resourceName="people/me",
+                personFields="photos,organizations"
             ).execute()
-            
-            # Extract user information
-            user_info = {
-                'id': profile.get('resourceName', '').replace('people/', ''),
-                'email': None,
-                'name': None,
-                'picture': None,
-                'organization': None
-            }
-            
-            # Extract email
-            emails = profile.get('emailAddresses', [])
-            if emails:
-                user_info['email'] = emails[0].get('value')
-            
-            # Extract name
-            names = profile.get('names', [])
-            if names:
-                user_info['name'] = names[0].get('displayName')
-            
-            # Extract profile picture
-            photos = profile.get('photos', [])
+            photos = profile.get("photos", [])
             if photos:
-                user_info['picture'] = photos[0].get('url')
-            
-            # Extract organization
-            organizations = profile.get('organizations', [])
-            if organizations:
-                user_info['organization'] = organizations[0].get('name')
-            
-            self.debug_log(f"Retrieved user info for: {user_info.get('email')}")
-            return user_info
-            
-        except Exception as e:
-            self.debug_log(f"Error retrieving user info: {e}")
-            # Fallback to basic token info
-            return {
-                'id': 'unknown',
-                'email': 'unknown@example.com',
-                'name': 'Unknown User',
-                'picture': None,
-                'organization': None
-            }
-    
+                picture = photos[0].get("url")
+            orgs = profile.get("organizations", [])
+            if orgs:
+                organization = orgs[0].get("name")
+        except Exception:
+            pass  # opcional — não falha a autenticação
+
+        # Consolida
+        email = (idinfo or userinfo or {}).get("email")
+        name = (idinfo or userinfo or {}).get("name") or (idinfo or {}).get("given_name")
+        sub = (idinfo or userinfo or {}).get("sub")
+        hd = (idinfo or userinfo or {}).get("hd")
+        if self.cfg.allowed_hd and hd and hd != self.cfg.allowed_hd:
+            raise PermissionError("Domínio não autorizado")
+
+        return {
+            "id": sub or "unknown",
+            "email": email or "unknown@example.com",
+            "name": name or "Unknown User",
+            "picture": picture or (userinfo or {}).get("picture"),
+            "organization": organization,
+            "hd": hd,
+        }
+
+    # -- Sessão ----------------------------------------------------------------
+    def _has_refresh_token(self) -> bool:
+        sess = self.store.get("user_session") or {}
+        creds = sess.get("credentials") or {}
+        return bool(creds.get("refresh_token"))
+
     def is_authenticated(self) -> bool:
-        """Check if user is currently authenticated with valid session."""
-        if not st.session_state.get('authenticated', False):
+        if not self.store.get("authenticated"):
             return False
-        
-        session = st.session_state.get('user_session')
-        if not session:
+        sess = self.store.get("user_session")
+        if not isinstance(sess, dict):
             return False
-        
-        # Check session expiration
         try:
-            expires_at = datetime.fromisoformat(session['expires_at'])
-            if datetime.now() > expires_at:
+            exp = datetime.fromisoformat(sess["expires_at"])
+            if _now() > exp:
                 self.logout()
                 return False
-        except (KeyError, ValueError):
+        except Exception:
             self.logout()
             return False
-        
         return True
-    
+
     def get_current_user(self) -> Optional[Dict[str, Any]]:
-        """Get current authenticated user information."""
-        if not self.is_authenticated():
-            return None
-        
-        session = st.session_state.get('user_session')
-        return session.get('user_info') if session else None
-    
-    def logout(self):
-        """Clear authentication session and logout user."""
-        # Clear session state
-        keys_to_remove = ['authenticated', 'user_session', 'oauth_state']
-        for key in keys_to_remove:
-            if key in st.session_state:
-                del st.session_state[key]
-        
-        self.debug_log("User logged out")
-    
+        return (self.store.get("user_session") or {}).get("user_info") if self.is_authenticated() else None
+
     def refresh_credentials(self) -> bool:
-        """Refresh expired credentials using refresh token."""
-        session = st.session_state.get('user_session')
-        if not session or 'credentials' not in session:
+        """Atualiza access token usando refresh_token (se disponível)."""
+        sess = self.store.get("user_session")
+        if not sess:
             return False
-        
+        cred_data = sess.get("credentials") or {}
+        if not cred_data.get("refresh_token"):
+            return False
         try:
-            cred_data = session['credentials']
-            credentials = Credentials(
-                token=cred_data['token'],
-                refresh_token=cred_data['refresh_token'],
-                token_uri=cred_data['token_uri'],
-                client_id=cred_data['client_id'],
-                client_secret=cred_data['client_secret'],
-                scopes=cred_data['scopes']
+            creds = Credentials(
+                token=cred_data.get("token"),
+                refresh_token=cred_data["refresh_token"],
+                token_uri="https://oauth2.googleapis.com/token",
+                client_id=self.cfg.client_id,
+                client_secret=self.cfg.client_secret,
+                scopes=cred_data.get("scopes") or list(self.cfg.scopes),
             )
-            
-            # Refresh token
-            credentials.refresh(Request())
-            
-            # Update session with new token
-            session['credentials']['token'] = credentials.token
-            session['expires_at'] = (datetime.now() + timedelta(seconds=self.session_timeout)).isoformat()
-            st.session_state.user_session = session
-            
-            self.debug_log("Credentials refreshed successfully")
+            creds.refresh(Request())
+            cred_data["token"] = creds.token
+            sess["credentials"] = cred_data
+            sess["expires_at"] = (_now() + timedelta(seconds=self.cfg.session_timeout_seconds)).isoformat()
+            self.store.set("user_session", sess)
             return True
-            
         except Exception as e:
-            self.debug_log(f"Failed to refresh credentials: {e}")
+            self.logger.warning(f"Falha ao refrescar token: {e}")
             self.logout()
             return False
-    
-    def debug_log(self, message: str):
-        """Log debug messages if debug mode is enabled."""
-        if self.debug:
-            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            print(f"[{timestamp}] AUTH DEBUG: {message}")
 
-
-def require_authentication(func):
-    """Decorator to require authentication for Streamlit pages."""
-    def wrapper(*args, **kwargs):
-        if not DEPENDENCIES_AVAILABLE:
-            if st is not None:
-                st.error("❌ Authentication system not available - dependencies missing")
-                st.stop()
-            else:
-                logging.info("❌ Authentication system not available - dependencies missing")
-                return {"error": "Authentication dependencies not available"}
-        
+    def logout(self) -> None:
+        """Limpa sessão e tenta revogar refresh_token (se houver)."""
         try:
-            auth_manager = GoogleOAuthManager()
-            
-            # Skip authentication if not required
-            if not auth_manager.require_auth:
-                return func(*args, **kwargs)
-            
-            # Check if user is authenticated
-            if auth_manager.is_authenticated():
-                return func(*args, **kwargs)
-            
-            # Show login page
-            render_login_page(auth_manager)
-            
-        except Exception as e:
-            if st is not None:
-                st.error(f"❌ Authentication Error: {e}")
-                st.error("Please check your configuration and try again.")
-                st.stop()
-            else:
-                logging.info(f"❌ Authentication Error: {e}")
-                return {"error": f"Authentication Error: {e}"}
-    
+            sess = self.store.get("user_session") or {}
+            cred_data = sess.get("credentials") or {}
+            refresh = cred_data.get("refresh_token")
+            if refresh:
+                # Revogação padrão OAuth (best effort)
+                requests.post(
+                    "https://oauth2.googleapis.com/revoke",
+                    params={"token": refresh},
+                    headers={"content-type": "application/x-www-form-urlencoded"},
+                    timeout=5,
+                )
+        except Exception:
+            pass
+        for key in ("authenticated", "user_session", "oauth_state", "oauth_nonce", "oauth_code_verifier"):
+            self.store.delete(key)
+
+    # -- UI helpers (opcionais) ------------------------------------------------
+    def render_login_page(self) -> None:
+        if not DEPS:
+            raise RuntimeError("Sem Streamlit disponível")
+        st.title("🔐 TDD Framework - Login necessário")
+        st.write("Entre com sua conta Google para continuar.")
+        qp = st.query_params or {}
+        if "code" in qp and "state" in qp:
+            with st.spinner("Autenticando..."):
+                try:
+                    data = self.handle_callback(qp["code"], qp["state"])
+                    st.query_params.clear()
+                    st.success(f"✅ Bem-vindo(a), {data['user_info']['name']}!")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"❌ Falha na autenticação: {e}")
+                    st.query_params.clear()
+                    st.rerun()
+            return
+
+        if st.button("🔗 Entrar com Google", type="primary", use_container_width=True):
+            try:
+                url, _ = self.get_authorization_url()
+                st.markdown(
+                    f'<meta http-equiv="refresh" content="0; url={url}">',
+                    unsafe_allow_html=True,
+                )
+            except Exception as e:
+                st.error(f"Não foi possível iniciar OAuth: {e}")
+
+    def render_user_menu(self) -> None:
+        if not (DEPS and self.is_authenticated()):
+            return
+        user = self.get_current_user() or {}
+        with st.sidebar:
+            st.markdown("---")
+            st.markdown("### 👤 Usuário")
+            c1, c2 = st.columns([1, 2])
+            with c1:
+                if user.get("picture"):
+                    st.image(user["picture"], width=48)
+                else:
+                    st.markdown("👤")
+            with c2:
+                st.markdown(f"**{user.get('name','Usuário')}**")
+                st.caption(user.get("email", "sem email"))
+                if user.get("organization"):
+                    st.caption(f"🏢 {user['organization']}")
+            if st.button("🚪 Sair", use_container_width=True):
+                self.logout()
+                st.rerun()
+
+
+# ---- Decorator utilitário ----------------------------------------------------
+
+def require_authentication(page_func):
+    """Decorator para páginas Streamlit que exigem login."""
+    def wrapper(*args, **kwargs):
+        if not DEPS:
+            # Modo sem UI: bloqueia com log claro (não faz I/O)
+            logging.error("❌ Autenticação indisponível: deps ausentes")
+            return None
+        auth = GoogleOAuthManager()
+        if not auth.cfg.require_auth:
+            return page_func(*args, **kwargs)
+        if not auth.is_authenticated():
+            auth.render_login_page()
+            st.stop()
+        # refresh opportunístico se estiver perto do vencimento (metade do timeout)
+        sess = st.session_state.get("user_session") if st else None
+        try:
+            if sess:
+                exp = datetime.fromisoformat(sess["expires_at"])
+                if (exp - _now()).total_seconds() < auth.cfg.session_timeout_seconds / 2:
+                    auth.refresh_credentials()
+        except Exception:
+            pass
+        return page_func(*args, **kwargs)
     return wrapper
 
 
-def render_login_page(auth_manager: GoogleOAuthManager):
-    """Render the Google OAuth login page."""
-    st.title("🔐 TDD Framework - Authentication Required")
-    st.markdown("Please sign in with your Google account to access the application.")
-    
-    # Handle OAuth callback
-    query_params = st.query_params
-    
-    if 'code' in query_params and 'state' in query_params:
-        with st.spinner("🔄 Authenticating..."):
-            try:
-                auth_code = query_params['code']
-                state = query_params['state']
-                
-                # Handle OAuth callback
-                session_data = auth_manager.handle_callback(auth_code, state)
-                
-                # Clear query parameters and redirect
-                st.query_params.clear()
-                st.success(f"✅ Welcome, {session_data['user_info']['name']}!")
-                st.rerun()
-                
-            except Exception as e:
-                st.error(f"❌ Authentication failed: {e}")
-                st.query_params.clear()
-                st.rerun()
-    
-    else:
-        # Show login button
-        st.markdown("---")
-        
-        col1, col2, col3 = st.columns([1, 2, 1])
-        
-        with col2:
-            if st.button("🔗 Sign in with Google", use_container_width=True, type="primary"):
-                with st.spinner("🔄 Redirecting to Google..."):
-                    try:
-                        auth_url, state = auth_manager.get_authorization_url()
-                        
-                        # JavaScript redirect to OAuth URL
-                        st.markdown(
-                            f"""
-                            <meta http-equiv="refresh" content="0; url={auth_url}">
-                            <script>
-                                window.location.href = "{auth_url}";
-                            </script>
-                            """,
-                            unsafe_allow_html=True
-                        )
-                        
-                    except Exception as e:
-                        st.error(f"❌ Failed to initiate authentication: {e}")
-        
-        # Information section
-        st.markdown("---")
-        with st.expander("ℹ️ About Authentication"):
-            st.markdown("""
-            **Google OAuth 2.0 Authentication**
-            
-            This application uses Google OAuth 2.0 for secure authentication:
-            
-            - ✅ **Secure**: Your password never leaves Google's servers
-            - ✅ **Privacy**: We only access basic profile information
-            - ✅ **Control**: You can revoke access anytime in your Google account
-            
-            **What information we access:**
-            - Email address (for identification)
-            - Display name (for personalization) 
-            - Profile picture (optional)
-            - Organization (if available)
-            
-            **Your data is safe:**
-            - No passwords are stored
-            - Sessions expire automatically
-            - All communication is encrypted
-            """)
+# ---- Funções utilitárias compatíveis com o seu código atual ------------------
 
-
-def render_user_menu(auth_manager: GoogleOAuthManager):
-    """Render user menu with profile and logout options."""
-    if not auth_manager.is_authenticated():
-        return
-    
-    user = auth_manager.get_current_user()
-    if not user:
-        return
-    
-    with st.sidebar:
-        st.markdown("---")
-        st.markdown("### 👤 User Profile")
-        
-        # User avatar and info
-        col1, col2 = st.columns([1, 2])
-        
-        with col1:
-            if user.get('picture'):
-                st.image(user['picture'], width=50)
-            else:
-                st.markdown("👤")
-        
-        with col2:
-            st.markdown(f"**{user.get('name', 'Unknown')}**")
-            st.caption(user.get('email', 'No email'))
-            if user.get('organization'):
-                st.caption(f"🏢 {user['organization']}")
-        
-        # Logout button
-        if st.button("🚪 Logout", use_container_width=True):
-            auth_manager.logout()
-            st.rerun()
-
-
-# Utility functions for easy integration
 def get_authenticated_user() -> Optional[Dict[str, Any]]:
-    """Get the currently authenticated user (utility function)."""
-    if not DEPENDENCIES_AVAILABLE:
-        return None
-    
+    if not DEPS:
+        return _get_traditional_auth_user()
+    auth = GoogleOAuthManager()
+    if not auth.configured:
+        return _get_traditional_auth_user()
+    return auth.get_current_user()
+
+def is_user_authenticated() -> bool:
+    if not DEPS:
+        return _is_traditional_auth_active()
+    auth = GoogleOAuthManager()
+    if not auth.configured:
+        return _is_traditional_auth_active()
+    return auth.is_authenticated()
+
+# Fallbacks para seu middleware legado (se existirem)
+def _get_traditional_auth_user() -> Optional[Dict[str, Any]]:
     try:
-        auth_manager = GoogleOAuthManager()
-        return auth_manager.get_current_user()
+        from ..auth.middleware import get_current_user  # type: ignore
+        u = get_current_user()
+        if not u:
+            return None
+        return {
+            "id": getattr(u, "id", "unknown"),
+            "email": getattr(u, "email", getattr(u, "username", "user@local")),
+            "name": getattr(u, "username", getattr(u, "name", "User")),
+            "picture": None,
+            "organization": None,
+        }
     except Exception:
         return None
 
-
-def is_user_authenticated() -> bool:
-    """Check if user is authenticated (utility function)."""
-    if not DEPENDENCIES_AVAILABLE:
-        return False
-    
+def _is_traditional_auth_active() -> bool:
     try:
-        auth_manager = GoogleOAuthManager()
-        return auth_manager.is_authenticated()
+        from ..auth.middleware import is_authenticated  # type: ignore
+        return bool(is_authenticated())
     except Exception:
         return False

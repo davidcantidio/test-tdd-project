@@ -253,6 +253,20 @@ def navigate_to_page(page_name: str, rerun: bool = True) -> None:
     if rerun:
         st.rerun()
 
+
+def redirect_to_login() -> None:
+    """Redirect to login page with TDAH-friendly messaging."""
+    if not STREAMLIT_AVAILABLE:
+        return
+    
+    # Clear interface and show login
+    st.empty()
+    st.info("🔐 **Please log in to continue.** You'll return to your previous page after authentication.")
+    
+    # Navigate to login page
+    set_current_page("login")
+    st.rerun()
+
 def get_available_page_names() -> List[str]:
     """Return list of available page names (always includes Dashboard)."""
     if PAGES_AVAILABLE:
@@ -379,6 +393,7 @@ __all__ = [
     "set_current_page",
     "get_current_page",
     "navigate_to_page",
+    "redirect_to_login",
     "get_available_page_names",
 
     # Page state management
