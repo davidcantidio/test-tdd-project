@@ -1,289 +1,246 @@
  (cd "$(git rev-parse --show-toplevel)" && git apply --3way <<'EOF' 
-diff --git a/streamlit_extension/pages/__init__.py b/streamlit_extension/pages/__init__.py
-index 4aee6748ff9e705d7a905600b93a5481064888e6..bec2dd79d420f10253748f708c91438ff5daeb9d 100644
---- a/streamlit_extension/pages/__init__.py
-+++ b/streamlit_extension/pages/__init__.py
-@@ -31,51 +31,51 @@ RenderFunc = Callable[[], Optional[object]]  # páginas podem retornar dict/None
+diff --git a/streamlit_extension/streamlit_app.py b/streamlit_extension/streamlit_app.py
+index e5dc1db0960bfba1eced1f9630f0cb46005951cb..1cb1b1dd9f676788bb66d120b214c5c709827b6d 100644
+--- a/streamlit_extension/streamlit_app.py
++++ b/streamlit_extension/streamlit_app.py
+@@ -111,59 +111,65 @@ if is_ui():
+ # === ORCHESTRATION ============================================================
  
- def _import_page(module_name: str, func_name: str) -> Tuple[Optional[RenderFunc], bool]:
-     """Importa módulo/func dinamicamente com proteção e retorna (callable, disponível)."""
-     module = safe_streamlit_operation(
-         import_module,
-         f"{__name__}.{module_name}",
-         default_return=None,
-         operation_name=f"import_{module_name}",
-     )
-     if module and hasattr(module, func_name):
-         return getattr(module, func_name), True
-     return None, False
+ def setup_application() -> None:
+     """Inicializa estado de sessão e dependências mínimas."""
+     initialize_session_state()
+     logger.info("Session state initialized.")
  
- 
- # =============================================================================
- # Import das páginas (lazy-friendly via safe_streamlit_operation)
- # =============================================================================
- 
- render_analytics_page, ANALYTICS_AVAILABLE = _import_page("analytics", "render_analytics_page")
- render_kanban_page, KANBAN_AVAILABLE = _import_page("kanban", "render_kanban_page")
- render_gantt_page, GANTT_AVAILABLE = _import_page("gantt", "render_gantt_page")
- render_timer_page, TIMER_AVAILABLE = _import_page("timer", "render_timer_page")
- render_settings_page, SETTINGS_AVAILABLE = _import_page("settings", "render_settings_page")
- render_clients_page, CLIENTS_AVAILABLE = _import_page("clients", "render_clients_page")
- render_projects_page, PROJECTS_AVAILABLE = _import_page("projects", "render_projects_page")
--render_health_dashboard, HEALTH_AVAILABLE = _import_page("health", "render_health_dashboard")
-+render_health_page, HEALTH_AVAILABLE = _import_page("health", "render_health_page")
- render_projeto_wizard_page, PROJETO_WIZARD_AVAILABLE = _import_page("projeto_wizard", "render_projeto_wizard_page")
- 
- 
- def _import_auth_page() -> Tuple[Optional[RenderFunc], bool]:
+ def _render_login_inline() -> None:
+     """Renderiza a página de login de forma segura (somente em UI)."""
+     if not is_ui():
+         return
      try:
-         from streamlit_extension.auth.login_page import render_login_page  # type: ignore
-         return render_login_page, True
+         render_login_page()
+     except Exception as e:
+         # Evita hard-fail na tela de login; mostra erro amigável e loga detalhes.
+         logger.exception("Authentication UI error: %s", e)
+         safe_streamlit_error("🔒 Authentication system unavailable at the moment.")
+ 
+ def authenticate_user() -> Optional[AuthenticatedUser]:
+     """
+     Controla autenticação com fallback simples e seguro.
+     - Headless: retorna usuário sentinel.
+     - UI sem sessão: mostra login e interrompe render do app por agora.
+     - UI com sessão: retorna dados do usuário (normalizados).
+     """
++    print("DEBUG: Starting authentication check...")
++
+     if not is_ui():
+         # Em headless não há sessão UI: retorna sentinel para seguir smoke test.
+         return AuthenticatedUser(name="Headless", id="headless")
+ 
+     if not is_user_authenticated():
++        print("DEBUG: User NOT authenticated, showing login")
+         _render_login_inline()
+         return None
+ 
++    print("DEBUG: User IS authenticated, proceeding...")
+     user = get_authenticated_user()
++    print(f"DEBUG: Retrieved user: {user}")
++
+     # Normalização defensiva do retorno do auth layer
+     if isinstance(user, dict):
+         # Mapeia chaves padrão, tolerando ausência.
+         return AuthenticatedUser(
+             id=str(user.get("id", "")),
+             name=str(user.get("name", "User")),
+             email=str(user.get("email", "")),
+             role=str(user.get("role", "")),
+         )
+ 
+     # Fallback seguro (não quebra UI, mas deixa evidente o estado)
+     logger.warning("Authenticated user returned in unexpected format: %r", user)
+     return AuthenticatedUser(name="User")
+ 
+ def render_application_ui(user: AuthenticatedUser) -> None:
+     """Renderiza a UI principal com segurança e isolando falhas."""
+     if not is_ui():
+         return
+ 
+     try:
+         # Sidebar/navigation
+         _sidebar_state = render_sidebar()
+ 
+         # Top bar (saudação, status, etc.)
+         render_topbar(user)
+diff --git a/streamlit_extension/utils/auth.py b/streamlit_extension/utils/auth.py
+index 7a4fbc825c7e26a638bdebc4de9a910f7cb8eac0..da9b8945856460026ceea22c6f0d2f6d1fa57a2b 100644
+--- a/streamlit_extension/utils/auth.py
++++ b/streamlit_extension/utils/auth.py
+@@ -282,86 +282,99 @@ class GoogleOAuthManager:
+         self._stash_with_ttl("oauth_state", state, self.cfg.state_ttl_seconds)
+         self._stash_with_ttl("oauth_nonce", nonce, self.cfg.nonce_ttl_seconds)
+         self.store.set("oauth_flow_id", flow_id)
+ 
+         extra = {
+             "access_type": "offline",
+             "include_granted_scopes": "true",
+             "state": state,
+             "nonce": nonce,  # OpenID Connect
+             "prompt": "consent" if not self._has_refresh_token() else None,
+             "code_challenge": code_challenge,
+             "code_challenge_method": "S256",
+         }
+         if self.cfg.allowed_hd:
+             extra["hd"] = self.cfg.allowed_hd
+ 
+         auth_url, _ = flow.authorization_url(**{k: v for k, v in extra.items() if v is not None})
+         _json_log(self.logger, "auth_url_issued", flow_id=flow_id, state=state, has_refresh=self._has_refresh_token())
+         return auth_url, state
+ 
+     # ---- Callback/Troca de código -------------------------------------------
+     def handle_callback(self, authorization_code: str, state: str) -> Dict[str, Any]:
+         """Troca code por tokens, valida state/nonce/iss/aud/azp e popula sessão autenticada."""
+         flow_id = self.store.get("oauth_flow_id")
+ 
++        # Debug session state before processing callback
++        try:
++            print(f"DEBUG: Session before callback: {list(st.session_state.keys())}")
++        except Exception:
++            pass
++
+         if not self._pop_if_valid("oauth_state", state):
+             # limpa resíduos para evitar multi-aba confusa
+             for k in ("oauth_code_verifier", "oauth_nonce"):
+                 self.store.delete(k)
+             raise ValueError("Estado OAuth inválido/expirado (CSRF)")
+ 
+         code_verifier_payload = self.store.get("oauth_code_verifier")
+         code_verifier = code_verifier_payload.get("value") if isinstance(code_verifier_payload, dict) else None
+         self.store.delete("oauth_code_verifier")
+ 
+         flow = self._create_flow(code_verifier=code_verifier)
+         try:
+             flow.fetch_token(code=authorization_code)
+             cred: Credentials = flow.credentials
+         except Exception as e:
+             _json_log(self.logger, "code_exchange_failed", flow_id=flow_id, error=str(e))
+             raise RuntimeError(f"Falha ao trocar code por token: {e}") from e
+ 
+         # Resolve user info (inclui validação do id_token)
+         user_info, access_expiry_iso = self._resolve_user_info_and_expiry(cred)
+ 
+         # Mapeia sessão (sem client_secret/token_uri)
+         session_data: Dict[str, Any] = {
+             "user_info": user_info,
+             "credentials": {
+                 "token": cred.token,
+                 "refresh_token": cred.refresh_token,
+                 "scopes": list(cred.scopes or []),
+             },
+             "authenticated_at": _now().isoformat(),
+             "access_expires_at": access_expiry_iso,
+             "expires_at": (_now() + timedelta(seconds=self.cfg.session_timeout_seconds)).isoformat(),
+         }
+         self.store.set("authenticated", True)
+         self.store.set("user_session", session_data)
+         _json_log(self.logger, "login_success", flow_id=flow_id, email=user_info.get("email"), sub=user_info.get("id"))
++
++        # Debug session state after processing callback
++        try:
++            print(f"DEBUG: Session after callback: {list(st.session_state.keys())}")
++            print(f"DEBUG: Authenticated flag: {self.store.get('authenticated')}")
++        except Exception:
++            pass
+         return session_data
+ 
+     # ---- User info (ID Token / UserInfo / People API) ------------------------
+     def _resolve_user_info_and_expiry(self, credentials: Credentials) -> Tuple[Dict[str, Any], Optional[str]]:
+         """
+         Valida id_token quando presente (iss/aud/azp/nonce) ou consulta /userinfo.
+         Retorna (userinfo_dict, access_token_expiry_iso|None).
+         """
+         idinfo: Optional[Dict[str, Any]] = None
+         access_expiry_iso: Optional[str] = None
+ 
+         # Access token expiry (se google-auth popular)
+         try:
+             if getattr(credentials, "expiry", None):
+                 access_expiry_iso = credentials.expiry.astimezone(timezone.utc).isoformat()
+         except Exception:
+             access_expiry_iso = None
+ 
+         # 1) id_token → validação completa
+         if getattr(credentials, "id_token", None):
+             try:
+                 idinfo = google_id_token.verify_oauth2_token(
+                     credentials.id_token,
+                     Request(),
+                     audience=self.cfg.client_id,
+@@ -671,54 +684,65 @@ def require_authentication(page_func):
+ 
+ 
+ # =============================================================================
+ # Funções utilitárias compatíveis com o seu código atual
+ # =============================================================================
+ 
+ def render_login_page() -> None:
+     """Wrapper function for backward compatibility."""
+     if not DEPS:
+         raise RuntimeError("Sem Streamlit disponível")
+     auth = GoogleOAuthManager()
+     return auth.render_login_page()
+ 
+ def get_authenticated_user() -> Optional[Dict[str, Any]]:
+     if not DEPS:
+         return _get_traditional_auth_user()
+     auth = GoogleOAuthManager()
+     if not auth.configured and auth.cfg.allow_dev_fallback:
+         return _get_traditional_auth_user()
+     return auth.get_current_user()
+ 
+ def is_user_authenticated() -> bool:
+     if not DEPS:
+         return _is_traditional_auth_active()
+     auth = GoogleOAuthManager()
+-    
++
++    try:
++        print(f"DEBUG: Auth configured: {auth.configured}")
++        print(f"DEBUG: Session keys: {list(st.session_state.keys())}")
++    except Exception:
++        pass
++
+     # Always check OAuth session first, even if not configured
+     # This ensures OAuth sessions persist correctly after reruns
+-    if auth.is_authenticated():
++    is_auth = auth.is_authenticated()
++    try:
++        print(f"DEBUG: is_authenticated result: {is_auth}")
++    except Exception:
++        pass
++    if is_auth:
+         return True
+         
+     # Only use fallback if no OAuth session exists
+     if not auth.configured and auth.cfg.allow_dev_fallback:
+         return _is_traditional_auth_active()
+         
+     return False
+ 
+ # ---- Fallbacks para middleware legado (quando existir) -----------------------
+ 
+ def _get_traditional_auth_user() -> Optional[Dict[str, Any]]:
+     try:
+         from ..auth.middleware import get_current_user  # type: ignore
+         u = get_current_user()
+         if u:
+             return {
+                 "id": getattr(u, "id", "unknown"),
+                 "email": getattr(u, "email", getattr(u, "username", "user@local")),
+                 "name": getattr(u, "username", getattr(u, "name", "User")),
+                 "picture": None,
+                 "organization": None,
+             }
      except Exception:
-         return None, False
+         pass
  
- 
- render_login_page, LOGIN_AVAILABLE = _import_auth_page()
- 
- 
- # =============================================================================
- # Definição tipada do registro de páginas
- # =============================================================================
- 
- @dataclass(frozen=True)
- class PageSpec:
-     id: str
-     title: str
-     icon: str
-     description: str
-     render_func: Optional[RenderFunc]
-@@ -158,51 +158,51 @@ PAGE_REGISTRY: Dict[str, PageSpec] = {
-         description="Client management and contacts",
-         render_func=render_clients_page,
-         available=CLIENTS_AVAILABLE,
-     ),
-     "projects": PageSpec(
-         id="projects",
-         title="📁 Projects",
-         icon="📁",
-         description="Project management and tracking",
-         render_func=render_projects_page,
-         available=PROJECTS_AVAILABLE,
-     ),
-     "projeto_wizard": PageSpec(
-         id="projeto_wizard",
-         title="🚀 Criar Projeto",
-         icon="🚀",
-         description="Wizard completo com IA: Visão → Épicos → Stories → Tasks",
-         render_func=render_projeto_wizard_page,
-         available=PROJETO_WIZARD_AVAILABLE,
-     ),
-     "health": PageSpec(
-         id="health",
-         title="🏥 Health",
-         icon="🏥",
-         description="System health monitoring and diagnostics",
--        render_func=render_health_dashboard,
-+        render_func=render_health_page,
-         available=HEALTH_AVAILABLE,
-     ),
- }
- 
- 
- # =============================================================================
- # API pública utilitária
- # =============================================================================
- 
- def get_page_specs() -> Dict[str, PageSpec]:
-     """Retorna o registry completo (imutável por contrato)."""
-     return PAGE_REGISTRY
- 
- 
- def get_available_pages(show_all: bool = False) -> Dict[str, PageSpec]:
-     """
-     Páginas disponíveis para navegação, preservando a ordem do registro.
- 
-     - show_all=False: retorna apenas páginas `is_navigable()`.
-     - show_all=True: retorna todas as páginas `available=True` (login continua oculto por padrão).
-     """
-     out: Dict[str, PageSpec] = {}
-     for pid, spec in PAGE_REGISTRY.items():
-         if show_all:
-             if spec.available:
-@@ -268,49 +268,49 @@ def render_page(page_id: str):
-     if not spec.available:
-         return {"error": f"Page '{resolved}' is not available"}
- 
-     if spec.render_func is None:
-         # Por contrato, sempre teremos algo — dashboard usa _noop_render
-         return {"error": f"No render function for page: {resolved}"}
- 
-     # Protege UX: se a página quebrar, o app segue vivo
-     with streamlit_error_boundary(f"Error rendering page '{resolved}'"):
-         return spec.render_func()
- 
- 
- # =============================================================================
- # Back-compat: exporta símbolos esperados pelo restante do projeto
- # =============================================================================
- 
- __all__ = [
-     # render functions
-     "render_analytics_page",
-     "render_kanban_page",
-     "render_gantt_page",
-     "render_timer_page",
-     "render_settings_page",
-     "render_clients_page",
-     "render_projects_page",
--    "render_health_dashboard",
-+    "render_health_page",
-     "render_projeto_wizard_page",
-     "render_login_page",
- 
-     # registry & flags
-     "PAGE_REGISTRY",
-     "get_available_pages",
-     "render_page",
-     "ANALYTICS_AVAILABLE",
-     "KANBAN_AVAILABLE",
-     "GANTT_AVAILABLE",
-     "TIMER_AVAILABLE",
-     "SETTINGS_AVAILABLE",
-     "CLIENTS_AVAILABLE",
-     "PROJECTS_AVAILABLE",
-     "HEALTH_AVAILABLE",
-     "PROJETO_WIZARD_AVAILABLE",
-     "LOGIN_AVAILABLE",
- 
-     # utilitários extras
-     "list_pages_for_nav",
-     "get_page_specs",
-     "resolve_page_id",
- ]
-diff --git a/streamlit_extension/pages/health.py b/streamlit_extension/pages/health.py
-index 477a043daa463eb0f28855aa6ff2fe811790c256..d68a76b53046e98a7d18f201774917cd46e8d148 100644
---- a/streamlit_extension/pages/health.py
-+++ b/streamlit_extension/pages/health.py
-@@ -1,64 +1,45 @@
--"""
--🏥 Health Check Endpoint Page
-+"""Minimal health check page for Streamlit app.
- 
--Provides:
--- REST-like health endpoint for orchestration
--- Detailed health dashboard for administrators
--- Real-time component monitoring
--- Health history and trends
-+Provides a lightweight endpoint that can be used as a liveness signal.
-+It reports the application status, database connectivity and current
-+package version.  The implementation intentionally avoids heavy
-+dependencies – it only performs a simple database health check using the
-+existing helper and surfaces the results on a Streamlit page.
- """
- 
- from __future__ import annotations
- 
- from typing import Dict
- 
--from streamlit_extension.utils.health_check import HealthChecker
--from streamlit_extension.utils.exception_handler import handle_streamlit_exceptions
--
--# Authentication middleware
--try:
--    from streamlit_extension.auth.middleware import init_protected_page
--except ImportError:
--    init_protected_page = None
-+from streamlit_extension import __version__
-+from streamlit_extension.database import check_health
- 
--_health_checker = HealthChecker()
- 
-+def get_health_status() -> Dict[str, object]:
-+    """Return minimal health status information.
- 
--def get_health_json() -> Dict[str, object]:
--    """Return JSON health status for API consumption."""
-+    Returns
-+    -------
-+    Dict[str, object]
-+        Dictionary containing service status, database health details and
-+        the current package version.
-+    """
- 
--    return _health_checker.get_health_endpoint_response()
-+    return {
-+        "status": "OK",
-+        "database": check_health(),
-+        "version": __version__,
-+    }
- 
- 
--@handle_streamlit_exceptions(show_error=True, attempt_recovery=True)
--def render_health_endpoint() -> None:  # pragma: no cover - requires streamlit
--    """Render health check endpoint for monitoring tools."""
-+def render_health_page() -> None:  # pragma: no cover - requires streamlit
-+    """Render Streamlit page exposing basic health information."""
- 
-     import streamlit as st
--    
--    # Initialize protected page with authentication
--    current_user = init_protected_page("🏥 Health Check")
--    if not current_user:
--        st.error("Authentication required")
--        return
- 
--    st.json(get_health_json())
-+    st.success("OK")
-+    st.json(get_health_status())
- 
- 
--@handle_streamlit_exceptions(show_error=True, attempt_recovery=True)
--def render_health_dashboard() -> None:  # pragma: no cover - requires streamlit
--    """Render detailed health dashboard for administrators."""
--
--    import streamlit as st
--    
--    # Initialize protected page with authentication
--    current_user = init_protected_page("🏥 Health Dashboard")
--    if not current_user:
--        st.error("Authentication required")
--        return
-+__all__ = ["get_health_status", "render_health_page"]
- 
--    st.title("Health Dashboard")
--    data = get_health_json()
--    for component in data["components"]:
--        st.subheader(component["name"])
--        st.write(component)
-diff --git a/tests/test_health_page_basic.py b/tests/test_health_page_basic.py
-new file mode 100644
-index 0000000000000000000000000000000000000000..49c6c93432b27d53537fc0e29d26773deb1c0bb6
---- /dev/null
-+++ b/tests/test_health_page_basic.py
-@@ -0,0 +1,23 @@
-+import sys
-+from pathlib import Path
-+
-+sys.path.append(str(Path(__file__).resolve().parents[1]))
-+
-+
-+def test_get_health_status(monkeypatch):
-+    from streamlit_extension.pages.health import get_health_status
-+    from streamlit_extension import __version__
-+
-+    # Fake database health to make the test deterministic
-+    def fake_health():
-+        return {"status": "ok"}
-+
-+    monkeypatch.setattr(
-+        "streamlit_extension.pages.health.check_health", fake_health, raising=False
-+    )
-+
-+    data = get_health_status()
-+    assert data["status"] == "OK"
-+    assert data["database"] == {"status": "ok"}
-+    assert data["version"] == __version__
-+
  
 EOF
 )

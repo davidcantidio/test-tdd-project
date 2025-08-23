@@ -304,6 +304,12 @@ class GoogleOAuthManager:
         """Troca code por tokens, valida state/nonce/iss/aud/azp e popula sessão autenticada."""
         flow_id = self.store.get("oauth_flow_id")
 
+        # Debug session state before processing callback
+        try:
+            print(f"DEBUG: Session before callback: {list(st.session_state.keys())}")
+        except Exception:
+            pass
+
         if not self._pop_if_valid("oauth_state", state):
             # limpa resíduos para evitar multi-aba confusa
             for k in ("oauth_code_verifier", "oauth_nonce"):
@@ -340,6 +346,13 @@ class GoogleOAuthManager:
         self.store.set("authenticated", True)
         self.store.set("user_session", session_data)
         _json_log(self.logger, "login_success", flow_id=flow_id, email=user_info.get("email"), sub=user_info.get("id"))
+
+        # Debug session state after processing callback
+        try:
+            print(f"DEBUG: Session after callback: {list(st.session_state.keys())}")
+            print(f"DEBUG: Authenticated flag: {self.store.get('authenticated')}")
+        except Exception:
+            pass
         return session_data
 
     # ---- User info (ID Token / UserInfo / People API) ------------------------
@@ -693,10 +706,21 @@ def is_user_authenticated() -> bool:
     if not DEPS:
         return _is_traditional_auth_active()
     auth = GoogleOAuthManager()
-    
+
+    try:
+        print(f"DEBUG: Auth configured: {auth.configured}")
+        print(f"DEBUG: Session keys: {list(st.session_state.keys())}")
+    except Exception:
+        pass
+
     # Always check OAuth session first, even if not configured
     # This ensures OAuth sessions persist correctly after reruns
-    if auth.is_authenticated():
+    is_auth = auth.is_authenticated()
+    try:
+        print(f"DEBUG: is_authenticated result: {is_auth}")
+    except Exception:
+        pass
+    if is_auth:
         return True
         
     # Only use fallback if no OAuth session exists
