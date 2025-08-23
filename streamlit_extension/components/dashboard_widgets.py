@@ -343,7 +343,6 @@ class NotificationToast:
                 padding: 12px 15px;
                 margin: 10px 0;
                 color: {style['text']};
-                animation: slideIn 0.3s ease;
             ">
                 <div style="display: flex; align-items: start;">
                     <span style="font-size: 20px; margin-right: 10px;">{icon}</span>
@@ -356,23 +355,6 @@ class NotificationToast:
                     </div>
                 </div>
             </div>
-            
-            <style>
-                @keyframes slideIn {{
-                    from {{
-# Auth imports
-from streamlit_extension.auth.middleware import require_auth, require_admin
-from streamlit_extension.auth.user_model import UserRole
-
-                        transform: translateX(100%);
-                        opacity: 0;
-                    }}
-                    to {{
-                        transform: translateX(0);
-                        opacity: 1;
-                    }}
-                }}
-            </style>
             """
             
             st.markdown(toast_html, unsafe_allow_html=True)

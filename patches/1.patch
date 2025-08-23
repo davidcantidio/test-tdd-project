@@ -1,146 +1,89 @@
  (cd "$(git rev-parse --show-toplevel)" && git apply --3way <<'EOF' 
-diff --git a/audit_system/tools/complexity_analyzer_tool.py b/audit_system/tools/complexity_analyzer_tool.py
-index 0334747d399c98081ea10ebc418b9b4cbf638235..c78ca34b1f874c915fbc17bfbb08b1724450ea4d 100644
---- a/audit_system/tools/complexity_analyzer_tool.py
-+++ b/audit_system/tools/complexity_analyzer_tool.py
-@@ -102,72 +102,81 @@ class ComplexityAnalyzerTool(BaseRefactoringTool):
-         # Parameter count
-         param_count = len(func_node.args.args)
-         if func_node.args.vararg:
-             param_count += 1
-         if func_node.args.kwarg:
-             param_count += 1
+diff --git a/streamlit_extension/components/dashboard_widgets.py b/streamlit_extension/components/dashboard_widgets.py
+index a9a0d1435671733ff620fca24e03c43e040daa29..ae3ff91a0eebc9ee8b76f9e9bc5dd6eeebad7be9 100644
+--- a/streamlit_extension/components/dashboard_widgets.py
++++ b/streamlit_extension/components/dashboard_widgets.py
+@@ -321,80 +321,62 @@ class NotificationToast:
+             return
          
-         # Nesting depth
-         max_depth = self._calculate_max_nesting_depth(func_node)
+         # Type to style mapping
+         styles = {
+             "success": {"bg": "#d4edda", "border": "#c3e6cb", "text": "#155724", "icon": "✅"},
+             "error": {"bg": "#f8d7da", "border": "#f5c6cb", "text": "#721c24", "icon": "❌"},
+             "warning": {"bg": "#fff3cd", "border": "#ffeaa7", "text": "#856404", "icon": "⚠️"},
+             "info": {"bg": "#d1ecf1", "border": "#bee5eb", "text": "#0c5460", "icon": "ℹ️"}
+         }
          
-         # Maintainability index (simplified)
-         maintainability = self._calculate_maintainability_index(
-             cyclomatic, line_count, len(source_lines)
-         )
+         style = styles.get(notification.type, styles["info"])
+         icon = notification.icon or style["icon"]
          
-         return ComplexityMetrics(
-             cyclomatic_complexity=cyclomatic,
-             cognitive_complexity=cognitive,
-             maintainability_index=maintainability,
-             max_nesting_depth=max_depth,
-             line_count=line_count,
-             parameter_count=param_count
-         )
-     
-     def _calculate_cognitive_complexity(self, node: ast.AST) -> int:
--        """Calculate cognitive complexity (SonarQube style)."""
--        complexity = 0
--        nesting_level = 0
--        
--        for child in ast.walk(node):
--            if isinstance(child, (ast.If, ast.While, ast.For, ast.AsyncFor)):
--                # Base increment + nesting increment
--                complexity += 1 + nesting_level
--                nesting_level += 1
--            elif isinstance(child, (ast.And, ast.Or)):
--                complexity += 1
--            elif isinstance(child, ast.Try):
--                complexity += 1
--                nesting_level += 1
--            elif isinstance(child, ast.ExceptHandler):
--                complexity += 1 + nesting_level
--            elif isinstance(child, (ast.ListComp, ast.DictComp, ast.SetComp, ast.GeneratorExp)):
--                complexity += 1 + nesting_level
--            elif isinstance(child, ast.Lambda):
--                complexity += 1 + nesting_level
--        
--        return complexity
-+        """Calculate cognitive complexity (SonarQube style).
-+
-+        The previous implementation relied on ``ast.walk`` and simply increased
-+        a ``nesting_level`` counter whenever a branching node was encountered.
-+        This approach never decreased the counter, causing subsequent siblings to
-+        be treated as if they were nested and inflating the reported complexity.
-+
-+        Here we perform a depth-aware traversal so that the nesting level is
-+        correctly incremented and decremented as we move through the tree.
-+        """
-+
-+        def visit(n: ast.AST, depth: int = 0) -> int:
-+            score = 0
-+            for child in ast.iter_child_nodes(n):
-+                if isinstance(child, (ast.If, ast.While, ast.For, ast.AsyncFor, ast.Try, ast.With)):
-+                    score += 1 + depth
-+                    score += visit(child, depth + 1)
-+                elif isinstance(child, ast.ExceptHandler):
-+                    score += 1 + depth
-+                    score += visit(child, depth + 1)
-+                elif isinstance(child, ast.BoolOp) and len(child.values) > 1:
-+                    score += len(child.values) - 1
-+                    score += visit(child, depth)
-+                elif isinstance(child, (ast.ListComp, ast.DictComp, ast.SetComp, ast.GeneratorExp, ast.Lambda, ast.IfExp)):
-+                    score += 1 + depth
-+                    score += visit(child, depth + 1)
-+                else:
-+                    score += visit(child, depth)
-+            return score
-+
-+        return visit(node, 0)
-     
-     def _calculate_max_nesting_depth(self, node: ast.AST) -> int:
-         """Calculate maximum nesting depth."""
-         max_depth = 0
-         current_depth = 0
+         # Create columns for layout
+         col1, col2, col3 = st.columns([1, 10, 1])
          
-         def visit_node(n):
-             nonlocal max_depth, current_depth
+         with col2:
+             toast_html = f"""
+             <div style="
+                 background-color: {style['bg']};
+                 border: 1px solid {style['border']};
+                 border-radius: 8px;
+                 padding: 12px 15px;
+                 margin: 10px 0;
+                 color: {style['text']};
+-                animation: slideIn 0.3s ease;
+             ">
+                 <div style="display: flex; align-items: start;">
+                     <span style="font-size: 20px; margin-right: 10px;">{icon}</span>
+                     <div style="flex-grow: 1;">
+                         <div style="font-weight: bold; margin-bottom: 3px;">{notification.title}</div>
+                         <div style="font-size: 14px;">{notification.message}</div>
+                         <div style="font-size: 11px; color: #888; margin-top: 5px;">
+                             {notification.timestamp.strftime("%H:%M:%S")}
+                         </div>
+                     </div>
+                 </div>
+             </div>
+-            
+-            <style>
+-                @keyframes slideIn {{
+-                    from {{
+-# Auth imports
+-from streamlit_extension.auth.middleware import require_auth, require_admin
+-from streamlit_extension.auth.user_model import UserRole
+-
+-                        transform: translateX(100%);
+-                        opacity: 0;
+-                    }}
+-                    to {{
+-                        transform: translateX(0);
+-                        opacity: 1;
+-                    }}
+-                }}
+-            </style>
+             """
              
-             if isinstance(n, (ast.If, ast.While, ast.For, ast.AsyncFor, ast.With, ast.Try)):
-                 current_depth += 1
-                 max_depth = max(max_depth, current_depth)
-                 
-                 # Visit children
-                 for child in ast.iter_child_nodes(n):
-                     visit_node(child)
-                 
-                 current_depth -= 1
-             else:
-                 # Visit children
-                 for child in ast.iter_child_nodes(n):
-                     visit_node(child)
+             st.markdown(toast_html, unsafe_allow_html=True)
+             
+             if notification.action_label and notification.action_callback:
+                 if st.button(notification.action_label, key=f"notif_action_{notification.timestamp}"):
+                     notification.action_callback()
+ 
+ 
+ class QuickActionButton:
+     """Quick action buttons for common tasks."""
+     
+     @staticmethod
+     def render(label: str, icon: str, callback: callable, 
+               color: str = "primary", disabled: bool = False,
+               tooltip: Optional[str] = None) -> bool:
+         """
+         Render a quick action button.
          
-         visit_node(node)
-         return max_depth
-diff --git a/tests/test_agno_tools/test_complexity_cognitive.py b/tests/test_agno_tools/test_complexity_cognitive.py
-new file mode 100644
-index 0000000000000000000000000000000000000000..ef0d001ca02266ac1c29a107a42a08c1928ff386
---- /dev/null
-+++ b/tests/test_agno_tools/test_complexity_cognitive.py
-@@ -0,0 +1,28 @@
-+#!/usr/bin/env python3
-+# -*- coding: utf-8 -*-
-+import ast
-+import textwrap
-+import sys
-+from pathlib import Path
-+
-+# Ensure project root is on sys.path
-+project_root = Path(__file__).resolve().parent.parent.parent
-+sys.path.insert(0, str(project_root))
-+
-+from audit_system.tools.complexity_analyzer_tool import ComplexityAnalyzerTool
-+
-+def test_cognitive_complexity_counts_top_level_branches_independently():
-+    code = textwrap.dedent(
-+        '''
-+        def sample(x):
-+            if x > 0:
-+                pass
-+            if x < 0:
-+                pass
-+            return x
-+        '''
-+    )
-+    tree = ast.parse(code)
-+    func = next(n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef))
-+    tool = ComplexityAnalyzerTool()
-+    assert tool._calculate_cognitive_complexity(func) == 2
+         Args:
+             label: Button label
+             icon: Icon/emoji for the button
+             callback: Function to call on click
+             color: Button color theme
+             disabled: Whether button is disabled
  
 EOF
 )
