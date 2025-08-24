@@ -293,7 +293,7 @@ def _render_pages_system_page(current_page: str) -> None:
     if not STREAMLIT_AVAILABLE:
         return
 
-    page_id = current_page.lower()  # "Clients" -> "clients"
+    page_id = current_page.lower()
     with streamlit_error_boundary(f"render_page_{page_id}"):
         result = render_page(page_id)
         if isinstance(result, dict) and result.get("error"):

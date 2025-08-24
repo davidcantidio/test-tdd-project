@@ -5,7 +5,7 @@ Addresses report.md requirement: "Refactor repeated form logic into DRY componen
 
 Simplified form architecture providing:
 - StandardForm: Base form component with common helpers
-- ProjectForm: Specialized project form component (Client functionality removed)
+- ProjectForm: Specialized project form component
 - Enhanced Field Support: Extensible field type system
 - Security Integration: CSRF protection and input sanitization
 """

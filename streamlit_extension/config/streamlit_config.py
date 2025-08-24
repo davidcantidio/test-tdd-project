@@ -171,10 +171,6 @@ class StreamlitConfig:
                 "secondaryBackgroundColor": "#262730" if self.streamlit_theme == "dark" else "#F0F2F6",
                 "textColor": "#FFFFFF" if self.streamlit_theme == "dark" else "#262730"
             },
-            "client": {
-                "showSidebarNavigation": True,
-                "toolbarMode": "auto"
-            },
             "runner": {
                 "magicEnabled": True,
                 "fastReruns": self.streamlit_auto_rerun

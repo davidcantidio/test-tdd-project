@@ -43,7 +43,7 @@ def create_security_patches():
 def _validate_table_name(table_name: str) -> str:
     """Validate table name against whitelist to prevent SQL injection."""
     allowed_tables = {
-        'framework_clients', 'framework_projects', 'framework_epics', 'framework_tasks',
+        'framework_projects', 'framework_epics', 'framework_tasks',
         'work_sessions', 'achievement_types', 'user_achievements', 'user_streaks',
         'github_sync_log', 'system_settings'
     }

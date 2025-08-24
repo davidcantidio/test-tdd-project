@@ -29,12 +29,10 @@ streamlit_extension/
 │   ├── middleware.py     # @require_auth() decorators
 │   └── session_handler.py # Session management
 ├── 📄 pages/             # Multi-page application  
-│   ├── clients.py        # Client management (CSRF protected)
 │   ├── projects.py       # Project management
 │   ├── analytics.py      # TDD analytics dashboard
 │   └── timer.py          # TDAH focus timer
 ├── 🏢 services/          # Business logic layer
-│   ├── client_service.py # Client CRUD operations
 │   ├── project_service.py # Project management
 │   └── service_container.py # Dependency injection
 ├── 🧩 components/        # Reusable UI components
@@ -103,7 +101,6 @@ duration_system/
 
 #### **🔄 Migration Scripts** (`scripts/migration/`)
 - **`migrate_real_json_data.py`** - Epic data migration
-- **`assign_epics_to_client_project.py`** - Hierarchy assignment
 - **`migration_utility.py`** - Generic migration helpers
 
 #### **📊 Analysis Scripts** (`scripts/analysis/`)
@@ -422,7 +419,6 @@ streamlit_extension/database/
 streamlit_extension/services/
 ├── base.py                         # Service foundation (HIGH RISK)
 ├── service_container.py            # Dependency injection (HIGH RISK)
-├── client_service.py               # Client business logic (HIGH RISK)
 ├── project_service.py              # Project business logic (HIGH RISK)
 ├── epic_service.py                 # Epic business logic (HIGH RISK)
 ├── task_service.py                 # Task business logic (HIGH RISK)

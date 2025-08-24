@@ -185,7 +185,7 @@ def test_sql_injection_protection():
             "'; DROP TABLE framework_epics; --",
             "1; UPDATE framework_epics SET status='hacked'; --",
             "' OR 1=1 --",
-            "1' UNION SELECT * FROM framework_clients --"
+            "1' UNION SELECT * FROM framework_projects --"
         ]
         
         for malicious_input in malicious_filters:

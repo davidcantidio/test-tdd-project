@@ -45,11 +45,6 @@ class CascadeTransactionManager:
         
         # Define safe table relationships (whitelist approach)
         self.safe_relationships = {
-            'framework_clients': [
-                {'table': 'framework_projects', 'foreign_key': 'client_id'},
-                {'table': 'framework_epics', 'foreign_key': 'client_id'},
-                {'table': 'framework_tasks', 'foreign_key': 'client_id'}
-            ],
             'framework_projects': [
                 {'table': 'framework_epics', 'foreign_key': 'project_id'},
                 {'table': 'framework_tasks', 'foreign_key': 'project_id'}
@@ -256,7 +251,7 @@ def render_cascade_dashboard():
     # Risk analysis
     st.subheader("🔍 Impact Analysis")
     
-    table = st.selectbox("Table", ["framework_clients", "framework_projects", "framework_epics"])
+    table = st.selectbox("Table", ["framework_projects", "framework_epics"])
     record_id = st.number_input("Record ID", min_value=1, value=1)
 
     if st.button("Analyze Impact"):
