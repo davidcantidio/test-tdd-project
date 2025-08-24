@@ -67,8 +67,6 @@ def _apply_filters(
     projects: List[dict],
     search_name: str,
     status_filter: str,
-    client_filter_name: str,
-    clients_map: Dict[int, str],
 ) -> List[dict]:
     filtered = projects
 
@@ -79,11 +77,6 @@ def _apply_filters(
 
     if status_filter != "all":
         filtered = [p for p in filtered if p.get("status") == status_filter]
-
-    if client_filter_name != "all":
-        client_id = next((cid for cid, nm in clients_map.items() if nm == client_filter_name), None)
-        if client_id is not None:
-            filtered = [p for p in filtered if p.get("client_id") == client_id]
 
     return filtered
 
@@ -110,10 +103,8 @@ def _health_emoji(health: str) -> str:
     return '🟢' if health == 'green' else '🟡' if health == 'yellow' else '🔴'
 
 
-def render_simple_project_card(project: Dict[str, Any], clients_map: Dict[int, str]) -> None:
+def render_simple_project_card(project: Dict[str, Any]) -> None:
     """Render a simple, modern project card (display is sanitized)."""
-    client_name = clients_map.get(project.get('client_id'), 'Unknown Client')
-    safe_client_name = sanitize_display(client_name) if sanitize_display else client_name
     safe_project_name = sanitize_display(project.get('name', 'Unnamed')) if sanitize_display else project.get('name', 'Unnamed')
 
     with st.container(border=True):
@@ -121,7 +112,6 @@ def render_simple_project_card(project: Dict[str, Any], clients_map: Dict[int, s
 
         with col1:
             st.markdown(f"### 📁 {safe_project_name}")
-            st.markdown(f"**Client:** {safe_client_name}")
             if project.get('description'):
                 desc = project['description']
                 safe_desc = sanitize_display(desc) if sanitize_display else desc
@@ -196,7 +186,12 @@ def render_wizard_call_to_action() -> None:
 @handle_streamlit_exceptions(show_error=True, attempt_recovery=True)
 def render_projects_page() -> Dict[str, Any]:
     """Render the main projects management page with auth, filters and pagination."""
-    init_protected_page(UIConstants.PROJECTS_PAGE_TITLE or "📁 Project Management", layout="wide")
+    # Configure page layout first
+    st.set_page_config(
+        page_title=UIConstants.PROJECTS_PAGE_TITLE or "📁 Project Management",
+        layout="wide"
+    )
+    init_protected_page(UIConstants.PROJECTS_PAGE_TITLE or "📁 Project Management")
 
     # --- Rate limit (por página) ---
     allowed, msg = check_rate_limit("projects_page_load") if check_rate_limit else (True, None)
@@ -222,23 +217,8 @@ def render_projects_page() -> Dict[str, Any]:
         st.error(ErrorMessages.LOADING_ERROR.format(entity="database connection", error=e))
         return {"error": f"Database connection error: {e}"}
 
-    # --- Clients mapping ---
-    clients_map: Dict[int, str] = {}
-    with streamlit_error_boundary("loading_clients"):
-        try:
-            clients_result = db_manager.get_clients(include_inactive=False)
-            clients = _normalize_db_list_result(clients_result)
-            clients_map = {int(c["id"]): c["name"] for c in clients if "id" in c and "name" in c}
-            if not clients_map:
-                st.warning(ErrorMessages.NO_ITEMS_FOUND.format(entity="active clients"))
-                return {"status": "no_clients"}
-        except Exception as e:
-            logger.exception("Error loading clients: %s", e)
-            st.error(ErrorMessages.CLIENT_LOAD_ERROR.format(error=e))
-            return {"error": ErrorMessages.CLIENT_LOAD_ERROR.format(error=e)}
-
     # --- Filters ---
-    col1, col2, col3, col4 = st.columns([2, 1, 1, 1])
+    col1, col2, col3 = st.columns([3, 2, 1])
     with col1:
         search_name = st.text_input(
             f"{UIConstants.ICON_SEARCH} Search by name",
@@ -255,8 +235,6 @@ def render_projects_page() -> Dict[str, Any]:
         ]
         status_filter = st.selectbox("Status Filter", options=status_options, index=0)
     with col3:
-        client_filter = st.selectbox("Client Filter", options=["all"] + list(clients_map.values()), index=0)
-    with col4:
         page_size = st.selectbox("Page Size", options=[5, 10, 20, 50], index=1)
 
     # CTA
@@ -283,7 +261,7 @@ def render_projects_page() -> Dict[str, Any]:
         return {"status": "no_projects"}
 
     # --- Filtering ---
-    filtered_projects = _apply_filters(all_projects, search_name, status_filter, client_filter, clients_map)
+    filtered_projects = _apply_filters(all_projects, search_name, status_filter)
 
     # --- Pagination controls ---
     total_filtered = len(filtered_projects)
@@ -299,7 +277,7 @@ def render_projects_page() -> Dict[str, Any]:
     # --- Render list (safe boundary per card) ---
     for project in page_items:
         with streamlit_error_boundary(f"rendering_project_{project.get('id', 'unknown')}"):
-            render_simple_project_card(project, clients_map)
+            render_simple_project_card(project)
 
     return {"status": "success", "projects_count": total_filtered, "page": page_idx + 1, "page_size": page_size}
 

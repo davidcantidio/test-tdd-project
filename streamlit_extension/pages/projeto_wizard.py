@@ -36,12 +36,11 @@ except ImportError:
 # --- Banco (padrão híbrido) ---------------------------------------------------
 # Preferimos o híbrido, mas funcionamos mesmo que alguma API não esteja disponível
 _DBM = None
-_list_clients_fn = None
 _create_project_fn = None
 _transaction_ctx = None
 
 def _init_db_layer() -> None:
-    global _DBM, _list_clients_fn, _create_project_fn, _transaction_ctx
+    global _DBM, _create_project_fn, _transaction_ctx
     # Tentamos APIs em ordem: híbrido (modular + manager) → apenas manager
     try:
         # Modular API (transação)
@@ -59,38 +58,12 @@ def _init_db_layer() -> None:
 
     # Opcional: modular helpers, se existirem
     try:
-        from streamlit_extension.database import list_clients as _lc  # type: ignore
-        _list_clients_fn = _lc
-    except Exception:
-        _list_clients_fn = None
-
-    try:
         from streamlit_extension.database import create_project as _cp  # type: ignore
         _create_project_fn = _cp
     except Exception:
         _create_project_fn = None
 
-def _get_clients() -> List[Dict[str, Any]]:
-    # 1) Modular list_clients() → 2) DatabaseManager().get_clients() → 3) fallback
-    try:
-        if _list_clients_fn is not None:
-            items = _list_clients_fn()
-            # Normalizamos para lista de dicionários
-            if isinstance(items, list) and (not items or isinstance(items[0], dict)):
-                return items
-    except Exception as e:
-        st.warning(f"Não foi possível carregar clientes via API modular: {e}")
-
-    try:
-        if _DBM is not None and hasattr(_DBM, "get_clients"):
-            items = _DBM.get_clients()  # type: ignore[attr-defined]
-            if isinstance(items, list) and (not items or isinstance(items[0], dict)):
-                return items
-    except Exception as e:
-        st.warning(f"Não foi possível carregar clientes via DatabaseManager: {e}")
-
-    # Fallback seguro — evita o erro “List argument must consist only of dictionaries”
-    return [{"id": 0, "name": "Default Client"}]
+# Client functionality removed - no longer needed
 
 def _create_project_safely(payload: Dict[str, Any]) -> Dict[str, Any]:
     """
@@ -128,15 +101,12 @@ def _create_project_safely(payload: Dict[str, Any]) -> Dict[str, Any]:
 
 # --- UI Helpers ----------------------------------------------------------------
 def _form_validation(
-    client_name: str,
     project_name: str,
     start: date,
     end: date,
     budget: float,
 ) -> List[str]:
     errors: List[str] = []
-    if not client_name:
-        errors.append("Selecione um cliente.")
     if not project_name or len(project_name.strip()) < 3:
         errors.append("Informe um nome de projeto com pelo menos 3 caracteres.")
     if end < start:
@@ -148,7 +118,12 @@ def _form_validation(
 # --- Página --------------------------------------------------------------------
 @require_auth()  # Protege a página; em dev, o fallback acima permite acesso
 def _render() -> None:
-    init_protected_page("Projeto Wizard", layout="wide")
+    # Configure page layout first
+    st.set_page_config(
+        page_title="Projeto Wizard",
+        layout="wide"
+    )
+    init_protected_page("Projeto Wizard")
     st.title("🧙‍♂️ Projeto Wizard")
 
     # Carrega camada de banco
@@ -160,12 +135,7 @@ def _render() -> None:
     with col_left:
         st.subheader("1) Informações do Projeto")
 
-        clients = _get_clients()
-        client_names = [c.get("name") or c.get("title") or f"Cliente {c.get('id', '')}" for c in clients]
-        client_map = {name: c for name, c in zip(client_names, clients)}  # nome → dict
-
         with st.form("project_wizard_form", clear_on_submit=False):
-            client_name = st.selectbox("Cliente", client_names, index=0 if client_names else None)
             project_name = st.text_input("Nome do Projeto", placeholder="Ex.: Plataforma ETL – SEBRAE")
             description = st.text_area("Descrição (opcional)", placeholder="Contexto, objetivos e escopo do projeto")
             col1, col2 = st.columns(2)
@@ -182,16 +152,13 @@ def _render() -> None:
             submitted = st.form_submit_button("Criar Projeto", use_container_width=True)
 
         if submitted:
-            errors = _form_validation(client_name, project_name, start_date, end_date, budget)
+            errors = _form_validation(project_name, start_date, end_date, budget)
             if errors:
                 for e in errors:
                     st.error(e)
                 st.stop()
 
-            client_obj = client_map.get(client_name, {})
             payload: Dict[str, Any] = {
-                "client_id": client_obj.get("id", 0),
-                "client_name": client_name,
                 "name": project_name.strip(),
                 "description": (description or "").strip(),
                 "start_date": str(start_date),

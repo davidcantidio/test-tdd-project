@@ -52,22 +52,6 @@ class TDDPhases(Enum):
         return [phase.value for phase in cls]
 
 
-class ClientTiers(Enum):
-    """Client tier classifications"""
-    FREE_TRIAL = "free_trial"
-    STANDARD = "standard"
-    PREMIUM = "premium"
-    ENTERPRISE = "enterprise"
-
-    @classmethod
-    def get_all_values(cls) -> List[str]:
-        """Get all tier values as a list."""
-        return [tier.value for tier in cls]
-
-    @classmethod
-    def get_default(cls) -> str:
-        """Get default client tier."""
-        return cls.STANDARD.value
 
 
 class CompanySizes(Enum):
@@ -178,35 +162,6 @@ class ProjectStatus(Enum):
         return [status.value for status in cls]
 
 
-class ClientStatus(Enum):
-    """Client status options."""
-    ACTIVE = "active"
-    INACTIVE = "inactive"
-    PROSPECT = "prospect"
-    SUSPENDED = "suspended"
-    ARCHIVED = "archived"
-    
-    @classmethod
-    def get_all_values(cls) -> List[str]:
-        """Get all status values as a list."""
-        return [status.value for status in cls]
-    
-    @classmethod
-    def get_display_name(cls, status_value: str) -> str:
-        """Get display-friendly name for status value."""
-        display_names = {
-            cls.ACTIVE.value: "Ativo",
-            cls.INACTIVE.value: "Inativo", 
-            cls.PROSPECT.value: "Prospecto",
-            cls.SUSPENDED.value: "Suspenso",
-            cls.ARCHIVED.value: "Arquivado"
-        }
-        return display_names.get(status_value, status_value.title())
-    
-    @classmethod
-    def get_default(cls) -> str:
-        """Get default client status."""
-        return cls.ACTIVE.value
 
 
 class GeneralStatus(Enum):
@@ -234,22 +189,6 @@ class TDDPhase(Enum):
         return [phase.value for phase in cls]
 
 
-class ClientTier(Enum):
-    """Client tier options."""
-    BASIC = "basic"
-    STANDARD = "standard"
-    PREMIUM = "premium"
-    ENTERPRISE = "enterprise"
-    
-    @classmethod
-    def get_all_values(cls) -> List[str]:
-        """Get all tier values as a list."""
-        return [tier.value for tier in cls]
-    
-    @classmethod
-    def get_default(cls) -> str:
-        """Get default client tier."""
-        return cls.STANDARD.value
 
 
 class CompanySize(Enum):
@@ -301,7 +240,6 @@ class TableNames:
     GITHUB_SYNC_LOG = "github_sync_log"
     SYSTEM_SETTINGS = "system_settings"
     WORK_SESSIONS = "work_sessions"
-    CLIENTS = "clients"
     PROJECTS = "projects"
 
 
@@ -320,7 +258,6 @@ class FieldNames:
     TASK_ID = "task_id"
     USER_ID = "user_id"
     PROJECT_ID = "project_id"
-    CLIENT_ID = "client_id"
     EPIC_KEY = "epic_key"
     TASK_TITLE = "title"
     TDD_PHASE = "tdd_phase"
@@ -333,7 +270,6 @@ class FieldNames:
 class UIConstants:
     """User interface constants."""
     # Page titles
-    CLIENTS_PAGE_TITLE = "👥 Client Management"
     PROJECTS_PAGE_TITLE = "📁 Project Management"
     ANALYTICS_PAGE_TITLE = "📊 Analytics Dashboard"
     KANBAN_PAGE_TITLE = "📋 Kanban Board"
@@ -371,6 +307,7 @@ class UIConstants:
     # Generic icons
     ICON_EPIC = "📋"
     ICON_TASK = "📝"
+    ICON_PROJECTS = "📁"  # Added missing icon for projects page
     ICON_SEARCH = "🔍"
     ICON_TOTAL = "📊"
     ICON_PAGE = "📄"
@@ -396,43 +333,6 @@ class UIConstants:
 class FormFields:
     """Form field configurations."""
     
-    CLIENT_FIELDS = {
-        "client_key": {
-            "label": "Client Key*",
-            "placeholder": "e.g., client_xyz",
-            "required": True
-        },
-        "name": {
-            "label": "Client Name*",
-            "placeholder": "e.g., Company ABC",
-            "required": True
-        },
-        "description": {
-            "label": "Description",
-            "placeholder": "Brief description of the client...",
-            "required": False
-        },
-        "industry": {
-            "label": "Industry",
-            "placeholder": "e.g., Technology",
-            "required": False
-        },
-        "primary_contact_name": {
-            "label": "Contact Name",
-            "placeholder": "e.g., John Doe",
-            "required": False
-        },
-        "primary_contact_email": {
-            "label": "Contact Email*",
-            "placeholder": "john@company.com",
-            "required": True
-        },
-        "primary_contact_phone": {
-            "label": "Contact Phone",
-            "placeholder": "+55 (11) 99999-9999",
-            "required": False
-        }
-    }
     
     PROJECT_FIELDS = {
         "name": {
@@ -487,11 +387,9 @@ class FilterOptions:
     STATUS_FILTERS = {
         "tasks":   [ALL_OPTION] + _values_or_statusvalues.__func__(StatusValues),
         "epics":   [ALL_OPTION] + _values_or_statusvalues.__func__(StatusValues),
-        "clients": [ALL_OPTION] + _values_or_statusvalues.__func__(StatusValues),
         "projects":[ALL_OPTION] + _values_or_statusvalues.__func__(StatusValues),
     }
 
-    TIER_FILTERS = [ALL_OPTION] + ClientTiers.get_all_values()
     SIZE_FILTERS = [ALL_OPTION] + CompanySizes.get_all_values()
     TDD_PHASE_FILTERS = [ALL_OPTION] + TDDPhases.get_all_values()
 
@@ -526,20 +424,17 @@ class ValidationRules:
 # Aliases para compatibilidade com importações existentes no pacote:
 #   - GeneralStatus → StatusValues
 #   - TDDPhase      → TDDPhases
-#   - ClientTier    → ClientTiers
 #   - CompanySize   → CompanySizes
 # Obs.: Aliases para TaskStatus/EpicStatus/ProjectStatus não são criados aqui
 # por falta de definição original; filtros usam fallback seguro acima.
 # ──────────────────────────────────────────────────────────────────────────────
 GeneralStatus = StatusValues
 TDDPhase = TDDPhases
-ClientTier = ClientTiers
 CompanySize = CompanySizes
 
 __all__ = [
     'StatusValues', 'GeneralStatus',
     'TDDPhases', 'TDDPhase',
-    'ClientTiers', 'ClientTier',
     'CompanySizes', 'CompanySize',
     'ErrorMessages',
     'FormFields', 'CacheConfig', 'FilterOptions', 'ValidationRules'

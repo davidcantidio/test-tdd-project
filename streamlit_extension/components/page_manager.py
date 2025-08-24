@@ -179,26 +179,23 @@ def _render_login_page() -> None:
     if not STREAMLIT_AVAILABLE:
         return
     
-    # Check OAuth configuration availability
+    # Always try to use the new OAuth system first
     try:
-        from config.environment import has_oauth_credentials, is_oauth_enabled, is_development
-    except ImportError:
-        has_oauth_credentials = lambda: False
-        is_oauth_enabled = lambda: False  
-        is_development = lambda: True
+        # Import the new auth system directly
+        from ..utils.auth import render_login_page, check_oauth_health
+        
+        # Check auth system status
+        health = check_oauth_health()
+        
+        # If OAuth is configured, use the new system
+        if health.get("oauth_configured", False):
+            render_login_page()
+            return
+    except Exception as e:
+        st.error(f"❌ Error with new auth system: {e}")
     
-    oauth_available = has_oauth_credentials()
-    is_dev_mode = is_development()
-    
-    if oauth_available:
-        # Full OAuth login available
-        _render_oauth_login_page()
-    elif is_dev_mode:
-        # Development mode without OAuth - show fallback
-        _render_development_login_page()
-    else:
-        # Production without OAuth - show error
-        _render_oauth_unavailable_page()
+    # Fallback to development mode
+    _render_development_login_page()
 
 
 def _render_oauth_login_page() -> None:
@@ -249,6 +246,12 @@ def _render_development_login_page() -> None:
         if st.button("🔄 Recarregar Configuração", use_container_width=True):
             # Force config reload to check for new credentials
             try:
+                # Import from project root config, not streamlit_extension config
+                import sys
+                import os
+                project_root = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+                sys.path.insert(0, project_root)
+                
                 from config.environment import reload_config
                 reload_config()
                 st.rerun()

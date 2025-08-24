@@ -93,7 +93,6 @@ except ImportError:
 from .constants import (
     TableNames,
     FieldNames,
-    ClientStatus,
     ProjectStatus,
     TaskStatus,
     EpicStatus,
@@ -106,7 +105,6 @@ logger = logging.getLogger(__name__)
 
 # Security: Whitelist of allowed table names to prevent SQL injection
 ALLOWED_TABLES = {
-    "framework_clients",
     "framework_projects", 
     "framework_epics",
     "framework_tasks",
@@ -124,7 +122,7 @@ ALLOWED_TABLES = {
 # Security: Whitelist of allowed sort columns
 ALLOWED_SORT_COLUMNS = {
     "id", "created_at", "updated_at", "name", "title", "status", "priority",
-    "client_id", "project_id", "epic_id", "budget", "completion_percentage",
+    "project_id", "epic_id", "budget", "completion_percentage",
     "email"  # For tests
 }
 
@@ -2591,183 +2589,11 @@ class DatabaseManager(PerformancePaginationMixin):
     # HIERARCHY SYSTEM METHODS (CLIENT → PROJECT → EPIC → TASK) - SCHEMA V6
     # ==================================================================================
     
-    @cache_database_query("get_clients", ttl=300) if CACHE_AVAILABLE else lambda f: f
-    def get_clients(
-        self,
-        include_inactive: bool = True,
-        page: int = 1,
-        page_size: int = 20,
-        name_filter: str = "",
-        status_filter: Optional[Union[ClientStatus, str]] = None,
-    ) -> Dict[str, Any]:
-        """Retrieve clients with filtering and pagination support.
 
-        Performs optimized client queries with multiple filter options and
-        pagination. Results are cached for performance.
-
-        Args:
-            include_inactive: Include inactive clients. Defaults to ``True``.
-            page: Page number (1-based).
-            page_size: Number of items per page.
-            name_filter: Search term for client name using ``LIKE`` matching.
-            status_filter: Filter by client status (e.g. ``"active"``).
-
-        Returns:
-            Dict[str, Any]: Dictionary containing:
-                - ``data`` (List[Dict]): List of client records.
-                - ``total`` (int): Total count of matching clients.
-                - ``page`` (int): Current page number.
-                - ``page_size`` (int): Results per page.
-                - ``total_pages`` (int): Total pages available.
-
-        Raises:
-            DatabaseError: If query execution fails.
-
-        Performance:
-            - Cached results: ~1ms response time.
-            - Uncached results: ~10-50ms depending on dataset size.
-
-        Thread Safety:
-            This method is thread-safe and can be called concurrently.
-
-        Example:
-            >>> result = db_manager.get_clients(include_inactive=False, page=1)
-            >>> clients = result["data"]
-        """
-        try:
-            with self.get_connection("framework") as conn:
-                # Build WHERE conditions
-                where_conditions = ["deleted_at IS NULL"]
-                params: Dict[str, Any] = {}
-
-                if not include_inactive:
-                    where_conditions.append(f"{FieldNames.STATUS} = :status")
-                    params["status"] = ClientStatus.ACTIVE.value
-
-                if name_filter:
-                    where_conditions.append("name LIKE :name_filter")
-                    params["name_filter"] = f"%{name_filter}%"
-
-                if status_filter:
-                    where_conditions.append(f"{FieldNames.STATUS} = :status_filter")
-                    params["status_filter"] = (
-                        status_filter.value if isinstance(status_filter, ClientStatus) else status_filter
-                    )
-                
-                where_clause = " AND ".join(where_conditions)
-                
-                # Count total records
-                count_query = f"SELECT COUNT(*) FROM {TableNames.CLIENTS} WHERE {where_clause}"  # nosec B608
-                
-                if SQLALCHEMY_AVAILABLE:
-                    count_result = conn.execute(text(count_query), params)
-                    total = count_result.scalar()
-                else:
-                    with conn.cursor() as cursor:
-                        cursor.execute(count_query, params)
-                        total = cursor.fetchone()[0]
-                
-                # Calculate pagination
-                total_pages = (total + page_size - 1) // page_size
-                offset = (page - 1) * page_size
-                
-                # Get paginated data
-                data_query = f"""
-                    SELECT id, client_key, name, description, industry, company_size,
-                           primary_contact_name, primary_contact_email,
-                           timezone, currency, preferred_language,
-                           hourly_rate, contract_type, status, client_tier,
-                           priority_level, account_manager_id, technical_lead_id,
-                           created_at, updated_at, last_contact_date
-                    FROM {TableNames.CLIENTS}
-                    WHERE {where_clause}
-                    ORDER BY priority_level DESC, name ASC
-                    LIMIT :limit OFFSET :offset
-                """  # nosec B608
-                params["limit"] = page_size
-                params["offset"] = offset
-                
-                if SQLALCHEMY_AVAILABLE:
-                    result = conn.execute(text(data_query), params)
-                    data = [dict(row._mapping) for row in result]
-                else:
-                    cursor = conn.cursor()
-                    cursor.execute(data_query, params)
-                    data = [dict(row) for row in cursor.fetchall()]
-                
-                return {
-                    "data": data,
-                    "total": total,
-                    "page": page,
-                    "page_size": page_size,
-                    "total_pages": total_pages
-                }
-                
-        except Exception as e:
-            logger.error(f"Error loading clients: {e}")
-            if STREAMLIT_AVAILABLE and st:
-                st.error(f"❌ Error loading clients: {e}")
-            return {"data": [], "total": 0, "page": 1, "page_size": page_size, "total_pages": 0}
-
-    def get_client(self, client_id: int) -> Optional[Dict[str, Any]]:
-        """Retrieve single client by ID.
-
-        Args:
-            client_id: Unique client identifier. Must be a positive integer.
-
-        Returns:
-            Optional[Dict[str, Any]]: Client record dictionary or ``None`` if
-                not found.
-
-        Raises:
-            ValueError: If ``client_id`` is not positive.
-            DatabaseError: If query execution fails.
-
-        Performance:
-            - Primary key lookup: ~1ms.
-            - Result cached for subsequent calls.
-
-        Example:
-            >>> client = db_manager.get_client(123)
-            >>> if client:
-            ...     print(client["name"])
-        """
-        if client_id <= 0:
-            raise ValueError("client_id must be positive")
-
-        try:
-            with self.get_connection("framework") as conn:
-                if SQLALCHEMY_AVAILABLE:
-                    result = conn.execute(
-                        text(
-                            """
-                            SELECT * FROM framework_clients
-                            WHERE id = :client_id AND deleted_at IS NULL
-                            """
-                        ),
-                        {"client_id": client_id},
-                    )
-                    row = result.fetchone()
-                    return dict(row._mapping) if row else None
-                else:
-                    cursor = conn.cursor()
-                    cursor.execute(
-                        """
-                            SELECT * FROM framework_clients
-                            WHERE id = ? AND deleted_at IS NULL
-                        """,
-                        (client_id,),
-                    )
-                    row = cursor.fetchone()
-                    return dict(row) if row else None
-        except Exception as e:
-            logger.error(f"Error getting client: {e}")
-            return None
     
     @cache_database_query("get_projects", ttl=300) if CACHE_AVAILABLE else lambda f: f
     def get_projects(
         self,
-        client_id: Optional[int] = None,
         include_inactive: bool = False,
         page: int = 1,
         page_size: int = 50,
@@ -2777,7 +2603,6 @@ class DatabaseManager(PerformancePaginationMixin):
         """Get projects with caching support and pagination.
         
         Args:
-            client_id: Filter by specific client ID (optional)
             include_inactive: If True, include inactive/archived projects
             page: Page number (1-based)
             page_size: Number of items per page
@@ -2793,9 +2618,6 @@ class DatabaseManager(PerformancePaginationMixin):
                 where_conditions = ["p.deleted_at IS NULL"]
                 params: Dict[str, Any] = {}
                 
-                if client_id:
-                    where_conditions.append("p.client_id = :client_id")
-                    params["client_id"] = client_id
 
                 if not include_inactive:
                     where_conditions.append("p.status NOT IN ('cancelled', 'archived')")
@@ -2816,7 +2638,6 @@ class DatabaseManager(PerformancePaginationMixin):
                 count_query = f"""
                     SELECT COUNT(*)
                     FROM {TableNames.PROJECTS} p
-                    INNER JOIN {TableNames.CLIENTS} c ON p.client_id = c.id AND c.deleted_at IS NULL
                     WHERE {where_clause}
                 """
                 
@@ -2834,7 +2655,7 @@ class DatabaseManager(PerformancePaginationMixin):
                 
                 # Get paginated data
                 data_query = f"""
-                    SELECT p.id, p.client_id, p.project_key, p.name, p.description,
+                    SELECT p.id, p.project_key, p.name, p.description,
                            p.summary, p.project_type, p.methodology, p.status,
                            p.priority, p.health_status, p.completion_percentage,
                            p.planned_start_date, p.planned_end_date,
@@ -2843,11 +2664,8 @@ class DatabaseManager(PerformancePaginationMixin):
                            p.budget_amount, p.budget_currency, p.hourly_rate,
                            p.project_manager_id, p.technical_lead_id,
                            p.repository_url, p.deployment_url, p.documentation_url,
-                           p.created_at, p.updated_at,
-                           c.name as client_name, c.client_key as client_key,
-                           c.status as client_status, c.client_tier
+                           p.created_at, p.updated_at
                     FROM {TableNames.PROJECTS} p
-                    INNER JOIN {TableNames.CLIENTS} c ON p.client_id = c.id AND c.deleted_at IS NULL
                     WHERE {where_clause}
                     ORDER BY p.priority DESC, p.name ASC
                     LIMIT :limit OFFSET :offset
@@ -2882,19 +2700,18 @@ class DatabaseManager(PerformancePaginationMixin):
                 "total_pages": 0
             }
     
-    def get_all_projects(self, client_id: Optional[int] = None, include_inactive: bool = False) -> List[Dict[str, Any]]:
+    def get_all_projects(self, include_inactive: bool = False) -> List[Dict[str, Any]]:
         """Backward compatibility method - get all projects without pagination."""
-        result = self.get_projects(client_id=client_id, include_inactive=include_inactive, page=1, page_size=1000)
+        result = self.get_projects(include_inactive=include_inactive, page=1, page_size=1000)
         return result["data"] if isinstance(result, dict) else result
     
     @cache_database_query("get_epics_with_hierarchy", ttl=300) if CACHE_AVAILABLE else lambda f: f
-    def get_epics_with_hierarchy(self, project_id: Optional[int] = None, client_id: Optional[int] = None,
+    def get_epics_with_hierarchy(self, project_id: Optional[int] = None,
                                page: int = 1, page_size: int = 25, status_filter: str = "") -> Dict[str, Any]:
-        """Get epics with complete hierarchy information (client → project → epic) with pagination.
+        """Get epics with complete hierarchy information (project → epic) with pagination.
         
         Args:
             project_id: Filter by specific project ID (optional)
-            client_id: Filter by specific client ID (optional)
             page: Page number (1-based)
             page_size: Number of items per page
             status_filter: Filter by epic status
@@ -2911,9 +2728,6 @@ class DatabaseManager(PerformancePaginationMixin):
                 if project_id:
                     where_conditions.append("e.project_id = :project_id")
                     params["project_id"] = project_id
-                elif client_id:
-                    where_conditions.append("p.client_id = :client_id")
-                    params["client_id"] = client_id
                 
                 if status_filter:
                     where_conditions.append("e.status = :status_filter")
@@ -2926,7 +2740,6 @@ class DatabaseManager(PerformancePaginationMixin):
                     SELECT COUNT(*) 
                     FROM framework_epics e
                     LEFT JOIN framework_projects p ON e.project_id = p.id AND p.deleted_at IS NULL
-                    LEFT JOIN framework_clients c ON p.client_id = c.id AND c.deleted_at IS NULL
                     WHERE {where_clause}
                 """
                 
@@ -2953,12 +2766,9 @@ class DatabaseManager(PerformancePaginationMixin):
                            e.created_at, e.updated_at, e.completed_at,
                            e.project_id,
                            p.name as project_name, p.project_key, p.status as project_status,
-                           p.health_status as project_health, p.client_id,
-                           c.name as client_name, c.client_key, c.status as client_status,
-                           c.client_tier, c.hourly_rate as client_hourly_rate
+                           p.health_status as project_health
                     FROM framework_epics e
                     LEFT JOIN framework_projects p ON e.project_id = p.id AND p.deleted_at IS NULL
-                    LEFT JOIN framework_clients c ON p.client_id = c.id AND c.deleted_at IS NULL
                     WHERE {where_clause}
                     ORDER BY c.priority_level DESC, p.priority DESC, e.created_at DESC
                     LIMIT :limit OFFSET :offset
@@ -2993,17 +2803,14 @@ class DatabaseManager(PerformancePaginationMixin):
                 "total_pages": 0
             }
     
-    def get_all_epics_with_hierarchy(self, project_id: Optional[int] = None, client_id: Optional[int] = None) -> List[Dict[str, Any]]:
+    def get_all_epics_with_hierarchy(self, project_id: Optional[int] = None) -> List[Dict[str, Any]]:
         """Backward compatibility method - get all epics with hierarchy without pagination."""
-        result = self.get_epics_with_hierarchy(project_id=project_id, client_id=client_id, page=1, page_size=1000)
+        result = self.get_epics_with_hierarchy(project_id=project_id, page=1, page_size=1000)
         return result["data"] if isinstance(result, dict) else result
     
     @cache_database_query("get_hierarchy_overview", ttl=180) if CACHE_AVAILABLE else lambda f: f
-    def get_hierarchy_overview(self, client_id: Optional[int] = None) -> List[Dict[str, Any]]:
+    def get_hierarchy_overview(self) -> List[Dict[str, Any]]:
         """Get complete hierarchy overview using the database view.
-        
-        Args:
-            client_id: Filter by specific client ID (optional)
             
         Returns:
             List of hierarchy records with aggregated task counts
@@ -3011,8 +2818,7 @@ class DatabaseManager(PerformancePaginationMixin):
         try:
             with self.get_connection("framework") as conn:
                 query = """
-                    SELECT client_id, client_key, client_name, client_status, client_tier,
-                           project_id, project_key, project_name, project_status, project_health,
+                    SELECT project_id, project_key, project_name, project_status, project_health,
                            project_completion, epic_id, epic_key, epic_name, epic_status,
                            calculated_duration_days, total_tasks, completed_tasks,
                            epic_completion_percentage, planned_start_date, planned_end_date,
@@ -3022,11 +2828,7 @@ class DatabaseManager(PerformancePaginationMixin):
                 """
                 
                 params = []
-                if client_id:
-                    query += " AND client_id = ?"
-                    params.append(client_id)
-                
-                query += " ORDER BY client_name, project_name, epic_key"
+                query += " ORDER BY project_name, epic_key"
                 
                 if SQLALCHEMY_AVAILABLE:
                     result = conn.execute(text(query), params)
@@ -3039,55 +2841,13 @@ class DatabaseManager(PerformancePaginationMixin):
             logger.error(f"Error loading hierarchy overview: {e}")
             return []
     
-    @cache_database_query("get_client_dashboard", ttl=180) if CACHE_AVAILABLE else lambda f: f
-    def get_client_dashboard(self, client_id: Optional[int] = None) -> List[Dict[str, Any]]:
-        """Get client dashboard data using the database view.
-        
-        Args:
-            client_id: Get data for specific client (optional)
-            
-        Returns:
-            List of client dashboard records with aggregated metrics
-        """
-        try:
-            with self.get_connection("framework") as conn:
-                query = """
-                    SELECT client_id, client_key, client_name, client_status, client_tier,
-                           hourly_rate, total_projects, active_projects, completed_projects,
-                           total_epics, active_epics, completed_epics,
-                           total_tasks, completed_tasks, in_progress_tasks,
-                           total_hours_logged, total_budget, total_points_earned,
-                           earliest_project_start, latest_project_end,
-                           projects_at_risk, avg_project_completion
-                    FROM client_dashboard
-                    WHERE 1=1
-                """
-                
-                params = []
-                if client_id:
-                    query += " AND client_id = ?"
-                    params.append(client_id)
-                
-                query += " ORDER BY client_name"
-                
-                if SQLALCHEMY_AVAILABLE:
-                    result = conn.execute(text(query), params)
-                    return [dict(row._mapping) for row in result]
-                else:
-                    cursor = conn.cursor()
-                    cursor.execute(query, params)
-                    return [dict(row) for row in cursor.fetchall()]
-        except Exception as e:
-            logger.error(f"Error loading client dashboard: {e}")
-            return []
     
     @cache_database_query("get_project_dashboard", ttl=180) if CACHE_AVAILABLE else lambda f: f  
-    def get_project_dashboard(self, project_id: Optional[int] = None, client_id: Optional[int] = None) -> List[Dict[str, Any]]:
+    def get_project_dashboard(self, project_id: Optional[int] = None) -> List[Dict[str, Any]]:
         """Get project dashboard data using the database view.
         
         Args:
             project_id: Get data for specific project (optional)
-            client_id: Get data for projects of specific client (optional)
             
         Returns:
             List of project dashboard records with aggregated metrics
@@ -3096,7 +2856,7 @@ class DatabaseManager(PerformancePaginationMixin):
             with self.get_connection("framework") as conn:
                 query = """
                     SELECT project_id, project_key, project_name, project_status, health_status,
-                           completion_percentage, client_id, client_name, client_tier,
+                           completion_percentage,
                            total_epics, completed_epics, active_epics,
                            total_tasks, completed_tasks, in_progress_tasks,
                            estimated_hours, actual_hours, estimated_task_hours, actual_task_hours,
@@ -3111,11 +2871,8 @@ class DatabaseManager(PerformancePaginationMixin):
                 if project_id:
                     query += " AND project_id = ?"
                     params.append(project_id)
-                elif client_id:
-                    query += " AND client_id = ?"
-                    params.append(client_id)
                 
-                query += " ORDER BY client_name, project_name"
+                query += " ORDER BY project_name"
                 
                 if SQLALCHEMY_AVAILABLE:
                     result = conn.execute(text(query), params)
@@ -3131,20 +2888,6 @@ class DatabaseManager(PerformancePaginationMixin):
     # ==================================================================================
     # HIERARCHY CRUD OPERATIONS
     # ==================================================================================
-    
-    @invalidate_cache_on_change("db_query:get_clients:", "db_query:get_client_dashboard:") if CACHE_AVAILABLE else lambda f: f
-    def create_client(
-        self,
-        client_key: str,
-        name: str,
-        description: str = "",
-        industry: str = "",
-        company_size: str = "startup",
-        primary_contact_name: str = "",
-        primary_contact_email: str = "",
-        hourly_rate: float = 0.0,
-        **kwargs: Any,
-    ) -> Optional[int]:
         """Create new client record.
 
         Creates client with full validation and automatic timestamp assignment.

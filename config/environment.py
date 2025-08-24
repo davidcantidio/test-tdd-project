@@ -206,11 +206,30 @@ class EnvironmentConfigLoader:
         return config
     
     def _load_secrets_from_env(self, config: AppConfig) -> AppConfig:
-        """Load sensitive data from environment variables (SECURE)."""
+        """Load sensitive data from environment variables and Streamlit secrets (SECURE)."""
         
-        # Google OAuth (from environment variables)
+        # Google OAuth (from environment variables first)
         google_client_id = os.getenv("GOOGLE_CLIENT_ID")
         google_client_secret = os.getenv("GOOGLE_CLIENT_SECRET")
+        
+        # Fallback to Streamlit secrets if environment variables not available
+        if not google_client_id or not google_client_secret:
+            try:
+                secrets_path = Path(".streamlit/secrets.toml")
+                if secrets_path.exists():
+                    with open(secrets_path, "rb") as f:
+                        secrets_data = tomllib.load(f)
+                    
+                    google_secrets = secrets_data.get("google", {})
+                    if not google_client_id:
+                        google_client_id = google_secrets.get("client_id")
+                    if not google_client_secret:
+                        google_client_secret = google_secrets.get("client_secret")
+                        
+                    if google_client_id and google_client_secret:
+                        logger.info("Loaded Google OAuth credentials from .streamlit/secrets.toml")
+            except Exception as e:
+                logger.debug(f"Could not load .streamlit/secrets.toml: {e}")
         
         # Smart OAuth configuration - enable only if credentials are available
         if google_client_id and google_client_secret:
@@ -218,7 +237,7 @@ class EnvironmentConfigLoader:
             config.google_oauth.client_secret = google_client_secret
             # Enable OAuth only if we have valid credentials
             config.google_oauth.enabled = True
-            logger.info("Loaded Google OAuth credentials from environment - OAuth enabled")
+            logger.info("Google OAuth enabled with valid credentials")
         else:
             # In development, disable OAuth if no credentials are available
             if self.environment == "development":
@@ -227,7 +246,7 @@ class EnvironmentConfigLoader:
             else:
                 # In production/staging, warn but don't disable (may be intentional)
                 config.google_oauth.enabled = False
-                logger.warning("Google OAuth credentials not found in environment variables - OAuth disabled")
+                logger.warning("Google OAuth credentials not found in environment variables or secrets.toml - OAuth disabled")
         
         # Database paths from environment
         if db_path := os.getenv("FRAMEWORK_DB_PATH"):

@@ -14,7 +14,6 @@ This package provides:
 """
 
 from .base import BaseService, ServiceResult, ServiceError
-from .client_service import ClientService
 from .project_service import ProjectService
 from .epic_service import EpicService
 from .task_service import TaskService
@@ -25,7 +24,6 @@ from .service_container import (
     initialize_service_container,
     get_service_container,
     shutdown_service_container,
-    get_client_service,
     get_project_service,
     get_epic_service,
     get_task_service,
@@ -39,14 +37,14 @@ __all__ = [
     'BaseService', 'ServiceResult', 'ServiceError',
     
     # Service implementations
-    'ClientService', 'ProjectService', 'EpicService', 'TaskService',
+    'ProjectService', 'EpicService', 'TaskService',
     'AnalyticsService', 'TimerService',
     
     # Service container
     'ServiceContainer', 'initialize_service_container', 'get_service_container', 'shutdown_service_container',
     
     # Service accessors
-    'get_client_service', 'get_project_service', 'get_epic_service', 
+    'get_project_service', 'get_epic_service', 
     'get_task_service', 'get_analytics_service', 'get_timer_service',
     
     # Utilities

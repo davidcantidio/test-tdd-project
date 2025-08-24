@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import os
 import time
+from datetime import datetime
 from functools import lru_cache, wraps
 from typing import Callable, Optional, Sequence, Any, List, Protocol, runtime_checkable
 
@@ -24,6 +25,7 @@ from .user_model import User, UserRole
 # Flags/Config
 # =============================================================================
 
+# Authentication debugging resolved - reverting to normal mode
 _AUTH_DEBUG = os.environ.get("AUTH_DEBUG", "").strip().lower() in {"1", "true", "yes"}
 
 
@@ -36,6 +38,7 @@ class UINotifier(Protocol):
     def info(self, msg: str) -> None: ...
     def warning(self, msg: str) -> None: ...
     def error(self, msg: str) -> None: ...
+    def success(self, msg: str) -> None: ...
     def sidebar_separator(self) -> None: ...
     def rerun(self) -> None: ...
 
@@ -43,6 +46,7 @@ class _StreamlitNotifier:
     def info(self, msg: str) -> None: st.info(msg)
     def warning(self, msg: str) -> None: st.warning(msg)
     def error(self, msg: str) -> None: st.error(msg)
+    def success(self, msg: str) -> None: st.success(msg)
     def sidebar_separator(self) -> None:
         with st.sidebar: st.markdown("---")
     def rerun(self) -> None: st.rerun()
@@ -165,37 +169,55 @@ def _check_session_timeout() -> bool:
 
 def auth_middleware() -> Optional[User]:
     """
-    Sincroniza estado de autenticação:
-    - Carrega usuário a partir do session_id quando existente.
-    - Remove sessão inválida/expirada de forma segura.
+    Sincroniza estado de autenticação usando OAuth system:
+    - Verifica autenticação OAuth real
+    - Converte dados OAuth para User model
     - Emite avisos TDAH-friendly.
     - Retorna o User atual (ou None).
     """
-    session_id = _get_session_id()
-    if not session_id:
+    # Import the OAuth system
+    try:
+        from ..utils.auth import is_user_authenticated, get_authenticated_user
+        
+        # Check OAuth authentication
+        if not is_user_authenticated():
+            _set_current_user(None)
+            return None
+        
+        # Get OAuth user data
+        oauth_user_data = get_authenticated_user()
+        if not oauth_user_data:
+            _set_current_user(None)
+            return None
+        
+        # Convert OAuth data to User model
+        # Generate numeric ID from string ID
+        oauth_id = oauth_user_data.get('id', 'oauth_user')
+        numeric_id = abs(hash(oauth_id)) % 1000000  # Convert string to 6-digit number
+        
+        user = User(
+            id=numeric_id,
+            username=oauth_user_data.get('name', 'OAuth User'),
+            email=oauth_user_data.get('email', ''),
+            role=UserRole.USER,
+            created_at=datetime.now(),
+            last_login=datetime.now(),
+            is_active=True
+        )
+        
+        _set_current_user(user)
+        return user
+        
+    except ImportError as e:
+        if _AUTH_DEBUG:
+            _ui.error(f"❌ Failed to import OAuth functions: {str(e)}")
         _set_current_user(None)
         return None
-
-    if not _check_session_timeout():
-        _clear_session(expired=True)
-        _ui.info("⏰ **Sessão expirada.** Faça login novamente. Suas preferências foram mantidas.")
-        return None
-
-    am = get_auth_manager()
-    try:
-        user = am.get_current_user(session_id)
     except Exception as e:
-        # Backend indisponível — limpa somente o local; não insiste
-        _clear_session()
-        _ui.warning(_safe_error("Authentication backend unavailable", e))
+        if _AUTH_DEBUG:
+            _ui.error(f"❌ OAuth integration error: {str(e)}")
+        _set_current_user(None)
         return None
-
-    if not user:
-        _clear_session()
-        return None
-
-    _set_current_user(user)
-    return user
 
 
 def get_current_user() -> Optional[User]:

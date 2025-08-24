@@ -14,7 +14,6 @@ from contextlib import contextmanager
 from datetime import datetime
 
 from .base import BaseService
-from .client_service import ClientService
 from .project_service import ProjectService
 from .epic_service import EpicService
 from .task_service import TaskService
@@ -164,7 +163,6 @@ class ServiceContainer:
 
         self._services: Dict[str, BaseService] = {}
         self._service_classes: Dict[str, Type[BaseService]] = {
-            "client": ClientService,
             "project": ProjectService,
             "epic": EpicService,
             "task": TaskService,
@@ -267,9 +265,6 @@ class ServiceContainer:
         return results
 
     # --- getters específicos --------------------------------------------------
-    def get_client_service(self) -> ClientService:
-        return self._get_service("client", ClientService)
-
     def get_project_service(self) -> ProjectService:
         return self._get_service("project", ProjectService)
 
@@ -362,10 +357,6 @@ def shutdown_service_container() -> None:
 # =============================================================================
 # Conveniências para acesso direto
 # =============================================================================
-def get_client_service() -> ClientService:
-    return get_service_container().get_client_service()
-
-
 def get_project_service() -> ProjectService:
     return get_service_container().get_project_service()
 

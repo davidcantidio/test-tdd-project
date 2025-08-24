@@ -133,21 +133,16 @@ def authenticate_user() -> Optional[AuthenticatedUser]:
     - UI sem sessão: mostra login e interrompe render do app por agora.
     - UI com sessão: retorna dados do usuário (normalizados).
     """
-    print("DEBUG: Starting authentication check...")
-
     if not is_ui():
         # Em headless não há sessão UI: retorna sentinel para seguir smoke test.
         return AuthenticatedUser(name="Headless", id="headless")
 
     if not is_user_authenticated():
-        print("DEBUG: User NOT authenticated, showing login")
         _render_login_inline()
         return None
 
-    print("DEBUG: User IS authenticated, proceeding...")
     user = get_authenticated_user()
-    print(f"DEBUG: Retrieved user: {user}")
-
+    
     # Normalização defensiva do retorno do auth layer
     if isinstance(user, dict):
         # Mapeia chaves padrão, tolerando ausência.
