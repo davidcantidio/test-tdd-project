@@ -789,7 +789,7 @@ class DatabaseManager(PerformancePaginationMixin):
             ...     cascade_tables=["epics", "tasks"]
             ... )
         """
-        # Define safe cascade relationships (client layer removed)
+        # Define safe cascade relationships
         safe_relationships = {
             "projects": ["epics", "tasks"],
             "epics": ["tasks"]
@@ -2935,7 +2935,7 @@ class DatabaseManager(PerformancePaginationMixin):
                 'project_manager_id': kwargs.get('project_manager_id', 1),
                 'technical_lead_id': kwargs.get('technical_lead_id', 1),
                 'repository_url': kwargs.get('repository_url', ''),
-                'visibility': kwargs.get('visibility', 'client'),
+                'visibility': kwargs.get('visibility', 'public'),
                 'access_level': kwargs.get('access_level', 'standard'),
                 'complexity_score': kwargs.get('complexity_score', 5.0),
                 'quality_score': kwargs.get('quality_score', 8.0),

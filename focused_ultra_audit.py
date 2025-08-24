@@ -31,7 +31,6 @@ class FocusedUltraAudit:
         key_files = [
             "utils/database.py",
             "utils/auth_manager.py", 
-            "services/client_service.py",
             "utils/session_manager.py",
             "utils/cache.py",
             "components/form_components.py",

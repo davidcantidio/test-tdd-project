@@ -19,9 +19,7 @@ class FinalSyntaxCleanup:
         self.files_fixed = 0
         self.critical_files = [
             "streamlit_extension/utils/database.py",
-            "streamlit_extension/services/client_service.py", 
             "streamlit_extension/services/project_service.py",
-            "streamlit_extension/pages/clients.py",
             "streamlit_extension/pages/projects.py"
         ]
     

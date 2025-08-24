@@ -303,7 +303,7 @@ class EpicQueryBuilder(SecureQueryBuilder):
     def __init__(self):
         super().__init__("framework_epics")
 
-    # with_client_info removed - client functionality eliminated
+    # Removed in Phase 3.1
 
     def with_project_info(self) -> "EpicQueryBuilder":
         """Join with project information."""
@@ -318,7 +318,7 @@ class EpicQueryBuilder(SecureQueryBuilder):
         self.where("status", "!=", "archived")
         return self
 
-    # by_client removed - client functionality eliminated
+    # Removed in Phase 3.1
 
     def with_points_range(self, min_points: int, max_points: int) -> "EpicQueryBuilder":
         """Filter by points range."""

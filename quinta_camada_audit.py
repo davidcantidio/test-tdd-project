@@ -409,7 +409,7 @@ class SemanticAuditEngine:
         func_name = function.split(':')[1].lower()
         # TODO: Consider extracting this block into a separate method
         # TODO: Consider extracting this block into a separate method
-        entities = ['client', 'project', 'epic', 'task', 'user']
+        entities = ['project', 'epic', 'task', 'user']
         for entity in entities:
             if entity in func_name:
                 return entity

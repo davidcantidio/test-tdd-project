@@ -43,7 +43,6 @@ class RealClient:
 class RealProject:
     id: int = 1
     name: str = "Test-TDD-Project - Enterprise Streamlit Framework"
-    client_id: int = 1
     epic_count: int = 12
     task_count: int = 206
     tdd_adoption: str = "full"  # Full TDD methodology adoption
