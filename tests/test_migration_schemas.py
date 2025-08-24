@@ -188,8 +188,8 @@ class TestProductVisions(TestMigrationSchemaBase):
         
         # First create a project (dependency)
         cursor.execute("""
-            INSERT INTO framework_projects (id, client_id, project_key, name)
-            VALUES (1, 1, 'test_proj', 'Test Project')
+            INSERT INTO framework_projects (id, project_key, name)
+            VALUES (1, 'test_proj', 'Test Project')
         """)
         
         # Insert test vision
@@ -257,7 +257,7 @@ class TestUserStories(TestMigrationSchemaBase):
         cursor = conn.cursor()
         
         # Create test data hierarchy
-        cursor.execute("INSERT INTO framework_projects (id, client_id, project_key, name) VALUES (1, 1, 'proj1', 'Project 1')")
+        cursor.execute("INSERT INTO framework_projects (id, project_key, name) VALUES (1, 'proj1', 'Project 1')")
         cursor.execute("INSERT INTO framework_epics (id, project_id, epic_key, name) VALUES (1, 1, 'epic1', 'Epic 1')")
         
         # Insert user story
@@ -354,7 +354,7 @@ class TestTaskEnhancements(TestMigrationSchemaBase):
         cursor = conn.cursor()
         
         # Create test epic first
-        cursor.execute("INSERT INTO framework_projects (id, client_id, project_key, name) VALUES (1, 1, 'proj1', 'Project 1')")
+        cursor.execute("INSERT INTO framework_projects (id, project_key, name) VALUES (1, 'proj1', 'Project 1')")
         cursor.execute("INSERT INTO framework_epics (id, project_id, epic_key, name) VALUES (1, 1, 'epic1', 'Epic 1')")
         
         # Create parent task
@@ -429,7 +429,7 @@ class TestSprintSystem(TestMigrationSchemaBase):
         cursor = conn.cursor()
         
         # Create test data
-        cursor.execute("INSERT INTO framework_projects (id, client_id, project_key, name) VALUES (1, 1, 'proj1', 'Project 1')")
+        cursor.execute("INSERT INTO framework_projects (id, project_key, name) VALUES (1, 'proj1', 'Project 1')")
         cursor.execute("INSERT INTO framework_epics (id, project_id, epic_key, name) VALUES (1, 1, 'epic1', 'Epic 1')")
         cursor.execute("INSERT INTO framework_tasks (id, task_key, epic_id, title) VALUES (1, 'task1', 1, 'Task 1')")
         
@@ -543,7 +543,7 @@ class TestChangeLog(TestMigrationSchemaBase):
         cursor = conn.cursor()
         
         # Create test task
-        cursor.execute("INSERT INTO framework_projects (id, client_id, project_key, name) VALUES (1, 1, 'proj1', 'Project 1')")
+        cursor.execute("INSERT INTO framework_projects (id, project_key, name) VALUES (1, 'proj1', 'Project 1')")
         cursor.execute("INSERT INTO framework_epics (id, project_id, epic_key, name) VALUES (1, 1, 'epic1', 'Epic 1')")
         cursor.execute("""
             INSERT INTO framework_tasks (id, task_key, epic_id, title, status, assigned_to)
@@ -599,7 +599,7 @@ class TestPerformance(TestMigrationSchemaBase):
         cursor = conn.cursor()
         
         # Create some test data
-        cursor.execute("INSERT INTO framework_projects (id, client_id, project_key, name) VALUES (1, 1, 'proj1', 'Project 1')")
+        cursor.execute("INSERT INTO framework_projects (id, project_key, name) VALUES (1, 'proj1', 'Project 1')")
         
         # Test simple queries execute without error
         test_queries = [
@@ -664,7 +664,7 @@ class TestMigrationIntegrity(TestMigrationSchemaBase):
         
         # Original tables should still exist and be functional
         original_tables = [
-            'framework_users', 'framework_clients', 'framework_projects',
+            'framework_users', 'framework_projects',
             'framework_epics', 'framework_tasks', 'achievement_types'
         ]
         

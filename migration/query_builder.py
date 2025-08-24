@@ -17,7 +17,7 @@ import re
 
 # 🔒 SECURITY: Whitelist of allowed tables and columns
 ALLOWED_TABLES: Set[str] = {
-    'framework_epics', 'framework_tasks', 'framework_clients', 'framework_projects',
+    'framework_epics', 'framework_tasks', 'framework_projects',
     'work_sessions', 'user_achievements', 'achievement_types', 'user_streaks',
     'github_sync_log', 'system_settings', 'schema_migrations'
 }
@@ -25,7 +25,7 @@ ALLOWED_TABLES: Set[str] = {
 ALLOWED_COLUMNS: Set[str] = {
     'id', 'title', 'description', 'status', 'priority', 'created_at', 'updated_at',
     'points_value', 'due_date', 'icon', 'estimated_hours', 'created_by', 'updated_by',
-    'version', 'deleted_at', 'epic_id', 'project_id', 'client_id', 'name', 'email',
+    'version', 'deleted_at', 'epic_id', 'project_id', 'name', 'email',
     'phone', 'address', 'tier', 'budget', 'start_date', 'end_date', 'phase',
     'estimate_minutes', 'actual_minutes', 'notes', 'points_earned', 'difficulty',
     'session_id', 'user_id', 'duration_minutes', 'focus_rating', 'energy_level',

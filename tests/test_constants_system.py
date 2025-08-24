@@ -9,7 +9,6 @@ sys.modules.setdefault("psutil", types.ModuleType("psutil"))
 from streamlit_extension.utils.constants import (
     TableNames,
     FieldNames,
-    ClientStatus,
     ProjectStatus,
     TaskStatus,
     EpicStatus,
@@ -19,13 +18,11 @@ from streamlit_extension.utils.constants import (
 )
 
 def test_table_constants():
-    assert TableNames.CLIENTS == "framework_clients"
     assert TableNames.PROJECTS == "framework_projects"
     assert FieldNames.STATUS == "status"
 
 
 def test_enum_values():
-    assert ClientStatus.ACTIVE.value == "active"
     assert ProjectStatus.PLANNING.value == "planning"
     assert TaskStatus.TODO.value == "todo"
     assert EpicStatus.DRAFT.value == "draft"

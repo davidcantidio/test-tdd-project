@@ -341,31 +341,7 @@ class StreamlitSecurityManager:
         
         return text
     
-    def create_safe_client_data(self, form_data: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Create safely sanitized client data from form input.
-        
-        Args:
-            form_data: Raw form data from Streamlit
-            
-        Returns:
-            Sanitized client data safe for database storage
-        """
-        safe_data = {}
-        
-        # Fields that need sanitization
-        text_fields = [
-            'client_key', 'name', 'description', 'industry',
-            'primary_contact_name', 'primary_contact_email', 'primary_contact_phone'
-        ]
-        
-        for key, value in form_data.items():
-            if key in text_fields and isinstance(value, str):
-                safe_data[key] = self.sanitize_form_input(value, key)
-            else:
-                safe_data[key] = value
-        
-        return safe_data
+    # create_safe_client_data removed - client functionality eliminated
     
     def create_safe_project_data(self, form_data: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -830,9 +806,7 @@ def validate_form(data: Dict[str, Any]) -> Tuple[bool, List[str]]:
     return security_manager.validate_form_data(data)
 
 
-def create_safe_client(form_data: Dict[str, Any]) -> Dict[str, Any]:
-    """Create safe client data."""
-    return security_manager.create_safe_client_data(form_data)
+# create_safe_client removed - client functionality eliminated
 
 
 def create_safe_project(form_data: Dict[str, Any]) -> Dict[str, Any]:

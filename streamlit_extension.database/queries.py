@@ -190,12 +190,11 @@ def get_achievements(manager, user_id: int=1) -> List[Dict[str, Any]]:
         logger.error(f'Error loading achievements: {e}', exc_info=True)
         return []
 
-def get_epics_with_hierarchy(manager, project_id: Optional[int]=None, client_id: Optional[int]=None, page: int=1, page_size: int=25, status_filter: str='') -> Dict[str, Any]:
-    """Get epics with complete hierarchy information (client → project → epic) with pagination.
+def get_epics_with_hierarchy(manager, project_id: Optional[int]=None, page: int=1, page_size: int=25, status_filter: str='') -> Dict[str, Any]:
+    """Get epics with complete hierarchy information (project → epic) with pagination.
         
         Args:
             project_id: Filter by specific project ID (optional)
-            client_id: Filter by specific client ID (optional)
             page: Page number (1-based)
             page_size: Number of items per page
             status_filter: Filter by epic status
@@ -210,14 +209,11 @@ def get_epics_with_hierarchy(manager, project_id: Optional[int]=None, client_id:
             if project_id:
                 where_conditions.append('e.project_id = :project_id')
                 params['project_id'] = project_id
-            elif client_id:
-                where_conditions.append('p.client_id = :client_id')
-                params['client_id'] = client_id
             if status_filter:
                 where_conditions.append('e.status = :status_filter')
                 params['status_filter'] = status_filter
             where_clause = ' AND '.join(where_conditions)
-            count_query = f'\n                    SELECT COUNT(*) \n                    FROM framework_epics e\n                    LEFT JOIN framework_projects p ON e.project_id = p.id AND p.deleted_at IS NULL\n                    LEFT JOIN framework_clients c ON p.client_id = c.id AND c.deleted_at IS NULL\n                    WHERE {where_clause}\n                '
+            count_query = f'\n                    SELECT COUNT(*) \n                    FROM framework_epics e\n                    LEFT JOIN framework_projects p ON e.project_id = p.id AND p.deleted_at IS NULL\n                    WHERE {where_clause}\n                '
             if SQLALCHEMY_AVAILABLE:
                 count_result = conn.execute(text(count_query), params)
                 total = count_result.scalar()
@@ -227,7 +223,7 @@ def get_epics_with_hierarchy(manager, project_id: Optional[int]=None, client_id:
                 total = cursor.fetchone()[0]
             total_pages = (total + page_size - 1) // page_size
             offset = (page - 1) * page_size
-            data_query = f'\n                    SELECT e.id, e.epic_key, e.name, e.description, e.summary,\n                           e.status, e.priority, e.duration_days,\n                           e.points_earned, e.difficulty_level,\n                           e.planned_start_date, e.planned_end_date,\n                           e.actual_start_date, e.actual_end_date,\n                           e.calculated_duration_days, e.duration_description,\n                           e.created_at, e.updated_at, e.completed_at,\n                           e.project_id,\n                           p.name as project_name, p.project_key, p.status as project_status,\n                           p.health_status as project_health, p.client_id,\n                           c.name as client_name, c.client_key, c.status as client_status,\n                           c.client_tier, c.hourly_rate as client_hourly_rate\n                    FROM framework_epics e\n                    LEFT JOIN framework_projects p ON e.project_id = p.id AND p.deleted_at IS NULL\n                    LEFT JOIN framework_clients c ON p.client_id = c.id AND c.deleted_at IS NULL\n                    WHERE {where_clause}\n                    ORDER BY c.priority_level DESC, p.priority DESC, e.created_at DESC\n                    LIMIT :limit OFFSET :offset\n                '
+            data_query = f'\n                    SELECT e.id, e.epic_key, e.name, e.description, e.summary,\n                           e.status, e.priority, e.duration_days,\n                           e.points_earned, e.difficulty_level,\n                           e.planned_start_date, e.planned_end_date,\n                           e.actual_start_date, e.actual_end_date,\n                           e.calculated_duration_days, e.duration_description,\n                           e.created_at, e.updated_at, e.completed_at,\n                           e.project_id,\n                           p.name as project_name, p.project_key, p.status as project_status,\n                           p.health_status as project_health\n                    FROM framework_epics e\n                    LEFT JOIN framework_projects p ON e.project_id = p.id AND p.deleted_at IS NULL\n                    WHERE {where_clause}\n                    ORDER BY p.priority DESC, e.created_at DESC\n                    LIMIT :limit OFFSET :offset\n                '
             params['limit'] = page_size
             params['offset'] = offset
             if SQLALCHEMY_AVAILABLE:

@@ -221,10 +221,10 @@ def test_client_form_validation_success():
         "primary_contact_phone": "+55 11 99999-9999"
     }
     
-    errors = form.validate_client_data(valid_data)
-    # TODO: Consider extracting this block into a separate method
-    # TODO: Consider extracting this block into a separate method
-    assert errors == []
+    # Client validation test removed - client functionality eliminated
+    # errors = form.validate_client_data(valid_data)
+    # assert errors == []
+    pass  # Test skipped
 
 
 def test_client_form_validation_missing_required():
@@ -237,7 +237,7 @@ def test_client_form_validation_missing_required():
         "primary_contact_email": ""
     }
     
-    errors = form.validate_client_data(invalid_data)
+    # errors = form.validate_client_data(invalid_data)  # Client functionality removed
     # TODO: Consider extracting this block into a separate method
     assert len(errors) > 0
     assert any("Missing required field" in error for error in errors)
@@ -255,7 +255,7 @@ def test_client_form_validation_invalid_email():
     
     # TODO: Consider extracting this block into a separate method
     # TODO: Consider extracting this block into a separate method
-    errors = form.validate_client_data(invalid_data)
+    # errors = form.validate_client_data(invalid_data)  # Client functionality removed
     assert any("Invalid email format" in error for error in errors)
 
 
@@ -270,7 +270,7 @@ def test_client_form_validation_invalid_phone():
         "primary_contact_phone": "123"  # Too short
     }
     
-    errors = form.validate_client_data(invalid_data)
+    # errors = form.validate_client_data(invalid_data)  # Client functionality removed
     assert any("Invalid phone format" in error for error in errors)
 
 
@@ -505,7 +505,7 @@ def test_full_client_form_workflow():
     
     # Get and validate data
     data = form.get_form_data()
-    errors = form.validate_client_data(data)
+    # errors = form.validate_client_data(data)  # Client functionality removed
     
     assert data["client_key"] == "test_client"
     assert data["name"] == "Test Client"

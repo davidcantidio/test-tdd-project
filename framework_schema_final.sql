@@ -126,7 +126,7 @@ CREATE TABLE IF NOT EXISTS framework_projects (
     FOREIGN KEY (created_by) REFERENCES framework_users(id),
     FOREIGN KEY (deleted_by) REFERENCES framework_users(id),
     
-    UNIQUE(client_id, project_key)
+    UNIQUE(project_key)
 );
 
 -- ==================================================================================
@@ -422,7 +422,7 @@ CREATE TABLE IF NOT EXISTS system_settings (
 -- Client indexes removed
 
 -- Project indexes
-CREATE INDEX IF NOT EXISTS idx_projects_client ON framework_projects(client_id, deleted_at);
+-- Client index removed
 CREATE INDEX IF NOT EXISTS idx_projects_key ON framework_projects(project_key);
 CREATE INDEX IF NOT EXISTS idx_projects_status ON framework_projects(status, deleted_at);
 CREATE INDEX IF NOT EXISTS idx_projects_health ON framework_projects(health_status, status);
@@ -452,14 +452,9 @@ CREATE INDEX IF NOT EXISTS idx_achievements_type ON user_achievements(achievemen
 -- VIEWS FOR REPORTING AND DASHBOARDS
 -- ==================================================================================
 
--- Complete hierarchy view
+-- Complete hierarchy view (client references removed)
 CREATE VIEW IF NOT EXISTS hierarchy_overview AS
 SELECT 
-    c.id as client_id,
-    c.client_key,
-    c.name as client_name,
-    c.status as client_status,
-    
     p.id as project_id,
     p.project_key,
     p.name as project_name,
@@ -478,40 +473,14 @@ SELECT
         NULLIF(COUNT(t.id), 0), 2
     ) as completion_percentage
     
-FROM framework_clients c
-LEFT JOIN framework_projects p ON c.id = p.client_id AND p.deleted_at IS NULL
+FROM framework_projects p
 LEFT JOIN framework_epics e ON p.id = e.project_id AND e.deleted_at IS NULL
 LEFT JOIN framework_tasks t ON e.id = t.epic_id
-WHERE c.deleted_at IS NULL
-GROUP BY c.id, p.id, e.id
-ORDER BY c.name, p.name, e.epic_key;
+WHERE p.deleted_at IS NULL
+GROUP BY p.id, e.id
+ORDER BY p.name, e.epic_key;
 
--- Client dashboard view
-CREATE VIEW IF NOT EXISTS client_dashboard AS
-SELECT 
-    c.id as client_id,
-    c.name as client_name,
-    c.client_tier,
-    
-    COUNT(DISTINCT p.id) as total_projects,
-    COUNT(DISTINCT CASE WHEN p.status = 'active' THEN p.id END) as active_projects,
-    
-    COUNT(DISTINCT e.id) as total_epics,
-    COUNT(DISTINCT CASE WHEN e.status = 'completed' THEN e.id END) as completed_epics,
-    
-    COUNT(t.id) as total_tasks,
-    COUNT(CASE WHEN t.status = 'completed' THEN 1 END) as completed_tasks,
-    
-    COALESCE(SUM(p.actual_hours), 0) as total_hours_logged,
-    COALESCE(SUM(p.budget_amount), 0) as total_budget
-    
-FROM framework_clients c
-LEFT JOIN framework_projects p ON c.id = p.client_id AND p.deleted_at IS NULL
-LEFT JOIN framework_epics e ON p.id = e.project_id AND e.deleted_at IS NULL
-LEFT JOIN framework_tasks t ON e.id = t.epic_id
-WHERE c.deleted_at IS NULL
-GROUP BY c.id
-ORDER BY c.name;
+-- Client dashboard view removed - client functionality eliminated
 
 -- Project dashboard view
 CREATE VIEW IF NOT EXISTS project_dashboard AS
@@ -521,7 +490,6 @@ SELECT
     p.status as project_status,
     p.health_status,
     
-    c.name as client_name,
     
     COUNT(DISTINCT e.id) as total_epics,
     COUNT(DISTINCT CASE WHEN e.status = 'completed' THEN e.id END) as completed_epics,
@@ -539,23 +507,18 @@ SELECT
     ) as calculated_completion_percentage
     
 FROM framework_projects p
-INNER JOIN framework_clients c ON p.client_id = c.id AND c.deleted_at IS NULL
 LEFT JOIN framework_epics e ON p.id = e.project_id AND e.deleted_at IS NULL
 LEFT JOIN framework_tasks t ON e.id = t.epic_id
 WHERE p.deleted_at IS NULL
-GROUP BY p.id, c.id
-ORDER BY c.name, p.name;
+GROUP BY p.id
+ORDER BY p.name;
 
 -- ==================================================================================
 -- TRIGGERS FOR DATA INTEGRITY
 -- ==================================================================================
 
 -- Update timestamp triggers
-CREATE TRIGGER IF NOT EXISTS update_clients_timestamp 
-AFTER UPDATE ON framework_clients
-BEGIN
-    UPDATE framework_clients SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
-END;
+-- Client timestamp trigger removed
 
 CREATE TRIGGER IF NOT EXISTS update_projects_timestamp 
 AFTER UPDATE ON framework_projects

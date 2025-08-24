@@ -34,7 +34,7 @@ sys.path.append(str(Path(__file__).parent.parent.parent))
 try:
     from streamlit_extension.utils.database import DatabaseManager
     from streamlit_extension.services import (
-        ClientService, ProjectService, EpicService, TaskService, 
+        ProjectService, EpicService, TaskService, 
         AnalyticsService, ServiceContainer
     )
     SERVICES_AVAILABLE = True
@@ -83,7 +83,6 @@ class IntegrationTestFramework:
         
         # Initialize test data tracking
         self.test_data = {
-            "clients": [],
             "projects": [],
             "epics": [],
             "tasks": [],

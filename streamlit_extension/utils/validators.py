@@ -356,81 +356,7 @@ def generate_validation_report(validations: List[Tuple[str, bool, List[str]]]) -
     return report
 
 
-# validate_client_data removed - client functionality eliminated
-    
-    # Required fields
-    required_fields = ["client_key", "name", "primary_contact_email"]
-    for field in required_fields:
-        if field not in client or not client[field]:
-            errors.append(f"Missing required field: {field}")
-    
-    # Validate client_key format
-    client_key = client.get("client_key", "")
-    if client_key:
-        if not re.match(r'^[a-z0-9_]{2,50}$', client_key):
-            errors.append("Client key must be lowercase, contain only letters, numbers, underscores (2-50 chars)")
-    
-    # Validate name length
-    name = client.get("name", "")
-    if len(name) > 255:
-        errors.append(f"Client name too long ({len(name)} characters, max 255)")
-    if len(name.strip()) == 0:
-        errors.append("Client name cannot be empty")
-    
-    # Validate primary contact email
-    email = client.get("primary_contact_email", "")
-    if email:
-        email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
-        if not re.match(email_pattern, email):
-            errors.append(f"Invalid email format: {email}")
-    
-    # Validate status
-    valid_statuses = ["active", "inactive", "suspended", "archived"]
-    status = client.get("status", "active").lower()
-    if status and status not in valid_statuses:
-        errors.append(f"Invalid status '{status}'. Valid options: {', '.join(valid_statuses)}")
-    
-    # Validate client tier
-    valid_tiers = ["basic", "standard", "premium", "enterprise"]
-    tier = client.get("client_tier", "standard").lower()
-    if tier and tier not in valid_tiers:
-        errors.append(f"Invalid client tier '{tier}'. Valid options: {', '.join(valid_tiers)}")
-    
-    # Validate priority level
-    priority = client.get("priority_level")
-    if priority is not None:
-        try:
-            priority_int = int(priority)
-            if priority_int < 1 or priority_int > 10:
-                errors.append(f"Priority level {priority_int} outside valid range (1-10)")
-        except (ValueError, TypeError):
-            errors.append(f"Invalid priority level value: {priority}")
-    
-    # Validate hourly rate
-    hourly_rate = client.get("hourly_rate")
-    if hourly_rate is not None:
-        try:
-            rate_float = float(hourly_rate)
-            if rate_float < 0:
-                errors.append("Hourly rate cannot be negative")
-            if rate_float > 10000:
-                errors.append(f"Hourly rate {rate_float} seems unreasonably high")
-        except (ValueError, TypeError):
-            errors.append(f"Invalid hourly rate value: {hourly_rate}")
-    
-    # Validate contract type
-    valid_contract_types = ["time_and_materials", "fixed_price", "retainer", "subscription"]
-    contract_type = client.get("contract_type", "time_and_materials")
-    if contract_type and contract_type not in valid_contract_types:
-        errors.append(f"Invalid contract type '{contract_type}'. Valid options: {', '.join(valid_contract_types)}")
-    
-    # Validate billing email if provided
-    billing_email = client.get("billing_email", "")
-    if billing_email:
-        if not re.match(email_pattern, billing_email):
-            errors.append(f"Invalid billing email format: {billing_email}")
-    
-    return len(errors) == 0, errors
+# validate_client_data completely removed - client functionality eliminated
 
 
 def validate_project_data(project: Dict[str, Any]) -> Tuple[bool, List[str]]:
@@ -450,8 +376,6 @@ def validate_project_data(project: Dict[str, Any]) -> Tuple[bool, List[str]]:
     for field in required_fields:
         if field not in project or project[field] is None:
             errors.append(f"Missing required field: {field}")
-    
-    # Client ID validation removed - projects are managed directly
     
     # Validate project_key format
     project_key = project.get("project_key", "")
@@ -565,10 +489,7 @@ def validate_project_data(project: Dict[str, Any]) -> Tuple[bool, List[str]]:
     return len(errors) == 0, errors
 
 
-# Client email validation removed - client functionality eliminated
-
-
-# Client key validation removed - client functionality eliminated
+# Client validation functions removed - client functionality eliminated
 
 
 def validate_project_key_uniqueness(project_key: str, existing_projects: List[Dict[str, Any]], exclude_project_id: Optional[int] = None) -> bool:
