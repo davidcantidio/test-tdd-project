@@ -419,7 +419,6 @@ def example_service_usage() -> None:
     container = initialize_service_container(dm, lazy_loading=True)
 
     try:
-        client_service = get_client_service()
         project_service = get_project_service()
         epic_service = get_epic_service()
         task_service = get_task_service()
@@ -427,7 +426,6 @@ def example_service_usage() -> None:
         timer_service = get_timer_service()
 
         # Exemplos ilustrativos (ajuste conforme as assinaturas reais dos serviços)
-        _ = client_service  # evitar warnings
         _ = project_service
         _ = epic_service
         _ = task_service

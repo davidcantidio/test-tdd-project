@@ -2,7 +2,7 @@
 📄 Pages Package - Streamlit Extension (Optimized)
 
 Sistema de navegação multi-páginas do TDD Framework:
-- Analytics, Kanban, Gantt, Timer, Settings, Clients, Projects, Health, Projeto Wizard
+- Analytics, Kanban, Gantt, Timer, Settings, Projects, Health, Projeto Wizard
 - Página de login isolada (oculta na navegação principal)
 - Registro tipado com validações leves e proteção de execução
 
@@ -51,7 +51,7 @@ render_kanban_page, KANBAN_AVAILABLE = _import_page("kanban", "render_kanban_pag
 render_gantt_page, GANTT_AVAILABLE = _import_page("gantt", "render_gantt_page")
 render_timer_page, TIMER_AVAILABLE = _import_page("timer", "render_timer_page")
 render_settings_page, SETTINGS_AVAILABLE = _import_page("settings", "render_settings_page")
-render_clients_page, CLIENTS_AVAILABLE = _import_page("clients", "render_clients_page")
+# Client functionality removed - no longer needed
 render_projects_page, PROJECTS_AVAILABLE = _import_page("projects", "render_projects_page")
 render_health_page, HEALTH_AVAILABLE = _import_page("health", "render_health_page")
 render_projeto_wizard_page, PROJETO_WIZARD_AVAILABLE = _import_page("projeto_wizard", "render_projeto_wizard_page")
@@ -151,14 +151,7 @@ PAGE_REGISTRY: Dict[str, PageSpec] = {
         render_func=render_settings_page,
         available=SETTINGS_AVAILABLE,
     ),
-    "clients": PageSpec(
-        id="clients",
-        title="👥 Clients",
-        icon="👥",
-        description="Client management and contacts",
-        render_func=render_clients_page,
-        available=CLIENTS_AVAILABLE,
-    ),
+    # Client functionality removed - page eliminated
     "projects": PageSpec(
         id="projects",
         title="📁 Projects",
@@ -288,7 +281,6 @@ __all__ = [
     "render_gantt_page",
     "render_timer_page",
     "render_settings_page",
-    "render_clients_page",
     "render_projects_page",
     "render_health_page",
     "render_projeto_wizard_page",
@@ -303,7 +295,6 @@ __all__ = [
     "GANTT_AVAILABLE",
     "TIMER_AVAILABLE",
     "SETTINGS_AVAILABLE",
-    "CLIENTS_AVAILABLE",
     "PROJECTS_AVAILABLE",
     "HEALTH_AVAILABLE",
     "PROJETO_WIZARD_AVAILABLE",

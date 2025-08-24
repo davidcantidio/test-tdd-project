@@ -234,33 +234,7 @@ class QueryBuilder:
 # ----------------------------------------------------------------------
 # Specialized builders
 # ----------------------------------------------------------------------
-class ClientQueryBuilder(QueryBuilder):
-    """Specialized query builder for clients."""
-
-    def __init__(self) -> None:
-        super().__init__("framework_clients")
-
-    def active_only(self) -> "ClientQueryBuilder":
-        """Filter only active clients."""
-        return self.where("status = ?", "active")
-
-    def by_tier(self, tier: str) -> "ClientQueryBuilder":
-        """Filter by client tier."""
-        return self.where("client_tier = ?", tier)
-
-    def search_by_name(self, search_term: str) -> "ClientQueryBuilder":
-        """Search clients by name."""
-        return self.where("name LIKE ?", f"%{search_term}%")
-
-    def with_project_count(self) -> "ClientQueryBuilder":
-        """Include project count in results."""
-        return (
-            self.left_join(
-                "framework_projects p", "framework_clients.id = p.client_id"
-            )
-            .select("framework_clients.*", "COUNT(p.id) as project_count")
-            .group_by("framework_clients.id")
-        )
+# Client query builder removed - client functionality eliminated
 
 
 class ProjectQueryBuilder(QueryBuilder):
@@ -269,27 +243,11 @@ class ProjectQueryBuilder(QueryBuilder):
     def __init__(self) -> None:
         super().__init__("framework_projects")
 
-    def for_client(self, client_id: int) -> "ProjectQueryBuilder":
-        """Filter projects for specific client."""
-        return self.where("client_id = ?", client_id)
+    # Client-related methods removed - client functionality eliminated
 
     def active_only(self) -> "ProjectQueryBuilder":
         """Filter only active projects."""
         return self.where("status = ?", "active")
-
-    def with_client_info(self) -> "ProjectQueryBuilder":
-        """Include client information."""
-        return (
-            self.left_join(
-                "framework_clients c",
-                "framework_projects.client_id = c.id",
-            )
-            .select(
-                "framework_projects.*",
-                "c.name as client_name",
-                "c.industry as client_industry",
-            )
-        )
 
     def with_epic_stats(self) -> "ProjectQueryBuilder":
         """Include epic statistics."""

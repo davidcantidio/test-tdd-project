@@ -30,11 +30,10 @@ class TaskRepository(BaseRepository):
         try:
             query = """
                 SELECT t.*, e.title as epic_title, e.epic_key, 
-                       p.name as project_name, c.name as client_name
+                       p.name as project_name
                 FROM framework_tasks t
                 LEFT JOIN framework_epics e ON t.epic_id = e.id
                 LEFT JOIN framework_projects p ON e.project_id = p.id
-                LEFT JOIN framework_clients c ON p.client_id = c.id
                 WHERE t.id = ?
             """
             result = self.db_manager.execute_query(query, (task_id,))
@@ -62,15 +61,14 @@ class TaskRepository(BaseRepository):
     ) -> PaginatedResult[Dict[str, Any]]:
         """Find all tasks with filtering, sorting, and pagination."""
         try:
-            # Build base query with epic, project, and client information
+            # Build base query with epic and project information
             base_query = """
                 SELECT t.*, e.title as epic_title, e.epic_key, 
-                       p.name as project_name, c.name as client_name,
+                       p.name as project_name,
                        COALESCE(ws.total_time, 0) as total_time_minutes
                 FROM framework_tasks t
                 LEFT JOIN framework_epics e ON t.epic_id = e.id
                 LEFT JOIN framework_projects p ON e.project_id = p.id
-                LEFT JOIN framework_clients c ON p.client_id = c.id
                 LEFT JOIN (
                     SELECT task_id, SUM(duration_minutes) as total_time
                     FROM work_sessions
@@ -106,10 +104,6 @@ class TaskRepository(BaseRepository):
                     where_conditions.append("e.project_id = ?")
                     params.append(filters.get('project_id'))
                 
-                if filters.has('client_id'):
-                    where_conditions.append("p.client_id = ?")
-                    params.append(filters.get('client_id'))
-                
                 if filters.has('priority'):
                     where_conditions.append("t.priority = ?")
                     params.append(filters.get('priority'))
@@ -144,8 +138,6 @@ class TaskRepository(BaseRepository):
                     sort_field = f"e.title"
                 elif sort_field in ['project_name']:
                     sort_field = f"p.name"
-                elif sort_field in ['client_name']:
-                    sort_field = f"c.name"
                 elif sort_field == 'total_time':
                     sort_field = "total_time_minutes"
                 
@@ -157,7 +149,6 @@ class TaskRepository(BaseRepository):
                 FROM framework_tasks t
                 LEFT JOIN framework_epics e ON t.epic_id = e.id
                 LEFT JOIN framework_projects p ON e.project_id = p.id
-                LEFT JOIN framework_clients c ON p.client_id = c.id
                 {where_clause}
             """
             total_count = self.db_manager.execute_query(count_query, params)[0]['COUNT(*)']

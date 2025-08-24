@@ -39,75 +39,11 @@ CREATE TABLE IF NOT EXISTS framework_users (
 -- CLIENT-PROJECT HIERARCHY
 -- ==================================================================================
 
--- Clients table (top-level organization)
-CREATE TABLE IF NOT EXISTS framework_clients (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    client_key VARCHAR(50) UNIQUE NOT NULL,
-    name VARCHAR(255) NOT NULL,
-    
-    -- Client Information
-    description TEXT,
-    industry VARCHAR(100),
-    company_size VARCHAR(50),
-    
-    -- Contact
-    primary_contact_name VARCHAR(255),
-    primary_contact_email VARCHAR(255),
-    primary_contact_phone VARCHAR(50),
-    
-    -- Business
-    billing_email VARCHAR(255),
-    billing_address TEXT,
-    tax_id VARCHAR(100),
-    
-    -- Configuration
-    timezone VARCHAR(50) DEFAULT 'America/Sao_Paulo',
-    currency VARCHAR(10) DEFAULT 'BRL',
-    preferred_language VARCHAR(10) DEFAULT 'pt-BR',
-    preferences JSON,
-    custom_fields JSON,
-    
-    -- Commercial
-    hourly_rate DECIMAL(10,2),
-    contract_type VARCHAR(50) DEFAULT 'time_and_materials',
-    payment_terms VARCHAR(100),
-    
-    -- Status
-    status VARCHAR(50) DEFAULT 'active',
-    client_tier VARCHAR(20) DEFAULT 'standard',
-    priority_level INTEGER DEFAULT 5,
-    
-    -- Relationships
-    account_manager_id INTEGER,
-    technical_lead_id INTEGER,
-    
-    -- Integration
-    external_client_id VARCHAR(100),
-    external_system_name VARCHAR(100),
-    
-    -- Security
-    access_level VARCHAR(50) DEFAULT 'standard',
-    allowed_ips JSON,
-    requires_2fa BOOLEAN DEFAULT FALSE,
-    
-    -- Audit
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    created_by INTEGER,
-    last_contact_date DATE,
-    deleted_at TIMESTAMP NULL,
-    deleted_by INTEGER,
-    
-    FOREIGN KEY (account_manager_id) REFERENCES framework_users(id),
-    FOREIGN KEY (technical_lead_id) REFERENCES framework_users(id),
-    FOREIGN KEY (created_by) REFERENCES framework_users(id),
-    FOREIGN KEY (deleted_by) REFERENCES framework_users(id)
-);
+-- Client functionality eliminated - table removed
 
--- Projects table (client's projects)
+-- Projects table (standalone projects)
 CREATE TABLE IF NOT EXISTS framework_projects (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    client_id INTEGER NOT NULL,
     project_key VARCHAR(50) NOT NULL,
     name VARCHAR(255) NOT NULL,
     
@@ -184,7 +120,7 @@ CREATE TABLE IF NOT EXISTS framework_projects (
     deleted_at TIMESTAMP NULL,
     deleted_by INTEGER,
     
-    FOREIGN KEY (client_id) REFERENCES framework_clients(id) ON DELETE CASCADE,
+    -- Client foreign key removed
     FOREIGN KEY (project_manager_id) REFERENCES framework_users(id),
     FOREIGN KEY (technical_lead_id) REFERENCES framework_users(id),
     FOREIGN KEY (created_by) REFERENCES framework_users(id),
@@ -483,9 +419,7 @@ CREATE TABLE IF NOT EXISTS system_settings (
 -- ==================================================================================
 
 -- Client indexes
-CREATE INDEX IF NOT EXISTS idx_clients_key ON framework_clients(client_key);
-CREATE INDEX IF NOT EXISTS idx_clients_status ON framework_clients(status, deleted_at);
-CREATE INDEX IF NOT EXISTS idx_clients_tier_priority ON framework_clients(client_tier, priority_level);
+-- Client indexes removed
 
 -- Project indexes
 CREATE INDEX IF NOT EXISTS idx_projects_client ON framework_projects(client_id, deleted_at);

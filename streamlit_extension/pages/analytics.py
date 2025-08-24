@@ -71,7 +71,7 @@ except ImportError:
 try:
     from streamlit_extension.utils.database import DatabaseManager
     from streamlit_extension.utils.security import (
-        create_safe_client, sanitize_display, validate_form, check_rate_limit,
+        sanitize_display, validate_form, check_rate_limit,
         security_manager,
     )
     from streamlit_extension.utils.exception_handler import (
@@ -81,7 +81,7 @@ try:
     DATABASE_UTILS_AVAILABLE = True
 except ImportError:
     DatabaseManager = load_config = None  # type: ignore
-    create_safe_client = sanitize_display = validate_form = None  # type: ignore
+    sanitize_display = validate_form = None  # type: ignore
     check_rate_limit = security_manager = None  # type: ignore
 
     # Fallbacks seguros: no-op decorators/utilitários

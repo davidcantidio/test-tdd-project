@@ -49,10 +49,9 @@ class EpicRepository(BaseRepository):
         """Find epic by ID with project and client information."""
         try:
             query = """
-                SELECT e.*, p.name as project_name, c.name as client_name
+                SELECT e.*, p.name as project_name
                 FROM framework_epics e
                 LEFT JOIN framework_projects p ON e.project_id = p.id
-                LEFT JOIN framework_clients c ON p.client_id = c.id
                 WHERE e.id = ?
             """
             result = self.db_manager.execute_query(query, (epic_id,))
@@ -82,12 +81,11 @@ class EpicRepository(BaseRepository):
         try:
             # Build base query with project and client information
             base_query = """
-                SELECT e.*, p.name as project_name, c.name as client_name,
+                SELECT e.*, p.name as project_name,
                        COUNT(t.id) as task_count,
                        SUM(CASE WHEN t.status = 'completed' THEN 1 ELSE 0 END) as completed_tasks
                 FROM framework_epics e
                 LEFT JOIN framework_projects p ON e.project_id = p.id
-                LEFT JOIN framework_clients c ON p.client_id = c.id
                 LEFT JOIN framework_tasks t ON e.id = t.epic_id
             """
             
@@ -157,7 +155,6 @@ class EpicRepository(BaseRepository):
                     SELECT e.id
                     FROM framework_epics e
                     LEFT JOIN framework_projects p ON e.project_id = p.id
-                    LEFT JOIN framework_clients c ON p.client_id = c.id
                     {where_clause}
                     GROUP BY e.id
                 )

@@ -80,16 +80,6 @@ class CompanySizes(Enum):
 
 class ErrorMessages:
     """Centralized error message templates"""
-    # Client errors
-    CLIENT_LOAD_ERROR = "❌ Error loading clients: {error}"
-    CLIENT_CREATE_ERROR = "❌ Error creating client: {error}"
-    CLIENT_UPDATE_ERROR = "❌ Error updating client: {error}"
-    CLIENT_DELETE_ERROR = "❌ Error deleting client: {error}"
-    CLIENT_NOT_FOUND = "❌ Client not found"
-    CLIENT_CREATE_SUCCESS = "✅ Client created successfully!"
-    CLIENT_UPDATE_SUCCESS = "✅ Client updated successfully!"
-    CLIENT_DELETE_SUCCESS = "✅ Client deleted successfully!"
-
     # Project errors
     PROJECT_LOAD_ERROR = "❌ Error loading projects: {error}"
     PROJECT_CREATE_ERROR = "❌ Error creating project: {error}"
@@ -165,7 +155,7 @@ class ProjectStatus(Enum):
 
 
 class GeneralStatus(Enum):
-    """General entity status options (clients, etc.)."""
+    """General entity status options (projects, epics, tasks)."""
     ACTIVE = "active"
     INACTIVE = "inactive"
     SUSPENDED = "suspended"

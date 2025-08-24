@@ -104,9 +104,9 @@ class DatabaseHealthChecker:
             
             # Test query performance
             test_queries = [
-                "SELECT COUNT(*) FROM framework_clients",
                 "SELECT COUNT(*) FROM framework_projects", 
-                "SELECT COUNT(*) FROM framework_epics"
+                "SELECT COUNT(*) FROM framework_epics",
+                "SELECT COUNT(*) FROM framework_tasks"
             ]
             
             query_times = []

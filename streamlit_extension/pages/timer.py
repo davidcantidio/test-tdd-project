@@ -31,7 +31,7 @@ try:
     from streamlit_extension.config import load_config
     from streamlit_extension.components.timer import TimerComponent
     from streamlit_extension.utils.security import (
-        create_safe_client, sanitize_display, validate_form, check_rate_limit,
+        sanitize_display, validate_form, check_rate_limit,
         security_manager
     )
     from streamlit_extension.utils.exception_handler import (
@@ -43,7 +43,7 @@ try:
     DATABASE_UTILS_AVAILABLE = True
 except ImportError:
     DatabaseManager = load_config = TimerComponent = None
-    create_safe_client = sanitize_display = validate_form = None
+    sanitize_display = validate_form = None
     check_rate_limit = security_manager = None
     init_protected_page = ErrorMessages = UIConstants = TaskStatus = None
     DATABASE_UTILS_AVAILABLE = False

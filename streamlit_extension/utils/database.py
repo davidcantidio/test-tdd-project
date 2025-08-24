@@ -782,16 +782,15 @@ class DatabaseManager(PerformancePaginationMixin):
             True if deletion succeeded, False otherwise
             
         Example:
-            >>> # Delete client and all related data
+            >>> # Delete project and all related data
             >>> success = db.delete_cascade_safe(
-            ...     "clients", 
-            ...     client_id, 
-            ...     cascade_tables=["projects", "epics", "tasks"]
+            ...     "projects", 
+            ...     project_id, 
+            ...     cascade_tables=["epics", "tasks"]
             ... )
         """
-        # Define safe cascade relationships
+        # Define safe cascade relationships (client layer removed)
         safe_relationships = {
-            "clients": ["projects", "epics", "tasks"],
             "projects": ["epics", "tasks"],
             "epics": ["tasks"]
         }
@@ -804,19 +803,19 @@ class DatabaseManager(PerformancePaginationMixin):
         
         # Add cascade deletes (reverse order for dependencies)
         for cascade_table in reversed(tables_to_clean):
-            if cascade_table == "tasks":
+            if cascade_table == "tasks" and table_name == "projects":
                 delete_ops.append((
-                    f"DELETE FROM {cascade_table} WHERE epic_id IN (SELECT id FROM epics WHERE project_id IN (SELECT id FROM projects WHERE client_id = :record_id))",
+                    f"DELETE FROM {cascade_table} WHERE epic_id IN (SELECT id FROM epics WHERE project_id = :record_id)",
                     {"record_id": record_id}
                 ))
-            elif cascade_table == "epics":
+            elif cascade_table == "tasks" and table_name == "epics":
                 delete_ops.append((
-                    f"DELETE FROM {cascade_table} WHERE project_id IN (SELECT id FROM projects WHERE client_id = :record_id)",
+                    f"DELETE FROM {cascade_table} WHERE epic_id = :record_id",
                     {"record_id": record_id}
                 ))
-            elif cascade_table == "projects":
+            elif cascade_table == "epics" and table_name == "projects":
                 delete_ops.append((
-                    f"DELETE FROM {cascade_table} WHERE client_id = :record_id",
+                    f"DELETE FROM {cascade_table} WHERE project_id = :record_id",
                     {"record_id": record_id}
                 ))
         
@@ -1527,7 +1526,7 @@ class DatabaseManager(PerformancePaginationMixin):
                 unavailable.
 
         Example:
-            >>> db_manager.clear_cache("db_query:get_clients:")
+            >>> db_manager.clear_cache("db_query:get_projects:")
         """
         if not CACHE_AVAILABLE:
             logging.info("Cache not available")
@@ -2888,100 +2887,14 @@ class DatabaseManager(PerformancePaginationMixin):
     # ==================================================================================
     # HIERARCHY CRUD OPERATIONS
     # ==================================================================================
-        """Create new client record.
-
-        Creates client with full validation and automatic timestamp assignment.
-        Invalidates related caches and triggers audit logging.
-
-        Args:
-            client_key: Unique client identifier string (3-20 chars).
-            name: Client display name (1-100 characters).
-            description: Client description (max 500 chars).
-            industry: Industry classification.
-            company_size: Company size category.
-            primary_contact_name: Primary contact name.
-            primary_contact_email: Primary contact email.
-            hourly_rate: Billing rate per hour.
-            **kwargs: Additional optional fields like ``status`` or
-                ``client_tier``.
-
-        Returns:
-            Optional[int]: New client ID if successful, ``None`` if failed.
-
-        Raises:
-            ValueError: If required fields are missing or invalid.
-            IntegrityError: If ``client_key`` already exists.
-            DatabaseError: If insert operation fails.
-
-        Side Effects:
-            - Invalidates client list caches.
-            - Creates audit log entry.
-
-        Performance:
-            - Insert operation: ~5ms.
-
-        Example:
-            >>> client_id = db_manager.create_client(
-            ...     client_key="acme_corp", name="ACME Corporation"
-            ... )
-        """
-        try:
-            client_data = {
-                'client_key': client_key,
-                'name': name,
-                'description': description,
-                'industry': industry,
-                'company_size': company_size,
-                'primary_contact_name': primary_contact_name,
-                'primary_contact_email': primary_contact_email,
-                'hourly_rate': hourly_rate,
-                'status': kwargs.get('status', ClientStatus.ACTIVE.value),
-                'client_tier': kwargs.get('client_tier', 'standard'),
-                'priority_level': kwargs.get('priority_level', 5),
-                'timezone': kwargs.get('timezone', 'America/Sao_Paulo'),
-                'currency': kwargs.get('currency', 'BRL'),
-                'preferred_language': kwargs.get('preferred_language', 'pt-BR'),
-                'contract_type': kwargs.get('contract_type', 'time_and_materials'),
-                'created_by': kwargs.get('created_by', 1)
-            }
-            
-            with self.get_connection("framework") as conn:
-                placeholders = ', '.join(['?' for _ in client_data])
-                columns = ', '.join(client_data.keys())
-                
-                if SQLALCHEMY_AVAILABLE:
-                    # Convert to named parameters for SQLAlchemy
-                    named_placeholders = ', '.join([f':{key}' for key in client_data.keys()])
-                    result = conn.execute(
-                        text(f"INSERT INTO {TableNames.CLIENTS} ({columns}) VALUES ({named_placeholders})"),  # nosec B608
-                        client_data
-                    )
-                    conn.commit()
-                    return result.lastrowid
-                else:
-                    cursor = conn.cursor()
-                    cursor.execute(
-                        f"INSERT INTO {TableNames.CLIENTS} ({columns}) VALUES ({placeholders})",  # nosec B608
-                        list(client_data.values())
-                    )
-                    conn.commit()
-                    return cursor.lastrowid
-                    
-        except Exception as e:
-            logger.error(f"Error creating client: {e}")
-            if STREAMLIT_AVAILABLE and st:
-                st.error(f"❌ Error creating client: {e}")
-            return None
     
     @invalidate_cache_on_change(
         "db_query:get_projects:",
         "db_query:get_hierarchy_overview:",
-        "db_query:get_client_dashboard:",
         "db_query:get_project_dashboard:"
     ) if CACHE_AVAILABLE else lambda f: f
     def create_project(
         self,
-        client_id: int,
         project_key: str,
         name: str,
         description: str = "",
@@ -2992,8 +2905,7 @@ class DatabaseManager(PerformancePaginationMixin):
         """Create a new project.
         
         Args:
-            client_id: ID of the client who owns this project
-            project_key: Unique project identifier within client
+            project_key: Unique project identifier
             name: Project name
             description: Project description
             project_type: Type of project (development, maintenance, etc.)
@@ -3005,7 +2917,6 @@ class DatabaseManager(PerformancePaginationMixin):
         """
         try:
             project_data = {
-                'client_id': client_id,
                 'project_key': project_key,
                 'name': name,
                 'description': description,
@@ -3096,42 +3007,11 @@ class DatabaseManager(PerformancePaginationMixin):
             logger.error(f"Error updating epic project: {e}")
             return False
     
-    def get_client_by_key(self, client_key: str) -> Optional[Dict[str, Any]]:
-        """Get client by client_key.
-        
-        Args:
-            client_key: Client key to search for
-            
-        Returns:
-            Client dictionary if found, None otherwise
-        """
-        try:
-            with self.get_connection("framework") as conn:
-                if SQLALCHEMY_AVAILABLE:
-                    result = conn.execute(text("""
-                        SELECT * FROM framework_clients 
-                        WHERE client_key = :client_key AND deleted_at IS NULL
-                    """), {"client_key": client_key})
-                    row = result.fetchone()
-                    return dict(row._mapping) if row else None
-                else:
-                    cursor = conn.cursor()
-                    cursor.execute("""
-                        SELECT * FROM framework_clients 
-                        WHERE client_key = ? AND deleted_at IS NULL
-                    """, (client_key,))
-                    row = cursor.fetchone()
-                    return dict(row) if row else None
-                    
-        except Exception as e:
-            logger.error(f"Error getting client by key: {e}")
-            return None
     
-    def get_project_by_key(self, client_id: int, project_key: str) -> Optional[Dict[str, Any]]:
-        """Get project by client_id and project_key.
+    def get_project_by_key(self, project_key: str) -> Optional[Dict[str, Any]]:
+        """Get project by project_key.
         
         Args:
-            client_id: Client ID
             project_key: Project key to search for
             
         Returns:
@@ -3142,17 +3022,17 @@ class DatabaseManager(PerformancePaginationMixin):
                 if SQLALCHEMY_AVAILABLE:
                     result = conn.execute(text("""
                         SELECT * FROM framework_projects 
-                        WHERE client_id = :client_id AND project_key = :project_key 
+                        WHERE project_key = :project_key 
                         AND deleted_at IS NULL
-                    """), {"client_id": client_id, "project_key": project_key})
+                    """), {"project_key": project_key})
                     row = result.fetchone()
                     return dict(row._mapping) if row else None
                 else:
                     cursor = conn.cursor()
                     cursor.execute("""
                         SELECT * FROM framework_projects 
-                        WHERE client_id = ? AND project_key = ? AND deleted_at IS NULL
-                    """, (client_id, project_key))
+                        WHERE project_key = ? AND deleted_at IS NULL
+                    """, (project_key,))
                     row = cursor.fetchone()
                     return dict(row) if row else None
                     
@@ -3160,154 +3040,11 @@ class DatabaseManager(PerformancePaginationMixin):
             logger.error(f"Error getting project by key: {e}")
             return None
     
-    @invalidate_cache_on_change("db_query:get_clients:", "db_query:get_client_dashboard:") if CACHE_AVAILABLE else lambda f: f
-    def update_client(self, client_id: int, **fields: Any) -> bool:
-        """Update existing client record.
-
-        Updates specified fields while preserving others. Validates all input
-        and maintains data integrity. Supports partial updates.
-
-        Args:
-            client_id: Client ID to update. Must exist.
-            **fields: Fields to update. Same validation as ``create_client``.
-
-        Returns:
-            bool: ``True`` if update successful, ``False`` if failed or no
-                changes.
-
-        Raises:
-            ValueError: If ``client_id`` invalid or field validation fails.
-            DatabaseError: If update operation fails.
-
-        Side Effects:
-            - Invalidates client caches for this client.
-            - Updates ``updated_at`` timestamp.
-
-        Performance:
-            - Update operation: ~3ms.
-
-        Example:
-            >>> db_manager.update_client(123, name="New Name")
-        """
-        try:
-            if not fields:
-                return True
-                
-            # Add updated_at timestamp
-            fields['updated_at'] = 'CURRENT_TIMESTAMP'
-            
-            # Build SET clause
-            set_clauses = []
-            values = {}
-            
-            for key, value in fields.items():
-                if key == 'updated_at':
-                    set_clauses.append(f"{key} = CURRENT_TIMESTAMP")
-                else:
-                    set_clauses.append(f"{key} = :{key}")
-                    values[key] = value
-            
-            values['client_id'] = client_id
-            
-            with self.get_connection("framework") as conn:
-                if SQLALCHEMY_AVAILABLE:
-                    conn.execute(text(f"""
-                        UPDATE {TableNames.CLIENTS}
-                        SET {', '.join(set_clauses)}
-                        WHERE id = :client_id AND deleted_at IS NULL
-                    """), values)  # nosec B608
-                    conn.commit()
-                else:
-                    cursor = conn.cursor()
-                    # Convert to positional parameters for sqlite
-                    positional_values = [values[key] for key in values.keys() if key != 'client_id']
-                    positional_values.append(client_id)
-                    
-                    sqlite_clauses = [clause.replace(f':{key}', '?') for clause in set_clauses if f':{key}' in clause]
-                    sqlite_clauses.extend([clause for clause in set_clauses if '?' not in clause and ':' not in clause])
-                    
-                    cursor.execute(f"""
-                        UPDATE {TableNames.CLIENTS}
-                        SET {', '.join(sqlite_clauses)}
-                        WHERE id = ? AND deleted_at IS NULL
-                    """, positional_values)  # nosec B608
-                    conn.commit()
-                
-                return True
-                
-        except Exception as e:
-            logger.error(f"Error updating client: {e}")
-            if STREAMLIT_AVAILABLE and st:
-                st.error(f"❌ Error updating client: {e}")
-            return False
     
-    @invalidate_cache_on_change("db_query:get_clients:", "db_query:get_client_dashboard:") if CACHE_AVAILABLE else lambda f: f
-    def delete_client(self, client_id: int, soft_delete: bool = True) -> bool:
-        """Delete client record (soft or hard delete).
-
-        Removes client from active use. Soft delete preserves data for audit
-        purposes. Hard delete permanently removes all data.
-
-        Args:
-            client_id: Client ID to delete. Must exist.
-            soft_delete: Use soft delete. Defaults to ``True``.
-
-        Returns:
-            bool: ``True`` if deletion successful, ``False`` if failed.
-
-        Raises:
-            ValueError: If ``client_id`` invalid.
-            DatabaseError: If delete operation fails.
-
-        Side Effects:
-            - Invalidates all client-related caches.
-
-        Performance:
-            - Soft delete: ~2ms.
-            - Hard delete: ~10-100ms (depends on related data).
-
-        Example:
-            >>> db_manager.delete_client(123, soft_delete=True)
-        """
-        try:
-            with self.get_connection("framework") as conn:
-                if soft_delete:
-                    if SQLALCHEMY_AVAILABLE:
-                        conn.execute(text("""
-                            UPDATE {TableNames.CLIENTS}
-                            SET deleted_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
-                            WHERE id = :client_id
-                        """), {"client_id": client_id})
-                        conn.commit()
-                    else:
-                        cursor = conn.cursor()
-                        cursor.execute("""
-                            UPDATE {TableNames.CLIENTS}
-                            SET deleted_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
-                            WHERE id = ?
-                        """, (client_id,))
-                        conn.commit()
-                else:
-                    # Use transaction-wrapped cascade delete for hard deletes
-                    # This prevents table locks during large cascade operations
-                    return self.delete_cascade_safe(
-                        table_name="clients",
-                        record_id=client_id,
-                        cascade_tables=["projects", "epics", "tasks"]  # Delete in dependency order
-                    )
-                
-                return True
-                
-        except Exception as e:
-            logger.error(f"Error deleting client: {e}")
-            if STREAMLIT_AVAILABLE and st:
-                st.error(f"❌ Error deleting client: {e}")
-            return False
     
     @invalidate_cache_on_change(
         "db_query:get_projects:",
         "db_query:get_hierarchy_overview:",
-        "db_query:get_client_dashboard:",
         "db_query:get_project_dashboard:"
     ) if CACHE_AVAILABLE else lambda f: f
     def update_project(self, project_id: int, **fields: Any) -> bool:
@@ -3375,7 +3112,6 @@ class DatabaseManager(PerformancePaginationMixin):
     @invalidate_cache_on_change(
         "db_query:get_projects:",
         "db_query:get_hierarchy_overview:",
-        "db_query:get_client_dashboard:",
         "db_query:get_project_dashboard:"
     ) if CACHE_AVAILABLE else lambda f: f
     def delete_project(self, project_id: int, soft_delete: bool = True) -> bool:

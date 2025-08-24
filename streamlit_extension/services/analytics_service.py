@@ -71,43 +71,6 @@ class AnalyticsRepository(BaseRepository):
     def __init__(self, db_manager: DatabaseManager):
         super().__init__(db_manager)
     
-    def get_client_metrics(self, client_id: Optional[int] = None, days: int = 30) -> Dict[str, Any]:
-        """Get client-level metrics."""
-        try:
-            date_filter = datetime.now() - timedelta(days=days)
-            
-            if client_id:
-                where_clause = "WHERE c.id = ? AND p.created_at >= ?"
-                params = [client_id, date_filter]
-            else:
-                where_clause = "WHERE p.created_at >= ?"
-                params = [date_filter]
-            
-            query = f"""
-                SELECT 
-                    COUNT(DISTINCT c.id) as total_clients,
-                    COUNT(DISTINCT p.id) as total_projects,
-                    COUNT(DISTINCT e.id) as total_epics,
-                    COUNT(DISTINCT t.id) as total_tasks,
-                    SUM(CASE WHEN p.status = 'completed' THEN 1 ELSE 0 END) as completed_projects,
-                    SUM(CASE WHEN e.status = 'completed' THEN 1 ELSE 0 END) as completed_epics,
-                    SUM(CASE WHEN t.status = 'completed' THEN 1 ELSE 0 END) as completed_tasks,
-                    AVG(p.budget) as avg_project_budget,
-                    SUM(p.budget) as total_project_value
-                FROM framework_clients c
-                LEFT JOIN framework_projects p ON c.id = p.client_id
-                LEFT JOIN framework_epics e ON p.id = e.project_id
-                LEFT JOIN framework_tasks t ON e.id = t.epic_id
-                {where_clause}
-            """
-            
-            result = self.db_manager.execute_query(query, params)
-            result_list = _ensure_dict_list(result)
-            return result_list[0] if result_list else {}
-            
-        except Exception as e:
-            self.db_manager.logger.error(f"Error getting client metrics: {e}")
-            return {}
     
     def get_project_progress_metrics(self, project_id: Optional[int] = None) -> List[Dict[str, Any]]:
         """Get project progress metrics."""
@@ -124,7 +87,6 @@ class AnalyticsRepository(BaseRepository):
                     p.id as project_id,
                     p.name as project_name,
                     p.status as project_status,
-                    c.name as client_name,
                     COUNT(DISTINCT e.id) as total_epics,
                     COUNT(DISTINCT t.id) as total_tasks,
                     SUM(CASE WHEN e.status = 'completed' THEN 1 ELSE 0 END) as completed_epics,
@@ -133,7 +95,6 @@ class AnalyticsRepository(BaseRepository):
                     SUM(COALESCE(ws.total_time, 0)) as total_time_minutes,
                     SUM(t.estimated_hours) as total_estimated_hours
                 FROM framework_projects p
-                LEFT JOIN framework_clients c ON p.client_id = c.id
                 LEFT JOIN framework_epics e ON p.id = e.project_id
                 LEFT JOIN framework_tasks t ON e.id = t.epic_id
                 LEFT JOIN (
@@ -142,7 +103,7 @@ class AnalyticsRepository(BaseRepository):
                     GROUP BY task_id
                 ) ws ON t.id = ws.task_id
                 {where_clause}
-                GROUP BY p.id, p.name, p.status, c.name
+                GROUP BY p.id, p.name, p.status
                 ORDER BY p.created_at DESC
             """
             
@@ -363,7 +324,6 @@ class AnalyticsService(BaseService):
                 return ServiceResult.validation_error("Days must be between 1 and 365", "days")
             
             # Get all metrics
-            client_metrics = self.repository.get_client_metrics(days=days)
             project_metrics = _ensure_dict_list(
                 self.repository.get_project_progress_metrics()
             )
@@ -372,7 +332,7 @@ class AnalyticsService(BaseService):
             gamification_metrics = self.repository.get_gamification_metrics(days=days)
             
             # Calculate derived metrics
-            completion_rates = self._calculate_completion_rates(client_metrics)
+            completion_rates = self._calculate_completion_rates({})
             productivity_trends = self._analyze_productivity_trends(productivity_metrics)
             tdd_effectiveness = self._analyze_tdd_effectiveness(tdd_metrics)
             
@@ -381,11 +341,10 @@ class AnalyticsService(BaseService):
                 # usar UTC para relatórios consistentes
                 'generated_at': datetime.utcnow().isoformat() + "Z",
                 'overview': {
-                    'total_clients': client_metrics.get('total_clients', 0),
-                    'total_projects': client_metrics.get('total_projects', 0),
-                    'total_epics': client_metrics.get('total_epics', 0),
-                    'total_tasks': client_metrics.get('total_tasks', 0),
-                    'total_project_value': client_metrics.get('total_project_value', 0)
+                    'total_projects': len(project_metrics),
+                    'total_epics': sum(p.get('total_epics', 0) for p in project_metrics),
+                    'total_tasks': sum(p.get('total_tasks', 0) for p in project_metrics),
+                    'total_project_value': sum(p.get('total_estimated_hours', 0) for p in project_metrics)
                 },
                 'completion_rates': completion_rates,
                 'productivity': productivity_trends,
@@ -403,45 +362,6 @@ class AnalyticsService(BaseService):
         except Exception as e:
             logger.warning("Operation failed: %s", str(e))
     
-    def get_client_analytics(self, client_id: int, days: int = 30) -> ServiceResult[Dict[str, Any]]:
-        """
-        Get analytics for a specific client.
-        
-        Args:
-            client_id: Client ID
-            days: Number of days to include
-            
-        Returns:
-            ServiceResult with client analytics
-        """
-        self.log_operation("get_client_analytics", client_id=client_id, days=days)
-        
-        try:
-            # Get client-specific metrics
-            client_metrics = self.repository.get_client_metrics(client_id=client_id, days=days)
-            project_metrics = _ensure_dict_list(
-                self.repository.get_project_progress_metrics()
-            )
-            
-            # Filter projects for this client
-            client_projects = [
-                p for p in project_metrics 
-                if p.get('client_name') == client_metrics.get('client_name')
-            ]
-            
-            analytics = {
-                'client_id': client_id,
-                'period_days': days,
-                'metrics': client_metrics,
-                'projects': client_projects,
-                'performance_summary': self._calculate_client_performance(client_projects),
-                'recommendations': self._generate_client_recommendations(client_projects)
-            }
-            
-            return ServiceResult.ok(analytics)
-            
-        except Exception as e:
-            logger.warning("Operation failed: %s", str(e))
     
     def get_project_analytics(self, project_id: int) -> ServiceResult[Dict[str, Any]]:
         """
@@ -675,38 +595,7 @@ class AnalyticsService(BaseService):
         else:
             return 'stable'
     
-    def _calculate_client_performance(self, projects: List[Dict[str, Any]]) -> Dict[str, Any]:
-        """Calculate client performance metrics."""
-        if not projects:
-            return {'overall_score': 0, 'on_time_rate': 0, 'budget_efficiency': 0}
-        
-        completed_projects = [p for p in projects if p['project_status'] == 'completed']
-        completion_rate = len(completed_projects) / len(projects) * 100
-        
-        return {
-            'overall_score': round(completion_rate, 2),
-            'total_projects': len(projects),
-            'completed_projects': len(completed_projects),
-            'completion_rate': round(completion_rate, 2)
-        }
     
-    def _generate_client_recommendations(self, projects: List[Dict[str, Any]]) -> List[str]:
-        """Generate recommendations for client based on project performance."""
-        recommendations = []
-        
-        if not projects:
-            recommendations.append("No projects found for analysis")
-            return recommendations
-        
-        completion_rate = len([p for p in projects if p['project_status'] == 'completed']) / len(projects)
-        
-        if completion_rate < 0.5:
-            recommendations.append("Focus on completing existing projects before starting new ones")
-        
-        if completion_rate > 0.8:
-            recommendations.append("Excellent project completion rate - consider scaling up")
-        
-        return recommendations
     
     def _analyze_project_progress(self, project: Dict[str, Any]) -> Dict[str, Any]:
         """Analyze individual project progress."""

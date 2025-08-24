@@ -31,14 +31,14 @@ try:
     from streamlit_extension.utils.database import DatabaseManager
     from streamlit_extension.config import load_config, create_streamlit_config_file
     from streamlit_extension.utils.security import (
-        create_safe_client, sanitize_display, validate_form, check_rate_limit,
+        sanitize_display, validate_form, check_rate_limit,
         security_manager
     )
     from streamlit_extension.config.streamlit_config import reload_config
     DATABASE_UTILS_AVAILABLE = True
 except ImportError:
     DatabaseManager = load_config = create_streamlit_config_file = reload_config = None
-    create_safe_client = sanitize_display = validate_form = None
+    sanitize_display = validate_form = None
     check_rate_limit = security_manager = None
     DATABASE_UTILS_AVAILABLE = False
 

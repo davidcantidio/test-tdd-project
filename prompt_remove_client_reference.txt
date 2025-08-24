@@ -1,0 +1,197 @@
+● 🔍 PROMPT PARA VARREDURA COMPLETA DE REFERÊNCIAS CLIENT
+
+  # MISSÃO: Varredura Final e Eliminação Sistemática de Referências Client
+
+  Você precisa realizar uma varredura COMPLETA e SISTEMÁTICA para identificar e eliminar TODAS as referências ao conceito de "client" como
+  entidade de negócio em um projeto, mantendo apenas as referências de autenticação (OAuth).
+
+  ## 🎯 OBJETIVO PRINCIPAL
+  Eliminar completamente o conceito de "client" como layer de negócio, transformando a hierarquia de CLIENT → PROJECT → EPIC → TASK em PROJECT
+   → EPIC → TASK.
+
+  ## 🔍 PADRÕES DE BUSCA OBRIGATÓRIOS
+
+  ### 1. **Busca por Termos Principais**
+  Execute essas buscas em TODOS os arquivos do projeto:
+  - `client` (case insensitive)
+  - `CLIENT`
+  - `framework_clients`
+  - `client_id` (apenas business client_id, NÃO OAuth)
+  - `ClientService`
+  - `get_client_service`
+  - `ClientStatus`
+  - `ClientQueryBuilder`
+  - `render_clients_page`
+  - `CLIENTS_AVAILABLE`
+
+  ### 2. **Tipos de Arquivos para Verificar**
+  - **Python (*.py)**: Services, utils, pages, models, tests
+  - **SQL (*.sql)**: Schema files, migrations, queries
+  - **JSON**: Configuration files, analysis reports
+  - **Markdown (*.md)**: Documentation files
+  - **TOML**: Configuration files
+  - **JavaScript/HTML**: Frontend files if any
+
+  ### 3. **Locais Críticos para Verificar**
+
+  #### **Core Application**
+  - `streamlit_extension/services/` - Todos os services
+  - `streamlit_extension/utils/` - Utilities e helpers
+  - `streamlit_extension/pages/` - UI pages e navigation
+  - `streamlit_extension/config/` - Configuration files
+
+  #### **Database Layer**
+  - `*.sql` files - Schema definitions
+  - `migration/` directory - Migration scripts
+  - Database utility files
+  - Query builder classes
+
+  #### **Tests**
+  - `tests/` directory completo
+  - Integration tests
+  - Unit tests
+  - Performance tests
+
+  #### **Scripts e Tools**
+  - `scripts/` directory
+  - Migration scripts
+  - Analysis tools
+  - Performance testers
+
+  ## ⚠️ IMPORTANTE: O QUE PRESERVAR
+
+  ### **OAuth References (MANTER)**
+  Estas referências devem ser PRESERVADAS pois são do sistema de autenticação:
+  - `client_id` em contexto OAuth/Google
+  - `client_secret` em contexto OAuth/Google  
+  - `googleapiclient`
+  - OAuth flow references
+  - Authentication client configurations
+
+  ### **Generic "Client" (AVALIAR)**
+  - HTTP client libraries
+  - API client references
+  - Database client connections
+  - Network client implementations
+
+  ## 📋 CHECKLIST DE ELIMINAÇÃO SISTEMÁTICA
+
+  ### **1. Service Layer**
+  - [ ] Remover `ClientService` class completa
+  - [ ] Eliminar `get_client_service()` functions
+  - [ ] Remover client do ServiceContainer
+  - [ ] Limpar client references em outros services
+  - [ ] Atualizar service exports e imports
+
+  ### **2. Database Layer**
+  - [ ] Remover tabela `framework_clients` do schema
+  - [ ] Eliminar `client_id` fields de outras tabelas
+  - [ ] Remover foreign keys para clients
+  - [ ] Eliminar client-related indexes
+  - [ ] Remover client views e triggers
+  - [ ] Limpar client JOINs em queries
+
+  ### **3. UI Layer**
+  - [ ] Remover client pages da navegação
+  - [ ] Eliminar client forms e components
+  - [ ] Limpar client references em page imports
+  - [ ] Atualizar navigation menus
+  - [ ] Remover client-related routes
+
+  ### **4. Configuration**
+  - [ ] Remover client constants e enums
+  - [ ] Eliminar client configuration options
+  - [ ] Limpar client field definitions
+  - [ ] Atualizar exports lists
+
+  ### **5. Utilities**
+  - [ ] Remover client query builders
+  - [ ] Eliminar client validation rules
+  - [ ] Limpar client utility functions
+  - [ ] Atualizar performance tests
+
+  ### **6. Tests**
+  - [ ] Remover client test cases
+  - [ ] Eliminar client mock data
+  - [ ] Atualizar integration tests
+  - [ ] Limpar client test fixtures
+
+  ## 🔧 COMANDOS DE VERIFICAÇÃO
+
+  ### **Busca Geral**
+  ```bash
+  # Buscar todas as referências client em Python
+  find . -name "*.py" -type f -exec grep -l "client" {} \; | grep -v patches | grep -v backups
+
+  # Buscar framework_clients em todos os arquivos  
+  grep -r "framework_clients" . --exclude-dir=patches --exclude-dir=backups
+
+  # Buscar client_id (business context)
+  grep -r "client_id" . --exclude-dir=patches --exclude-dir=backups | grep -v oauth | grep -v auth
+
+  Validação Final
+
+  # Verificar se funções client foram removidas
+  grep -r "get_client_service\|ClientService\|ClientStatus" . --include="*.py"
+
+  # Verificar se tabela foi removida do schema
+  grep -n "framework_clients" *.sql
+
+  # Verificar se imports client foram limpos
+  grep -r "from.*client\|import.*client" . --include="*.py" | grep -v oauth
+
+  📊 RELATÓRIO OBRIGATÓRIO
+
+  Ao final, gere um relatório com:
+
+  1. Estatísticas
+
+  - Total de arquivos verificados
+  - Total de arquivos modificados
+  - Total de referências eliminadas
+  - Arquivos que ainda contêm referências (com justificativa)
+
+  2. Resumo por Categoria
+
+  - Services alterados
+  - Database changes
+  - UI components removed
+  - Tests updated
+  - Configuration cleaned
+
+  3. Validação
+
+  - ✅ Funcionalidades core preservadas
+  - ✅ OAuth authentication mantido
+  - ✅ Database integrity verificada
+  - ✅ Tests passando (se aplicável)
+
+  4. Arquivos Restantes
+
+  Liste qualquer arquivo que ainda contenha "client" e explique:
+  - Por que foi preservado (OAuth, HTTP client, etc.)
+  - Se é seguro manter
+  - Se requer ação futura
+
+  🚨 CRITÉRIO DE SUCESSO
+
+  A varredura será considerada bem-sucedida quando:
+
+  1. Zero referências business client em código operacional
+  2. OAuth client references preservadas e funcionais
+  3. Database schema limpo sem tabelas/campos client
+  4. Navigation sem client pages
+  5. Services funcionando sem dependências client
+  6. Tests refatorados ou removidos apropriadamente
+
+  💡 DICAS DE EXECUÇÃO
+
+  1. Trabalhe em fases (services → database → UI → tests)
+  2. Valide constantemente após cada modificação
+  3. Preserve funcionalidade - não quebre features existentes
+  4. Documente mudanças - mantenha changelog atualizado
+  5. Teste incrementalmente - verifique que tudo funciona
+
+  ---
+  RESULTADO ESPERADO: Sistema completamente livre de conceito business client, com arquitetura simplificada PROJECT → EPIC → TASK funcionando
+  perfeitamente.

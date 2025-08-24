@@ -30,7 +30,6 @@
 ### **Service Hierarchy with TDD Integration**
 ```
 BaseService (Abstract)
-├── ClientService (548 lines) + TDD project management
 ├── ProjectService (612 lines) + TDD epic organization
 ├── EpicService (847 lines) + TDD workflow orchestration ⭐
 ├── TaskService (923 lines) + TDD cycle management ⭐⭐
@@ -437,7 +436,6 @@ def good_tdah_service():
 - services/analytics_service.py:seção_W - [TDD + TDAH effectiveness metrics]
 
 **Business Services:**
-- services/client_service.py:linha_V - [TDD project context integration]
 - services/project_service.py:linha_U - [TDD epic organization]
 
 **Infrastructure:**

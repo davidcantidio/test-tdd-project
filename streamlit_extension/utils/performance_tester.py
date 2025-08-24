@@ -183,34 +183,34 @@ class DatabasePerformanceTester:
         """Benchmark CRUD operations performance."""
         results = {}
         
-        # Test client operations
-        with self.profiler.profile_operation("client_create"):
+        # Test project operations
+        with self.profiler.profile_operation("project_create"):
             for i in range(iterations):
-                self.db_manager.create_client(
-                    client_key=f"test_client_{i}",
-                    name=f"Test Client {i}",
-                    description="Performance test client"
+                self.db_manager.create_project(
+                    project_key=f"test_project_{i}",
+                    name=f"Test Project {i}",
+                    description="Performance test project"
                 )
         
-        with self.profiler.profile_operation("client_read"):
+        with self.profiler.profile_operation("project_read"):
             for i in range(iterations):
-                self.db_manager.get_clients(limit=10)
+                self.db_manager.get_projects(limit=10)
         
         # Collect statistics
-        results["client_create"] = self.profiler.get_statistics("client_create")
-        results["client_read"] = self.profiler.get_statistics("client_read")
+        results["project_create"] = self.profiler.get_statistics("project_create")
+        results["project_read"] = self.profiler.get_statistics("project_read")
         
         return results
     
     def test_query_performance(self) -> Dict[str, Any]:
         """Test complex query performance."""
         test_queries = {
-            "simple_select": "SELECT * FROM framework_clients LIMIT 100",
+            "simple_select": "SELECT * FROM framework_projects LIMIT 100",
             "complex_join": """
-                SELECT c.name, COUNT(p.id) as project_count 
-                FROM framework_clients c 
-                LEFT JOIN framework_projects p ON c.id = p.client_id 
-                GROUP BY c.id
+                SELECT p.name, COUNT(e.id) as epic_count 
+                FROM framework_projects p 
+                LEFT JOIN framework_epics e ON p.id = e.project_id 
+                GROUP BY p.id
             """,
             "aggregation": """
                 SELECT status, COUNT(*) as count, AVG(progress) as avg_progress
@@ -304,9 +304,9 @@ class LoadTester:
         """Generate test data for load testing."""
         return [
             {
-                "client_key": f"load_test_client_{i}",
-                "name": f"Load Test Client {i}",
-                "description": f"Load test client {i} for performance testing",
+                "project_key": f"load_test_project_{i}",
+                "name": f"Load Test Project {i}",
+                "description": f"Load test project {i} for performance testing",
                 "industry": "Technology",
                 "client_tier": "basic"
             }

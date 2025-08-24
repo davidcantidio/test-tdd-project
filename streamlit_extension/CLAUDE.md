@@ -15,9 +15,9 @@ Advanced Security Stack: CSRF protection, XSS sanitization, enterprise rate limi
 
 Rate Limiting Layer: Multi-backend support (Memory/SQLite/Redis), métricas e proteção DoS
 
-Service Layer: Clean architecture com 6 serviços de negócio
+Service Layer: Clean architecture com 5 serviços de negócio (Client layer eliminated)
 
-Multi-page Interface: Gestão de Client/Project/Epic/Task
+Multi-page Interface: Gestão de Project/Epic/Task (simplified hierarchy)
 
 Component System: Componentes de UI reutilizáveis e padrões de formulário
 
@@ -41,7 +41,7 @@ Opcional (recomendado se o app crescer): adotar uma camada app/ (ex.: boot.py, r
 
 Key Patterns
 
-Service Layer: Lógica de negócio separada da UI
+Service Layer: 5 business services (Client layer removed - Phase 3.1)
 
 Repository: Abstração de acesso a dados
 
@@ -200,20 +200,20 @@ if dos.detect_attack(client_ip):
 Service Container
 from streamlit_extension.services import ServiceContainer
 container = ServiceContainer()
-client_service = container.get_client_service()
-project_service = container.get_project_service()
+project_service = container.get_project_service()  # Client layer removed
+epic_service = container.get_epic_service()
 
 ServiceResult (type hints explícitos)
-result = client_service.get_all_clients()
+result = project_service.get_all_projects()
 if result.success:
-    clients: list[ClientDTO] = result.data
+    projects: list[ProjectDTO] = result.data
 else:
     for error in result.errors:
         st.error(f"Error: {error}")
 
 Serviços Disponíveis
 
-ClientService, ProjectService, EpicService, TaskService, AnalyticsService, TimerService
+ProjectService, EpicService, TaskService, AnalyticsService, TimerService (ClientService removed - Phase 3.1)
 
 📊 Modular Database
 Estrutura (refatoração 2025-08-17)
@@ -274,16 +274,16 @@ Mensagens de erro amigáveis
 
 🧩 Components
 
-form_components.py: StandardForm, ClientForm, ProjectForm
+form_components.py: StandardForm, ProjectForm, EpicForm (ClientForm removed - Phase 3.1)
 
 dashboard_widgets.py: métricas, charts, progress
 
 pagination.py, sidebar.py
 
-from streamlit_extension.components.form_components import ClientForm
+from streamlit_extension.components.form_components import ProjectForm
 
-client_form = ClientForm()
-result = client_form.render(
+project_form = ProjectForm()
+result = project_form.render(
     data=existing_data,
     validation_rules=custom_rules,
     security_enabled=True
@@ -307,11 +307,11 @@ DatabaseManager (exemplo seguro)
 from streamlit_extension.utils.database import DatabaseManager
 
 db = DatabaseManager(db_path)
-clients = safe_streamlit_operation(
-    db.get_clients,
+projects = safe_streamlit_operation(
+    db.get_projects,
     include_inactive=True,
     default_return=[],
-    operation_name="get_clients"
+    operation_name="get_projects"
 )
 
 🎨 UI/UX Standards
@@ -353,8 +353,8 @@ def expensive_calculation(params):
     return complex_calculation(params)
 
 @st.cache_data
-def cached_get_clients():
-    return db_manager.get_clients()
+def cached_get_projects():
+    return db_manager.get_projects()
 
 🚀 Workflow
 Novas Páginas
@@ -403,7 +403,7 @@ Security Checklist (ampliado)
 
 📊 Module Metrics (informativos)
 
-Organização: 6 serviços • 10+ páginas • 20+ componentes • 30+ utils
+Organização: 5 serviços • 10+ páginas • 20+ componentes • 30+ utils (Client layer removed)
 Segurança: 100% páginas protegidas • 100% forms com CSRF • 240+ padrões de validação
 Performance: OptimizedConnectionPool (4,600x+ improvement) • LRU cache • WAL mode
 

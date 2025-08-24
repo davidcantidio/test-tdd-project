@@ -45,9 +45,8 @@ class ProjectRepository(BaseRepository):
         """Find project by ID with client information."""
         try:
             query = """
-                SELECT p.*, c.name as client_name, c.email as client_email
+                SELECT p.*
                 FROM framework_projects p
-                LEFT JOIN framework_clients c ON p.client_id = c.id
                 WHERE p.id = ?
             """
             result = self.db_manager.execute_query(query, (project_id,))
@@ -75,11 +74,10 @@ class ProjectRepository(BaseRepository):
     ) -> PaginatedResult[Dict[str, Any]]:
         """Find all projects with filtering, sorting, and pagination."""
         try:
-            # Build base query with client information
+            # Build base query
             base_query = """
-                SELECT p.*, c.name as client_name, c.email as client_email
+                SELECT p.*
                 FROM framework_projects p
-                LEFT JOIN framework_clients c ON p.client_id = c.id
             """
             
             where_conditions = []
@@ -138,7 +136,6 @@ class ProjectRepository(BaseRepository):
             count_query = f"""
                 SELECT COUNT(*) AS total
                 FROM framework_projects p
-                LEFT JOIN framework_clients c ON p.client_id = c.id
                 {where_clause}
             """
             total_count = self.db_manager.execute_query(count_query, params)[0]['total']
@@ -306,15 +303,7 @@ class ProjectRepository(BaseRepository):
                 'progress_percentage': 0
             }
     
-    def client_exists(self, client_id: int) -> bool:
-        """Check if client exists and is active."""
-        try:
-            query = "SELECT id FROM framework_clients WHERE id = ? AND status = 'active'"
-            result = self.db_manager.execute_query(query, (client_id,))
-            return len(result) > 0
-        except Exception as e:
-            self.db_manager.logger.error(f"Error checking client existence {client_id}: {e}")
-            return False
+    # Client functionality removed - method eliminated
 
 
 class ProjectService(BaseService):

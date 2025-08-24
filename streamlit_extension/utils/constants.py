@@ -9,7 +9,6 @@ from streamlit_extension.auth.user_model import UserRole
 
 class TableNames:
     """Database table names."""
-    CLIENTS: Final[str] = "framework_clients"
     PROJECTS: Final[str] = "framework_projects"
     EPICS: Final[str] = "framework_epics"
     TASKS: Final[str] = "framework_tasks"
@@ -27,17 +26,11 @@ class FieldNames:
     STATUS: Final[str] = "status"
     CREATED_AT: Final[str] = "created_at"
     UPDATED_AT: Final[str] = "updated_at"
-    CLIENT_ID: Final[str] = "client_id"
     PROJECT_ID: Final[str] = "project_id"
     EPIC_ID: Final[str] = "epic_id"
 
 
-class ClientStatus(Enum):
-    """Client status values."""
-    ACTIVE = "active"
-    INACTIVE = "inactive"
-    PROSPECT = "prospect"
-    ARCHIVED = "archived"
+# Client status removed - client functionality eliminated
 
 
 class ProjectStatus(Enum):
@@ -124,7 +117,7 @@ class TimeConstants:
 
 # Explicit re-exports para linting/type checkers
 __all__: List[str] = [
-    "TableNames", "FieldNames", "ClientStatus", "ProjectStatus", "TaskStatus",
+    "TableNames", "FieldNames", "ProjectStatus", "TaskStatus",
     "EpicStatus", "TDDPhase", "Priority", "Complexity", "UIConstants",
     "ValidationRules", "TimeConstants",
 ]

@@ -84,7 +84,6 @@ __all__ = [
     "check_database_connection",
     "cleanup_application",
     "reset_services",
-    "get_client_service",
     "get_project_service",
     "get_epic_service",
     "get_task_service",
@@ -479,9 +478,6 @@ def _get_container() -> Optional["ServiceContainer"]:
     _, container = get_session_services()
     return container
 
-def get_client_service():
-    c = _get_container()
-    return c.get_client_service() if c else None
 
 def get_project_service():
     c = _get_container()
