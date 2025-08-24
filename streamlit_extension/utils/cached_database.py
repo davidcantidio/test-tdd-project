@@ -58,12 +58,14 @@ class CachedDatabase:
             cur.execute(sql, params)
             return [dict(row) for row in cur.fetchall()]
 
-try:
-    from streamlit_extension.utils.database import DatabaseManager
-    DATABASE_MANAGER_AVAILABLE = True
-except ImportError:
-    DATABASE_MANAGER_AVAILABLE = False
-    DatabaseManager = None
+# Legacy import - keeping for hybrid compatibility
+from streamlit_extension.utils.database import DatabaseManager  # Legacy compatibility
+from streamlit_extension.database import get_connection, list_epics
+from streamlit_extension.services import ServiceContainer
+# Cache integration imports
+from functools import lru_cache
+
+DATABASE_MANAGER_AVAILABLE = True
 
 try:
     from .redis_cache import (
@@ -354,6 +356,9 @@ class CachedDatabaseManager:
         except Exception as e:
             self.logger.error(f"Error getting epics: {e}")
             self._record_operation("db_direct_calls", time.time() - start_time)
+            # Fallback opcional (comentado) para modular API
+            # with get_connection() as conn:
+            #     result = list_epics()
             raise
     
     @cached("epic", operation_type="medium")
@@ -549,6 +554,38 @@ class CachedDatabaseManager:
                 return wrapper
             return attr
         raise AttributeError(f"'{self.__class__.__name__}' object has no attribute '{name}'")
+
+
+class HybridCachedDatabase:
+    """Cached database with hybrid API support."""
+
+    def __init__(self):
+        # Legacy database manager
+        self.db_manager = DatabaseManager()  # Legacy compatibility
+
+        # Service layer setup
+        self.service_container = ServiceContainer()
+
+        # Cache parameters (simples e local)
+        self.cache = {}
+        self.cache_ttl = 300  # 5 minutes
+
+    @lru_cache(maxsize=1000)
+    def get_cached_epics(self):
+        """Get epics with caching via modular API."""
+        try:
+            # Preferir API modular quando disponível
+            return list_epics()
+        except Exception:
+            # Fallback para legado em caso de indisponibilidade
+            return self.db_manager.get_epics()
+
+    def get_cached_connection(self):
+        """Get cached database connection."""
+        try:
+            return get_connection()  # Direct modular API
+        except Exception:
+            return self.db_manager.get_connection()  # Legacy fallback
 
 
 # Export main class

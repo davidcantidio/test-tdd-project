@@ -1,1959 +1,278 @@
  (cd "$(git rev-parse --show-toplevel)" && git apply --3way <<'EOF' 
-diff --git a/audit_system/cli/run_meta_agent.py b/audit_system/cli/run_meta_agent.py
-index 3170ab38ae47616b9dac962990748a408bff61c1..86364f969022e062a86dcac7cccd4e4703812308 100644
---- a/audit_system/cli/run_meta_agent.py
-+++ b/audit_system/cli/run_meta_agent.py
-@@ -97,51 +97,51 @@ def analyze_file(file_path: str, args: argparse.Namespace) -> Dict[str, Any]:
-         if result["warnings"]:
-             for warning in result["warnings"]:
-                 print(f"      ⚠️  {warning}")
-         
-         # Show errors  
-         if result["errors"]:
-             for error in result["errors"]:
-                 print(f"      ❌ {error}")
-         
-         print()
+diff --git a/streamlit_extension/utils/performance_tester.py b/streamlit_extension/utils/performance_tester.py
+index 2a815854668547204b6ac45066db31a64ce99e68..2c41da99d296a02204dc4fdf89f7db80bf8181a5 100644
+--- a/streamlit_extension/utils/performance_tester.py
++++ b/streamlit_extension/utils/performance_tester.py
+@@ -1,63 +1,75 @@
+ """
+ 🚀 Performance Testing System - Enterprise Load Testing
+ 
+ Comprehensive performance testing and benchmarking system addressing report.md items:
+ - Performance bottleneck identification
+ - Load testing capabilities 
+ - Database query optimization
+ - Real-time performance monitoring
+ - Automated performance regression detection
+ 
+ Features:
+ - Multi-threaded load simulation
+ - Database performance profiling
+ - Memory usage analysis
+ - Response time measurement
+ - Throughput analysis
+ - Bottleneck detection
+ - Performance regression alerts
+ """
+ 
+ import time
+ import threading
+ import sqlite3
++import logging
+ try:
+     import psutil
+ except Exception:  # pragma: no cover
+     psutil = None
+ import tracemalloc
+ from concurrent.futures import ThreadPoolExecutor, as_completed
+ from typing import Dict, List, Optional, Any, Callable
+ from dataclasses import dataclass
+ from contextlib import contextmanager
+ import statistics
+ import json
+ from pathlib import Path
+ import datetime
+ import gc
+ 
++# Legacy import - keeping for hybrid compatibility
++from streamlit_extension.utils.database import DatabaseManager  # Legacy compatibility
++from streamlit_extension.database import get_connection, list_epics, list_tasks
++from streamlit_extension.services import ServiceContainer
++# Performance testing imports
++try:  # pragma: no cover
++    from streamlit_extension.utils.performance_monitor import PerformanceTester
++except ImportError:  # pragma: no cover
++    PerformanceTester = None  # type: ignore
++from streamlit_extension.database import get_connection
++
+ 
+ @dataclass
+ class PerformanceMetrics:
+     """Performance measurement data structure."""
+     operation_name: str
+     response_time: float
+     memory_usage: float
+     cpu_usage: float
+     threads_count: int
+     timestamp: datetime.datetime
+     success: bool
+     error_message: Optional[str] = None
+ 
+ 
+ @dataclass
+ class LoadTestConfig:
+     """Load test configuration."""
+     concurrent_users: int = 10
+     duration_seconds: int = 60
+     operations_per_second: int = 100
+     ramp_up_seconds: int = 10
+     test_data_size: int = 1000
+ 
+ 
+ class PerformanceProfiler:
+@@ -152,108 +164,147 @@ class PerformanceProfiler:
+                 "max": max(response_times),
+             },
+             "memory": {
+                 "avg_delta_mb": float(sum(mem_deltas)/len(mem_deltas)),
+                 "max": max(mem_deltas) if mem_deltas else 0.0
+             },
+         }
+         return stats
      
-     # Show summary
-     summary = results["summary"]
-     print("📊 Analysis Summary:")
-     print(f"   🎯 Agents executed: {summary['total_agents']}")
-     print(f"   ✅ Successful: {summary['successful_agents']}")
-     print(f"   ⏱️  Total time: {summary['total_execution_time']:.2f}s")
-     print(f"   🔥 Total tokens: {summary['total_tokens_used']}")
+     def _percentile(self, data: List[float], percentile: int) -> float:
+         """Calculate percentile."""
+         if not data:
+             return 0.0
+         sorted_data = sorted(data)
+         index = (percentile / 100) * (len(sorted_data) - 1)
+         if index.is_integer():
+             return sorted_data[int(index)]
+         else:
+             lower = sorted_data[int(index)]
+             upper = sorted_data[int(index) + 1]
+             return lower + (upper - lower) * (index - int(index))
+ 
+ 
+ class DatabasePerformanceTester:
+     """Specialized database performance testing."""
+-    
+-    def __init__(self, db_manager):
+-        self.db_manager = db_manager
++
++    def __init__(self, db_manager: Optional[DatabaseManager] = None):
++        self.db_manager = db_manager or DatabaseManager()  # Legacy fallback
++        # Performance testing with direct connection
++        self.performance_connection = get_connection()
++        # Service container for business logic testing  
++        self.service_container = ServiceContainer(self.db_manager)
+         self.profiler = PerformanceProfiler()
+         
+     def benchmark_crud_operations(self, iterations: int = 1000) -> Dict[str, Any]:
+         """Benchmark CRUD operations performance."""
+         results = {}
+         
+         # Test project operations
+         with self.profiler.profile_operation("project_create"):
+             for i in range(iterations):
+                 self.db_manager.create_project(
+                     project_key=f"test_project_{i}",
+                     name=f"Test Project {i}",
+                     description="Performance test project"
+                 )
+         
+         with self.profiler.profile_operation("project_read"):
+             for i in range(iterations):
+                 self.db_manager.get_projects(limit=10)
+         
+         # Collect statistics
+         results["project_create"] = self.profiler.get_statistics("project_create")
+         results["project_read"] = self.profiler.get_statistics("project_read")
+         
+         return results
      
-     success_rate = summary['successful_agents'] / summary['total_agents'] if summary['total_agents'] > 0 else 0
-     print(f"   📈 Success rate: {success_rate:.1%}")
+     def test_query_performance(self) -> Dict[str, Any]:
+         """Test complex query performance."""
+         test_queries = {
+             "simple_select": "SELECT * FROM framework_projects LIMIT 100",
+             "complex_join": """
+                 SELECT p.name, COUNT(e.id) as epic_count 
+                 FROM framework_projects p 
+                 LEFT JOIN framework_epics e ON p.id = e.project_id 
+                 GROUP BY p.id
+             """,
+             "aggregation": """
+                 SELECT status, COUNT(*) as count, AVG(progress) as avg_progress
+                 FROM framework_epics 
+                 GROUP BY status
+             """
+         }
+         
+         results = {}
+         for query_name, query_sql in test_queries.items():
+             with self.profiler.profile_operation(f"query_{query_name}"):
+-                with self.db_manager.get_connection() as conn:
++                with get_connection() as conn:  # Direct connection for performance testing
+                     cursor = conn.cursor()
+                     cursor.execute(query_sql)
+                     rows = cursor.fetchall()
+             
+             results[query_name] = self.profiler.get_statistics(f"query_{query_name}")
+             results[query_name]["rows_returned"] = len(rows)
+         
+         return results
+ 
++    def benchmark_hybrid_operations(self) -> Dict[str, Any]:
++        """Benchmark mix of legacy and modular operations."""
++        results = {}
++        with self.profiler.profile_operation("legacy_get_projects"):
++            self.db_manager.get_projects(limit=5)
++        with self.profiler.profile_operation("modular_list_epics"):
++            list_epics()
++        results["legacy_get_projects"] = self.profiler.get_statistics("legacy_get_projects")
++        results["modular_list_epics"] = self.profiler.get_statistics("modular_list_epics")
++        return results
++
++    def benchmark_modular_operations(self) -> Dict[str, Any]:
++        """Benchmark modular API operations."""
++        results = {}
++        with self.profiler.profile_operation("mod_list_epics"):
++            list_epics()
++        with self.profiler.profile_operation("mod_list_tasks"):
++            list_tasks(1)
++        results["mod_list_epics"] = self.profiler.get_statistics("mod_list_epics")
++        results["mod_list_tasks"] = self.profiler.get_statistics("mod_list_tasks")
++        return results
++
++    def benchmark_service_layer(self) -> Dict[str, Any]:
++        """Benchmark operations through the service layer."""
++        results = {}
++        epic_service = self.service_container.get_epic_service()
++        task_service = self.service_container.get_task_service()
++        with self.profiler.profile_operation("svc_list_epics"):
++            epic_service.list_epics()
++        with self.profiler.profile_operation("svc_list_tasks"):
++            task_service.list_tasks()
++        results["svc_list_epics"] = self.profiler.get_statistics("svc_list_epics")
++        results["svc_list_tasks"] = self.profiler.get_statistics("svc_list_tasks")
++        return results
++
+ 
+ class LoadTester:
+     """Multi-threaded load testing system."""
+     
+     def __init__(self, db_manager):
+         self.db_manager = db_manager
+         self.profiler = PerformanceProfiler()
+         self.stop_event = threading.Event()
+         
+     def run_load_test(self, config: LoadTestConfig, target_function: Callable) -> Dict[str, Any]:
+         """Execute load test with specified configuration."""
+         self.stop_event.clear()
+         
+         # Prepare test data
+         test_data = self._generate_test_data(config.test_data_size)
+         
+         # Start load test
+         start_time = time.time()
+         
+         with ThreadPoolExecutor(max_workers=config.concurrent_users) as executor:
+             # Submit tasks
+             futures = []
+             for i in range(config.concurrent_users):
+                 future = executor.submit(
+                     self._worker_thread,
+@@ -548,34 +599,36 @@ def create_performance_test_suite(db_manager) -> Dict[str, Any]:
+     logging.info("📋 Generating performance report...")
+     report_file = reporter.generate_performance_report(results, "comprehensive_test")
+     
+     logging.info(f"✅ Performance testing complete! Report saved to: {report_file}")
      
      return results
  
  
--def generate_report(all_results: List[Dict[str, Any]], output_file: str = None):
-+def generate_report(all_results: List[Dict[str, Any]], output_file: str = None) -> None:
-     """Generate comprehensive report of all analyzed files."""
+ # Example usage and integration functions
+ def run_quick_performance_check(db_manager) -> Dict[str, Any]:
+     """Run quick performance check for monitoring."""
+     profiler = PerformanceProfiler()
      
-     total_files = len(all_results)
-     successful_analyses = len([r for r in all_results if not r.get('error')])
-     total_agents_executed = sum(r.get('summary', {}).get('total_agents', 0) for r in all_results)
-     total_tokens_used = sum(r.get('summary', {}).get('total_tokens_used', 0) for r in all_results)
-     total_time = sum(r.get('summary', {}).get('total_execution_time', 0) for r in all_results)
-     
-     report = {
-         "meta_analysis_summary": {
-             "total_files_analyzed": total_files,
-             "successful_analyses": successful_analyses,
-             "failed_analyses": total_files - successful_analyses,
-             "total_agents_executed": total_agents_executed,
-             "total_tokens_consumed": total_tokens_used,
-             "total_execution_time": total_time
-         },
-         "files": []
+     # Test basic operations
+     with profiler.profile_operation("get_projects"):
+         db_manager.get_projects(limit=10)
+ 
+     return {
+         "get_projects": profiler.get_statistics("get_projects"),
+         "timestamp": datetime.datetime.now().isoformat()
      }
-     
-     print("\n" + "="*70)
-     print("🧠 METAAGENT ANALYSIS REPORT")
-     print("="*70)
-     print()
-     
-@@ -312,84 +312,93 @@ Examples:
-     parser.add_argument('--project-root',
-                        help='Project root directory (auto-detected if not specified)')
-     
-     parser.add_argument('--token-budget',
-                        type=int,
-                        default=32000,
-                        help='Token budget for analysis (default: 32000)')
-     
-     parser.add_argument('--apply',
-                        action='store_true', 
-                        help='Apply agent recommendations (not dry-run mode)')
-     
-     # Output options
-     parser.add_argument('--report', '-r',
-                        help='Generate JSON report file')
-     
-     parser.add_argument('--verbose', '-v',
-                        action='store_true',
-                        help='Enable verbose logging')
-     
-     parser.add_argument('--quiet', '-q',
-                        action='store_true',
-                        help='Minimal output (errors only)')
-     
-     args = parser.parse_args()
--    
-+
-+    # Sanitize and validate path inputs
-+    if args.file:
-+        args.file = str(Path(args.file).resolve())
-+        if not Path(args.file).exists():
-+            print(f"❌ Error: File not found: {args.file}")
-+            return 1
-+    if args.scan:
-+        args.scan = str(Path(args.scan).resolve())
-+        if not Path(args.scan).exists():
-+            print(f"❌ Error: Directory not found: {args.scan}")
-+            return 1
-+    if args.project_root:
-+        args.project_root = str(Path(args.project_root).resolve())
-+        if not Path(args.project_root).exists():
-+            print(f"❌ Error: Project root directory not found: {args.project_root}")
-+            return 1
-+
-     # Setup logging
-     if args.verbose:
-         logging.basicConfig(level=logging.DEBUG)
-     elif args.quiet:
-         logging.basicConfig(level=logging.ERROR)
-     else:
-         logging.basicConfig(level=logging.INFO)
-     
-     # Print header unless quiet
-     if not args.quiet:
-         print("🧠 MetaAgent - Intelligent Agent Coordination")
-         print("Automated agent selection and task optimization")
-         print(f"Task: {args.task.replace('_', ' ').title()}")
-         print(f"Token Budget: {args.token_budget:,}")
-         print(f"Mode: {'Apply Changes' if args.apply else 'Dry Run'}")
-         print()
-     
-     # Collect files to analyze
-     files_to_analyze = []
-     
-     if args.file:
--        file_path = Path(args.file)
--        if not file_path.exists():
--            print(f"❌ Error: File not found: {args.file}")
--            return 1
--        files_to_analyze = [file_path]
--        
-+        files_to_analyze = [Path(args.file)]
-+
-     elif args.scan:
-         scan_path = Path(args.scan)
--        if not scan_path.exists():
--            print(f"❌ Error: Directory not found: {args.scan}")
--            return 1
--        
-         files_to_analyze = scan_directory(scan_path)
-         if not files_to_analyze:
-             print(f"❌ No Python files found in: {args.scan}")
-             return 1
-         
-         if not args.quiet:
-             print(f"📁 Found {len(files_to_analyze)} Python files to analyze")
-     
-     # Analyze all files
-     all_results = []
-     start_time = time.time()
-     
-     for i, file_path in enumerate(files_to_analyze, 1):
-         if not args.quiet and len(files_to_analyze) > 1:
-             print(f"\n[{i}/{len(files_to_analyze)}] Processing: {file_path}")
-         
-         try:
-             result = analyze_file(str(file_path), args)
-             all_results.append(result)
-         except KeyboardInterrupt:
-             print("\n⚠️  Analysis interrupted by user")
-             break
-         except Exception as e:
-             print(f"❌ Error analyzing {file_path}: {e}")
-             all_results.append({"file_path": str(file_path), "error": str(e)})
-diff --git a/audit_system/coordination/file_coordination_manager.py b/audit_system/coordination/file_coordination_manager.py
-index 5c50e3c2851ac69998832944615b3d3642000f30..e1a7b6892f397d27a2e96c99b95bd564d62dcf7a 100644
---- a/audit_system/coordination/file_coordination_manager.py
-+++ b/audit_system/coordination/file_coordination_manager.py
-@@ -97,50 +97,52 @@ class FileCoordinationManager:
-         
-         Args:
-             project_root: Project root directory
-             lock_timeout: Maximum time to hold locks in seconds
-         """
-         self.project_root = Path(project_root)
-         self.lock_timeout = lock_timeout
-         
-         # Create coordination database
-         self.db_path = self.project_root / ".file_coordination.db"
-         self._init_database()
-         
-         # In-memory tracking for current process
-         self._active_locks: Dict[str, FileLockInfo] = {}
-         self._modification_history: List[FileModification] = []
-         self._lock_handles: Dict[str, Any] = {}  # OS file handles
-         self._thread_locks: Dict[str, threading.Lock] = {}
-         
-         # Create backup directory
-         self.backup_dir = self.project_root / ".agent_backups"
-         self.backup_dir.mkdir(exist_ok=True)
-     
-     def _init_database(self):
-         """Initialize coordination database."""
-         with sqlite3.connect(str(self.db_path)) as conn:
-+            conn.execute("PRAGMA journal_mode=WAL;")
-+            conn.execute("PRAGMA foreign_keys=ON;")
-             conn.execute("""
-                 CREATE TABLE IF NOT EXISTS file_locks (
-                     file_path TEXT PRIMARY KEY,
-                     lock_type TEXT NOT NULL,
-                     process_id INTEGER NOT NULL,
-                     thread_id TEXT NOT NULL,
-                     agent_name TEXT NOT NULL,
-                     acquired_at TEXT NOT NULL,
-                     expires_at TEXT,
-                     backup_path TEXT
-                 )
-             """)
-             
-             conn.execute("""
-                 CREATE TABLE IF NOT EXISTS file_modifications (
-                     id INTEGER PRIMARY KEY AUTOINCREMENT,
-                     file_path TEXT NOT NULL,
-                     agent_name TEXT NOT NULL,
-                     modification_type TEXT NOT NULL,
-                     timestamp TEXT NOT NULL,
-                     backup_path TEXT NOT NULL,
-                     file_size_before INTEGER,
-                     file_size_after INTEGER,
-                     checksum_before TEXT,
-                     checksum_after TEXT,
-@@ -156,172 +158,176 @@ class FileCoordinationManager:
-         import hashlib
-         
-         if not Path(file_path).exists():
-             return ""
-         
-         sha256_hash = hashlib.sha256()
-         with open(file_path, "rb") as f:
-             for chunk in iter(lambda: f.read(4096), b""):
-                 sha256_hash.update(chunk)
-         return sha256_hash.hexdigest()
-     
-     def _create_backup(self, file_path: str, agent_name: str) -> str:
-         """Create backup of file before modification."""
-         if not Path(file_path).exists():
-             raise FileNotFoundError(f"Cannot backup non-existent file: {file_path}")
-         
-         # Create unique backup filename
-         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-         file_stem = Path(file_path).stem
-         file_suffix = Path(file_path).suffix
-         backup_name = f"{file_stem}_{agent_name}_{timestamp}{file_suffix}.backup"
-         
-         backup_path = self.backup_dir / backup_name
-         shutil.copy2(file_path, backup_path)
-         
--        logger.info(f"Created backup: {backup_path}")
-+        logger.info("Created backup: %s", backup_path)
-         return str(backup_path)
-     
-     def _cleanup_expired_locks(self):
-         """Clean up expired locks from database."""
-         current_time = datetime.now()
-         
-         with sqlite3.connect(str(self.db_path)) as conn:
-+            conn.execute("PRAGMA journal_mode=WAL;")
-+            conn.execute("PRAGMA foreign_keys=ON;")
-             cursor = conn.cursor()
-             
-             # Find expired locks
-             cursor.execute("""
-                 SELECT file_path, process_id FROM file_locks 
-                 WHERE expires_at IS NOT NULL 
-                 AND datetime(expires_at) < datetime(?)
-             """, (current_time.isoformat(),))
-             
-             expired_locks = cursor.fetchall()
-             
-             # Remove expired locks
-             if expired_locks:
-                 cursor.execute("""
-                     DELETE FROM file_locks 
-                     WHERE expires_at IS NOT NULL 
-                     AND datetime(expires_at) < datetime(?)
-                 """, (current_time.isoformat(),))
-                 
-                 conn.commit()
-                 
--                logger.info(f"Cleaned up {len(expired_locks)} expired locks")
-+                logger.info("Cleaned up %s expired locks", len(expired_locks))
-     
-     def _check_process_alive(self, process_id: int) -> bool:
-         """Check if a process is still alive."""
-         try:
-             os.kill(process_id, 0)  # Signal 0 just checks if process exists
-             return True
-         except (OSError, ProcessLookupError):
-             return False
-     
-     @contextmanager
-     def acquire_file_lock(
-         self, 
-         file_path: str, 
-         agent_name: str, 
-         lock_type: LockType = LockType.EXCLUSIVE,
-         create_backup: bool = True
-     ):
-         """
-         Context manager to acquire file lock with automatic cleanup.
-         
-         Args:
-             file_path: Path to file to lock
-             agent_name: Name of agent requesting lock
-             lock_type: Type of lock to acquire
-             create_backup: Whether to create backup before modifications
-             
-         Yields:
-             FileLockInfo: Information about acquired lock
-             
-         Raises:
-             TimeoutError: If lock cannot be acquired within timeout
-             FileNotFoundError: If file doesn't exist and backup requested
-         """
-         absolute_path = str(Path(file_path).resolve())
-         lock_info = None
-         
-         try:
-             # Acquire lock
-             lock_info = self._acquire_lock(absolute_path, agent_name, lock_type, create_backup)
--            logger.info(f"🔒 Lock acquired: {agent_name} -> {file_path}")
-+            logger.info("🔒 Lock acquired: %s -> %s", agent_name, file_path)
-             
-             yield lock_info
-             
-         finally:
-             # Always release lock
-             if lock_info:
-                 self._release_lock(absolute_path, agent_name)
--                logger.info(f"🔓 Lock released: {agent_name} -> {file_path}")
-+                logger.info("🔓 Lock released: %s -> %s", agent_name, file_path)
-     
-     def _acquire_lock(
-         self, 
-         file_path: str, 
-         agent_name: str, 
-         lock_type: LockType,
-         create_backup: bool
-     ) -> FileLockInfo:
-         """Acquire file lock with database coordination."""
-         
-         # Clean up expired locks first
-         self._cleanup_expired_locks()
-         
-         # Check for existing locks
-         max_wait_time = 30  # seconds
-         wait_start = time.time()
-         
-         while time.time() - wait_start < max_wait_time:
-             with sqlite3.connect(str(self.db_path)) as conn:
-+                conn.execute("PRAGMA journal_mode=WAL;")
-+                conn.execute("PRAGMA foreign_keys=ON;")
-                 cursor = conn.cursor()
-                 
-                 # Check for conflicting locks
-                 cursor.execute("""
-                     SELECT process_id, agent_name, lock_type, acquired_at
-                     FROM file_locks 
-                     WHERE file_path = ?
-                 """, (file_path,))
-                 
-                 existing_locks = cursor.fetchall()
-                 
-                 # Check if any existing locks conflict
-                 conflicts = []
-                 for lock in existing_locks:
-                     proc_id, existing_agent, existing_type, acquired_at = lock
-                     
-                     # Check if process is still alive
-                     if not self._check_process_alive(proc_id):
-                         # Remove dead process lock
-                         cursor.execute("""
-                             DELETE FROM file_locks 
-                             WHERE file_path = ? AND process_id = ?
-                         """, (file_path, proc_id))
-                         conn.commit()
--                        logger.warning(f"Removed dead process lock: PID {proc_id}")
-+                        logger.warning("Removed dead process lock: PID %s", proc_id)
-                         continue
-                     
-                     # Check for conflicts (exclusive locks conflict with everything)
-                     if (existing_type == LockType.EXCLUSIVE.value or 
-                         lock_type == LockType.EXCLUSIVE):
-                         conflicts.append((existing_agent, existing_type, acquired_at))
-                 
-                 # If no conflicts, acquire lock
-                 if not conflicts:
-                     # Create backup if requested and file exists
-                     backup_path = None
-                     if create_backup and Path(file_path).exists():
-                         backup_path = self._create_backup(file_path, agent_name)
-                     
-                     # Calculate expiration time
-                     acquired_at = datetime.now()
-                     expires_at = acquired_at.timestamp() + self.lock_timeout
-                     
-                     # Insert lock record
-                     cursor.execute("""
-                         INSERT OR REPLACE INTO file_locks 
-                         (file_path, lock_type, process_id, thread_id, agent_name, 
-                          acquired_at, expires_at, backup_path)
-                         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                     """, (
-@@ -334,62 +340,64 @@ class FileCoordinationManager:
-                         datetime.fromtimestamp(expires_at).isoformat(),
-                         backup_path
-                     ))
-                     
-                     conn.commit()
-                     
-                     # Create lock info
-                     lock_info = FileLockInfo(
-                         file_path=file_path,
-                         lock_type=lock_type,
-                         process_id=os.getpid(),
-                         thread_id=threading.current_thread().name,
-                         agent_name=agent_name,
-                         acquired_at=acquired_at,
-                         expires_at=datetime.fromtimestamp(expires_at),
-                         backup_path=backup_path
-                     )
-                     
-                     # Store in memory
-                     self._active_locks[file_path] = lock_info
-                     
-                     return lock_info
-                 
-                 # If conflicts exist, wait and retry
-                 conflict_info = ", ".join(f"{agent}({type_})" for agent, type_, _ in conflicts)
--                logger.warning(f"Lock conflict for {file_path}: {conflict_info} - waiting...")
-+                logger.warning("Lock conflict for %s: %s - waiting...", file_path, conflict_info)
-                 time.sleep(1)
-         
-         # Timeout reached
-         raise TimeoutError(
-             f"Could not acquire lock for {file_path} within {max_wait_time}s. "
-             f"Conflicting agents: {conflict_info}"
-         )
-     
-     def _release_lock(self, file_path: str, agent_name: str):
-         """Release file lock."""
-         with sqlite3.connect(str(self.db_path)) as conn:
-+            conn.execute("PRAGMA journal_mode=WAL;")
-+            conn.execute("PRAGMA foreign_keys=ON;")
-             cursor = conn.cursor()
-             
-             # Remove lock from database
-             cursor.execute("""
-                 DELETE FROM file_locks 
-                 WHERE file_path = ? AND process_id = ? AND agent_name = ?
-             """, (file_path, os.getpid(), agent_name))
-             
-             conn.commit()
-         
-         # Remove from memory
-         self._active_locks.pop(file_path, None)
-     
-     def record_modification(
-         self,
-         file_path: str,
-         agent_name: str,
-         modification_type: str,
-         backup_path: str,
-         success: bool,
-         error_message: Optional[str] = None
-     ):
-         """Record a file modification in the history."""
-         
-         # Calculate file info
-@@ -401,142 +409,150 @@ class FileCoordinationManager:
-         if backup_path and Path(backup_path).exists():
-             file_size_before = Path(backup_path).stat().st_size
-             checksum_before = self._calculate_checksum(backup_path)
-         
-         if Path(file_path).exists():
-             file_size_after = Path(file_path).stat().st_size
-             checksum_after = self._calculate_checksum(file_path)
-         
-         # Create modification record
-         modification = FileModification(
-             file_path=file_path,
-             agent_name=agent_name,
-             modification_type=modification_type,
-             timestamp=datetime.now(),
-             backup_path=backup_path,
-             file_size_before=file_size_before,
-             file_size_after=file_size_after,
-             checksum_before=checksum_before,
-             checksum_after=checksum_after,
-             success=success,
-             error_message=error_message
-         )
-         
-         # Store in database
-         with sqlite3.connect(str(self.db_path)) as conn:
-+            conn.execute("PRAGMA journal_mode=WAL;")
-+            conn.execute("PRAGMA foreign_keys=ON;")
-             cursor = conn.cursor()
-             
-             cursor.execute("""
-                 INSERT INTO file_modifications 
-                 (file_path, agent_name, modification_type, timestamp, backup_path,
-                  file_size_before, file_size_after, checksum_before, checksum_after,
-                  success, error_message)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-             """, (
-                 modification.file_path,
-                 modification.agent_name,
-                 modification.modification_type,
-                 modification.timestamp.isoformat(),
-                 modification.backup_path,
-                 modification.file_size_before,
-                 modification.file_size_after,
-                 modification.checksum_before,
-                 modification.checksum_after,
-                 modification.success,
-                 modification.error_message
-             ))
-             
-             conn.commit()
-         
-         # Store in memory
-         self._modification_history.append(modification)
-         
--        logger.info(f"📝 Recorded modification: {agent_name} -> {file_path} ({'✅' if success else '❌'})")
-+        logger.info("📝 Recorded modification: %s -> %s (%s)", agent_name, file_path, '✅' if success else '❌')
-     
-     def get_lock_status(self) -> Dict[str, List[Dict[str, Any]]]:
-         """Get current lock status across all processes."""
-         
-         with sqlite3.connect(str(self.db_path)) as conn:
-+            conn.execute("PRAGMA journal_mode=WAL;")
-+            conn.execute("PRAGMA foreign_keys=ON;")
-             cursor = conn.cursor()
-             
-             cursor.execute("""
-                 SELECT file_path, lock_type, process_id, thread_id, agent_name, 
-                        acquired_at, expires_at, backup_path
-                 FROM file_locks
-                 ORDER BY acquired_at
-             """)
-             
-             locks = cursor.fetchall()
-         
-         # Group by file
-         status = {}
-         for lock in locks:
-             file_path, lock_type, process_id, thread_id, agent_name, acquired_at, expires_at, backup_path = lock
-             
-             if file_path not in status:
-                 status[file_path] = []
-             
-             status[file_path].append({
-                 "lock_type": lock_type,
-                 "process_id": process_id,
-                 "thread_id": thread_id,
-                 "agent_name": agent_name,
-                 "acquired_at": acquired_at,
-                 "expires_at": expires_at,
-                 "backup_path": backup_path,
-                 "process_alive": self._check_process_alive(process_id)
-             })
-         
-         return status
-     
-     def cleanup_all_locks(self, force: bool = False):
-         """Clean up all locks (emergency cleanup)."""
-         
-         if not force:
-             logger.warning("Use cleanup_all_locks(force=True) to confirm cleanup")
-             return
-         
-         with sqlite3.connect(str(self.db_path)) as conn:
-+            conn.execute("PRAGMA journal_mode=WAL;")
-+            conn.execute("PRAGMA foreign_keys=ON;")
-             cursor = conn.cursor()
-             
-             # Get current locks for logging
-             cursor.execute("SELECT COUNT(*) FROM file_locks")
-             lock_count = cursor.fetchone()[0]
-             
-             # Clear all locks
-             cursor.execute("DELETE FROM file_locks")
-             conn.commit()
-         
-         # Clear memory
-         self._active_locks.clear()
-         
--        logger.warning(f"🧹 Emergency cleanup: Removed {lock_count} locks")
-+        logger.warning("🧹 Emergency cleanup: Removed %s locks", lock_count)
-     
-     def get_modification_history(self, file_path: Optional[str] = None) -> List[Dict[str, Any]]:
-         """Get modification history."""
-         
-         with sqlite3.connect(str(self.db_path)) as conn:
-+            conn.execute("PRAGMA journal_mode=WAL;")
-+            conn.execute("PRAGMA foreign_keys=ON;")
-             cursor = conn.cursor()
-             
-             if file_path:
-                 cursor.execute("""
-                     SELECT * FROM file_modifications 
-                     WHERE file_path = ?
-                     ORDER BY timestamp DESC
-                 """, (file_path,))
-             else:
-                 cursor.execute("""
-                     SELECT * FROM file_modifications 
-                     ORDER BY timestamp DESC
-                 """)
-             
-             columns = [desc[0] for desc in cursor.description]
-             modifications = []
-             
-             for row in cursor.fetchall():
-                 modifications.append(dict(zip(columns, row)))
-         
-         return modifications
- 
- 
- # Global instance for easy access
- _coordination_manager: Optional[FileCoordinationManager] = None
-diff --git a/audit_system/coordination/meta_agent.py b/audit_system/coordination/meta_agent.py
-index 750d60afe41561e6e660f7527dea76edce85a61c..6fc82f68723fdae56540d7edbd5f5c9b8766e6ee 100644
---- a/audit_system/coordination/meta_agent.py
-+++ b/audit_system/coordination/meta_agent.py
-@@ -161,90 +161,90 @@ class MetaAgent:
-     ):
-         """Initialize MetaAgent with configuration and resource limits."""
-         self.project_root = Path(project_root)
-         self.token_budget = token_budget
-         self.max_time_per_file = max_time_per_file
-         self.enable_tdah_features = enable_tdah_features
-         self.dry_run = dry_run
-         
-         # Initialize file coordination manager for safe modifications
-         self.coordination_manager = get_coordination_manager(str(self.project_root))
-         
-         # Agent instances
-         self._agents = {}
-         self._initialize_agents()
-         
-         # Decision trees and knowledge base
-         self._agent_selection_rules = self._build_agent_selection_rules()
-         self._file_pattern_knowledge = self._build_file_pattern_knowledge()
-         self._token_estimation_models = self._build_token_estimation_models()
-         
-         # Execution tracking
-         self.execution_history = []
-         self.token_usage_stats = defaultdict(int)
-         self.performance_metrics = defaultdict(list)
-         
--        logger.info(f"MetaAgent initialized for {self.project_root}")
--        logger.info(f"Token budget: {self.token_budget}, TDAH features: {self.enable_tdah_features}")
-+        logger.info("MetaAgent initialized for %s", self.project_root)
-+        logger.info("Token budget: %s, TDAH features: %s", self.token_budget, self.enable_tdah_features)
-         
-     def _initialize_agents(self):
-         """Initialize all available specialized agents."""
-         if not AGENTS_AVAILABLE:
-             logger.warning("Specialized agents not available - MetaAgent running in analysis-only mode")
-             return
-             
-         try:
-             # Initialize IntelligentCodeAgent
-             self._agents[AgentType.INTELLIGENT_CODE_AGENT] = IntelligentCodeAgent(
-                 project_root=self.project_root,
-                 analysis_depth=AnalysisDepth.ADVANCED,
-                 semantic_mode=SemanticMode.CONSERVATIVE,
-                 dry_run=self.dry_run
-             )
-             
-             # Initialize IntelligentRefactoringEngine
-             self._agents[AgentType.REFACTORING_ENGINE] = IntelligentRefactoringEngine(
-                 dry_run=self.dry_run
-             )
-             
-             # Initialize TDDIntelligentWorkflowAgent
-             self._agents[AgentType.TDD_WORKFLOW_AGENT] = TDDIntelligentWorkflowAgent(
-                 project_root=self.project_root,
-                 tdah_mode=self.enable_tdah_features,
-                 default_focus_minutes=25 if not self.enable_tdah_features else 15
-             )
-             
-             # Initialize GodCodeRefactoringAgent
-             self._agents[AgentType.GOD_CODE_AGENT] = GodCodeRefactoringAgent(
-                 dry_run=self.dry_run,
-                 aggressive_refactoring=False
-             )
-             
--            logger.info(f"Initialized {len(self._agents)} specialized agents")
-+            logger.info("Initialized %s specialized agents", len(self._agents))
-             
-         except Exception as e:
--            logger.error(f"Error initializing agents: {e}")
-+            logger.error("Error initializing agents: %s", e)
-             self._agents = {}
-     
-     def _build_agent_selection_rules(self) -> Dict[str, Any]:
-         """Build intelligent decision rules for agent selection."""
-         return {
-             # File complexity → Agent selection
-             "complexity_rules": {
-                 FileComplexity.SIMPLE: [
-                     AgentType.INTELLIGENT_CODE_AGENT,
-                     AgentType.REFACTORING_ENGINE
-                 ],
-                 FileComplexity.MODERATE: [
-                     AgentType.INTELLIGENT_CODE_AGENT,
-                     AgentType.REFACTORING_ENGINE,
-                     AgentType.TDD_WORKFLOW_AGENT
-                 ],
-                 FileComplexity.COMPLEX: [
-                     AgentType.INTELLIGENT_CODE_AGENT,
-                     AgentType.REFACTORING_ENGINE,
-                     AgentType.TDD_WORKFLOW_AGENT,
-                     AgentType.GOD_CODE_AGENT
-                 ],
-                 FileComplexity.GOD_FILE: [
-                     AgentType.GOD_CODE_AGENT,  # Primary focus
-                     AgentType.INTELLIGENT_CODE_AGENT,
-@@ -354,85 +354,85 @@ class MetaAgent:
-             
-         Returns:
-             FileAnalysis with file characteristics and metrics
-         """
-         try:
-             file_path_obj = Path(file_path)
-             
-             # Read and parse file
-             with open(file_path_obj, 'r', encoding='utf-8') as f:
-                 content = f.read()
-             
-             # Basic metrics
-             lines = content.split('\n')
-             line_count = len([line for line in lines if line.strip()])
-             
-             # AST analysis
-             try:
-                 tree = ast.parse(content)
-                 function_count = len([node for node in ast.walk(tree) if isinstance(node, ast.FunctionDef)])
-                 class_count = len([node for node in ast.walk(tree) if isinstance(node, ast.ClassDef)])
-                 
-                 # Calculate AST complexity score
-                 complexity_score = self._calculate_ast_complexity(tree)
-                 
-             except SyntaxError:
--                logger.warning(f"Could not parse AST for {file_path}")
-+                logger.warning("Could not parse AST for %s", file_path)
-                 function_count = content.count('def ')
-                 class_count = content.count('class ')
-                 complexity_score = line_count * 0.1  # Fallback estimate
-             
-             # Determine file complexity
-             file_complexity = self._classify_file_complexity(
-                 line_count, function_count, class_count, complexity_score
-             )
-             
-             # Detect patterns and imports
-             suspected_patterns = self._detect_file_patterns(file_path_obj, content)
-             imports = self._extract_imports(content)
-             file_type = self._classify_file_type(file_path_obj, imports, content)
-             
-             # Estimate tokens needed for analysis
-             estimated_tokens = self._estimate_file_tokens(
-                 line_count, function_count, class_count, complexity_score
-             )
-             
-             return FileAnalysis(
-                 file_path=file_path,
-                 line_count=line_count,
-                 function_count=function_count,
-                 class_count=class_count,
-                 ast_complexity_score=complexity_score,
-                 file_complexity=file_complexity,
-                 suspected_patterns=suspected_patterns,
-                 imports=imports,
-                 file_type=file_type,
-                 estimated_tokens=estimated_tokens
-             )
-             
-         except Exception as e:
--            logger.error(f"Error analyzing file {file_path}: {e}")
-+            logger.error("Error analyzing file %s: %s", file_path, e)
-             return FileAnalysis(
-                 file_path=file_path,
-                 line_count=0,
-                 function_count=0,
-                 class_count=0,
-                 ast_complexity_score=0.0,
-                 file_complexity=FileComplexity.SIMPLE,
-                 estimated_tokens=100  # Minimal fallback estimate
-             )
-     
-     def _calculate_ast_complexity(self, tree: ast.AST) -> float:
-         """Calculate complexity score from AST analysis."""
-         complexity = 0.0
-         
-         for node in ast.walk(tree):
-             # Control flow complexity
-             if isinstance(node, (ast.If, ast.While, ast.For)):
-                 complexity += 2.0
-             elif isinstance(node, ast.Try):
-                 complexity += 3.0
-             elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                 # Function complexity based on arguments and decorators
-                 complexity += 1.0 + len(node.args.args) * 0.2 + len(node.decorator_list) * 0.5
-             elif isinstance(node, ast.ClassDef):
-                 complexity += 2.0 + len(node.bases) * 0.5
-@@ -618,51 +618,56 @@ class MetaAgent:
-         
-         # Adjust based on file patterns
-         pattern_agents = []
-         for pattern in file_analysis.suspected_patterns:
-             if pattern in self._agent_selection_rules["pattern_rules"]:
-                 pattern_agents.extend(self._agent_selection_rules["pattern_rules"][pattern])
-         
-         # Combine and prioritize agents
-         all_agents = list(set(base_agents + complexity_agents + pattern_agents))
-         
-         # Create recommendations for each agent
-         for agent_type in all_agents:
-             if agent_type not in self._agents:
-                 continue  # Skip unavailable agents
-             
-             priority, confidence, reasoning = self._calculate_agent_priority(
-                 agent_type, file_analysis, task_type
-             )
-             
-             # Estimate tokens and time for this agent
-             estimated_tokens = self._estimate_agent_tokens(agent_type, file_analysis)
-             estimated_time = self._estimate_agent_time(agent_type, file_analysis)
-             
-             # Skip agent if it would exceed token budget
-             if estimated_tokens > available_tokens:
--                logger.warning(f"Skipping {agent_type.value} - estimated tokens ({estimated_tokens}) exceed budget ({available_tokens})")
-+                logger.warning(
-+                    "Skipping %s - estimated tokens (%s) exceed budget (%s)",
-+                    agent_type.value,
-+                    estimated_tokens,
-+                    available_tokens,
-+                )
-                 continue
-             
-             configuration = self._build_agent_configuration(agent_type, file_analysis)
-             
-             recommendation = AgentRecommendation(
-                 agent_type=agent_type,
-                 priority=priority,
-                 confidence=confidence,
-                 reasoning=reasoning,
-                 configuration=configuration,
-                 estimated_tokens=estimated_tokens,
-                 estimated_time=estimated_time
-             )
-             
-             recommendations.append(recommendation)
-         
-         # Sort by priority and confidence
-         recommendations.sort(key=lambda r: (
-             r.priority.value,  # Priority first (critical, high, medium, low)
-             -r.confidence      # Then by confidence (higher is better)
-         ))
-         
-         return recommendations
-     
-     def _calculate_agent_priority(
-@@ -915,168 +920,168 @@ class MetaAgent:
-         
-         # TODO: Implement dependency analysis
-         # This could analyze imports to identify related files
-         # that should be analyzed together
-         
-         return dependencies
-     
-     def execute_plan(self, execution_plan: TaskExecution) -> List[ExecutionResult]:
-         """
-         Execute the agent plan for a file.
-         
-         Args:
-             execution_plan: Complete execution plan
-             
-         Returns:
-             List of execution results from each agent
-         """
-         
-         if not AGENTS_AVAILABLE:
-             logger.error("Cannot execute plan - agents not available")
-             return []
-         
-         results = []
-         start_time = time.time()
-         
--        logger.info(f"Executing plan for {execution_plan.file_path}")
--        logger.info(f"Agents: {[a.value for a in execution_plan.execution_order]}")
--        logger.info(f"Estimated tokens: {execution_plan.total_estimated_tokens}")
--        logger.info(f"Estimated time: {execution_plan.total_estimated_time:.1f}s")
-+        logger.info("Executing plan for %s", execution_plan.file_path)
-+        logger.info("Agents: %s", [a.value for a in execution_plan.execution_order])
-+        logger.info("Estimated tokens: %s", execution_plan.total_estimated_tokens)
-+        logger.info("Estimated time: %.1fs", execution_plan.total_estimated_time)
-         
-         # Execute each agent in order
-         for agent_type in execution_plan.execution_order:
-             if agent_type not in self._agents:
--                logger.warning(f"Agent {agent_type.value} not available - skipping")
-+                logger.warning("Agent %s not available - skipping", agent_type.value)
-                 continue
-             
-             # Find the recommendation for this agent
-             agent_rec = next(
-                 (rec for rec in execution_plan.agents if rec.agent_type == agent_type),
-                 None
-             )
-             
-             if not agent_rec:
--                logger.warning(f"No recommendation found for {agent_type.value}")
-+                logger.warning("No recommendation found for %s", agent_type.value)
-                 continue
-             
-             # Execute agent with configuration
-             result = self._execute_single_agent(
-                 agent_type, 
-                 execution_plan.file_path, 
-                 agent_rec.configuration
-             )
-             
-             results.append(result)
-             
-             # Update token usage statistics
-             self.token_usage_stats[agent_type] += result.tokens_used
-             
-             # Check if we should stop due to errors
-             if not result.success and agent_rec.priority == Priority.CRITICAL:
--                logger.error(f"Critical agent {agent_type.value} failed - stopping execution")
-+                logger.error("Critical agent %s failed - stopping execution", agent_type.value)
-                 break
-         
-         total_time = time.time() - start_time
-         total_tokens = sum(result.tokens_used for result in results)
-         
-         # Update performance metrics
-         self.performance_metrics["total_execution_time"].append(total_time)
-         self.performance_metrics["total_tokens_used"].append(total_tokens)
-         self.performance_metrics["agents_executed"].append(len(results))
-         
-         # Record in execution history
-         self.execution_history.append({
-             "file_path": execution_plan.file_path,
-             "task_type": execution_plan.task_type.value,
-             "agents_executed": [r.agent_type.value for r in results],
-             "execution_time": total_time,
-             "tokens_used": total_tokens,
-             "success_rate": len([r for r in results if r.success]) / len(results) if results else 0
-         })
-         
--        logger.info(f"Plan execution completed: {len(results)} agents, {total_tokens} tokens, {total_time:.1f}s")
-+        logger.info("Plan execution completed: %s agents, %s tokens, %.1fs", len(results), total_tokens, total_time)
-         
-         return results
-     
-     def _execute_single_agent(
-         self, agent_type: AgentType, file_path: str, configuration: Dict[str, Any]
-     ) -> ExecutionResult:
-         """Execute a single agent with the given configuration and file coordination."""
-         
-         start_time = time.time()
-         tokens_used = 0
-         result_data = {}
-         warnings = []
-         errors = []
-         success = False
-         agent_name = agent_type.value
-         
-         try:
-             agent = self._agents[agent_type]
-             
-             logger.debug(f"Executing {agent_name} on {file_path}")
-             logger.debug(f"Configuration: {configuration}")
-             
-             # Determine if this agent will modify files (not dry_run)
-             will_modify_file = not self.dry_run and not configuration.get("dry_run", self.dry_run)
-             
-             if will_modify_file:
-                 # Execute with file coordination for safe modifications
--                logger.info(f"🔒 Acquiring file lock for {agent_name} -> {file_path}")
-+                logger.info("🔒 Acquiring file lock for %s -> %s", agent_name, file_path)
-                 
-                 with self.coordination_manager.acquire_file_lock(
-                     file_path, 
-                     agent_name, 
-                     LockType.EXCLUSIVE,
-                     create_backup=True
-                 ) as lock_info:
-                     
-                     # Execute agent within protected context
-                     result_data, success, tokens_used = self._execute_agent_safely(
-                         agent, agent_type, file_path, configuration
-                     )
-                     
-                     # Record modification
-                     self.coordination_manager.record_modification(
-                         file_path=file_path,
-                         agent_name=agent_name,
-                         modification_type=agent_type.value.lower().replace("_", "_"),
-                         backup_path=lock_info.backup_path or "",
-                         success=success,
-                         error_message=None if success else str(result_data.get("error", "Unknown error"))
-                     )
-                     
--                    logger.info(f"🔓 Released file lock for {agent_name} -> {file_path}")
-+                    logger.info("🔓 Released file lock for %s -> %s", agent_name, file_path)
-                     
-             else:
-                 # Execute in analysis-only mode (dry_run)
-                 result_data, success, tokens_used = self._execute_agent_safely(
-                     agent, agent_type, file_path, configuration
-                 )
-                 
-         except Exception as e:
--            logger.error(f"Error executing {agent_name}: {e}")
-+            logger.error("Error executing %s: %s", agent_name, e)
-             errors.append(str(e))
-             
-             # Record failed modification if applicable
-             if not self.dry_run:
-                 try:
-                     self.coordination_manager.record_modification(
-                         file_path=file_path,
-                         agent_name=agent_name,
-                         modification_type=agent_type.value.lower().replace("_", "_"),
-                         backup_path="",
-                         success=False,
-                         error_message=str(e)
-                     )
-                 except Exception:
-                     pass  # Don't let recording errors block execution
-         
-         execution_time = time.time() - start_time
-         
-         return ExecutionResult(
-             agent_type=agent_type,
-             success=success,
-             execution_time=execution_time,
-             tokens_used=tokens_used,
-             result_data=result_data,
-             warnings=warnings,
-@@ -1165,51 +1170,51 @@ class MetaAgent:
-                     dry_run=configuration.get("dry_run", self.dry_run)
-                 )
-                 if god_code_results is None:
-                     return {"error": "God code analysis returned None", "file_path": file_path}, False, 0
-                 
-                 # Apply god code refactoring results if not dry run
-                 file_modified = False
-                 if not self.dry_run and not configuration.get("dry_run", self.dry_run):
-                     file_modified = self._apply_god_code_refactoring(file_path, god_code_results)
-                 
-                 # Get tokens_used and error status from result
-                 tokens_used = god_code_results.get("tokens_used", 0) if isinstance(god_code_results, dict) else getattr(god_code_results, 'tokens_used', 0)
-                 has_error = god_code_results.get("error") if isinstance(god_code_results, dict) else getattr(god_code_results, 'error', None)
-                 
-                 # Return result dict with file modification status
-                 return {
-                     "god_code_results": god_code_results,
-                     "file_modified": file_modified,
-                     "tokens_used": tokens_used
-                 }, not has_error, tokens_used
-                 
-             else:
-                 raise ValueError(f"Unknown agent type: {agent_type}")
-                 
-         except Exception as e:
--            logger.error(f"Error in _execute_agent_safely for {agent_type.value}: {e}")
-+            logger.error("Error in _execute_agent_safely for %s: %s", agent_type.value, e)
-             return {"error": str(e), "file_path": file_path}, False, 0
-     
-     def _execute_god_code_agent_with_code_generation(
-         self, file_path: str, aggressive: bool = False, dry_run: bool = False
-     ) -> Dict[str, Any]:
-         """
-         Execute GodCodeRefactoringAgent with direct access to generated refactored code.
-         
-         This method bypasses the run_god_code_analysis function to get the actual
-         RefactoringResult objects with the refactored code content.
-         """
-         try:
-             # Read the file content
-             with open(file_path, 'r', encoding='utf-8') as f:
-                 code_content = f.read()
-         except Exception as e:
-             return {"error": f"Failed to read file {file_path}: {e}"}
-         
-         # Initialize the agent
-         agent = self._agents.get(AgentType.GOD_CODE_AGENT)
-         if not agent:
-             return {"error": "GodCodeRefactoringAgent not available"}
-         
-         try:
-             # Analyze god codes
-@@ -1253,115 +1258,115 @@ class MetaAgent:
-                 refactoring_result = agent.apply_refactoring(code_content, detection, strategy)
-                 
-                 # Store minimal metadata (for compatibility)
-                 result_dict = {
-                     "original_name": detection.name,
-                     "success": refactoring_result.validation_passed,
-                     "modules_created": list(refactoring_result.refactored_modules.keys()),
-                     "warnings": refactoring_result.warnings
-                 }
-                 results["refactoring_results"].append(result_dict)
-                 
-                 # Store FULL RefactoringResult with actual code (NEW!)
-                 full_result = {
-                     "original_code": refactoring_result.original_code,
-                     "refactored_modules": refactoring_result.refactored_modules,  # Dict[str, str] - module_name -> code
-                     "updated_original": refactoring_result.updated_original,      # Updated original code
-                     "validation_passed": refactoring_result.validation_passed,
-                     "improvement_metrics": getattr(refactoring_result, 'improvement_metrics', {}),
-                     "warnings": refactoring_result.warnings
-                 }
-                 results["full_refactoring_results"].append(full_result)
-             
-             return results
-             
-         except Exception as e:
--            logger.error(f"Error in god code agent execution: {e}")
-+            logger.error("Error in god code agent execution: %s", e)
-             return {"error": f"God code agent execution failed: {e}"}
-     
-     def _apply_analysis_improvements(self, file_path: str, analysis_result: Dict[str, Any]) -> bool:
-         """Apply improvements suggested by IntelligentCodeAgent analysis."""
-         try:
-             # Extract refactored code from analysis result
-             refactored_code = self._extract_analysis_code(analysis_result)
-             if not refactored_code:
--                logger.info(f"No code improvements found in analysis for {file_path}")
-+                logger.info("No code improvements found in analysis for %s", file_path)
-                 return False
-             
-             # Apply the refactored code
-             return self._safe_write_file(file_path, refactored_code, "analysis_improvements")
-             
-         except Exception as e:
--            logger.error(f"Error applying analysis improvements to {file_path}: {e}")
-+            logger.error("Error applying analysis improvements to %s: %s", file_path, e)
-             return False
-     
-     def _apply_refactoring_results(self, file_path: str, refactoring_results: Dict[str, Any]) -> bool:
-         """Apply results from IntelligentRefactoringEngine."""
-         try:
-             # Extract refactored code from refactoring results
-             refactored_code = self._extract_refactoring_code(refactoring_results)
-             if not refactored_code:
--                logger.info(f"No refactoring improvements found for {file_path}")
-+                logger.info("No refactoring improvements found for %s", file_path)
-                 return False
-             
-             # Apply the refactored code
-             return self._safe_write_file(file_path, refactored_code, "refactoring_engine")
-             
-         except Exception as e:
--            logger.error(f"Error applying refactoring results to {file_path}: {e}")
-+            logger.error("Error applying refactoring results to %s: %s", file_path, e)
-             return False
-     
-     def _apply_tdd_improvements(self, file_path: str, tdd_analysis: Dict[str, Any]) -> bool:
-         """Apply improvements suggested by TDDIntelligentWorkflowAgent."""
-         try:
-             # Extract improved code from TDD analysis
-             improved_code = self._extract_tdd_code(tdd_analysis)
-             if not improved_code:
--                logger.info(f"No TDD improvements found for {file_path}")
-+                logger.info("No TDD improvements found for %s", file_path)
-                 return False
-             
-             # Apply the improved code
-             return self._safe_write_file(file_path, improved_code, "tdd_improvements")
-             
-         except Exception as e:
--            logger.error(f"Error applying TDD improvements to {file_path}: {e}")
-+            logger.error("Error applying TDD improvements to %s: %s", file_path, e)
-             return False
-     
-     def _apply_god_code_refactoring(self, file_path: str, god_code_results: Dict[str, Any]) -> bool:
-         """Apply god code refactoring results."""
-         try:
-             # Extract refactored code from god code analysis
-             refactored_code = self._extract_god_code_refactoring(god_code_results)
-             if not refactored_code:
--                logger.info(f"No god code refactoring found for {file_path}")
-+                logger.info("No god code refactoring found for %s", file_path)
-                 return False
-             
-             # Apply the refactored code
-             return self._safe_write_file(file_path, refactored_code, "god_code_refactoring")
-             
-         except Exception as e:
--            logger.error(f"Error applying god code refactoring to {file_path}: {e}")
-+            logger.error("Error applying god code refactoring to %s: %s", file_path, e)
-             return False
-     
-     def _extract_analysis_code(self, analysis_result: Any) -> Optional[str]:
-         """Extract refactored code from IntelligentCodeAgent analysis result."""
-         # Handle FileSemanticAnalysis dataclass
-         if hasattr(analysis_result, 'recommended_refactorings'):
-             # Check if there are recommended refactorings with actual code
-             refactorings = getattr(analysis_result, 'recommended_refactorings', [])
-             if refactorings:
-                 # Look for refactorings that have refactored code
-                 for refactoring in refactorings:
-                     if hasattr(refactoring, 'refactored_code') and getattr(refactoring, 'refactored_code'):
-                         return getattr(refactoring, 'refactored_code')
-                     if hasattr(refactoring, 'improved_code') and getattr(refactoring, 'improved_code'):
-                         return getattr(refactoring, 'improved_code')
-         
-         # Handle dictionary format (fallback)
-         if isinstance(analysis_result, dict):
-             code_keys = [
-                 "refactored_code", "improved_code", "optimized_code", 
-                 "updated_code", "result_code", "output_code"
-             ]
-             
-             for key in code_keys:
-                 if key in analysis_result and analysis_result[key]:
-@@ -1421,58 +1426,58 @@ class MetaAgent:
-         for key in code_keys:
-             if key in tdd_analysis and tdd_analysis[key]:
-                 return tdd_analysis[key]
-         
-         # Check for TDD optimization results
-         if "tdd_optimizations" in tdd_analysis:
-             optimizations = tdd_analysis["tdd_optimizations"]
-             if isinstance(optimizations, dict):
-                 for key in code_keys:
-                     if key in optimizations:
-                         return optimizations[key]
-         
-         return None
-     
-     def _extract_god_code_refactoring(self, god_code_results: Dict[str, Any]) -> Optional[str]:
-         """Extract refactored code from GodCodeRefactoringAgent results."""
-         
-         # NEW: Check for full_refactoring_results with actual code
-         if "full_refactoring_results" in god_code_results:
-             full_results = god_code_results["full_refactoring_results"]
-             if isinstance(full_results, list) and full_results:
-                 for full_result in full_results:
-                     if isinstance(full_result, dict):
-                         # Try updated_original first (complete refactored file)
-                         if "updated_original" in full_result and full_result["updated_original"]:
--                            logger.info(f"Found updated_original code ({len(full_result['updated_original'])} chars)")
-+                            logger.info("Found updated_original code (%s chars)", len(full_result['updated_original']))
-                             return full_result["updated_original"]
-                         
-                         # Try combining refactored_modules
-                         if "refactored_modules" in full_result and full_result["refactored_modules"]:
-                             modules = full_result["refactored_modules"]
-                             if isinstance(modules, dict) and modules:
--                                logger.info(f"Found refactored_modules: {list(modules.keys())}")
-+                                logger.info("Found refactored_modules: %s", list(modules.keys()))
-                                 combined_code = self._combine_refactored_modules(modules)
-                                 if combined_code:
-                                     return combined_code
-         
-         # FALLBACK: Look for god code refactoring results (old format)
-         code_keys = [
-             "refactored_code", "updated_original", "final_code",
-             "improved_code", "output_code", "result_code"
-         ]
-         
-         for key in code_keys:
-             if key in god_code_results and god_code_results[key]:
-                 return god_code_results[key]
-         
-         # Check for refactoring results list
-         if "refactoring_results" in god_code_results:
-             results = god_code_results["refactoring_results"]
-             if isinstance(results, list) and results:
-                 # Use the last/final refactoring result
-                 final_result = results[-1]
-                 if isinstance(final_result, dict):
-                     for key in code_keys:
-                         if key in final_result:
-                             return final_result[key]
-         
-@@ -1488,174 +1493,182 @@ class MetaAgent:
-                             combined_code = self._combine_refactored_modules(modules)
-                             if combined_code:
-                                 return combined_code
-         
-         logger.info("No refactored code found in god code results")
-         return None
-     
-     def _combine_refactored_modules(self, refactored_modules: Dict[str, Any]) -> Optional[str]:
-         """Combine refactored modules into a single code string."""
-         try:
-             code_parts = []
-             
-             # Add imports first
-             if "imports" in refactored_modules:
-                 code_parts.append(refactored_modules["imports"])
-             
-             # Add classes and functions
-             for key, value in refactored_modules.items():
-                 if key != "imports" and isinstance(value, str) and value.strip():
-                     code_parts.append(value)
-             
-             if code_parts:
-                 return "\n\n".join(code_parts)
-             
-         except Exception as e:
--            logger.error(f"Error combining refactored modules: {e}")
-+            logger.error("Error combining refactored modules: %s", e)
-         
-         return None
-     
-     def _safe_write_file(self, file_path: str, new_code: str, operation_type: str) -> bool:
-         """
-         Safely write refactored code to file with validation and rollback capability.
-         
-         Args:
-             file_path: Path to file to modify
-             new_code: New code content to write
-             operation_type: Type of operation for logging
-             
-         Returns:
-             True if file was successfully modified, False otherwise
-         """
-         try:
-             # Read original file for backup
-             with open(file_path, 'r', encoding='utf-8') as f:
-                 original_code = f.read()
-             
-             # Validate that new code is actually different
-             if new_code.strip() == original_code.strip():
--                logger.info(f"No changes needed for {file_path} - code is identical")
-+                logger.info("No changes needed for %s - code is identical", file_path)
-                 return False
-             
-             # Validate syntax of new code
-             if not self._validate_refactored_code(new_code, file_path):
--                logger.error(f"Validation failed for refactored code in {file_path}")
-+                logger.error("Validation failed for refactored code in %s", file_path)
-                 return False
-             
-             # Create additional backup before modification
-             backup_path = f"{file_path}.backup.meta_agent.{int(time.time())}"
-             with open(backup_path, 'w', encoding='utf-8') as f:
-                 f.write(original_code)
-             
-             # Write new code to file
-             with open(file_path, 'w', encoding='utf-8') as f:
-                 f.write(new_code)
-             
--            logger.info(f"✅ Successfully applied {operation_type} to {file_path}")
--            logger.info(f"📋 Backup created: {backup_path}")
-+            logger.info("✅ Successfully applied %s to %s", operation_type, file_path)
-+            logger.info("📋 Backup created: %s", backup_path)
-             
-             # Verify the write was successful by reading back
-             with open(file_path, 'r', encoding='utf-8') as f:
-                 written_code = f.read()
-             
-             if written_code != new_code:
--                logger.error(f"File write verification failed for {file_path}")
-+                logger.error("File write verification failed for %s", file_path)
-                 # Restore from backup
-                 with open(backup_path, 'r', encoding='utf-8') as f:
-                     with open(file_path, 'w', encoding='utf-8') as f2:
-                         f2.write(f.read())
-                 return False
-             
-             return True
-             
-         except Exception as e:
--            logger.error(f"Error in _safe_write_file for {file_path}: {e}")
-+            logger.error("Error in _safe_write_file for %s: %s", file_path, e)
-             
-             # Attempt to restore from backup if available
-             try:
-                 if 'backup_path' in locals():
-                     with open(backup_path, 'r', encoding='utf-8') as f:
-                         with open(file_path, 'w', encoding='utf-8') as f2:
-                             f2.write(f.read())
--                    logger.info(f"Restored {file_path} from backup after error")
-+                    logger.info("Restored %s from backup after error", file_path)
-             except Exception as restore_error:
--                logger.error(f"Failed to restore backup for {file_path}: {restore_error}")
-+                logger.error("Failed to restore backup for %s: %s", file_path, restore_error)
-             
-             return False
-     
-     def _validate_refactored_code(self, code: str, file_path: str) -> bool:
-         """
-         Validate that refactored code is syntactically correct and safe to apply.
-         
-         Args:
-             code: Code to validate
-             file_path: Original file path for context
-             
-         Returns:
-             True if code is valid, False otherwise
-         """
-         try:
-             # Basic syntax validation using AST
-             ast.parse(code)
-             
-             # Check for minimum code quality indicators
-             lines = [line.strip() for line in code.split('\n') if line.strip()]
-             
-             # Ensure code is not empty or trivial
-             if len(lines) < 5:
--                logger.warning(f"Refactored code for {file_path} seems too short ({len(lines)} lines)")
-+                logger.warning(
-+                    "Refactored code for %s seems too short (%s lines)",
-+                    file_path,
-+                    len(lines),
-+                )
-                 return False
-             
-             # Check for obvious corruption patterns
-             corruption_indicators = [
-                 "SyntaxError", "IndentationError", "TabError",
-                 "<<<<<<< HEAD", ">>>>>>> ", "======="
-             ]
-             
-             for indicator in corruption_indicators:
-                 if indicator in code:
--                    logger.error(f"Code corruption detected in {file_path}: {indicator}")
-+                    logger.error("Code corruption detected in %s: %s", file_path, indicator)
-                     return False
-             
-             # Check for basic Python structure
-             has_functions_or_classes = any(
-                 line.startswith(('def ', 'class ', 'async def ')) 
-                 for line in lines
-             )
-             
-             # Allow files without functions/classes (e.g., config files, scripts)
-             if not has_functions_or_classes and len(lines) > 20:
--                logger.warning(f"Refactored code for {file_path} has no functions or classes but is {len(lines)} lines")
-+                logger.warning(
-+                    "Refactored code for %s has no functions or classes but is %s lines",
-+                    file_path,
-+                    len(lines),
-+                )
-             
-             logger.debug(f"Code validation passed for {file_path}")
-             return True
-             
-         except SyntaxError as e:
--            logger.error(f"Syntax error in refactored code for {file_path}: {e}")
-+            logger.error("Syntax error in refactored code for %s: %s", file_path, e)
-             return False
-         except Exception as e:
--            logger.error(f"Error validating refactored code for {file_path}: {e}")
-+            logger.error("Error validating refactored code for %s: %s", file_path, e)
-             return False
-     
-     def get_performance_summary(self) -> Dict[str, Any]:
-         """Get performance summary and statistics."""
-         
-         total_executions = len(self.execution_history)
-         
-         if total_executions == 0:
-             return {
-                 "total_executions": 0,
-                 "message": "No executions recorded yet"
-             }
-         
-         # Calculate averages
-         avg_execution_time = sum(self.performance_metrics["total_execution_time"]) / len(self.performance_metrics["total_execution_time"])
-         avg_tokens_used = sum(self.performance_metrics["total_tokens_used"]) / len(self.performance_metrics["total_tokens_used"])
-         avg_agents_per_execution = sum(self.performance_metrics["agents_executed"]) / len(self.performance_metrics["agents_executed"])
-         
-         # Calculate success rates
-         total_success_rate = sum(ex["success_rate"] for ex in self.execution_history) / total_executions
-         
-         # Agent usage statistics
-         agent_usage_stats = {}
-         for agent_type, token_usage in self.token_usage_stats.items():
-             executions = len([ex for ex in self.execution_history if agent_type.value in ex["agents_executed"]])
-@@ -1724,51 +1737,51 @@ def run_meta_agent_analysis(
-             "execution_plan": {
-                 "agents": [rec.agent_type.value for rec in execution_plan.agents],
-                 "estimated_tokens": execution_plan.total_estimated_tokens,
-                 "estimated_time": execution_plan.total_estimated_time
-             },
-             "execution_results": [
-                 {
-                     "agent": result.agent_type.value,
-                     "success": result.success,
-                     "execution_time": result.execution_time,
-                     "tokens_used": result.tokens_used,
-                     "warnings": result.warnings,
-                     "errors": result.errors
-                 }
-                 for result in results
-             ],
-             "summary": {
-                 "total_agents": len(results),
-                 "successful_agents": len([r for r in results if r.success]),
-                 "total_execution_time": sum(r.execution_time for r in results),
-                 "total_tokens_used": sum(r.tokens_used for r in results)
-             }
-         }
-         
-     except Exception as e:
--        logger.error(f"Error in meta agent analysis: {e}")
-+        logger.error("Error in meta agent analysis: %s", e)
-         return {
-             "file_path": file_path,
-             "error": str(e),
-             "success": False
-         }
  
  
  if __name__ == "__main__":
-     # Simple CLI for testing MetaAgent
-     import argparse
-     
-     parser = argparse.ArgumentParser(description="MetaAgent - Intelligent Agent Coordination")
-     parser.add_argument("file_path", help="Path to file to analyze")
-     parser.add_argument("--task", choices=[t.value for t in TaskType], 
-                        default=TaskType.COMPREHENSIVE_AUDIT.value, help="Analysis task type")
-     parser.add_argument("--project-root", help="Project root directory")
-     parser.add_argument("--token-budget", type=int, default=32000, help="Token budget")
-     parser.add_argument("--dry-run", action="store_true", help="Run in dry-run mode")
-     parser.add_argument("--verbose", action="store_true", help="Verbose output")
-     
-     args = parser.parse_args()
-     
-     # Setup logging
-     logging.basicConfig(
-         level=logging.DEBUG if args.verbose else logging.INFO,
-diff --git a/audit_system/core/systematic_file_auditor.py b/audit_system/core/systematic_file_auditor.py
-index 2ec78530de046498c86baa91d50329039fcf65d1..cd0ddb5236a85adbee975d6f14e92e7a8935d35d 100644
---- a/audit_system/core/systematic_file_auditor.py
-+++ b/audit_system/core/systematic_file_auditor.py
-@@ -1976,50 +1976,52 @@ class EnhancedSystematicFileAuditor:
-             return True, resume_info
-         
-         return False, {}
- 
-     def _start_new_audit_session(self, total_files: int, config: Dict[str, Any]) -> str:
-         """Start a new audit session with tracking."""
-         session_id = self.session_manager.start_new_session(total_files, config)
-         self.logger.info("🚀 Started new audit session: %s", session_id)
-         return session_id
- 
-     def _validate_system_health(self) -> Dict[str, Any]:
-         try:
-             # Teste simples de conectividade do banco de dados
-             try:
-                 # Usar método seguro da API legada
-                 result = self.db_manager.get_all_epics()  # type: ignore
-                 if result is not None:
-                     return {"healthy": True, "checks_passed": ["database_connectivity"], "issues": []}
-                 else:
-                     return {"healthy": False, "checks_passed": [], "issues": ["Database returned None"]}
-             except Exception as e:
-                 # Fallback: tentar conexão direta
-                 try:
-                     framework_db_path = self.db_manager.framework_db_path if hasattr(self.db_manager, 'framework_db_path') else "framework.db"
-                     with sqlite3.connect(framework_db_path) as conn:
-+                        conn.execute("PRAGMA journal_mode=WAL;")
-+                        conn.execute("PRAGMA foreign_keys=ON;")
-                         cursor = conn.cursor()
-                         cursor.execute("SELECT 1")
-                         cursor.fetchone()
-                     return {"healthy": True, "checks_passed": ["database_connectivity"], "issues": []}
-                 except Exception as e2:
-                     return {"healthy": False, "checks_passed": [], "issues": [f"Database connectivity failed: {e2}"]}
-         except Exception as e:
-             return {"healthy": False, "checks_passed": [], "issues": [f"Health check error: {e}"]}
- 
-     def _create_full_system_backup(self) -> str:
-         bid = f"critical_backup_{int(time.time())}"
-         self.logger.info("Criando backup completo do sistema: %s", bid)
-         # Em produção: snapshot real
-         return bid
- 
-     def _restore_system_backup(self, backup_id: str) -> bool:
-         self.logger.warning("Restaurando sistema a partir do backup: %s", backup_id)
-         # Em produção: restauração real
-         return True
- 
-     def _generate_execution_summary(self, results: Dict[str, Any], duration_seconds: float) -> Dict[str, Any]:
-         """Gera relatório detalhado com métricas abrangentes."""
-         waves = [k for k in results.keys() if k.startswith("WAVE_")]
-         
-         # Métricas básicas
-@@ -2255,59 +2257,64 @@ class EnterpriseSessionManager:
-         self.db_manager = db_manager
-         self.project_root = project_root
-         self.logger = logging.getLogger(f"{__name__}.EnterpriseSessionManager")
-         
-         # Session state
-         self.current_session_id: Optional[str] = None
-         self.session_start_time: Optional[datetime] = None
-         self.checkpoints: List[SessionCheckpoint] = []
-         
-         # Progress tracking
-         self.files_completed: Set[str] = set()
-         self.files_failed: Set[str] = set()
-         self.files_deferred: Set[str] = set()
-         self.file_results: Dict[str, Dict[str, Any]] = {}
-         
-         # Recovery state
-         self.is_resumed_session = False
-         self.original_session_id: Optional[str] = None
-         
-         self._ensure_session_tables()
-         self.logger.info("EnterpriseSessionManager initialized")
-     
-     def _get_db_connection(self):
-         """Get database connection consistently."""
-         framework_db_path = self.db_manager.framework_db_path if hasattr(self.db_manager, 'framework_db_path') else "framework.db"
--        return sqlite3.connect(framework_db_path)
-+        conn = sqlite3.connect(framework_db_path)
-+        conn.execute("PRAGMA journal_mode=WAL;")
-+        conn.execute("PRAGMA foreign_keys=ON;")
-+        return conn
-     
-     def _ensure_session_tables(self) -> None:
-         """Ensure session tracking tables exist in database."""
-         try:
-             # Use existing database connection - DatabaseManager returns sqlite connection
-             framework_db_path = self.db_manager.framework_db_path if hasattr(self.db_manager, 'framework_db_path') else "framework.db"
-             
-             with sqlite3.connect(framework_db_path) as conn:
-+                conn.execute("PRAGMA journal_mode=WAL;")
-+                conn.execute("PRAGMA foreign_keys=ON;")
-                 cursor = conn.cursor()
-                 
-                 # Session metadata table
-                 cursor.execute("""
-                     CREATE TABLE IF NOT EXISTS audit_sessions (
-                         session_id TEXT PRIMARY KEY,
-                         start_time TEXT NOT NULL,
-                         end_time TEXT,
-                         status TEXT NOT NULL DEFAULT 'active',
-                         total_files INTEGER,
-                         completed_files INTEGER DEFAULT 0,
-                         failed_files INTEGER DEFAULT 0,
-                         deferred_files INTEGER DEFAULT 0,
-                         total_tokens_consumed INTEGER DEFAULT 0,
-                         session_config TEXT,
-                         metadata TEXT,
-                         created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-                         updated_at TEXT DEFAULT CURRENT_TIMESTAMP
-                     )
-                 """)
-                 
-                 # File processing results table
-                 cursor.execute("""
-                     CREATE TABLE IF NOT EXISTS audit_file_results (
-                         id INTEGER PRIMARY KEY AUTOINCREMENT,
-@@ -2331,84 +2338,88 @@ class EnterpriseSessionManager:
-                     CREATE TABLE IF NOT EXISTS audit_checkpoints (
-                         id INTEGER PRIMARY KEY AUTOINCREMENT,
-                         session_id TEXT NOT NULL,
-                         checkpoint_data TEXT NOT NULL,
-                         timestamp TEXT DEFAULT CURRENT_TIMESTAMP,
-                         FOREIGN KEY (session_id) REFERENCES audit_sessions (session_id)
-                     )
-                 """)
-                 
-                 conn.commit()
-                 self.logger.debug("Session tables ensured in database")
-                 
-         except Exception as e:
-             self.logger.error("Failed to ensure session tables: %s", e)
-     
-     def start_new_session(self, total_files: int, session_config: Dict[str, Any]) -> str:
-         """Start a new audit session with comprehensive tracking."""
-         self.current_session_id = f"audit_{int(time.time())}_{os.getpid()}"
-         self.session_start_time = datetime.now()
-         self.is_resumed_session = False
-         
-         try:
-             framework_db_path = self.db_manager.framework_db_path if hasattr(self.db_manager, 'framework_db_path') else "framework.db"
-             
-             with sqlite3.connect(framework_db_path) as conn:
-+                conn.execute("PRAGMA journal_mode=WAL;")
-+                conn.execute("PRAGMA foreign_keys=ON;")
-                 cursor = conn.cursor()
-                 cursor.execute("""
-                     INSERT INTO audit_sessions 
-                     (session_id, start_time, status, total_files, session_config, metadata)
-                     VALUES (?, ?, ?, ?, ?, ?)
-                 """, (
-                     self.current_session_id,
-                     self.session_start_time.isoformat(),
-                     'active',
-                     total_files,
-                     json.dumps(session_config),
-                     json.dumps({
-                         "pid": os.getpid(),
-                         "hostname": os.uname().nodename,
-                         "python_version": sys.version,
-                         "intelligent_mode": session_config.get("intelligent_mode", False)
-                     })
-                 ))
-                 conn.commit()
-                 
-             self.logger.info("✅ New audit session started: %s (%d files)", 
-                            self.current_session_id, total_files)
-             
-             return self.current_session_id
-             
-         except Exception as e:
-             self.logger.error("Failed to start new session: %s", e)
-             raise
-     
-     def resume_session(self, session_id: Optional[str] = None) -> Tuple[bool, Optional[str], Dict[str, Any]]:
-         """Resume the most recent incomplete session or specific session."""
-         try:
-             framework_db_path = self.db_manager.framework_db_path if hasattr(self.db_manager, 'framework_db_path') else "framework.db"
-             with sqlite3.connect(framework_db_path) as conn:
-+                conn.execute("PRAGMA journal_mode=WAL;")
-+                conn.execute("PRAGMA foreign_keys=ON;")
-                 cursor = conn.cursor()
-                 
-                 if session_id:
-                     # Resume specific session
-                     cursor.execute("""
-                         SELECT session_id, start_time, total_files, completed_files, 
-                                failed_files, deferred_files, session_config, metadata
-                         FROM audit_sessions 
-                         WHERE session_id = ? AND status = 'active'
-                     """, (session_id,))
-                 else:
-                     # Resume most recent incomplete session
-                     cursor.execute("""
-                         SELECT session_id, start_time, total_files, completed_files,
-                                failed_files, deferred_files, session_config, metadata
-                         FROM audit_sessions 
-                         WHERE status = 'active'
-                         ORDER BY start_time DESC LIMIT 1
-                     """)
-                 
-                 session_row = cursor.fetchone()
-                 
-                 if not session_row:
-                     self.logger.info("No active session found to resume")
-                     return False, None, {}
-@@ -2461,50 +2472,52 @@ class EnterpriseSessionManager:
-             return False
-             
-         try:
-             checkpoint = SessionCheckpoint(
-                 session_id=self.current_session_id,
-                 timestamp=datetime.now(),
-                 files_completed=list(self.files_completed),
-                 files_failed=list(self.files_failed),
-                 files_deferred=list(self.files_deferred),
-                 current_batch=current_batch,
-                 token_consumption_history=getattr(token_manager_stats, 'file_consumption_history', {}),
-                 performance_metrics=getattr(token_manager_stats, 'performance_metrics', {}),
-                 session_config={
-                     "is_resumed": self.is_resumed_session,
-                     "original_session_id": self.original_session_id
-                 },
-                 recovery_metadata={
-                     "checkpoint_count": len(self.checkpoints) + 1,
-                     "last_checkpoint": datetime.now().isoformat()
-                 }
-             )
-             
-             # Save to database
-             framework_db_path = self.db_manager.framework_db_path if hasattr(self.db_manager, 'framework_db_path') else "framework.db"
-             with sqlite3.connect(framework_db_path) as conn:
-+                conn.execute("PRAGMA journal_mode=WAL;")
-+                conn.execute("PRAGMA foreign_keys=ON;")
-                 cursor = conn.cursor()
-                 cursor.execute("""
-                     INSERT INTO audit_checkpoints (session_id, checkpoint_data)
-                     VALUES (?, ?)
-                 """, (self.current_session_id, json.dumps(checkpoint.__dict__, default=str)))
-                 
-                 # Update session progress
-                 cursor.execute("""
-                     UPDATE audit_sessions 
-                     SET completed_files = ?, failed_files = ?, deferred_files = ?,
-                         total_tokens_consumed = ?, updated_at = CURRENT_TIMESTAMP
-                     WHERE session_id = ?
-                 """, (
-                     len(self.files_completed),
-                     len(self.files_failed), 
-                     len(self.files_deferred),
-                     token_manager_stats.get('tokens_used_today', 0),
-                     self.current_session_id
-                 ))
-                 
-                 conn.commit()
-             
-             self.checkpoints.append(checkpoint)
-             self.logger.debug("Checkpoint saved for session %s", self.current_session_id)
-             return True
-@@ -2521,50 +2534,52 @@ class EnterpriseSessionManager:
-         try:
-             status = "completed" if result.get('modified', False) or not result.get('error') else "failed"
-             if result.get('deferred'):
-                 status = "deferred"
-             
-             # Update local tracking
-             if status == "completed":
-                 self.files_completed.add(file_path)
-                 self.files_failed.discard(file_path)
-                 self.files_deferred.discard(file_path)
-             elif status == "failed":
-                 self.files_failed.add(file_path)
-                 self.files_completed.discard(file_path)
-                 self.files_deferred.discard(file_path)
-             elif status == "deferred":
-                 self.files_deferred.add(file_path)
-                 self.files_completed.discard(file_path)
-                 self.files_failed.discard(file_path)
-             
-             # Store detailed result
-             self.file_results[file_path] = result
-             
-             # Save to database
-             framework_db_path = self.db_manager.framework_db_path if hasattr(self.db_manager, 'framework_db_path') else "framework.db"
-             with sqlite3.connect(framework_db_path) as conn:
-+                conn.execute("PRAGMA journal_mode=WAL;")
-+                conn.execute("PRAGMA foreign_keys=ON;")
-                 cursor = conn.cursor()
-                 cursor.execute("""
-                     INSERT OR REPLACE INTO audit_file_results
-                     (session_id, file_path, status, tokens_used, lines_analyzed, 
-                      issues_found, optimizations_applied, processing_time_seconds, 
-                      analysis_result, error_message)
-                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                 """, (
-                     self.current_session_id,
-                     file_path,
-                     status,
-                     result.get('tokens_used', 0),
-                     result.get('lines_analyzed', 0),
-                     result.get('issues_found', 0),
-                     result.get('optimizations_applied', 0),
-                     result.get('processing_time_seconds', 0),
-                     json.dumps(result, default=str),
-                     result.get('error', '')
-                 ))
-                 conn.commit()
-             
-             return True
-             
-         except Exception as e:
-             self.logger.error("Failed to record file result for %s: %s", file_path, e)
-@@ -2603,50 +2618,52 @@ class EnterpriseSessionManager:
-         elif avg_tokens_per_file < 20000:
-             efficiency = "fair"
-         else:
-             efficiency = "needs_optimization"
-         
-         return AuditProgress(
-             total_files=total_files,
-             completed_files=completed,
-             failed_files=failed,
-             deferred_files=deferred,
-             completion_percentage=completion_percentage,
-             estimated_remaining_time_hours=estimated_remaining_hours,
-             total_tokens_consumed=total_tokens,
-             average_tokens_per_file=avg_tokens_per_file,
-             efficiency_rating=efficiency
-         )
-     
-     def finalize_session(self, final_stats: Dict[str, Any]) -> bool:
-         """Finalize the audit session with comprehensive results."""
-         if not self.current_session_id:
-             return False
-             
-         try:
-             framework_db_path = self.db_manager.framework_db_path if hasattr(self.db_manager, 'framework_db_path') else "framework.db"
-             with sqlite3.connect(framework_db_path) as conn:
-+                conn.execute("PRAGMA journal_mode=WAL;")
-+                conn.execute("PRAGMA foreign_keys=ON;")
-                 cursor = conn.cursor()
-                 cursor.execute("""
-                     UPDATE audit_sessions 
-                     SET end_time = ?, status = 'completed',
-                         metadata = ?
-                     WHERE session_id = ?
-                 """, (
-                     datetime.now().isoformat(),
-                     json.dumps(final_stats, default=str),
-                     self.current_session_id
-                 ))
-                 conn.commit()
-             
-             self.logger.info("✅ Session %s finalized successfully", self.current_session_id)
-             return True
-             
-         except Exception as e:
-             self.logger.error("Failed to finalize session: %s", e)
-             return False
- 
- 
- # =============================================================================
- # Tracking no banco (leve, sem schema novo)
- # =============================================================================
- class DatabaseTracker:
-diff --git a/tests/test_integration_flow.py b/tests/test_integration_flow.py
-new file mode 100644
-index 0000000000000000000000000000000000000000..2e27660e055f80b0183602653191953d25263303
---- /dev/null
-+++ b/tests/test_integration_flow.py
-@@ -0,0 +1,44 @@
-+import sys
-+import types
-+from pathlib import Path
+     # Example usage
+-    from streamlit_extension.utils.database import DatabaseManager
+-    
+-    db_manager = DatabaseManager("framework.db", "task_timer.db")
+-    
++    db_manager = DatabaseManager("framework.db", "task_timer.db")  # Legacy fallback
++    # Performance testing with direct connection
++    performance_connection = get_connection()
++    # Service container for business logic testing  
++    service_container = ServiceContainer(db_manager)
 +
-+import pytest
+     # Run comprehensive test suite
+     results = create_performance_test_suite(db_manager)
+-    
 +
-+sys.path.append(str(Path(__file__).resolve().parents[1]))
-+pkg = types.ModuleType("audit_system")
-+pkg.__path__ = [str(Path(__file__).resolve().parents[1] / "audit_system")]
-+sys.modules.setdefault("audit_system", pkg)
-+sys.modules.setdefault("streamlit", types.ModuleType("streamlit"))
-+
-+from audit_system.coordination.meta_agent import run_meta_agent_analysis, TaskType
-+from audit_system.core.systematic_file_auditor import EnhancedSystematicFileAuditor
-+
-+
-+def test_meta_agent_analysis_completes(tmp_path):
-+    # Create a simple Python file for analysis
-+    test_file = tmp_path / "sample.py"
-+    test_file.write_text("def foo():\n    return 42\n")
-+    result = run_meta_agent_analysis(
-+        file_path=str(test_file),
-+        task_type=TaskType.COMPREHENSIVE_AUDIT,
-+        project_root=str(tmp_path),
-+        token_budget=1000,
-+        dry_run=True,
-+    )
-+    assert "execution_plan" in result
-+    assert isinstance(result["execution_results"], list)
-+
-+
-+def test_systematic_auditor_flow(tmp_path):
-+    # Simulated project directory
-+    project_dir = tmp_path
-+    file_to_audit = project_dir / "module.py"
-+    file_to_audit.write_text("x = 1\n")
-+    auditor = EnhancedSystematicFileAuditor(
-+        project_root=project_dir,
-+        audit_dir=project_dir,
-+        dry_run=True,
-+    )
-+    res = auditor.audit_file_enhanced(str(file_to_audit))
-+    assert hasattr(res, "lines_analyzed")
-+    assert isinstance(res.lines_analyzed, int)
+     logging.info("Performance testing completed!")
+     logging.info(f"Results: {len(results)} test categories executed")
  
 EOF
 )

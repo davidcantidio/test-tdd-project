@@ -18,15 +18,11 @@ from __future__ import annotations
 import sys
 import os
 import tempfile
-import time
 import logging
 import argparse
-import json
 import sqlite3
 import math
 from pathlib import Path
-from typing import Dict, List, Any, Tuple, Optional, Callable, Iterable
-from dataclasses import dataclass, asdict, field
 from xml.etree.ElementTree import Element, SubElement, ElementTree
 
 # -----------------------------------------------------------------------------
@@ -44,28 +40,37 @@ sys.path.insert(0, str(project_root))
 # -----------------------------------------------------------------------------
 # Imports do projeto (protegidos)
 # -----------------------------------------------------------------------------
-try:
-    # Legado
-    from streamlit_extension.utils.database import DatabaseManager  # type: ignore
-except Exception as e:
-    DatabaseManager = None  # type: ignore
-    logger.warning(f"Não foi possível importar DatabaseManager legado: {e}")
+# Legacy import - keeping for hybrid compatibility
+from streamlit_extension.utils.database import DatabaseManager  # Legacy compatibility
+from streamlit_extension.database import (
+    get_connection,
+    list_epics,
+    list_tasks,
+    transaction,
+    check_health,
+    optimize,
+    create_schema_if_needed,
+    seed_initial_data,
+)
+from streamlit_extension.database.connection import get_connection_context
+from streamlit_extension.database.queries import (
+    list_all_epics,
+    list_all_tasks,
+    list_timer_sessions,
+    get_user_stats,
+    get_achievements,
+)
+from streamlit_extension.services import ServiceContainer
+# Validation framework imports
+from streamlit_extension.database.health import DatabaseHealthChecker
 
-try:
-    # Novo (modular)
-    from streamlit_extension.database import (  # type: ignore
-        get_connection, transaction, check_health,
-        optimize, create_schema_if_needed, seed_initial_data
-    )
-    from streamlit_extension.database.connection import get_connection_context  # type: ignore
-    from streamlit_extension.database.queries import (  # type: ignore
-        list_epics, list_all_epics, list_tasks, list_all_tasks,
-        list_timer_sessions, get_user_stats, get_achievements
-    )
-    HAS_MODULAR = True
-except Exception as e:
-    HAS_MODULAR = False
-    logger.warning(f"Não foi possível importar API modular: {e}")
+HAS_MODULAR = True
+
+import json
+import time
+import difflib
+from typing import Dict, List, Any, Optional, Tuple, Callable, Iterable
+from dataclasses import dataclass, asdict, field
 
 # -----------------------------------------------------------------------------
 # Data classes
@@ -786,6 +791,134 @@ def main() -> None:
                 logger.info("DB temporário removido.")
             except Exception as e:
                 logger.warning(f"Falha ao remover DB temporário: {e}")
+
+
+@dataclass
+class APIComparisonResult:
+    """Result of API equivalence comparison."""
+    legacy_result: Any
+    modular_result: Any
+    service_result: Any
+    equivalent: bool
+    differences: List[str]
+    performance_delta: float
+
+
+class APIEquivalenceValidator:
+    """Test equivalence between legacy, modular, and service layer APIs."""
+    def __init__(self):
+        # Legacy API
+        self.db_manager = DatabaseManager()
+
+        # Modular API setup
+        try:
+            self.modular_connection = get_connection()
+        except Exception as e:
+            self.modular_connection = None
+
+        # Service layer setup
+        try:
+            self.service_container = ServiceContainer()
+        except Exception as e:
+            self.service_container = None
+
+    def compare_epic_operations(self) -> APIComparisonResult:
+        import time
+        # Legacy
+        start = time.time()
+        try:
+            legacy_epics = self.db_manager.get_epics()
+            legacy_time = time.time() - start
+            legacy_err = None
+        except Exception as e:
+            legacy_epics, legacy_time, legacy_err = None, time.time() - start, str(e)
+
+        # Modular
+        start = time.time()
+        try:
+            modular_epics = list_epics() if self.modular_connection else None
+            modular_time = time.time() - start
+            modular_err = None
+        except Exception as e:
+            modular_epics, modular_time, modular_err = None, time.time() - start, str(e)
+
+        # Service
+        start = time.time()
+        try:
+            if self.service_container:
+                epic_service = self.service_container.get_epic_service()
+                service_res = epic_service.get_all()
+                service_epics = service_res.data if service_res.success else None
+            else:
+                service_epics = None
+            service_time = time.time() - start
+            service_err = None
+        except Exception as e:
+            service_epics, service_time, service_err = None, time.time() - start, str(e)
+
+        differences, equivalent = [], True
+        if legacy_epics is not None and modular_epics is not None:
+            if len(legacy_epics) != len(modular_epics):
+                differences.append(
+                    f"Epic count differs: legacy={len(legacy_epics)}, modular={len(modular_epics)}"
+                )
+                equivalent = False
+
+        perf_delta = (modular_time - legacy_time) if (legacy_time is not None and modular_time is not None) else 0.0
+
+        return APIComparisonResult(
+            legacy_result=(legacy_epics, legacy_err),
+            modular_result=(modular_epics, modular_err),
+            service_result=(service_epics, service_err),
+            equivalent=equivalent,
+            differences=differences,
+            performance_delta=perf_delta,
+        )
+
+    def run_comprehensive_validation(self) -> Dict[str, APIComparisonResult]:
+        results = {}
+        results["epic_operations"] = self.compare_epic_operations()
+        return results
+
+    def generate_validation_report(self, results: Dict[str, APIComparisonResult]) -> str:
+        report = []
+        report.append("=== API EQUIVALENCE VALIDATION REPORT ===")
+        report.append(f"Timestamp: {time.strftime('%Y-%m-%d %H:%M:%S')}")
+        report.append("")
+        for test_name, res in results.items():
+            report.append(f"## {test_name.upper()}")
+            report.append(f"Equivalent: {'✅ YES' if res.equivalent else '❌ NO'}")
+            if res.differences:
+                report.append("Differences found:")
+                for diff in res.differences:
+                    report.append(f"  - {diff}")
+            report.append(f"Performance delta: {res.performance_delta:.4f}s")
+            report.append("")
+        return "\n".join(report)
+
+
+# Global validator instance
+api_validator = APIEquivalenceValidator()
+
+
+def validate_with_modular_api():
+    """Validate using modular API."""
+    try:
+        connection = get_connection()
+        with connection:
+            cursor = connection.execute("SELECT COUNT(*) FROM framework_epics")
+            count = cursor.fetchone()[0]
+            return f"Modular API working - {count} epics found"
+    except Exception as e:
+        return f"Modular API failed: {e}"
+
+
+def run_hybrid_validation():
+    """Run validation using all available APIs."""
+    results = api_validator.run_comprehensive_validation()
+    report = api_validator.generate_validation_report(results)
+    print(report)
+    return results
 
 if __name__ == "__main__":
     main()

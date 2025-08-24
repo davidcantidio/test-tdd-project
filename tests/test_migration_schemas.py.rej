@@ -1,8 +1,4 @@
- (cd "$(git rev-parse --show-toplevel)" && git apply --3way <<'EOF' 
-diff --git a/tests/test_migration_schemas.py b/tests/test_migration_schemas.py
-index 6bb314ee77858a4d82e9a5d9ab6a469c405e0f79..d3bd42a54f2064989e5bed7b8dae6dd353c7ef60 100644
---- a/tests/test_migration_schemas.py
-+++ b/tests/test_migration_schemas.py
+diff a/tests/test_migration_schemas.py b/tests/test_migration_schemas.py	(rejected hunks)
 @@ -1,722 +1,141 @@
 -#!/usr/bin/env python3
 -"""
@@ -861,6 +857,3 @@ index 6bb314ee77858a4d82e9a5d9ab6a469c405e0f79..d3bd42a54f2064989e5bed7b8dae6dd3
 -    # Run tests with verbose output
 -    pytest.main([__file__, "-v"])
 \ No newline at end of file
- 
-EOF
-)

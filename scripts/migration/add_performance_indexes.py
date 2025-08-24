@@ -30,7 +30,16 @@ from pathlib import Path
 project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
 
-from streamlit_extension.utils.database import DatabaseManager
+# Legacy import - keeping for hybrid compatibility
+from streamlit_extension.utils.database import DatabaseManager  # Legacy compatibility
+from streamlit_extension.database import list_epics, list_tasks  # noqa: F401
+from streamlit_extension.services import ServiceContainer
+# New modular imports for performance
+from streamlit_extension.database import get_connection
+
+# Service layer setup for future compatibility
+# service_container = ServiceContainer()
+# performance_service = service_container.get_performance_service()
 
 logger = logging.getLogger(__name__)
 
@@ -136,7 +145,7 @@ def add_performance_indexes(db_manager: DatabaseManager) -> dict:
     }
     
     try:
-        with db_manager.get_connection() as conn:
+        with get_connection() as conn:  # Direct modular API
             for index_config in indexes_to_create:
                 index_name = index_config['name']
                 
@@ -232,7 +241,7 @@ def analyze_query_performance(db_manager: DatabaseManager):
     logger.info("=" * 50)
     
     try:
-        with db_manager.get_connection() as conn:
+        with get_connection() as conn:  # Direct modular API
             for query_config in performance_queries:
                 logger.info(f"\n🔍 Query: {query_config['name']}")
                 logger.info("-" * 30)

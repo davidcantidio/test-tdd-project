@@ -21,6 +21,7 @@ Features:
 import time
 import threading
 import sqlite3
+import logging
 try:
     import psutil
 except Exception:  # pragma: no cover
@@ -35,6 +36,17 @@ import json
 from pathlib import Path
 import datetime
 import gc
+
+# Legacy import - keeping for hybrid compatibility
+from streamlit_extension.utils.database import DatabaseManager  # Legacy compatibility
+from streamlit_extension.database import get_connection, list_epics, list_tasks
+from streamlit_extension.services import ServiceContainer
+# Performance testing imports
+try:  # pragma: no cover
+    from streamlit_extension.utils.performance_monitor import PerformanceTester
+except ImportError:  # pragma: no cover
+    PerformanceTester = None  # type: ignore
+from streamlit_extension.database import get_connection
 
 
 @dataclass
@@ -174,9 +186,13 @@ class PerformanceProfiler:
 
 class DatabasePerformanceTester:
     """Specialized database performance testing."""
-    
-    def __init__(self, db_manager):
-        self.db_manager = db_manager
+
+    def __init__(self, db_manager: Optional[DatabaseManager] = None):
+        self.db_manager = db_manager or DatabaseManager()  # Legacy fallback
+        # Performance testing with direct connection
+        self.performance_connection = get_connection()
+        # Service container for business logic testing  
+        self.service_container = ServiceContainer(self.db_manager)
         self.profiler = PerformanceProfiler()
         
     def benchmark_crud_operations(self, iterations: int = 1000) -> Dict[str, Any]:
@@ -222,7 +238,7 @@ class DatabasePerformanceTester:
         results = {}
         for query_name, query_sql in test_queries.items():
             with self.profiler.profile_operation(f"query_{query_name}"):
-                with self.db_manager.get_connection() as conn:
+                with get_connection() as conn:  # Direct connection for performance testing
                     cursor = conn.cursor()
                     cursor.execute(query_sql)
                     rows = cursor.fetchall()
@@ -230,6 +246,41 @@ class DatabasePerformanceTester:
             results[query_name] = self.profiler.get_statistics(f"query_{query_name}")
             results[query_name]["rows_returned"] = len(rows)
         
+        return results
+
+    def benchmark_hybrid_operations(self) -> Dict[str, Any]:
+        """Benchmark mix of legacy and modular operations."""
+        results = {}
+        with self.profiler.profile_operation("legacy_get_projects"):
+            self.db_manager.get_projects(limit=5)
+        with self.profiler.profile_operation("modular_list_epics"):
+            list_epics()
+        results["legacy_get_projects"] = self.profiler.get_statistics("legacy_get_projects")
+        results["modular_list_epics"] = self.profiler.get_statistics("modular_list_epics")
+        return results
+
+    def benchmark_modular_operations(self) -> Dict[str, Any]:
+        """Benchmark modular API operations."""
+        results = {}
+        with self.profiler.profile_operation("mod_list_epics"):
+            list_epics()
+        with self.profiler.profile_operation("mod_list_tasks"):
+            list_tasks(1)
+        results["mod_list_epics"] = self.profiler.get_statistics("mod_list_epics")
+        results["mod_list_tasks"] = self.profiler.get_statistics("mod_list_tasks")
+        return results
+
+    def benchmark_service_layer(self) -> Dict[str, Any]:
+        """Benchmark operations through the service layer."""
+        results = {}
+        epic_service = self.service_container.get_epic_service()
+        task_service = self.service_container.get_task_service()
+        with self.profiler.profile_operation("svc_list_epics"):
+            epic_service.list_epics()
+        with self.profiler.profile_operation("svc_list_tasks"):
+            task_service.list_tasks()
+        results["svc_list_epics"] = self.profiler.get_statistics("svc_list_epics")
+        results["svc_list_tasks"] = self.profiler.get_statistics("svc_list_tasks")
         return results
 
 
@@ -570,12 +621,14 @@ def run_quick_performance_check(db_manager) -> Dict[str, Any]:
 
 if __name__ == "__main__":
     # Example usage
-    from streamlit_extension.utils.database import DatabaseManager
-    
-    db_manager = DatabaseManager("framework.db", "task_timer.db")
-    
+    db_manager = DatabaseManager("framework.db", "task_timer.db")  # Legacy fallback
+    # Performance testing with direct connection
+    performance_connection = get_connection()
+    # Service container for business logic testing  
+    service_container = ServiceContainer(db_manager)
+
     # Run comprehensive test suite
     results = create_performance_test_suite(db_manager)
-    
+
     logging.info("Performance testing completed!")
     logging.info(f"Results: {len(results)} test categories executed")
