@@ -179,7 +179,7 @@ class CachedDatabaseManager:
         Invalidate cache entries related to data modification.
         
         Args:
-            entity_type: Type of entity (client, project, epic, task)
+            entity_type: Type of entity (project, epic, task)
             entity_id: Specific entity ID (if applicable)
             **kwargs: Additional parameters for cache invalidation
         """
@@ -199,12 +199,8 @@ class CachedDatabaseManager:
             invalidate_cache("analytics")
             invalidate_cache("aggregation")
             
-            # Entity-specific invalidations
-            if entity_type == "client":
-                # Client changes affect projects
-                invalidate_cache("project_list")
-                invalidate_cache("client_projects")
-            elif entity_type == "project":
+            # Entity-specific invalidations - client invalidation removed
+            if entity_type == "project":
                 # Project changes affect epics
                 invalidate_cache("epic_list")
                 invalidate_cache("project_epics")
@@ -228,103 +224,15 @@ class CachedDatabaseManager:
     # CLIENT OPERATIONS WITH CACHING
     # =============================================================================
     
-    @cached("client_list", operation_type="quick")
-    def get_clients(self, 
-                   include_inactive: bool = False,
-                   search_name: Optional[str] = None,
-                   status_filter: Optional[str] = None,
-                   tier_filter: Optional[str] = None,
-                   limit: Optional[int] = None,
-                   offset: int = 0) -> Dict[str, Any]:
-        """Get clients with caching support."""
-        start_time = time.time()
-        
-        try:
-            result = self.db_manager.get_clients(
-                include_inactive=include_inactive,
-                search_name=search_name,
-                status_filter=status_filter,
-                tier_filter=tier_filter,
-                limit=limit,
-                offset=offset
-            )
-            
-            response_time = time.time() - start_time
-            operation_type = "cache_hits" if hasattr(self, '_from_cache') else "db_direct_calls"
-            self._record_operation(operation_type, response_time)
-            
-            return result
-            
-        except Exception as e:
-            self.logger.error(f"Error getting clients: {e}")
-            self._record_operation("db_direct_calls", time.time() - start_time)
-            raise
+    # get_clients removed - client functionality eliminated
     
-    @cached("client", operation_type="quick")
-    def get_client(self, client_id: int) -> Optional[Dict[str, Any]]:
-        """Get single client with caching."""
-        start_time = time.time()
-        
-        try:
-            result = self.db_manager.get_client(client_id)
-            
-            response_time = time.time() - start_time
-            operation_type = "cache_hits" if hasattr(self, '_from_cache') else "db_direct_calls"
-            self._record_operation(operation_type, response_time)
-            
-            return result
-            
-        except Exception as e:
-            self.logger.error(f"Error getting client {client_id}: {e}")
-            self._record_operation("db_direct_calls", time.time() - start_time)
-            raise
+    # get_client removed - client functionality eliminated
     
-    def create_client(self, **kwargs) -> Optional[int]:
-        """Create client and invalidate related cache."""
-        try:
-            result = self.db_manager.create_client(**kwargs)
-            
-            if result:
-                self._invalidate_related_cache("client")
-                self.logger.debug(f"Client created: {result}")
-            
-            return result
-            
-        except Exception as e:
-            self.logger.error(f"Error creating client: {e}")
-            raise
+    # create_client removed - client functionality eliminated
     
-    def update_client(self, client_id: int, **kwargs) -> bool:
-        """Update client and invalidate related cache."""
-        try:
-            result = self.db_manager.update_client(client_id, **kwargs)
-            
-            if result:
-                self._invalidate_related_cache("client", client_id)
-                self.logger.debug(f"Client updated: {client_id}")
-            
-            return result
-            
-        except Exception as e:
-            self.logger.error(f"Error updating client {client_id}: {e}")
-            raise
+    # update_client removed - client functionality eliminated
     
-    def delete_client(self, client_id: int, soft_delete: bool = True) -> bool:
-        """Delete client and invalidate related cache."""
-        try:
-            result = self.db_manager.delete_client(client_id, soft_delete=soft_delete)
-            
-            if result:
-                self._invalidate_related_cache("client", client_id)
-                # Also invalidate projects related to this client
-                invalidate_cache("project_list")
-                self.logger.debug(f"Client deleted: {client_id}")
-            
-            return result
-            
-        except Exception as e:
-            self.logger.error(f"Error deleting client {client_id}: {e}")
-            raise
+    # delete_client removed - client functionality eliminated
     
     # =============================================================================
     # PROJECT OPERATIONS WITH CACHING
@@ -332,7 +240,6 @@ class CachedDatabaseManager:
     
     @cached("project_list", operation_type="quick")
     def get_projects(self,
-                    client_id: Optional[int] = None,
                     include_inactive: bool = False,
                     search_name: Optional[str] = None,
                     status_filter: Optional[str] = None,
@@ -343,7 +250,6 @@ class CachedDatabaseManager:
         
         try:
             result = self.db_manager.get_projects(
-                client_id=client_id,
                 include_inactive=include_inactive,
                 search_name=search_name,
                 status_filter=status_filter,
@@ -388,9 +294,7 @@ class CachedDatabaseManager:
             
             if result:
                 self._invalidate_related_cache("project")
-                # Invalidate client-related caches if client_id provided
-                if "client_id" in kwargs:
-                    invalidate_cache("client_projects", kwargs["client_id"])
+                # Client cache invalidation removed
                 self.logger.debug(f"Project created: {result}")
             
             return result
@@ -555,7 +459,7 @@ class CachedDatabaseManager:
         try:
             # This would be a heavy aggregation query
             result = {
-                "total_clients": len(self.get_clients().get("data", [])),
+                # Client count removed - client functionality eliminated
                 "total_projects": len(self.get_projects().get("data", [])),
                 "total_epics": len(self.get_epics()),
                 "total_tasks": len(self.get_tasks()),

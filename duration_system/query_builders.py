@@ -303,13 +303,7 @@ class EpicQueryBuilder(SecureQueryBuilder):
     def __init__(self):
         super().__init__("framework_epics")
 
-    def with_client_info(self) -> "EpicQueryBuilder":
-        """Join with client information."""
-        self.left_join(
-            "framework_clients",
-            "framework_epics.client_id = framework_clients.id",
-        )
-        return self
+    # with_client_info removed - client functionality eliminated
 
     def with_project_info(self) -> "EpicQueryBuilder":
         """Join with project information."""
@@ -324,10 +318,7 @@ class EpicQueryBuilder(SecureQueryBuilder):
         self.where("status", "!=", "archived")
         return self
 
-    def by_client(self, client_id: int) -> "EpicQueryBuilder":
-        """Filter by client ID."""
-        self.where("client_id", "=", client_id)
-        return self
+    # by_client removed - client functionality eliminated
 
     def with_points_range(self, min_points: int, max_points: int) -> "EpicQueryBuilder":
         """Filter by points range."""

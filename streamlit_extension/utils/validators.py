@@ -356,17 +356,7 @@ def generate_validation_report(validations: List[Tuple[str, bool, List[str]]]) -
     return report
 
 
-def validate_client_data(client: Dict[str, Any]) -> Tuple[bool, List[str]]:
-    """
-    🏢 Validate client data structure and business rules.
-    
-    Args:
-        client: Client dictionary to validate
-    
-    Returns:
-        Tuple of (is_valid, error_messages)
-    """
-    errors = []
+# validate_client_data removed - client functionality eliminated
     
     # Required fields
     required_fields = ["client_key", "name", "primary_contact_email"]
@@ -455,21 +445,13 @@ def validate_project_data(project: Dict[str, Any]) -> Tuple[bool, List[str]]:
     """
     errors = []
     
-    # Required fields
-    required_fields = ["client_id", "project_key", "name", "status", "planned_start_date", "planned_end_date"]
+    # Required fields (client_id removed - direct project management)
+    required_fields = ["project_key", "name", "status", "planned_start_date", "planned_end_date"]
     for field in required_fields:
         if field not in project or project[field] is None:
             errors.append(f"Missing required field: {field}")
     
-    # Validate client_id
-    client_id = project.get("client_id")
-    if client_id is not None:
-        try:
-            client_id_int = int(client_id)
-            if client_id_int < 1:
-                errors.append("Client ID must be a positive integer")
-        except (ValueError, TypeError):
-            errors.append(f"Invalid client ID value: {client_id}")
+    # Client ID validation removed - projects are managed directly
     
     # Validate project_key format
     project_key = project.get("project_key", "")
@@ -583,79 +565,32 @@ def validate_project_data(project: Dict[str, Any]) -> Tuple[bool, List[str]]:
     return len(errors) == 0, errors
 
 
-def validate_email_uniqueness(email: str, existing_clients: List[Dict[str, Any]], exclude_client_id: Optional[int] = None) -> bool:
-    """
-    📧 Check if email is unique among existing clients.
-    
-    Args:
-        email: Email to check
-        existing_clients: List of existing client dictionaries
-        exclude_client_id: Client ID to exclude from check (for updates)
-    
-    Returns:
-        True if email is unique, False otherwise
-    """
-    if not email:
-        return True
-    
-    for client in existing_clients:
-        if exclude_client_id and client.get("id") == exclude_client_id:
-            continue
-        
-        if (client.get("primary_contact_email", "").lower() == email.lower() or
-            client.get("billing_email", "").lower() == email.lower()):
-            return False
-    
-    return True
+# Client email validation removed - client functionality eliminated
 
 
-def validate_client_key_uniqueness(client_key: str, existing_clients: List[Dict[str, Any]], exclude_client_id: Optional[int] = None) -> bool:
-    """
-    🔑 Check if client key is unique among existing clients.
-    
-    Args:
-        client_key: Client key to check
-        existing_clients: List of existing client dictionaries
-        exclude_client_id: Client ID to exclude from check (for updates)
-    
-    Returns:
-        True if client key is unique, False otherwise
-    """
-    if not client_key:
-        return True
-    
-    for client in existing_clients:
-        if exclude_client_id and client.get("id") == exclude_client_id:
-            continue
-        
-        if client.get("client_key", "").lower() == client_key.lower():
-            return False
-    
-    return True
+# Client key validation removed - client functionality eliminated
 
 
-def validate_project_key_uniqueness(project_key: str, client_id: int, existing_projects: List[Dict[str, Any]], exclude_project_id: Optional[int] = None) -> bool:
+def validate_project_key_uniqueness(project_key: str, existing_projects: List[Dict[str, Any]], exclude_project_id: Optional[int] = None) -> bool:
     """
-    🔑 Check if project key is unique within the client's projects.
+    🔑 Check if project key is unique across all projects.
     
     Args:
         project_key: Project key to check
-        client_id: Client ID for scoping
         existing_projects: List of existing project dictionaries
         exclude_project_id: Project ID to exclude from check (for updates)
     
     Returns:
-        True if project key is unique within client, False otherwise
+        True if project key is unique, False otherwise
     """
-    if not project_key or not client_id:
+    if not project_key:
         return True
     
     for project in existing_projects:
         if exclude_project_id and project.get("id") == exclude_project_id:
             continue
 
-        if (project.get("client_id") == client_id and
-            project.get("project_key", "").lower() == project_key.lower()):
+        if project.get("project_key", "").lower() == project_key.lower():
             return False
 
     return True

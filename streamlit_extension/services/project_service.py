@@ -55,14 +55,14 @@ class ProjectRepository(BaseRepository):
             self.db_manager.logger.error(f"Error finding project by ID {project_id}: {e}")
             return None
     
-    def find_by_name_and_client(self, name: str, client_id: int) -> Optional[Dict[str, Any]]:
-        """Find project by name and client ID."""
+    def find_by_name(self, name: str) -> Optional[Dict[str, Any]]:
+        """Find project by name."""
         try:
-            query = "SELECT * FROM framework_projects WHERE name = ? AND client_id = ?"
-            result = self.db_manager.execute_query(query, (name, client_id))
+            query = "SELECT * FROM framework_projects WHERE name = ?"
+            result = self.db_manager.execute_query(query, (name,))
             return result[0] if result else None
         except Exception as e:
-            self.db_manager.logger.error(f"Error finding project by name {name} and client {client_id}: {e}")
+            self.db_manager.logger.error(f"Error finding project by name {name}: {e}")
             return None
     
     def find_all(
@@ -92,13 +92,7 @@ class ProjectRepository(BaseRepository):
                     where_conditions.append("p.name LIKE ?")
                     params.append(f"%{filters.get('name')}%")
                 
-                if filters.has('client_id'):
-                    where_conditions.append("p.client_id = ?")
-                    params.append(filters.get('client_id'))
-                
-                if filters.has('client_name'):
-                    where_conditions.append("c.name LIKE ?")
-                    params.append(f"%{filters.get('client_name')}%")
+                # Client filtering removed - direct project access
                 
                 if filters.has('budget_min'):
                     where_conditions.append("p.budget >= ?")
@@ -161,13 +155,13 @@ class ProjectRepository(BaseRepository):
             self.db_manager.logger.error(f"Error finding projects: {e}")
             return PaginatedResult([], 0, page, page_size, 0)
     
-    def find_by_client(self, client_id: int) -> List[Dict[str, Any]]:
-        """Find all projects for a specific client."""
+    def find_all_projects(self) -> List[Dict[str, Any]]:
+        """Find all projects."""
         try:
-            query = "SELECT * FROM framework_projects WHERE client_id = ? ORDER BY created_at DESC"
-            return self.db_manager.execute_query(query, (client_id,))
+            query = "SELECT * FROM framework_projects ORDER BY created_at DESC"
+            return self.db_manager.execute_query(query)
         except Exception as e:
-            self.db_manager.logger.error(f"Error finding projects for client {client_id}: {e}")
+            self.db_manager.logger.error(f"Error finding projects: {e}")
             return []
     
     def create(self, project_data: Dict[str, Any]) -> Optional[int]:
@@ -175,14 +169,13 @@ class ProjectRepository(BaseRepository):
         try:
             query = """
                 INSERT INTO framework_projects (
-                    name, description, client_id, status, start_date, end_date,
+                    name, description, status, start_date, end_date,
                     budget, team_members, notes, created_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """
             params = (
                 project_data['name'],
                 project_data.get('description'),
-                project_data['client_id'],
                 project_data.get('status', ProjectStatus.PLANNING.value),
                 project_data.get('start_date'),
                 project_data.get('end_date'),
@@ -203,7 +196,7 @@ class ProjectRepository(BaseRepository):
         try:
             query = """
                 UPDATE framework_projects SET
-                    name = ?, description = ?, client_id = ?, status = ?,
+                    name = ?, description = ?, status = ?,
                     start_date = ?, end_date = ?, budget = ?, team_members = ?,
                     notes = ?, updated_at = ?
                 WHERE id = ?
@@ -211,7 +204,6 @@ class ProjectRepository(BaseRepository):
             params = (
                 project_data['name'],
                 project_data.get('description'),
-                project_data['client_id'],
                 project_data.get('status', ProjectStatus.PLANNING.value),
                 project_data.get('start_date'),
                 project_data.get('end_date'),
@@ -303,7 +295,7 @@ class ProjectRepository(BaseRepository):
                 'progress_percentage': 0
             }
     
-    # Client functionality removed - method eliminated
+    # Client functionality removed - all client-related methods eliminated
 
 
 class ProjectService(BaseService):
@@ -424,7 +416,7 @@ class ProjectService(BaseService):
         self.log_operation("create_project", project_data=project_data)
         
         # Validate required fields
-        required_fields = ['name', 'client_id']
+        required_fields = ['name']
         validation_errors = self.validate_required_fields(project_data, required_fields)
         
         # Validate business rules
@@ -434,19 +426,11 @@ class ProjectService(BaseService):
         if validation_errors:
             return ServiceResult.fail_multiple(validation_errors)
         
-        # Check if client exists
-        if not self.repository.client_exists(project_data['client_id']):
-            return ServiceResult.business_rule_violation(
-                f"Client with ID {project_data['client_id']} does not exist or is not active"
-            )
-        
-        # Check project name uniqueness within client
-        existing_project = self.repository.find_by_name_and_client(
-            project_data['name'], project_data['client_id']
-        )
+        # Check project name uniqueness
+        existing_project = self.repository.find_by_name(project_data['name'])
         if existing_project:
             return ServiceResult.business_rule_violation(
-                f"Project '{project_data['name']}' already exists for this client"
+                f"Project '{project_data['name']}' already exists"
             )
         
         try:
@@ -504,7 +488,7 @@ class ProjectService(BaseService):
             return ServiceResult.not_found("Project", project_id)
         
         # Validate required fields
-        required_fields = ['name', 'client_id']
+        required_fields = ['name']
         validation_errors = self.validate_required_fields(project_data, required_fields)
         
         # Validate business rules
@@ -514,19 +498,11 @@ class ProjectService(BaseService):
         if validation_errors:
             return ServiceResult.fail_multiple(validation_errors)
         
-        # Check if client exists
-        if not self.repository.client_exists(project_data['client_id']):
-            return ServiceResult.business_rule_violation(
-                f"Client with ID {project_data['client_id']} does not exist or is not active"
-            )
-        
-        # Check project name uniqueness within client (excluding current project)
-        existing_name_project = self.repository.find_by_name_and_client(
-            project_data['name'], project_data['client_id']
-        )
+        # Check project name uniqueness (excluding current project)
+        existing_name_project = self.repository.find_by_name(project_data['name'])
         if existing_name_project and existing_name_project['id'] != project_id:
             return ServiceResult.business_rule_violation(
-                f"Another project named '{project_data['name']}' already exists for this client"
+                f"Another project named '{project_data['name']}' already exists"
             )
         
         try:
@@ -630,30 +606,21 @@ class ProjectService(BaseService):
         except Exception as e:
             return self.handle_database_error("list_projects", e)
     
-    def get_projects_by_client(self, client_id: int) -> ServiceResult[List[Dict[str, Any]]]:
+    def get_all_projects(self) -> ServiceResult[List[Dict[str, Any]]]:
         """
-        Get all projects for a specific client.
+        Get all projects.
         
-        Args:
-            client_id: Client ID
-            
         Returns:
             ServiceResult with list of projects
         """
-        self.log_operation("get_projects_by_client", client_id=client_id)
+        self.log_operation("get_all_projects")
         
         try:
-            # Check if client exists
-            if not self.repository.client_exists(client_id):
-                return ServiceResult.business_rule_violation(
-                    f"Client with ID {client_id} does not exist or is not active"
-                )
-            
-            projects = self.repository.find_by_client(client_id)
+            projects = self.repository.find_all_projects()
             return ServiceResult.ok(projects)
             
         except Exception as e:
-            return self.handle_database_error("get_projects_by_client", e)
+            return self.handle_database_error("get_all_projects", e)
     
     def get_project_summary(self, project_id: int) -> ServiceResult[Dict[str, Any]]:
         """
@@ -703,7 +670,7 @@ class ProjectService(BaseService):
             ServiceResult indicating if data is valid
         """
         # Validate required fields
-        required_fields = ['name', 'client_id']
+        required_fields = ['name']
         validation_errors = self.validate_required_fields(project_data, required_fields)
         
         # Validate business rules
