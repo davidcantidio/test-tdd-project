@@ -37,7 +37,7 @@ except ImportError:
     is_production = lambda: False
 
 try:
-    from streamlit_extension.database import get_connection
+    from streamlit_extension.utils.database import DatabaseManager
     DATABASE_AVAILABLE = True
 except ImportError:
     DATABASE_AVAILABLE = False
@@ -236,7 +236,7 @@ class HealthCheckManager:
             }
         
         try:
-            # Migrated to modular API - using get_connection()
+            db_manager = DatabaseManager()
             
             # Test framework database
             with db_manager.get_connection("framework") as conn:
