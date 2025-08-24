@@ -69,14 +69,13 @@ class CacheStrategy:
     """Cache strategy definitions for different operation types."""
     
     # Query cache TTLs (in seconds)
-    QUICK_QUERIES = 300      # 5 minutes - client/project lists
-    MEDIUM_QUERIES = 900     # 15 minutes - epic/task data  
+    QUICK_QUERIES = 300      # 5 minutes - project lists
+    MEDIUM_QUERIES = 900     # 15 minutes - epic/task data
     HEAVY_QUERIES = 1800     # 30 minutes - analytics/aggregations
     STATIC_DATA = 3600       # 1 hour - settings/configs
     
     # Cache key prefixes
-    PREFIX_CLIENT = "client"
-    PREFIX_PROJECT = "project" 
+    PREFIX_PROJECT = "project"
     PREFIX_EPIC = "epic"
     PREFIX_TASK = "task"
     PREFIX_ANALYTICS = "analytics"
@@ -372,7 +371,7 @@ class RedisCacheManager:
         Generate secure cache key with SHA-256 hashing.
         
         Args:
-            prefix: Cache key prefix (e.g., 'client', 'project')
+            prefix: Cache key prefix (e.g., 'project')
             *args: Positional arguments for key generation
             **kwargs: Keyword arguments for key generation
             
@@ -529,7 +528,7 @@ class RedisCacheManager:
         Delete keys matching pattern.
         
         Args:
-            pattern: Key pattern (e.g., 'client:*')
+            pattern: Key pattern (e.g., 'project:*')
             
         Returns:
             Number of keys deleted
@@ -638,9 +637,9 @@ def cached(prefix: str, ttl: int = 900, operation_type: str = "medium"):
         operation_type: Operation type for TTL mapping
         
     Usage:
-        @cached("client", operation_type="quick")
-        def get_client_data(client_id):
-            return expensive_database_operation(client_id)
+        @cached("project", operation_type="quick")
+        def get_project_data(project_id):
+            return expensive_database_operation(project_id)
     """
     def decorator(func: Callable) -> Callable:
         @wraps(func)

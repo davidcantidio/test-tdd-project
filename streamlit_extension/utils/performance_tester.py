@@ -307,8 +307,7 @@ class LoadTester:
                 "project_key": f"load_test_project_{i}",
                 "name": f"Load Test Project {i}",
                 "description": f"Load test project {i} for performance testing",
-                "industry": "Technology",
-                "client_tier": "basic"
+                "industry": "Technology"
             }
             for i in range(size)
         ]
@@ -539,11 +538,11 @@ def create_performance_test_suite(db_manager) -> Dict[str, Any]:
     # 2. Load testing
     logging.info("⚡ Running load tests...")
     
-    def client_creation_test(data):
-        return db_manager.create_client(**data)
-    
-    results["load_test_light"] = load_tester.run_load_test(light_load, client_creation_test)
-    results["load_test_heavy"] = load_tester.run_load_test(heavy_load, client_creation_test)
+    def project_creation_test(data):
+        return db_manager.create_project(**data)
+
+    results["load_test_light"] = load_tester.run_load_test(light_load, project_creation_test)
+    results["load_test_heavy"] = load_tester.run_load_test(heavy_load, project_creation_test)
     
     # 3. Generate report
     logging.info("📋 Generating performance report...")
@@ -560,14 +559,10 @@ def run_quick_performance_check(db_manager) -> Dict[str, Any]:
     profiler = PerformanceProfiler()
     
     # Test basic operations
-    with profiler.profile_operation("get_clients"):
-        db_manager.get_clients(limit=10)
-    
     with profiler.profile_operation("get_projects"):
         db_manager.get_projects(limit=10)
-    
+
     return {
-        "get_clients": profiler.get_statistics("get_clients"),
         "get_projects": profiler.get_statistics("get_projects"),
         "timestamp": datetime.datetime.now().isoformat()
     }

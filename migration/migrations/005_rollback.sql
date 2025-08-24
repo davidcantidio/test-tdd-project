@@ -8,7 +8,6 @@ DROP INDEX IF EXISTS idx_framework_tasks_tdd_phase;
 
 -- Drop framework_epics indexes
 DROP INDEX IF EXISTS idx_framework_epics_status;
-DROP INDEX IF EXISTS idx_framework_epics_client_id;
 DROP INDEX IF EXISTS idx_framework_epics_project_id;
 
 -- Drop work_sessions indexes

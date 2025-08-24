@@ -2,7 +2,7 @@
 📁 Project Service Layer
 
 Business logic for project management operations.
-Implements complete CRUD operations with client relationships and validation.
+Implements complete CRUD operations with validation.
 """
 
 from typing import Dict, List, Optional, Any, Tuple
@@ -42,7 +42,7 @@ class ProjectRepository(BaseRepository):
         super().__init__(db_manager)
     
     def find_by_id(self, project_id: int) -> Optional[Dict[str, Any]]:
-        """Find project by ID with client information."""
+        """Find project by ID."""
         try:
             query = """
                 SELECT p.*
@@ -92,8 +92,6 @@ class ProjectRepository(BaseRepository):
                     where_conditions.append("p.name LIKE ?")
                     params.append(f"%{filters.get('name')}%")
                 
-                # Client filtering removed - direct project access
-                
                 if filters.has('budget_min'):
                     where_conditions.append("p.budget >= ?")
                     params.append(filters.get('budget_min'))
@@ -120,8 +118,6 @@ class ProjectRepository(BaseRepository):
                 sort_field = sort.field
                 if sort_field in ['name', 'status', 'start_date', 'end_date', 'budget']:
                     sort_field = f"p.{sort_field}"
-                elif sort_field in ['client_name']:
-                    sort_field = f"c.name"
                 
                 order_clause = f" ORDER BY {sort_field} {'ASC' if sort.ascending else 'DESC'}"
             
@@ -295,7 +291,6 @@ class ProjectRepository(BaseRepository):
                 'progress_percentage': 0
             }
     
-    # Client functionality removed - all client-related methods eliminated
 
 
 class ProjectService(BaseService):
@@ -448,11 +443,11 @@ class ProjectService(BaseService):
     
     def get_project(self, project_id: int) -> ServiceResult[Dict[str, Any]]:
         """
-        Get project by ID with client information.
-        
+        Get project by ID.
+
         Args:
             project_id: Project ID
-            
+
         Returns:
             ServiceResult with project data if found
         """
@@ -624,11 +619,11 @@ class ProjectService(BaseService):
     
     def get_project_summary(self, project_id: int) -> ServiceResult[Dict[str, Any]]:
         """
-        Get project summary with metrics and client information.
-        
+        Get project summary with metrics.
+
         Args:
             project_id: Project ID
-            
+
         Returns:
             ServiceResult with project summary data
         """

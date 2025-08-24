@@ -3,7 +3,7 @@
 
 Comprehensive project management interface with CRUD operations:
 - Project overview with card-based visualization
-- Client filtering, search and pagination
+- Search and pagination
 - Create, edit, and delete projects (via wizard/actions)
 - Status and progress monitoring
 """

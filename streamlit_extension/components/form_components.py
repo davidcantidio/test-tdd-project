@@ -183,7 +183,6 @@ class StandardForm:
                 self.st.error(error)
 
 
-# ClientForm removed - client functionality eliminated
 
 
 class ProjectForm(StandardForm):
@@ -199,7 +198,6 @@ class ProjectForm(StandardForm):
             
             # Basic Information Section
             self.st.markdown("#### Basic Information")
-            # Client selection removed - direct project management
             project_key = self.render_text_input(
                 "Project Key*", "project_key", required=True,
                 placeholder="e.g., project_xyz"
@@ -267,7 +265,6 @@ class ProjectForm(StandardForm):
 
 # ------------------------------------------------------------------
 # Convenience functions for form creation
-# create_client_form removed - client functionality eliminated
 
 
 def create_project_form(form_id: str, title: str) -> ProjectForm:
@@ -476,14 +473,12 @@ if __name__ == "__main__":
     logging.info("🏗️ Testing DRY Form Components - Simplified")
     logging.info("=" * 50)
     
-    # Test form creation - client functionality removed
     project_form = create_project_form("test_project", "Test Project Form")
     
     logging.info("✅ Form components created successfully")
     logging.info(f"   Project Form ID: {project_form.form_id}")
     logging.info(f"   Project Form Title: {project_form.title}")
     
-    # Test validation - client tests removed
     test_data = {"project_key": "test", "name": "Test Project", "status": "active"}
     errors = project_form.validate_project_data(test_data)
     

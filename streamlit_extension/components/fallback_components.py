@@ -215,17 +215,6 @@ class StandardForm:
             logger.error(f"Error in StandardForm fallback: {e}")
             return {"submitted": False, "valid": False, "data": {}, "errors": [str(e)]}
 
-class ClientForm:
-    """Fallback implementation for client form component."""
-    
-    @staticmethod
-    def render(data: Optional[Dict[str, Any]] = None, **kwargs) -> Dict[str, Any]:
-        """Render client form fallback."""
-        return StandardForm.render(fields=[
-            {"name": "name", "type": "text", "label": "Nome"},
-            {"name": "email", "type": "email", "label": "Email"}
-        ])
-
 class ProjectForm:
     """Fallback implementation for project form component."""
     
@@ -306,7 +295,6 @@ class NavigationMenu:
             # Basic navigation fallback
             default_items = [
                 {"label": "Dashboard", "value": "dashboard"},
-                {"label": "Clients", "value": "clients"},
                 {"label": "Projects", "value": "projects"}
             ]
             
@@ -352,7 +340,6 @@ class FallbackRegistry:
         
         # Forms
         "StandardForm": StandardForm,
-        "ClientForm": ClientForm,
         "ProjectForm": ProjectForm,
         
         # Charts and analytics
@@ -414,7 +401,6 @@ __all__ = [
     
     # Forms
     "StandardForm",
-    "ClientForm", 
     "ProjectForm",
     
     # Charts and analytics

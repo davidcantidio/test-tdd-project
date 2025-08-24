@@ -311,24 +311,22 @@ class AuthenticationManager:
         """Map roles to permissions."""
         permission_map = {
             'admin': {
-                'create_client', 'read_client', 'update_client', 'delete_client',
                 'create_project', 'read_project', 'update_project', 'delete_project',
                 'create_epic', 'read_epic', 'update_epic', 'delete_epic',
                 'create_task', 'read_task', 'update_task', 'delete_task',
                 'admin_panel', 'user_management', 'system_settings'
             },
             'manager': {
-                'create_client', 'read_client', 'update_client',
                 'create_project', 'read_project', 'update_project',
                 'create_epic', 'read_epic', 'update_epic',
                 'create_task', 'read_task', 'update_task'
             },
             'user': {
-                'read_client', 'read_project', 'read_epic', 'read_task',
+                'read_project', 'read_epic', 'read_task',
                 'create_task', 'update_task'
             },
             'viewer': {
-                'read_client', 'read_project', 'read_epic', 'read_task'
+                'read_project', 'read_epic', 'read_task'
             }
         }
         

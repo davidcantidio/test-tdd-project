@@ -755,7 +755,7 @@ if __name__ == "__main__":
     logger.info("application", "startup", "TDD Framework starting up")
     
     # Performance logging with timer
-    with logger.performance_timer("database", "client_query"):
+    with logger.performance_timer("database", "project_query"):
         time.sleep(0.1)  # Simulate work
     
     # Security event
@@ -771,7 +771,7 @@ if __name__ == "__main__":
     
     # User action logging
     with log_user_session("user123", "session456", "192.168.1.50"):
-        logger.user_action("user123", "create_client", "client_form", success=True)
+        logger.user_action("user123", "create_project", "project_form", success=True)
     
     logging.info("Structured logging demo completed!")
     logging.info("Check demo_logs/ directory for log files")

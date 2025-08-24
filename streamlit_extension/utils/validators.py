@@ -6,7 +6,7 @@ Validation utilities for Streamlit extension with:
 - Database schema validation
 - Input sanitization
 - Error reporting
-- Client and Project data validation
+- Project data validation
 """
 
 from __future__ import annotations
@@ -356,7 +356,6 @@ def generate_validation_report(validations: List[Tuple[str, bool, List[str]]]) -
     return report
 
 
-# validate_client_data completely removed - client functionality eliminated
 
 
 def validate_project_data(project: Dict[str, Any]) -> Tuple[bool, List[str]]:
@@ -371,7 +370,7 @@ def validate_project_data(project: Dict[str, Any]) -> Tuple[bool, List[str]]:
     """
     errors = []
     
-    # Required fields (client_id removed - direct project management)
+    # Required fields
     required_fields = ["project_key", "name", "status", "planned_start_date", "planned_end_date"]
     for field in required_fields:
         if field not in project or project[field] is None:
@@ -489,7 +488,6 @@ def validate_project_data(project: Dict[str, Any]) -> Tuple[bool, List[str]]:
     return len(errors) == 0, errors
 
 
-# Client validation functions removed - client functionality eliminated
 
 
 def validate_project_key_uniqueness(project_key: str, existing_projects: List[Dict[str, Any]], exclude_project_id: Optional[int] = None) -> bool:

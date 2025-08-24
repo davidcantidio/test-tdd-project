@@ -51,7 +51,6 @@ render_kanban_page, KANBAN_AVAILABLE = _import_page("kanban", "render_kanban_pag
 render_gantt_page, GANTT_AVAILABLE = _import_page("gantt", "render_gantt_page")
 render_timer_page, TIMER_AVAILABLE = _import_page("timer", "render_timer_page")
 render_settings_page, SETTINGS_AVAILABLE = _import_page("settings", "render_settings_page")
-# Client functionality removed - no longer needed
 render_projects_page, PROJECTS_AVAILABLE = _import_page("projects", "render_projects_page")
 render_health_page, HEALTH_AVAILABLE = _import_page("health", "render_health_page")
 render_projeto_wizard_page, PROJETO_WIZARD_AVAILABLE = _import_page("projeto_wizard", "render_projeto_wizard_page")
@@ -151,7 +150,6 @@ PAGE_REGISTRY: Dict[str, PageSpec] = {
         render_func=render_settings_page,
         available=SETTINGS_AVAILABLE,
     ),
-    # Client functionality removed - page eliminated
     "projects": PageSpec(
         id="projects",
         title="📁 Projects",

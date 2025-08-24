@@ -57,7 +57,7 @@ def _validate_column_name(column_name: str, table_name: str) -> str:
     allowed_columns = {
         'id', 'name', 'email', 'company', 'status', 'created_at', 'updated_at',
         'title', 'description', 'priority', 'estimate_minutes', 'actual_minutes',
-        'client_id', 'project_id', 'epic_id', 'task_id', 'user_id',
+        'project_id', 'epic_id', 'task_id', 'user_id',
         'start_date', 'end_date', 'budget', 'progress', 'points'
     }
     if column_name not in allowed_columns:

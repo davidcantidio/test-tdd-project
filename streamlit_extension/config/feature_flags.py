@@ -11,7 +11,6 @@ from streamlit_extension.auth.user_model import UserRole
 
 
 class FeatureFlag(str, Enum):
-    NEW_CLIENT_FORM = "NEW_CLIENT_FORM"
     ADVANCED_ANALYTICS = "ADVANCED_ANALYTICS"
     BETA_FEATURES = "BETA_FEATURES"
     MAINTENANCE_MODE = "MAINTENANCE_MODE"

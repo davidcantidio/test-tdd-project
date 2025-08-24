@@ -341,7 +341,6 @@ class StreamlitSecurityManager:
         
         return text
     
-    # create_safe_client_data removed - client functionality eliminated
     
     def create_safe_project_data(self, form_data: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -806,7 +805,6 @@ def validate_form(data: Dict[str, Any]) -> Tuple[bool, List[str]]:
     return security_manager.validate_form_data(data)
 
 
-# create_safe_client removed - client functionality eliminated
 
 
 def create_safe_project(form_data: Dict[str, Any]) -> Dict[str, Any]:

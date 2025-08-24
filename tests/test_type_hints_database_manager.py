@@ -12,10 +12,6 @@ from streamlit_extension.utils.database import DatabaseManager
 METHODS = [
     "get_connection",
     "execute_query",
-    "get_clients",
-    "create_client",
-    "update_client",
-    "delete_client",
     "get_projects",
     "create_project",
     "update_project",

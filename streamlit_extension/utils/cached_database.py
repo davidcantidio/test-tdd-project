@@ -199,7 +199,7 @@ class CachedDatabaseManager:
             invalidate_cache("analytics")
             invalidate_cache("aggregation")
             
-            # Entity-specific invalidations - client invalidation removed
+            # Entity-specific invalidations
             if entity_type == "project":
                 # Project changes affect epics
                 invalidate_cache("epic_list")
@@ -219,20 +219,6 @@ class CachedDatabaseManager:
                 
         except Exception as e:
             self.logger.error(f"Cache invalidation error: {e}")
-    
-    # =============================================================================
-    # CLIENT OPERATIONS WITH CACHING
-    # =============================================================================
-    
-    # get_clients removed - client functionality eliminated
-    
-    # get_client removed - client functionality eliminated
-    
-    # create_client removed - client functionality eliminated
-    
-    # update_client removed - client functionality eliminated
-    
-    # delete_client removed - client functionality eliminated
     
     # =============================================================================
     # PROJECT OPERATIONS WITH CACHING
@@ -294,7 +280,6 @@ class CachedDatabaseManager:
             
             if result:
                 self._invalidate_related_cache("project")
-                # Client cache invalidation removed
                 self.logger.debug(f"Project created: {result}")
             
             return result
@@ -459,7 +444,6 @@ class CachedDatabaseManager:
         try:
             # This would be a heavy aggregation query
             result = {
-                # Client count removed - client functionality eliminated
                 "total_projects": len(self.get_projects().get("data", [])),
                 "total_epics": len(self.get_epics()),
                 "total_tasks": len(self.get_tasks()),

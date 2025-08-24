@@ -46,7 +46,7 @@ class EpicRepository(BaseRepository):
         super().__init__(db_manager)
     
     def find_by_id(self, epic_id: int) -> Optional[Dict[str, Any]]:
-        """Find epic by ID with project and client information."""
+        """Find epic by ID with project information."""
         try:
             query = """
                 SELECT e.*, p.name as project_name
@@ -79,7 +79,7 @@ class EpicRepository(BaseRepository):
     ) -> PaginatedResult[Dict[str, Any]]:
         """Find all epics with filtering, sorting, and pagination."""
         try:
-            # Build base query with project and client information
+            # Build base query with project information
             base_query = """
                 SELECT e.*, p.name as project_name,
                        COUNT(t.id) as task_count,
@@ -108,10 +108,6 @@ class EpicRepository(BaseRepository):
                 if filters.has('project_id'):
                     where_conditions.append("e.project_id = ?")
                     params.append(filters.get('project_id'))
-                
-                if filters.has('client_id'):
-                    where_conditions.append("p.client_id = ?")
-                    params.append(filters.get('client_id'))
                 
                 if filters.has('priority'):
                     where_conditions.append("e.priority = ?")
@@ -142,8 +138,6 @@ class EpicRepository(BaseRepository):
                     sort_field = f"e.{sort_field}"
                 elif sort_field in ['project_name']:
                     sort_field = f"p.name"
-                elif sort_field in ['client_name']:
-                    sort_field = f"c.name"
                 elif sort_field == 'progress':
                     sort_field = "(completed_tasks * 100.0 / NULLIF(task_count, 0))"
                 
@@ -613,11 +607,11 @@ class EpicService(BaseService):
     
     def get_epic(self, epic_id: int) -> ServiceResult[Dict[str, Any]]:
         """
-        Get epic by ID with project and client information.
-        
+        Get epic by ID with project information.
+
         Args:
             epic_id: Epic ID
-            
+
         Returns:
             ServiceResult with epic data if found
         """

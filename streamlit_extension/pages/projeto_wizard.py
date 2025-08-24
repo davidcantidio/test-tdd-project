@@ -63,7 +63,6 @@ def _init_db_layer() -> None:
     except Exception:
         _create_project_fn = None
 
-# Client functionality removed - no longer needed
 
 def _create_project_safely(payload: Dict[str, Any]) -> Dict[str, Any]:
     """

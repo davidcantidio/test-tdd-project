@@ -108,9 +108,9 @@ def test_get_secret():
 # ---------------------------------------------------------------------------
 
 def test_feature_flag_enabled():
-    with patch.dict(os.environ, {"FF_NEW_CLIENT_FORM": "1"}):
+    with patch.dict(os.environ, {"FF_ADVANCED_ANALYTICS": "1"}):
         manager = FeatureFlagManager()
-        assert manager.is_enabled(FeatureFlag.NEW_CLIENT_FORM)
+        assert manager.is_enabled(FeatureFlag.ADVANCED_ANALYTICS)
 
 
 def test_feature_flag_disabled():

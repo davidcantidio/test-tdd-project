@@ -23,7 +23,7 @@ PHONE_RE = re.compile(r"^[+\d][\d\s().-]{7,}$")
 
 __all__ = [
     "validate_required_fields", "validate_email_format", "validate_phone_format",
-    "validate_text_length",  # validate_business_rules_client removed
+    "validate_text_length",
     "validate_business_rules_project", "sanitize_form_inputs",
 ]
 
@@ -65,7 +65,6 @@ def validate_text_length(text: str, min_len: int, max_len: int, field_name: str)
     return errors
 
 
-# validate_business_rules_client removed - client functionality eliminated
 
 
 def validate_business_rules_project(data: Dict[str, Any]) -> List[str]:

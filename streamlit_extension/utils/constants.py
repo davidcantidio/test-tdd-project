@@ -30,7 +30,6 @@ class FieldNames:
     EPIC_ID: Final[str] = "epic_id"
 
 
-# Client status removed - client functionality eliminated
 
 
 class ProjectStatus(Enum):

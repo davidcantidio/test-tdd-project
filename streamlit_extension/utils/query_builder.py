@@ -234,7 +234,6 @@ class QueryBuilder:
 # ----------------------------------------------------------------------
 # Specialized builders
 # ----------------------------------------------------------------------
-# Client query builder removed - client functionality eliminated
 
 
 class ProjectQueryBuilder(QueryBuilder):
@@ -243,7 +242,6 @@ class ProjectQueryBuilder(QueryBuilder):
     def __init__(self) -> None:
         super().__init__("framework_projects")
 
-    # Client-related methods removed - client functionality eliminated
 
     def active_only(self) -> "ProjectQueryBuilder":
         """Filter only active projects."""
