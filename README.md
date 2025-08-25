@@ -1,6 +1,6 @@
 # 🚀 TDD Framework - Enterprise Streamlit Application
 
-> **Production-ready Test-Driven Development** framework with **Client → Project → Epic → Task** hierarchy, enterprise authentication, and security stack.
+> **Production-ready Test-Driven Development** framework with **Project → Epic → Task** hierarchy (simplified architecture), enterprise authentication, and security stack.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
@@ -11,14 +11,15 @@
 ## ✨ Key Features
 
 ### 🏗️ **Enterprise Architecture**
-- **4-Level Hierarchy**: Client → Project → Epic → Task with full relationship mapping
+- **3-Level Hierarchy**: Project → Epic → Task with streamlined relationships
 - **Enterprise Security**: Grade A+ compliance with authentication, CSRF/XSS protection
-- **Service Layer**: 6 business services with clean architecture
+- **Service Layer**: 5 business services with clean architecture
 - **Multi-Environment**: Development, staging, production configurations
+- **Ultra-Normalized Database**: Product visions (15 fields) + Projects hub (78 fields)
 
 ### 🎯 **Core Functionality**
 - **📊 Interactive Dashboard**: Real-time metrics and progress tracking
-- **👥 Client/Project Management**: Complete CRUD with filtering and pagination
+- **👥 Project Management**: Complete CRUD with filtering and pagination
 - **🎯 Epic & Task Tracking**: TDD phase tracking (Red/Green/Refactor)
 - **⏱️ Focus Timer**: TDAH-optimized productivity sessions
 - **🛡️ Security Stack**: Enterprise-grade protection and monitoring
@@ -82,7 +83,7 @@ streamlit run streamlit_extension/streamlit_app.py  # Start dashboard + timer
 
 ## 📊 Dashboard Features
 
-**Sample Data:** 1 Client → 1 Project → 12 Epics → 206 Tasks  
+**Sample Data:** Direct Projects → 12 Epics → 206 Tasks  
 **Analytics:** Real-time progress, TDD metrics, focus sessions, productivity insights  
 **Management:** Complete CRUD operations via Streamlit interface
 
