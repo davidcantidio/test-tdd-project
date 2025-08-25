@@ -1,5 +1,5 @@
 import pytest
-from streamlit_extension.pages.projetos.product_vision_state import (
+from streamlit_extension.pages.projetos.domain.product_vision_state import (
     DEFAULT_PV,
     all_fields_filled,
     normalize_constraints,

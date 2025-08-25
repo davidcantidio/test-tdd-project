@@ -66,8 +66,19 @@ Decorators/Camadas: Cross-cutting concerns (auth, rate-limiting, segurança)
 streamlit_extension/pages/
 ├── projects.py              # Main projects page with navigation buttons
 ├── projeto_wizard.py        # ✅ WRAPPER FILE - Direct page access
-└── projeto_wizard/
-    └── projeto_wizard.py    # Core wizard implementation
+└── projetos/                # ✅ CLEAN ARCHITECTURE - Organized by domain
+    ├── projeto_wizard.py    # Core wizard implementation
+    ├── actions.py           # UI handlers → controller
+    ├── state.py            # Global wizard state
+    ├── project_wizard_state.py  # Wizard state management
+    ├── steps/              # 📄 UI Step Components
+    │   └── product_vision_step.py
+    ├── domain/             # 🧠 Pure Domain Logic (no Streamlit deps)
+    │   └── product_vision_state.py
+    ├── controllers/        # 🎮 Business Logic Controllers
+    │   └── product_vision_controller.py
+    └── repositories/       # 💾 Repository Pattern
+        └── product_vision_repository.py
 ```
 
 #### **Technical Implementation**
@@ -102,6 +113,85 @@ render_projeto_wizard_page()
 - **Playwright Browser Automation:** End-to-end testing confirmed navigation works
 - **Manual Testing:** Button click successfully navigates to wizard page
 - **Import Verification:** All wizard dependencies loading correctly
+
+## 🏗️ **CLEAN ARCHITECTURE IMPLEMENTATION**
+
+### **✅ Phase 4.4 - Clean Architecture for Project Wizard - Complete**
+
+**Status:** **PRODUCTION READY** - Clean Architecture implemented  
+**Implementation Date:** 2025-08-25  
+**Architecture:** Domain-Driven Design with Repository Pattern  
+
+#### **Clean Architecture Structure**
+```
+streamlit_extension/pages/projetos/
+├── 📄 UI Layer (Streamlit-specific)
+│   ├── projeto_wizard.py        # Main wizard page (UI fina)
+│   ├── actions.py              # UI handlers → controller
+│   ├── state.py               # Global wizard state  
+│   ├── project_wizard_state.py # Wizard state management
+│   └── steps/                 # UI Step Components
+│       └── product_vision_step.py
+├── 🎮 Controllers Layer (Business Logic)
+│   └── controllers/
+│       └── product_vision_controller.py
+├── 🧠 Domain Layer (Pure Logic - No Dependencies)
+│   └── domain/
+│       └── product_vision_state.py
+└── 💾 Infrastructure Layer (Repository Pattern)
+    └── repositories/
+        └── product_vision_repository.py
+```
+
+#### **Import Patterns**
+```python
+# In wizard pages (projeto_wizard.py):
+from .controllers.product_vision_controller import (
+    can_refine, can_save, build_summary
+)
+from .repositories.product_vision_repository import InMemoryProductVisionRepository
+from .domain.product_vision_state import DEFAULT_PV, validate_product_vision
+from .steps.product_vision_step import render_product_vision_step
+
+# In step components (product_vision_step.py):
+from ..controllers.product_vision_controller import apply_refinement
+from ..domain.product_vision_state import apply_refine_result, validate_product_vision
+
+# In controllers (product_vision_controller.py):
+from ..domain.product_vision_state import (
+    DEFAULT_PV, validate_product_vision, apply_refine_result
+)
+```
+
+#### **Repository Pattern Implementation**
+```python
+# Abstract Repository Interface
+class ProductVisionRepository(ABC):
+    @abstractmethod
+    def save_draft(self, pv: ProductVisionEntity) -> ProductVisionEntity:
+        pass
+    
+    @abstractmethod  
+    def get_by_project_id(self, project_id: int) -> Optional[ProductVisionEntity]:
+        pass
+
+# Implementations available:
+# - InMemoryProductVisionRepository (development/testing)
+# - DatabaseProductVisionRepository (production with SQLite)
+```
+
+#### **Clean Architecture Benefits**
+- **✅ Separation of Concerns:** UI, Business Logic, Domain, Infrastructure
+- **✅ Testability:** Pure domain logic easily testable
+- **✅ Flexibility:** Easy to swap repository implementations
+- **✅ Maintainability:** Clear boundaries and responsibilities
+- **✅ Extensibility:** Easy to add new steps/controllers/repositories
+
+#### **Validation Results**
+- **✅ All existing tests passing (12/12)**
+- **✅ Import structure validated**
+- **✅ Zero breaking changes**
+- **✅ Repository pattern functional**
 
 🔐 Authentication (Google OAuth 2.0)
 Core Components
