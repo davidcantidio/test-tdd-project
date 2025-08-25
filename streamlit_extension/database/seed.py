@@ -4,11 +4,6 @@ from typing import Optional, Protocol, runtime_checkable
 
 # Legacy import - keeping for hybrid compatibility
 from streamlit_extension.utils.database import DatabaseManager  # Legacy compatibility
-from streamlit_extension.database import get_connection, list_epics, list_tasks
-from streamlit_extension.services import ServiceContainer
-# New modular imports
-from streamlit_extension.database import get_connection, list_epics, list_tasks
-from streamlit_extension.services import ServiceContainer  # type: ignore
 
 _DBM_INSTANCE: DatabaseManager | None = None  # type: ignore
 

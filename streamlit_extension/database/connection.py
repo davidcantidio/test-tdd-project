@@ -9,14 +9,8 @@ from collections import OrderedDict, deque
 from contextlib import contextmanager
 from typing import Any, Dict, Iterable, Iterator, Optional, Tuple
 
-# Ajuste o import conforme a localização real do DatabaseManager
 # Legacy import - keeping for hybrid compatibility
 from streamlit_extension.utils.database import DatabaseManager  # Legacy compatibility
-from streamlit_extension.database import get_connection, list_epics, list_tasks
-from streamlit_extension.services import ServiceContainer
-# New modular imports
-from streamlit_extension.database import get_connection, list_epics, list_tasks
-from streamlit_extension.services import ServiceContainer  # type: ignore
 
 # Auth decorators
 from streamlit_extension.auth.middleware import require_auth, require_admin
@@ -88,10 +82,6 @@ def set_database_manager(dbm: DatabaseManager) -> None:
 # SEMANTIC DEDUPLICATION: Use centralized singleton instead of duplicate implementation
 from .database_singleton import get_database_manager as _db
 # Auth imports
-from streamlit_extension.auth.middleware import require_auth, require_admin
-from streamlit_extension.auth.user_model import UserRole
-
-from streamlit_extension.auth.middleware import require_auth, require_admin
 from streamlit_extension.auth.user_model import UserRole
 
 # Keep old function for backward compatibility but delegate to centralized implementation  
