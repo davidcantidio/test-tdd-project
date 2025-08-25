@@ -3,15 +3,11 @@ from __future__ import annotations
 import threading
 from typing import Any, Dict, List, Optional
 
-from streamlit_extension.utils.database import DatabaseManager  # type: ignore
-from .connection import execute_cached_query, get_optimized_connection
+from .connection import execute_cached_query, get_optimized_connection, get_connection_context
 
-_DBM_INSTANCE: DatabaseManager | None = None  # type: ignore
-_DBM_LOCK = threading.Lock()
+# Removed legacy DatabaseManager dependencies
 
 
-# SEMANTIC DEDUPLICATION: Use centralized singleton instead of duplicate implementation
-from .database_singleton import get_database_manager as _db
 # Auth imports
 from streamlit_extension.auth.middleware import require_auth, require_admin
 from streamlit_extension.auth.user_model import UserRole
@@ -22,38 +18,94 @@ from streamlit_extension.auth.user_model import UserRole
 # =============================================================================
 
 def list_epics() -> List[Dict[str, Any]]:
-    """Lista epics conforme regra do DatabaseManager legado."""
-    return _db().get_epics()
+    """Lista epics usando consulta direta otimizada."""
+    return list_epics_optimized()
 
 
 def list_all_epics() -> List[Dict[str, Any]]:
-    """Lista todos os epics (incluindo arquivados/deletados, se suportado)."""
-    return _db().get_all_epics()
+    """Lista todos os epics (incluindo arquivados/deletados)."""
+    sql = """
+        SELECT
+            id, epic_key, name, description, status, priority,
+            duration_days, progress, created_at, updated_at
+        FROM framework_epics
+        ORDER BY created_at DESC
+    """
+    return execute_cached_query(sql, cache_ttl=300)
 
 
 def list_tasks(epic_id: int) -> List[Dict[str, Any]]:
-    """Lista tasks de um epic específico (via legado)."""
-    return _db().get_tasks(epic_id)
+    """Lista tasks de um epic específico usando consulta direta."""
+    return list_tasks_optimized(epic_id)
 
 
 def list_all_tasks() -> List[Dict[str, Any]]:
-    """Lista todas as tasks via legado (pode ser custoso)."""
-    return _db().get_all_tasks()
+    """Lista todas as tasks com dados do epic (otimizada)."""
+    sql = """
+        SELECT
+            t.id, t.task_key, t.epic_id, t.title, t.description,
+            t.tdd_phase, t.status, t.estimate_minutes,
+            t.created_at, t.updated_at,
+            e.name AS epic_name, e.epic_key
+        FROM framework_tasks AS t
+        JOIN framework_epics AS e ON t.epic_id = e.id
+        ORDER BY t.created_at DESC, t.id DESC
+    """
+    return execute_cached_query(sql, cache_ttl=240)
 
 
 def list_timer_sessions() -> List[Dict[str, Any]]:
-    """Retorna sessões de timer agregadas pelo manager legado."""
-    return _db().get_timer_sessions()
+    """Retorna sessões de timer com dados de task/epic."""
+    return get_recent_timer_sessions_optimized(days=30)
 
 
 def get_user_stats(user_id: int) -> Dict[str, Any]:
-    """Métricas agregadas por usuário (via legado)."""
-    return _db().get_user_stats(user_id)
+    """Métricas agregadas por usuário usando consulta otimizada."""
+    return get_user_stats_optimized(user_id)
 
 
 def get_achievements(user_id: int) -> List[Dict[str, Any]]:
-    """Conquistas/gamificação do usuário (via legado)."""
-    return _db().get_achievements(user_id)
+    """Conquistas/gamificação do usuário usando consulta direta."""
+    sql = """
+        SELECT
+            ua.id, ua.user_id, ua.achievement_type_id, ua.earned_at,
+            at.name AS achievement_name, at.description AS achievement_description,
+            at.icon AS achievement_icon, at.points AS achievement_points
+        FROM user_achievements AS ua
+        JOIN achievement_types AS at ON ua.achievement_type_id = at.id
+        WHERE ua.user_id = ?
+        ORDER BY ua.earned_at DESC
+    """
+    return execute_cached_query(sql, params=(user_id,), cache_ttl=180)
+
+
+# =============================================================================
+# PROJECT QUERIES (for projects.py migration)
+# =============================================================================
+
+def list_all_projects() -> List[Dict[str, Any]]:
+    """Lista todos os projetos (incluindo inativos) - compatível com get_projects(include_inactive=True)."""
+    sql = """
+        SELECT
+            id, project_key, name, description, status,
+            created_at, updated_at
+        FROM framework_projects
+        ORDER BY created_at DESC
+    """
+    return execute_cached_query(sql, cache_ttl=300)
+
+
+def list_active_projects() -> List[Dict[str, Any]]:
+    """Lista apenas projetos ativos.""" 
+    sql = """
+        SELECT
+            id, project_key, name, description, status,
+            created_at, updated_at
+        FROM framework_projects
+        WHERE status = 'active'
+        ORDER BY created_at DESC
+    """
+    return execute_cached_query(sql, cache_ttl=300)
 
 
 # =============================================================================

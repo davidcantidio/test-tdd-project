@@ -14,7 +14,8 @@ from .base import (
     BaseService, ServiceResult, ServiceError, ServiceErrorType,
     BaseRepository, PaginatedResult, FilterCriteria, SortCriteria
 )
-from ..utils.database import DatabaseManager
+from ..database import queries as db_queries
+from ..database.connection import transaction, get_connection_context, execute
 from ..config.constants import ValidationRules, TaskStatus, TDDPhase
 from .task_execution_planner import TaskExecutionPlanner, ExecutionPlan
 
@@ -22,7 +23,7 @@ from .task_execution_planner import TaskExecutionPlanner, ExecutionPlan
 class TaskRepository(BaseRepository):
     """Repository for task data access operations."""
     
-    def __init__(self, db_manager: DatabaseManager):
+    def __init__(self):
         super().__init__(db_manager)
     
     def find_by_id(self, task_id: int) -> Optional[Dict[str, Any]]:
@@ -380,8 +381,8 @@ class TaskRepository(BaseRepository):
 class TaskService(BaseService):
     """Service for task business logic operations with TDD workflow."""
     
-    def __init__(self, db_manager: DatabaseManager):
-        self.repository = TaskRepository(db_manager)
+    def __init__(self):
+        self.repository = TaskRepository()
         self.db_manager = db_manager
         # Initialize TaskExecutionPlanner for task ordering and prioritization
         self._execution_planner = None

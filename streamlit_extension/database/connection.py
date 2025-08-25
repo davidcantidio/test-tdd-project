@@ -9,8 +9,7 @@ from collections import OrderedDict, deque
 from contextlib import contextmanager
 from typing import Any, Dict, Iterable, Iterator, Optional, Tuple
 
-# Legacy import - keeping for hybrid compatibility
-from streamlit_extension.utils.database import DatabaseManager  # Legacy compatibility
+# Legacy compatibility layer - removed monolith dependency
 
 # Auth decorators
 from streamlit_extension.auth.middleware import require_auth, require_admin
@@ -19,8 +18,7 @@ from streamlit_extension.auth.middleware import require_auth, require_admin
 # Config & Utils
 # =============================================================================
 
-_DBM_INSTANCE: Optional[DatabaseManager] = None  # type: ignore
-_DBM_LOCK = threading.Lock()
+# Removed legacy DatabaseManager singleton
 
 DEFAULT_DB_FILENAME = "framework.db"
 ENV_DB_PATH = "FRAMEWORK_DB"
@@ -73,14 +71,13 @@ def _new_sqlite_connection() -> sqlite3.Connection:
 # DatabaseManager (Singleton Delegation)
 # =============================================================================
 
-def set_database_manager(dbm: DatabaseManager) -> None:
-    """Permite injetar um ``DatabaseManager`` (ex.: testes)."""
-    global _DBM_INSTANCE
-    _DBM_INSTANCE = dbm  # type: ignore
+def set_database_manager(dbm: Any) -> None:
+    """Legacy compatibility - no longer needed with modular architecture."""
+    # This function is kept for API compatibility but does nothing
+    # The modular connection pool replaces DatabaseManager functionality
+    pass
 
 
-# SEMANTIC DEDUPLICATION: Use centralized singleton instead of duplicate implementation
-from .database_singleton import get_database_manager as _db
 # Auth imports
 from streamlit_extension.auth.user_model import UserRole
 
@@ -89,20 +86,33 @@ from streamlit_extension.auth.user_model import UserRole
 #     """DEPRECATED: Use database_singleton.get_database_manager() instead"""
 #     return get_database_manager()
 @require_admin
-def get_connection() -> Any:
-    """Obtém uma conexão do manager atual."""
-    return _db().get_connection()
+def get_connection() -> sqlite3.Connection:
+    """Obtém uma conexão do pool otimizado."""
+    # Use the optimized pool instead of legacy DatabaseManager
+    return _new_sqlite_connection()
+
 @require_admin
 def release_connection(conn: Any) -> None:
-    """Libera uma conexão obtida via ``get_connection()``."""
-    _db().release_connection(conn)
+    """Libera uma conexão - no-op com pool otimizado (auto-managed)."""
+    # With optimized connection pool, connections are managed automatically
+    # This function kept for API compatibility
+    try:
+        if hasattr(conn, 'close'):
+            conn.close()
+    except Exception:
+        pass  # Ignore close errors
 
 
 @contextmanager
-def transaction() -> Iterator[Any]:
-    """Delegação de transação para o manager atual."""
-    with _db().transaction() as tx:
-        yield tx
+def transaction() -> Iterator[sqlite3.Connection]:
+    """Context manager para transações usando pool otimizado."""
+    with _optimized_pool.get_optimized_connection() as conn:
+        try:
+            yield conn
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
 
 
 @contextmanager
@@ -124,13 +134,24 @@ def _is_select(sql: str) -> bool:
 
 def execute(sql: str, params: Optional[Iterable[Any]] = None) -> Any:
     """
-    Execução genérica de SQL, delegada ao manager.
+    Execução genérica de SQL usando pool otimizado.
     - Invalida o cache global quando detectar uma operação não-SELECT.
     """
-    result = _db().execute_query(sql, tuple(params or ()))
-    if not _is_select(sql):
-        _optimized_pool.clear_cache()
-    return result
+    with _optimized_pool.get_optimized_connection() as conn:
+        cursor = conn.execute(sql, tuple(params or ()))
+        if cursor.description:
+            # SELECT query - return rows as list of dicts
+            cols = [desc[0] for desc in cursor.description]
+            result = [dict(zip(cols, row)) for row in cursor.fetchall()]
+        else:
+            # Non-SELECT query - return affected rows count
+            result = cursor.rowcount
+        
+        if not _is_select(sql):
+            _optimized_pool.clear_cache()
+            conn.commit()  # Commit non-SELECT operations
+        
+        return result
 
 
 # =============================================================================

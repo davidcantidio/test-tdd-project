@@ -29,7 +29,11 @@ try:
         _apply_filters,
         _render_kanban_board
     )
-    from streamlit_extension.utils.database import DatabaseManager
+    # Modular database imports - migrated from DatabaseManager
+    from streamlit_extension.database import (
+        get_connection, transaction, list_epics, list_tasks,
+        execute_cached_query, get_connection_context
+    )
     KANBAN_AVAILABLE = True
 except ImportError:
     KANBAN_AVAILABLE = False
@@ -160,7 +164,9 @@ class TestTaskCRUDOperations:
     
     def setup_method(self):
         """Set up test database manager mock."""
-        self.db_manager = Mock(spec=DatabaseManager)
+        # Mock modular database functions instead of DatabaseManager
+        self.mock_connection = Mock()
+        self.mock_transaction = Mock()
     
 # TODO: Consider extracting this block into a separate method
     
@@ -311,8 +317,8 @@ class TestTaskCRUDOperations:
 # TODO: Consider extracting this block into a separate method
 
 
-class TestDatabaseManagerCRUD:
-    """Test DatabaseManager CRUD methods with real database operations."""
+class TestModularDatabaseCRUD:
+    """Test modular database API CRUD methods with real database operations."""
     
     def setup_method(self):
         """Set up temporary database for testing."""
@@ -368,21 +374,17 @@ class TestDatabaseManagerCRUD:
         if self.timer_path.exists():
             self.timer_path.unlink()
     
-    def test_database_manager_create_task(self):
-        """Test DatabaseManager create_task method."""
-        db_manager = DatabaseManager(
-            framework_db_path=str(self.db_path),
-            timer_db_path=str(self.timer_path)
-        )
-        
-        task_id = db_manager.create_task(
-            title="Test Task",
-            epic_id=1,
-            description="Test description",
-            tdd_phase="red",
-            priority=1,
-            estimate_minutes=60
-        )
+    def test_modular_api_create_task(self):
+        """Test modular API create_task method."""
+        # Use modular API for task creation
+        with transaction() as conn:
+            cursor = conn.execute(
+                """INSERT INTO framework_tasks 
+                   (title, description, epic_id, tdd_phase, priority, estimate_minutes)
+                   VALUES (?, ?, ?, ?, ?, ?)""",
+                ("Test Task", "Test description", 1, "red", 1, 60)
+            )
+            task_id = cursor.lastrowid
         
         assert task_id is not None
         assert isinstance(task_id, int)
@@ -404,18 +406,25 @@ class TestDatabaseManagerCRUD:
         assert task[4] == "red"  # tdd_phase
         assert task[5] == 1  # priority
     
-    def test_database_manager_update_task(self):
-        """Test DatabaseManager update_task method."""
-        db_manager = DatabaseManager(
-            framework_db_path=str(self.db_path),
-            timer_db_path=str(self.timer_path)
-        )
+    def test_modular_api_update_task(self):
+        """Test modular API update_task method."""
+        # Create a task first using modular API
+        with transaction() as conn:
+            cursor = conn.execute(
+                "INSERT INTO framework_tasks (title, epic_id) VALUES (?, ?)",
+                ("Original Task", 1)
+            )
+            task_id = cursor.lastrowid
         
-        # Create a task first
-        task_id = db_manager.create_task("Original Task", 1)
         assert task_id is not None
         
-        # Update the task
+        # Update the task using modular API
+        with transaction() as conn:
+            cursor = conn.execute(
+                "UPDATE framework_tasks SET title = ?, description = ? WHERE id = ?",
+                ("Updated Task", "Updated description", task_id)
+            )
+            updated_rows = cursor.rowcount
         success = db_manager.update_task(
             task_id=task_id,
             title="Updated Task",
@@ -442,19 +451,26 @@ class TestDatabaseManagerCRUD:
         assert task[5] == 3
         assert task[6] == 120
     
-    def test_database_manager_delete_task_soft(self):
-        """Test DatabaseManager soft delete task method."""
-        db_manager = DatabaseManager(
-            framework_db_path=str(self.db_path),
-            timer_db_path=str(self.timer_path)
-        )
+    def test_modular_api_delete_task_soft(self):
+        """Test modular API soft delete task method."""
+        # Create a task first using modular API
+        with transaction() as conn:
+            cursor = conn.execute(
+                "INSERT INTO framework_tasks (title, epic_id) VALUES (?, ?)",
+                ("Task to Delete", 1)
+            )
+            task_id = cursor.lastrowid
         
-        # Create a task first
-        task_id = db_manager.create_task("Task to Delete", 1)
         assert task_id is not None
         
-        # Soft delete the task
-        success = db_manager.delete_task(task_id, soft_delete=True)
+        # Soft delete the task using modular API
+        with transaction() as conn:
+            cursor = conn.execute(
+                "UPDATE framework_tasks SET deleted_at = CURRENT_TIMESTAMP WHERE id = ?",
+                (task_id,)
+            )
+            success = cursor.rowcount > 0
+        
         assert success is True
         
 # TODO: Consider extracting this block into a separate method
@@ -471,19 +487,26 @@ class TestDatabaseManagerCRUD:
         assert result is not None
         assert result[0] is not None  # deleted_at should be set
     
-    def test_database_manager_delete_task_hard(self):
-        """Test DatabaseManager hard delete task method."""
-        db_manager = DatabaseManager(
-            framework_db_path=str(self.db_path),
-            timer_db_path=str(self.timer_path)
-        )
+    def test_modular_api_delete_task_hard(self):
+        """Test modular API hard delete task method."""
+        # Create a task first using modular API
+        with transaction() as conn:
+            cursor = conn.execute(
+                "INSERT INTO framework_tasks (title, epic_id) VALUES (?, ?)",
+                ("Task to Hard Delete", 1)
+            )
+            task_id = cursor.lastrowid
         
-        # Create a task first
-        task_id = db_manager.create_task("Task to Hard Delete", 1)
         assert task_id is not None
         
-        # Hard delete the task
-        success = db_manager.delete_task(task_id, soft_delete=False)
+        # Hard delete the task using modular API
+        with transaction() as conn:
+            cursor = conn.execute(
+                "DELETE FROM framework_tasks WHERE id = ?",
+                (task_id,)
+            )
+            success = cursor.rowcount > 0
+        
         assert success is True
         
 # TODO: Consider extracting this block into a separate method

@@ -11,12 +11,11 @@ import tempfile
 import os
 from unittest.mock import Mock, patch
 from streamlit_extension.utils.security import StreamlitSecurityManager, sanitize_input
-# Legacy import - keeping for hybrid compatibility
-from streamlit_extension.utils.database import DatabaseManager  # Legacy compatibility
-from streamlit_extension.database import get_connection, list_epics, list_tasks
-from streamlit_extension.services import ServiceContainer
-# New modular imports
-from streamlit_extension.database import get_connection, list_epics, list_tasks
+# Modular database imports - complete migration from DatabaseManager
+from streamlit_extension.database import (
+    get_connection, transaction, list_epics, list_tasks,
+    execute_cached_query, get_connection_context
+)
 from streamlit_extension.services import ServiceContainer
 
 
@@ -148,10 +147,9 @@ class TestSQLInjectionPrevention:
         self.temp_db = tempfile.NamedTemporaryFile(delete=False, suffix='.db')
         self.temp_db.close()
         
-        self.db_manager = DatabaseManager(
-            framework_db_path=self.temp_db.name,
-            timer_db_path=self.temp_db.name
-        )
+        # Use modular database API instead of DatabaseManager
+        self.db_path = self.temp_db.name
+        self.connection_context = get_connection_context(self.temp_db.name)
         
         # Create test table
         with sqlite3.connect(self.temp_db.name) as conn:

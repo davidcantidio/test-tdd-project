@@ -28,7 +28,8 @@ except ImportError:
 
 # Local imports
 try:
-    from streamlit_extension.utils.database import DatabaseManager
+    # Migrated to modular database API
+    from streamlit_extension.database import health as db_health
     from streamlit_extension.config import load_config, create_streamlit_config_file
     from streamlit_extension.utils.security import (
         sanitize_display, validate_form, check_rate_limit,
@@ -37,7 +38,7 @@ try:
     from streamlit_extension.config.streamlit_config import reload_config
     DATABASE_UTILS_AVAILABLE = True
 except ImportError:
-    DatabaseManager = load_config = create_streamlit_config_file = reload_config = None
+    db_health = load_config = create_streamlit_config_file = reload_config = None
     sanitize_display = validate_form = None
     check_rate_limit = security_manager = None
     DATABASE_UTILS_AVAILABLE = False
@@ -482,20 +483,15 @@ def _render_database_settings(config):
     
     # Initialize database manager to check health
     with streamlit_error_boundary("database_initialization"):
-        db_manager = safe_streamlit_operation(
-            DatabaseManager,
-            str(config.get_database_path()),
-            default_return=None,
-            operation_name="database_manager_init",
-        )
-        if db_manager is None:
-            st.error("❌ Database manager error")
-            return
+        # Use modular database health check
         health = safe_streamlit_operation(
-            db_manager.check_database_health,
+            db_health.check_health,
             default_return={},
             operation_name="check_database_health",
         )
+        if not health:
+            st.error("❌ Database health check error")
+            return
     
     col1, col2 = st.columns(2)
     
@@ -503,35 +499,52 @@ def _render_database_settings(config):
         st.markdown("#### 📊 Database Status")
         
         # Framework database
-        fw_db_status = "✅ Connected" if health.get("framework_db_connected") else "❌ Not connected"
-        fw_db_exists = "✅ Exists" if health.get("framework_db_exists") else "❌ Missing"
+        fw_db_status = "✅ Connected" if health.get("status") == "healthy" else "❌ Not connected"
+        fw_db_exists = "✅ Exists" if health.get("status") == "healthy" else "❌ Missing"
+        
+        stats = health.get("stats", {})
+        db_size_mb = stats.get("approx_db_size_mb", "N/A")
+        table_count = stats.get("table_count", "N/A")
         
         st.info(f"""
         **Framework Database:**
         - Status: {fw_db_status}
         - File: {fw_db_exists}
         - Path: `{config.get_database_path()}`
+        - Size: {db_size_mb} MB
+        - Tables: {table_count}
         """)
         
-        # Timer database
-        timer_db_status = "✅ Connected" if health.get("timer_db_connected") else "❌ Not connected"
-        timer_db_exists = "✅ Exists" if health.get("timer_db_exists") else "❌ Missing"
+        # Timer database (same connection in modular architecture)
+        timer_db_status = "✅ Connected" if health.get("status") == "healthy" else "❌ Not connected"
+        timer_db_exists = "✅ Exists" if health.get("status") == "healthy" else "❌ Missing"
         
         st.info(f"""
         **Timer Database:**
         - Status: {timer_db_status}
         - File: {timer_db_exists}
         - Path: `{config.get_timer_database_path()}`
+        - Engine: {health.get("engine", "N/A")}
         """)
         
-        # Dependencies
-        sqlalchemy_status = "✅ Available" if health.get("sqlalchemy_available") else "❌ Missing"
-        pandas_status = "✅ Available" if health.get("pandas_available") else "❌ Missing"
+        # Dependencies (check imports directly)
+        try:
+            import sqlite3
+            sqlite_status = "✅ Available"
+        except ImportError:
+            sqlite_status = "❌ Missing"
+            
+        try:
+            import streamlit
+            streamlit_status = "✅ Available"
+        except ImportError:
+            streamlit_status = "❌ Missing"
         
         st.info(f"""
         **Dependencies:**
-        - SQLAlchemy: {sqlalchemy_status}
-        - Pandas: {pandas_status}
+        - SQLite3: {sqlite_status}
+        - Streamlit: {streamlit_status}
+        - Connection Pool: {health.get("connection_pool", "optimized")}
         """)
     
     with col2:

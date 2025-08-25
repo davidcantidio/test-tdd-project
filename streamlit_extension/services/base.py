@@ -125,8 +125,8 @@ class BaseRepository(ABC):
     for services to interact with data storage.
     """
     
-    def __init__(self, db_manager):
-        self.db_manager = db_manager
+    def __init__(self):
+        self.logger = logging.getLogger(self.__class__.__name__)
     
     @contextmanager
     def transaction(self):

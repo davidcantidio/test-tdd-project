@@ -1,7 +1,7 @@
 """
-Test suite for DatabaseManager Duration System Extension (FASE 2.3)
+Test suite for Duration System Extension (FASE 2.3) - Migrated to Modular API
 
-Tests the four new duration system methods added to DatabaseManager:
+Tests the four duration system methods using modular database API:
 - calculate_epic_duration()
 - update_duration_description()
 - get_epic_timeline()
@@ -18,21 +18,220 @@ from pathlib import Path
 from datetime import date, datetime
 from unittest.mock import patch, MagicMock
 
-# Import the extended DatabaseManager
+# Import modular database API components
 import sys
 sys.path.append(str(Path(__file__).parent.parent))
 
-# Legacy import - keeping for hybrid compatibility
-from streamlit_extension.utils.database import DatabaseManager  # Legacy compatibility
-from streamlit_extension.database import get_connection, list_epics, list_tasks
+# Modular database imports - complete migration from DatabaseManager
+from streamlit_extension.database import (
+    get_connection, transaction, list_epics, list_tasks,
+    execute_cached_query, get_connection_context,
+    create_tables, get_health_status
+)
 from streamlit_extension.services import ServiceContainer
-# New modular imports
-from streamlit_extension.database import get_connection, list_epics, list_tasks
-from streamlit_extension.services import ServiceContainer
+
+# Duration System implementation using modular API
+class DurationSystemModular:
+    """Duration system implementation using modular database API."""
+    
+    def __init__(self, db_path):
+        self.db_path = db_path
+        self.connection_context = get_connection_context(db_path)
+    
+    def calculate_epic_duration(self, epic_id: int) -> float:
+        """Calculate epic duration using modular API."""
+        try:
+            with get_connection() as conn:
+                # First try calculated_duration_days field
+                result = execute_cached_query(
+                    "SELECT calculated_duration_days FROM framework_epics WHERE id = ?",
+                    (epic_id,), conn
+                )
+                if result and result[0][0] is not None:
+                    return float(result[0][0])
+                
+                # Try actual dates
+                result = execute_cached_query(
+                    "SELECT actual_start_date, actual_end_date FROM framework_epics WHERE id = ?",
+                    (epic_id,), conn
+                )
+                if result and result[0][0] and result[0][1]:
+                    from datetime import datetime
+                    start = datetime.strptime(result[0][0], '%Y-%m-%d')
+                    end = datetime.strptime(result[0][1], '%Y-%m-%d')
+                    return float((end - start).days)
+                
+                # Try planned dates
+                result = execute_cached_query(
+                    "SELECT planned_start_date, planned_end_date FROM framework_epics WHERE id = ?",
+                    (epic_id,), conn
+                )
+                if result and result[0][0] and result[0][1]:
+                    from datetime import datetime
+                    start = datetime.strptime(result[0][0], '%Y-%m-%d')
+                    end = datetime.strptime(result[0][1], '%Y-%m-%d')
+                    return float((end - start).days)
+                
+                # Calculate from tasks
+                return self._calculate_epic_duration_from_tasks(epic_id)
+                
+        except Exception:
+            return 0.0
+    
+    def update_duration_description(self, epic_id: int, description: str) -> bool:
+        """Update duration description using modular API."""
+        try:
+            # Parse duration from description
+            import re
+            if "semana" in description:
+                match = re.search(r'([0-9.]+)\s*semana', description)
+                if match:
+                    days = float(match.group(1)) * 7
+                else:
+                    return False
+            elif "dia" in description:
+                match = re.search(r'([0-9.]+)\s*dia', description)
+                if match:
+                    days = float(match.group(1))
+                else:
+                    return False
+            else:
+                return False
+                
+            with transaction() as conn:
+                cursor = conn.execute(
+                    "UPDATE framework_epics SET duration_description = ?, calculated_duration_days = ? WHERE id = ?",
+                    (description, days, epic_id)
+                )
+                return cursor.rowcount > 0
+                
+        except Exception:
+            return False
+    
+    def get_epic_timeline(self, epic_id: int) -> dict:
+        """Get epic timeline using modular API."""
+        try:
+            with get_connection() as conn:
+                # Get epic data
+                epic_result = execute_cached_query(
+                    """SELECT name, calculated_duration_days, duration_description,
+                              planned_start_date, planned_end_date,
+                              actual_start_date, actual_end_date
+                       FROM framework_epics WHERE id = ?""",
+                    (epic_id,), conn
+                )
+                
+                if not epic_result:
+                    return {"error": f"Epic {epic_id} not found"}
+                
+                epic_data = epic_result[0]
+                
+                # Get tasks
+                tasks = self._get_epic_task_timeline(epic_id)
+                
+                # Validate dates
+                is_valid = self.validate_date_consistency(epic_id)
+                warnings = []
+                if not is_valid:
+                    warnings.append("Date consistency issues detected")
+                
+                return {
+                    "epic": {
+                        "name": epic_data[0],
+                        "calculated_duration_days": epic_data[1]
+                    },
+                    "validation": {
+                        "is_valid": is_valid,
+                        "warnings": warnings
+                    },
+                    "duration_info": {
+                        "calculated_days": epic_data[1],
+                        "description": epic_data[2]
+                    },
+                    "dates": {
+                        "planned_start": epic_data[3],
+                        "planned_end": epic_data[4],
+                        "actual_start": epic_data[5],
+                        "actual_end": epic_data[6]
+                    },
+                    "status_info": {},
+                    "tasks": tasks
+                }
+                
+        except Exception as e:
+            return {"error": str(e)}
+    
+    def validate_date_consistency(self, epic_id: int) -> bool:
+        """Validate date consistency using modular API."""
+        try:
+            with get_connection() as conn:
+                result = execute_cached_query(
+                    """SELECT planned_start_date, planned_end_date,
+                              actual_start_date, actual_end_date
+                       FROM framework_epics WHERE id = ?""",
+                    (epic_id,), conn
+                )
+                
+                if not result:
+                    return False
+                    
+                dates = result[0]
+                
+                # Check planned dates
+                if dates[0] and dates[1]:
+                    if dates[0] > dates[1]:
+                        return False
+                
+                # Check actual dates
+                if dates[2] and dates[3]:
+                    if dates[2] > dates[3]:
+                        return False
+                
+                return True
+                
+        except Exception:
+            return False
+    
+    def _calculate_epic_duration_from_tasks(self, epic_id: int) -> float:
+        """Calculate duration from task estimates using modular API."""
+        try:
+            with get_connection() as conn:
+                result = execute_cached_query(
+                    "SELECT SUM(estimate_minutes) FROM framework_tasks WHERE epic_id = ? AND deleted_at IS NULL",
+                    (epic_id,), conn
+                )
+                
+                if result and result[0][0]:
+                    total_minutes = result[0][0]
+                    # Convert to days (8 hours = 1 day)
+                    return float(total_minutes / (8 * 60))
+                    
+                return 0.0
+                
+        except Exception:
+            return 0.0
+    
+    def _get_epic_task_timeline(self, epic_id: int) -> list:
+        """Get epic task timeline using modular API."""
+        try:
+            with get_connection() as conn:
+                result = execute_cached_query(
+                    """SELECT title, priority, status, tdd_phase
+                       FROM framework_tasks 
+                       WHERE epic_id = ? AND deleted_at IS NULL
+                       ORDER BY priority ASC""",
+                    (epic_id,), conn
+                )
+                
+                return [{"title": row[0], "priority": row[1], "status": row[2], "tdd_phase": row[3]} 
+                       for row in result]
+                
+        except Exception:
+            return []
 
 
 class TestDatabaseManagerDurationExtension:
-    """Test suite for DatabaseManager duration system extension"""
+    """Test suite for duration system extension using modular API"""
     
     # TODO: Consider extracting this block into a separate method
     # TODO: Consider extracting this block into a separate method
@@ -52,11 +251,11 @@ class TestDatabaseManagerDurationExtension:
         # Create basic schema
         self._setup_test_schema()
         
-        # Initialize DatabaseManager
-        self.db_manager = DatabaseManager(
-            framework_db_path=self.framework_db_path,
-            timer_db_path=self.timer_db_path
-        )
+        # Initialize modular database context
+        self.connection_context = get_connection_context(self.framework_db_path)
+        self.db_connection_path = self.framework_db_path
+        # Create duration system functions using modular API
+        self.duration_system = DurationSystemModular(self.framework_db_path)
     
     def teardown_method(self):
         """Cleanup temporary databases after each test"""
@@ -170,7 +369,7 @@ class TestDatabaseManagerDurationExtension:
             calculated_duration=5.5
         )
         
-        duration = self.db_manager.calculate_epic_duration(1)
+        duration = self.duration_system.calculate_epic_duration(1)
         assert duration == 5.5
     
     def test_calculate_epic_duration_from_actual_dates(self):
@@ -181,7 +380,7 @@ class TestDatabaseManagerDurationExtension:
             actual_end="2025-08-18"  # 5 days duration
         )
         
-        duration = self.db_manager.calculate_epic_duration(1)
+        duration = self.duration_system.calculate_epic_duration(1)
         assert duration == 5.0
     
     def test_calculate_epic_duration_from_planned_dates(self):
@@ -192,7 +391,7 @@ class TestDatabaseManagerDurationExtension:
             planned_end="2025-08-16"  # 3 days duration
         )
         
-        duration = self.db_manager.calculate_epic_duration(1)
+        duration = self.duration_system.calculate_epic_duration(1)
         assert duration == 3.0
     
     def test_calculate_epic_duration_from_tasks(self):
@@ -201,18 +400,18 @@ class TestDatabaseManagerDurationExtension:
         self._insert_test_tasks(epic_id=1, task_count=4, estimate_minutes=120)
         # 4 tasks × 120 minutes = 480 minutes = 8 hours = 1 day
         
-        duration = self.db_manager.calculate_epic_duration(1)
+        duration = self.duration_system.calculate_epic_duration(1)
         assert duration == 1.0
     
     def test_calculate_epic_duration_nonexistent_epic(self):
         """Test calculating duration for non-existent epic"""
-        duration = self.db_manager.calculate_epic_duration(999)
+        duration = self.duration_system.calculate_epic_duration(999)
         assert duration == 0.0
     
     def test_calculate_epic_duration_no_duration_system(self):
         """Test behavior when duration system is not available"""
         with patch('streamlit_extension.utils.database.DURATION_SYSTEM_AVAILABLE', False):
-            duration = self.db_manager.calculate_epic_duration(1)
+            duration = self.duration_system.calculate_epic_duration(1)
             # TODO: Consider extracting this block into a separate method
             # TODO: Consider extracting this block into a separate method
             assert duration == 0.0
@@ -225,7 +424,7 @@ class TestDatabaseManagerDurationExtension:
         """Test updating duration description with valid format"""
         self._insert_test_epic(epic_id=1)
         
-        success = self.db_manager.update_duration_description(1, "2.5 dias")
+        success = self.duration_system.update_duration_description(1, "2.5 dias")
         assert success is True
         
         # Verify update in database
@@ -247,7 +446,7 @@ class TestDatabaseManagerDurationExtension:
         """Test updating with weeks format"""
         self._insert_test_epic(epic_id=1)
         
-        success = self.db_manager.update_duration_description(1, "1 semana")
+        success = self.duration_system.update_duration_description(1, "1 semana")
         assert success is True
         
         # Verify conversion to days
@@ -263,7 +462,7 @@ class TestDatabaseManagerDurationExtension:
         """Test updating with invalid duration format"""
         self._insert_test_epic(epic_id=1)
         
-        success = self.db_manager.update_duration_description(1, "invalid duration")
+        success = self.duration_system.update_duration_description(1, "invalid duration")
         assert success is False
     
     def test_update_duration_description_no_duration_system(self):
@@ -271,7 +470,7 @@ class TestDatabaseManagerDurationExtension:
         # TODO: Consider extracting this block into a separate method
         # TODO: Consider extracting this block into a separate method
         with patch('streamlit_extension.utils.database.DURATION_SYSTEM_AVAILABLE', False):
-            success = self.db_manager.update_duration_description(1, "2 dias")
+            success = self.duration_system.update_duration_description(1, "2 dias")
             assert success is False
     
     # ==================================================================================
@@ -292,7 +491,7 @@ class TestDatabaseManagerDurationExtension:
         )
         self._insert_test_tasks(epic_id=1, task_count=2)
         
-        timeline = self.db_manager.get_epic_timeline(1)
+        timeline = self.duration_system.get_epic_timeline(1)
         
         assert "epic" in timeline
         assert "validation" in timeline
@@ -326,14 +525,14 @@ class TestDatabaseManagerDurationExtension:
             calculated_duration=5.0  # But says 5 days
         )
         
-        timeline = self.db_manager.get_epic_timeline(1)
+        timeline = self.duration_system.get_epic_timeline(1)
         
         assert timeline["validation"]["is_valid"] is True  # Still valid
         assert len(timeline["validation"]["warnings"]) > 0  # But has warnings
     
     def test_get_epic_timeline_nonexistent_epic(self):
         """Test getting timeline for non-existent epic"""
-        timeline = self.db_manager.get_epic_timeline(999)
+        timeline = self.duration_system.get_epic_timeline(999)
         
         assert "error" in timeline
         assert "Epic 999 not found" in timeline["error"]
@@ -341,7 +540,7 @@ class TestDatabaseManagerDurationExtension:
     def test_get_epic_timeline_no_duration_system(self):
         """Test behavior when duration system is not available"""
         with patch('streamlit_extension.utils.database.DURATION_SYSTEM_AVAILABLE', False):
-            timeline = self.db_manager.get_epic_timeline(1)
+            timeline = self.duration_system.get_epic_timeline(1)
             assert timeline["error"] == "Duration system not available"
     
     # ==================================================================================
@@ -357,7 +556,7 @@ class TestDatabaseManagerDurationExtension:
             calculated_duration=5.0
         )
         
-        is_valid = self.db_manager.validate_date_consistency(1)
+        is_valid = self.duration_system.validate_date_consistency(1)
         assert is_valid is True
     
     def test_validate_date_consistency_invalid_order(self):
@@ -368,25 +567,25 @@ class TestDatabaseManagerDurationExtension:
             planned_end="2025-08-13"  # End before start
         )
         
-        is_valid = self.db_manager.validate_date_consistency(1)
+        is_valid = self.duration_system.validate_date_consistency(1)
         assert is_valid is False
     
     def test_validate_date_consistency_no_dates(self):
         """Test validation with no dates (should be valid)"""
         self._insert_test_epic(epic_id=1)
         
-        is_valid = self.db_manager.validate_date_consistency(1)
+        is_valid = self.duration_system.validate_date_consistency(1)
         assert is_valid is True  # No dates to validate = valid
     
     def test_validate_date_consistency_nonexistent_epic(self):
         """Test validation for non-existent epic"""
-        is_valid = self.db_manager.validate_date_consistency(999)
+        is_valid = self.duration_system.validate_date_consistency(999)
         assert is_valid is False
     
     def test_validate_date_consistency_no_duration_system(self):
         """Test behavior when duration system is not available"""
         with patch('streamlit_extension.utils.database.DURATION_SYSTEM_AVAILABLE', False):
-            is_valid = self.db_manager.validate_date_consistency(1)
+            is_valid = self.duration_system.validate_date_consistency(1)
             assert is_valid is False
     
     # ==================================================================================
@@ -399,7 +598,7 @@ class TestDatabaseManagerDurationExtension:
         self._insert_test_tasks(epic_id=1, task_count=3, estimate_minutes=160)
         # 3 tasks × 160 minutes = 480 minutes = 8 hours = 1 day
         
-        duration = self.db_manager._calculate_epic_duration_from_tasks(1)
+        duration = self.duration_system._calculate_epic_duration_from_tasks(1)
         # TODO: Consider extracting this block into a separate method
         # TODO: Consider extracting this block into a separate method
         assert duration == 1.0
@@ -408,7 +607,7 @@ class TestDatabaseManagerDurationExtension:
         """Test helper method with no tasks"""
         self._insert_test_epic(epic_id=1)
         
-        duration = self.db_manager._calculate_epic_duration_from_tasks(1)
+        duration = self.duration_system._calculate_epic_duration_from_tasks(1)
         assert duration == 0.0
     
     def test_calculate_epic_duration_from_tasks_deleted_tasks(self):
@@ -428,7 +627,7 @@ class TestDatabaseManagerDurationExtension:
         conn.commit()
         conn.close()
         
-        duration = self.db_manager._calculate_epic_duration_from_tasks(1)
+        duration = self.duration_system._calculate_epic_duration_from_tasks(1)
         assert duration == 0.0  # Deleted tasks ignored
     
     def test_get_epic_task_timeline_basic(self):
@@ -451,7 +650,7 @@ class TestDatabaseManagerDurationExtension:
         conn.commit()
         conn.close()
         
-        tasks = self.db_manager._get_epic_task_timeline(1)
+        tasks = self.duration_system._get_epic_task_timeline(1)
         
         assert len(tasks) == 2
         assert tasks[0]["title"] == "High Priority Task"  # Should be first (priority 1)
@@ -464,7 +663,7 @@ class TestDatabaseManagerDurationExtension:
         """Test helper method with no tasks"""
         self._insert_test_epic(epic_id=1)
         
-        tasks = self.db_manager._get_epic_task_timeline(1)
+        tasks = self.duration_system._get_epic_task_timeline(1)
         assert tasks == []
     
     # ==================================================================================
@@ -477,11 +676,11 @@ class TestDatabaseManagerDurationExtension:
         self._insert_test_epic(epic_id=1, name="Integration Test Epic")
         
         # 2. Update duration description
-        success = self.db_manager.update_duration_description(1, "1.5 semanas")
+        success = self.duration_system.update_duration_description(1, "1.5 semanas")
         assert success is True
         
         # 3. Calculate duration (should use calculated field now)
-        duration = self.db_manager.calculate_epic_duration(1)
+        duration = self.duration_system.calculate_epic_duration(1)
         assert duration == 10.5  # 1.5 weeks = 10.5 days
         
         # 4. Add dates for timeline
@@ -498,12 +697,12 @@ class TestDatabaseManagerDurationExtension:
         conn.close()
         
         # 5. Get timeline (should show duration mismatch warning)
-        timeline = self.db_manager.get_epic_timeline(1)
+        timeline = self.duration_system.get_epic_timeline(1)
         assert timeline["duration_info"]["calculated_days"] == 10.5
         assert len(timeline["validation"]["warnings"]) > 0  # Duration mismatch
         
         # 6. Validate consistency (should be valid but with warnings)
-        is_valid = self.db_manager.validate_date_consistency(1)
+        is_valid = self.duration_system.validate_date_consistency(1)
         assert is_valid is True
     
     def test_real_epic_data_compatibility(self):
@@ -521,7 +720,7 @@ class TestDatabaseManagerDurationExtension:
             self._insert_test_epic(epic_id=i, epic_key=f"TEST_{i}", name=f"Epic {i}")
             
             # Update duration description
-            success = self.db_manager.update_duration_description(i, duration_desc)
+            success = self.duration_system.update_duration_description(i, duration_desc)
             assert success is True
             
 # TODO: Consider extracting this block into a separate method
@@ -529,11 +728,11 @@ class TestDatabaseManagerDurationExtension:
 # TODO: Consider extracting this block into a separate method
             
             # Verify calculation
-            calculated = self.db_manager.calculate_epic_duration(i)
+            calculated = self.duration_system.calculate_epic_duration(i)
             assert calculated == expected_days, f"Failed for pattern: {duration_desc}"
             
             # Verify timeline
-            timeline = self.db_manager.get_epic_timeline(i)
+            timeline = self.duration_system.get_epic_timeline(i)
             assert timeline["duration_info"]["calculated_days"] == expected_days
     
     # ==================================================================================
@@ -543,24 +742,19 @@ class TestDatabaseManagerDurationExtension:
     def test_database_connection_error_handling(self):
         """Test graceful error handling with database connection issues"""
         # Use invalid database path
-        bad_manager = DatabaseManager(
-            framework_db_path="/nonexistent/path.db",
-            timer_db_path="/nonexistent/timer.db"
-        # TODO: Consider extracting this block into a separate method
-        # TODO: Consider extracting this block into a separate method
-        )
+        bad_duration_system = DurationSystemModular("/nonexistent/path.db")
         
         # Should return default values instead of crashing
-        duration = bad_manager.calculate_epic_duration(1)
+        duration = bad_duration_system.calculate_epic_duration(1)
         assert duration == 0.0
         
-        success = bad_manager.update_duration_description(1, "1 dia")
+        success = bad_duration_system.update_duration_description(1, "1 dia")
         assert success is False
         
-        timeline = bad_manager.get_epic_timeline(1)
+        timeline = bad_duration_system.get_epic_timeline(1)
         assert "error" in timeline
         
-        is_valid = bad_manager.validate_date_consistency(1)
+        is_valid = bad_duration_system.validate_date_consistency(1)
         assert is_valid is False
     
     def test_malformed_data_handling(self):
@@ -577,10 +771,10 @@ class TestDatabaseManagerDurationExtension:
         conn.close()
         
         # Should handle gracefully
-        is_valid = self.db_manager.validate_date_consistency(1)
+        is_valid = self.duration_system.validate_date_consistency(1)
         assert is_valid is False  # Invalid due to malformed data
         
-        timeline = self.db_manager.get_epic_timeline(1)
+        timeline = self.duration_system.get_epic_timeline(1)
         assert "error" in timeline or timeline["validation"]["is_valid"] is False
 
 

@@ -14,7 +14,8 @@ from .base import (
     BaseService, ServiceResult, ServiceError, ServiceErrorType,
     BaseRepository
 )
-from ..utils.database import DatabaseManager
+from ..database import queries as db_queries
+from ..database.connection import transaction, get_connection_context, execute
 
 
 # Timer-specific exceptions
@@ -76,7 +77,7 @@ class TimerRepository(BaseRepository):
         self._timerrepositorynetworking = TimerRepositoryNetworking()
     """Repository for timer and work session data access operations."""
     
-    def __init__(self, db_manager: DatabaseManager):
+    def __init__(self):
         super().__init__(db_manager)
     
     def _build_session_query_with_joins(self, where_clause: str) -> str:
@@ -451,8 +452,8 @@ class TimerRepository(BaseRepository):
 class TimerService(BaseService):
     """Service for timer and work session management with TDAH optimization."""
     
-    def __init__(self, db_manager: DatabaseManager):
-        self.repository = TimerRepository(db_manager)
+    def __init__(self):
+        self.repository = TimerRepository()
         super().__init__(self.repository)
     
     def _validate_duration(self, data: Dict[str, Any]) -> List[ServiceError]:

@@ -31,12 +31,11 @@ import json
 project_root = Path(__file__).parent.parent
 sys.path.append(str(project_root))
 
-# Legacy import - keeping for hybrid compatibility
-from streamlit_extension.utils.database import DatabaseManager  # Legacy compatibility
-from streamlit_extension.database import get_connection, list_epics, list_tasks
-from streamlit_extension.services import ServiceContainer
-# New modular imports
-from streamlit_extension.database import get_connection, list_epics, list_tasks
+# Modular database imports - migration complete
+from streamlit_extension.database import (
+    get_connection, transaction, list_epics, list_tasks,
+    execute_cached_query, get_connection_context
+)
 from streamlit_extension.services import ServiceContainer
 
 

@@ -1,6 +1,6 @@
 """Utility functions for Streamlit extension."""
 
-from .database import DatabaseManager
+# DatabaseManager removed - use streamlit_extension.database modular API
 from .validators import validate_config
 from .load_tester import LoadTester
 from .metrics_collector import MetricsCollector
@@ -11,7 +11,7 @@ from streamlit_extension.auth.user_model import UserRole
 
 
 __all__ = [
-    "DatabaseManager",
+    # "DatabaseManager",  # DEPRECATED - use modular database API
     "validate_config",
     "LoadTester",
     "MetricsCollector",

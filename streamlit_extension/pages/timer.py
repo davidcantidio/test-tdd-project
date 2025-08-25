@@ -27,7 +27,8 @@ except ImportError:
 
 # Local imports
 try:
-    from streamlit_extension.utils.database import DatabaseManager
+    # Migrated to modular database API
+    from streamlit_extension.database import queries
     from streamlit_extension.config import load_config
     from streamlit_extension.components.timer import TimerComponent
     from streamlit_extension.utils.security import (
@@ -42,7 +43,7 @@ try:
     from streamlit_extension.auth.middleware import init_protected_page
     DATABASE_UTILS_AVAILABLE = True
 except ImportError:
-    DatabaseManager = load_config = TimerComponent = None
+    queries = load_config = TimerComponent = None
     sanitize_display = validate_form = None
     check_rate_limit = security_manager = None
     init_protected_page = ErrorMessages = UIConstants = TaskStatus = None
@@ -80,10 +81,8 @@ def render_timer_page():
     # Initialize components
     try:
         config = load_config()
-        db_manager = DatabaseManager(
-            framework_db_path=str(config.get_database_path()),
-            timer_db_path=str(config.get_timer_database_path())
-        )
+        # Using modular database API instead of DatabaseManager
+        # No need to initialize connection - handled by connection pool
         
         # Initialize timer component if not in session state
         if "timer_component" not in st.session_state:
@@ -102,18 +101,18 @@ def render_timer_page():
     col1, col2 = st.columns([2, 1])
     
     with col1:
-        _render_main_timer(timer_component, db_manager, config)
+        _render_main_timer(timer_component, queries, config)
     
     with col2:
-        _render_session_stats(db_manager)
+        _render_session_stats(queries)
     
     st.markdown("---")
     
     # Session history and analytics
-    _render_session_history(db_manager)
+    _render_session_history(queries)
     
     # TDAH-specific insights
-    _render_tdah_insights(db_manager)
+    _render_tdah_insights(queries)
 
 
 def _render_timer_sidebar(config):
@@ -195,7 +194,7 @@ def _render_timer_sidebar(config):
     )
 
 
-def _render_main_timer(timer_component, db_manager: DatabaseManager, config):
+def _render_main_timer(timer_component, db_queries, config):
     """Render the main timer interface."""
     
     st.markdown("### 🎯 Current Session")
@@ -204,7 +203,7 @@ def _render_main_timer(timer_component, db_manager: DatabaseManager, config):
     @st.cache_data(ttl=300)  # Cache for 5 minutes to improve performance
     def get_active_tasks():
         """Get active tasks with caching for performance."""
-        tasks = db_manager.get_tasks()
+        tasks = db_queries.list_all_tasks()
         return [
             t
             for t in tasks
@@ -315,7 +314,7 @@ def _render_main_timer(timer_component, db_manager: DatabaseManager, config):
             st.warning(f"{UIConstants.ICON_ON_HOLD} **Timer is paused**")
 
 
-def _render_session_stats(db_manager: DatabaseManager):
+def _render_session_stats(db_queries):
     """Render session statistics in the sidebar."""
     
     st.markdown("### 📊 Today's Stats")
@@ -360,7 +359,7 @@ def _render_session_stats(db_manager: DatabaseManager):
         st.info("🌅 Start your first session of the day!")
 
 
-def _render_session_history(db_manager: DatabaseManager):
+def _render_session_history(db_queries):
     """Render recent session history."""
     
     st.markdown("### 📅 Recent Sessions")
@@ -368,7 +367,7 @@ def _render_session_history(db_manager: DatabaseManager):
     @st.cache_data(ttl=180)  # Cache for 3 minutes
     def get_recent_sessions():
         """Get recent sessions with caching for performance."""
-        return db_manager.get_timer_sessions(days=7)
+        return db_queries.get_recent_timer_sessions_optimized(days=7)
     
     recent_sessions = get_recent_sessions()
     
@@ -432,7 +431,7 @@ def _render_session_history(db_manager: DatabaseManager):
                 st.metric("Best Focus", f"{best_session['focus_rating']}/10")
 
 
-def _render_tdah_insights(db_manager: DatabaseManager):
+def _render_tdah_insights(db_queries):
     """Render TDAH-specific insights and recommendations."""
     
     st.markdown("### 🧠 TDAH Insights")
@@ -440,7 +439,7 @@ def _render_tdah_insights(db_manager: DatabaseManager):
     @st.cache_data(ttl=600)  # Cache for 10 minutes (insights don't change frequently)
     def get_sessions_for_analysis():
         """Get sessions for TDAH analysis with caching."""
-        return db_manager.get_timer_sessions(days=14)
+        return db_queries.get_recent_timer_sessions_optimized(days=14)
     
     # Get data for analysis
     recent_sessions = get_sessions_for_analysis()
@@ -505,7 +504,7 @@ def _render_tdah_insights(db_manager: DatabaseManager):
             st.success(f"⚡ **Peak energy time:** {peak_hour}:00 (avg {peak_energy:.1f}/10)")
 
 
-def _start_timer_session(timer_component, db_manager: DatabaseManager):
+def _start_timer_session(timer_component, db_queries):
     """Start a new timer session."""
     
     duration = st.session_state.get("timer_duration", 25)
@@ -534,7 +533,7 @@ def _start_timer_session(timer_component, db_manager: DatabaseManager):
     st.rerun()
 
 
-def _end_timer_session(timer_component, db_manager: DatabaseManager):
+def _end_timer_session(timer_component, db_queries):
     """End the current timer session with TDAH metrics."""
     
     if not timer_component.current_session:
@@ -559,7 +558,7 @@ def _end_timer_session(timer_component, db_manager: DatabaseManager):
     st.rerun()
 
 
-def _skip_timer_session(timer_component, db_manager: DatabaseManager):
+def _skip_timer_session(timer_component, db_queries):
     """Skip the current session (early completion)."""
     
     if not timer_component.current_session:
@@ -606,10 +605,10 @@ def _get_quick_energy_rating() -> int:
 
 
 @st.cache_data(ttl=120)  # Cache for 2 minutes (today's data changes frequently)
-def _get_todays_sessions(db_manager: DatabaseManager) -> List[Dict[str, Any]]:
+def _get_todays_sessions(db_queries) -> List[Dict[str, Any]]:
     """Get today's timer sessions with caching."""
     
-    all_sessions = db_manager.get_timer_sessions(days=1)
+    all_sessions = db_queries.get_recent_timer_sessions_optimized(days=1)
     today_str = datetime.now().strftime("%Y-%m-%d")
     
     return [

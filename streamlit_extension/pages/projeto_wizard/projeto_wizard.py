@@ -49,54 +49,50 @@ def _init_db_layer() -> None:
     except Exception:
         _transaction_ctx = None
 
+    # Using modular database API
     try:
-        # Enterprise API (DatabaseManager)
-        from streamlit_extension.utils.database import DatabaseManager  # type: ignore
-        _DBM = DatabaseManager()
+        from streamlit_extension.database import queries
+        from streamlit_extension.database.connection import get_connection_context, transaction
+        _queries = queries
+        _transaction_ctx = transaction
     except Exception:
-        _DBM = None
+        _queries = None
+        _transaction_ctx = None
 
-    # Opcional: modular helpers, se existirem
-    try:
-        from streamlit_extension.database import create_project as _cp  # type: ignore
-        _create_project_fn = _cp
-    except Exception:
-        _create_project_fn = None
+    # Create project function will be implemented inline
 
 
 def _create_project_safely(payload: Dict[str, Any]) -> Dict[str, Any]:
     """
-    Cria projeto usando o melhor caminho disponível:
-    1) modular create_project() dentro de transaction()
-    2) DatabaseManager().create_project()
-    Lança exceção com mensagem amigável se nenhum caminho estiver disponível.
+    Cria projeto usando API modular com transação.
     """
-    # 1) Modular
     try:
-        if _create_project_fn is not None:
-            if _transaction_ctx is not None:
-                with _transaction_ctx():  # type: ignore[misc]
-                    created = _create_project_fn(payload)  # type: ignore[misc]
-                    return {"ok": True, "data": created}
-            # Se transação modular não existir, ainda tentamos criar direto
-            created = _create_project_fn(payload)  # type: ignore[misc]
-            return {"ok": True, "data": created}
+        if _queries is None or _transaction_ctx is None:
+            raise RuntimeError("Modular database API not available")
+            
+        # Create project using direct SQL with transaction
+        with _transaction_ctx() as conn:
+            # Insert into framework_projects table
+            cursor = conn.execute("""
+                INSERT INTO framework_projects (project_key, name, description, status)
+                VALUES (?, ?, ?, 'active')
+            """, (payload.get('project_key'), payload.get('name'), payload.get('description', '')))
+            
+            project_id = cursor.lastrowid
+            
+            # Return created project data
+            created_project = {
+                'id': project_id,
+                'project_key': payload.get('project_key'),
+                'name': payload.get('name'),
+                'description': payload.get('description', ''),
+                'status': 'active'
+            }
+            
+            return {"ok": True, "data": created_project}
+            
     except Exception as e:
-        return {"ok": False, "error": f"Falha ao criar projeto (API modular): {e}"}
-
-    # 2) DatabaseManager
-    try:
-        if _DBM is not None and hasattr(_DBM, "create_project"):
-            created = _DBM.create_project(payload)  # type: ignore[attr-defined]
-            return {"ok": True, "data": created}
-    except Exception as e:
-        return {"ok": False, "error": f"Falha ao criar projeto (DatabaseManager): {e}"}
-
-    # 3) Sem backend disponível
-    raise RuntimeError(
-        "Nenhuma API de banco disponível para criar projeto. "
-        "Verifique as dependências do módulo database."
-    )
+        return {"ok": False, "error": f"Falha ao criar projeto: {e}"}
 
 # --- UI Helpers ----------------------------------------------------------------
 def _form_validation(

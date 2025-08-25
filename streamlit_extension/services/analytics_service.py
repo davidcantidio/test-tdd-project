@@ -17,7 +17,8 @@ from .base import (
     BaseService, ServiceResult, ServiceError, ServiceErrorType,
     BaseRepository
 )
-from ..utils.database import DatabaseManager
+from ..database import queries as db_queries
+from ..database.connection import transaction, get_connection_context, execute
 from ..config.constants import TaskStatus, EpicStatus, ProjectStatus, TDDPhase
 # Auth imports
 from streamlit_extension.auth.middleware import require_auth, require_admin
@@ -68,7 +69,7 @@ class AnalyticsRepository(BaseRepository):
         self._analyticsrepositoryformatting = AnalyticsRepositoryFormatting()
     """Repository for analytics data access operations."""
     
-    def __init__(self, db_manager: DatabaseManager):
+    def __init__(self):
         super().__init__(db_manager)
     
     
@@ -302,8 +303,8 @@ class AnalyticsRepository(BaseRepository):
 class AnalyticsService(BaseService):
     """Service for analytics and reporting operations."""
     
-    def __init__(self, db_manager: DatabaseManager):
-        self.repository = AnalyticsRepository(db_manager)
+    def __init__(self):
+        self.repository = AnalyticsRepository()
         super().__init__(self.repository)
     
     def get_dashboard_summary(self, days: int = 30) -> ServiceResult[Dict[str, Any]]:

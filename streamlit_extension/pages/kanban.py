@@ -27,7 +27,9 @@ except ImportError:
 
 # Local imports
 try:
-    from streamlit_extension.utils.database import DatabaseManager
+    # Migrated to modular database API
+    from streamlit_extension.database import queries
+    from streamlit_extension.database.connection import transaction
     from streamlit_extension.utils.security import (
         security_manager, validate_form, check_rate_limit, sanitize_display
     )
@@ -37,7 +39,7 @@ try:
     )
     DATABASE_UTILS_AVAILABLE = True
 except ImportError:
-    DatabaseManager = load_config = security_manager = None
+    queries = transaction = load_config = security_manager = None
     validate_form = check_rate_limit = sanitize_display = None
     TaskStatus = TDDPhases = Priority = UIConstants = ErrorMessages = None
     DATABASE_UTILS_AVAILABLE = False
@@ -108,22 +110,18 @@ def render_kanban_page():
             )
             return
 
-        db_manager = safe_streamlit_operation(
-            DatabaseManager,
-            str(config.get_database_path()),
-            default_return=None,
-            operation_name="database_manager_init",
-        )
-        if db_manager is None:
+        # Using modular database API - no initialization needed
+        db_queries = queries
+        if db_queries is None:
             st.error(
                 ErrorMessages.LOADING_ERROR.format(
-                    entity="database connection", error="failed"
+                    entity="database queries module", error="not available"
                 )
             )
             return
     
     # Sidebar filters
-    _render_sidebar_filters(db_manager)
+    _render_sidebar_filters(db_queries)
     
     # Database read rate limiting
     db_read_allowed, db_read_error = check_rate_limit("db_read") if check_rate_limit else (True, None)
@@ -137,7 +135,7 @@ def render_kanban_page():
     def get_tasks_cached():
         """Get tasks with caching for Kanban performance."""
         return safe_streamlit_operation(
-            db_manager.get_tasks,
+            db_queries.list_all_tasks,
             default_return=[],
             operation_name="get_tasks",
         )
@@ -146,7 +144,7 @@ def render_kanban_page():
     def get_epics_cached():
         """Get epics with caching for Kanban performance."""
         return safe_streamlit_operation(
-            db_manager.get_epics,
+            db_queries.list_epics,
             default_return=[],
             operation_name="get_epics",
         )
@@ -161,24 +159,24 @@ def render_kanban_page():
     
     if not filtered_tasks:
         st.info(ErrorMessages.NO_ITEMS_FOUND.format(entity="tasks"))
-        _render_create_task_form(db_manager, epics)
+        _render_create_task_form(db_queries, epics)
         return
     
     # Render board
     with streamlit_error_boundary("ui_rendering"):
-        _render_kanban_board(filtered_tasks, db_manager, epics)
+        _render_kanban_board(filtered_tasks, db_queries, epics)
     
     # Task creation form
     with st.expander("➕ Create New Task", expanded=False):
         with streamlit_error_boundary("form_rendering"):
-            _render_create_task_form(db_manager, epics)
+            _render_create_task_form(db_queries, epics)
 
     if st.session_state.get("show_debug_info", False):
         with st.expander("🔧 Error Statistics", expanded=False):
             st.json(get_error_statistics())
 
 
-def _render_sidebar_filters(db_manager: DatabaseManager):
+def _render_sidebar_filters(db_queries):
     """Render sidebar filters for the Kanban board."""
     
     st.sidebar.markdown("## 🔍 Filters")
@@ -186,7 +184,7 @@ def _render_sidebar_filters(db_manager: DatabaseManager):
     @st.cache_data(ttl=300)  # Cache for 5 minutes
     def get_epics_for_filter():
         """Get epics for filter dropdown with caching."""
-        return db_manager.get_epics()
+        return db_queries.list_epics()
     
     # Epic filter
     epics = get_epics_for_filter()
@@ -270,7 +268,7 @@ def _apply_filters(tasks: List[Dict[str, Any]], epics: List[Dict[str, Any]]) -> 
     return filtered_tasks
 
 
-def _render_kanban_board(tasks: List[Dict[str, Any]], db_manager: DatabaseManager, epics: List[Dict[str, Any]]):
+def _render_kanban_board(tasks: List[Dict[str, Any]], db_queries, epics: List[Dict[str, Any]]):
     """Render the main Kanban board."""
     
     # Define board columns
@@ -320,7 +318,7 @@ def _render_kanban_board(tasks: List[Dict[str, Any]], db_manager: DatabaseManage
                     _show_quick_add_modal(db_manager, epics)
 
 
-def _render_task_card(task: Dict[str, Any], db_manager: DatabaseManager, epics: List[Dict[str, Any]], current_status: str):
+def _render_task_card(task: Dict[str, Any], db_queries, epics: List[Dict[str, Any]], current_status: str):
     """Render a single task card."""
     
     task_id = task.get("id")
@@ -467,7 +465,7 @@ def _render_task_card(task: Dict[str, Any], db_manager: DatabaseManager, epics: 
                             st.rerun()
 
 
-def _show_quick_add_modal(db_manager: DatabaseManager, epics: List[Dict[str, Any]]):
+def _show_quick_add_modal(db_queries, epics: List[Dict[str, Any]]):
     """Show quick add task modal."""
     
     st.session_state.show_quick_add = True
@@ -552,7 +550,7 @@ def _show_quick_add_modal(db_manager: DatabaseManager, epics: List[Dict[str, Any
                     )
 
 
-def _render_create_task_form(db_manager: DatabaseManager, epics: List[Dict[str, Any]]):
+def _render_create_task_form(db_queries, epics: List[Dict[str, Any]]):
     """Render detailed task creation form."""
     
     with st.form("create_task"):
@@ -652,7 +650,7 @@ def _render_create_task_form(db_manager: DatabaseManager, epics: List[Dict[str, 
                     )
 
 
-def _show_edit_task_modal(task: Dict[str, Any], db_manager: DatabaseManager, epics: List[Dict[str, Any]]):
+def _show_edit_task_modal(task: Dict[str, Any], db_queries, epics: List[Dict[str, Any]]):
     """Show edit task modal."""
     
     task_id = task.get("id")
@@ -755,11 +753,11 @@ def _show_edit_task_modal(task: Dict[str, Any], db_manager: DatabaseManager, epi
                 st.rerun()
 
 
-def _create_task(title: str, epic_id: Optional[int], tdd_phase: str, db_manager: DatabaseManager,
+def _create_task(title: str, epic_id: Optional[int], tdd_phase: str, db_queries,
                 description: str = "", priority: int = 2, estimate_minutes: int = 0) -> bool:
     """Create a new task in the database."""
     task_id = safe_streamlit_operation(
-        db_manager.create_task,
+        lambda task_data: _create_task_modular(task_data, db_queries),
         title=title,
         epic_id=epic_id,
         description=description,
@@ -772,10 +770,10 @@ def _create_task(title: str, epic_id: Optional[int], tdd_phase: str, db_manager:
     return task_id is not None
 
 
-def _update_task_status(task_id: int, new_status: str, db_manager: DatabaseManager) -> bool:
+def _update_task_status(task_id: int, new_status: str, db_queries) -> bool:
     """Update task status."""
     return safe_streamlit_operation(
-        db_manager.update_task_status,
+        lambda task_id, status: _update_task_status_modular(task_id, status, db_queries),
         task_id,
         new_status,
         default_return=False,
@@ -784,10 +782,10 @@ def _update_task_status(task_id: int, new_status: str, db_manager: DatabaseManag
 
 
 def _update_task(task_id: int, title: str, description: str, tdd_phase: str,
-                priority: int, estimate_minutes: int, db_manager: DatabaseManager) -> bool:
+                priority: int, estimate_minutes: int, db_queries) -> bool:
     """Update task details."""
     return safe_streamlit_operation(
-        db_manager.update_task,
+        lambda task_id, data: _update_task_modular(task_id, data, db_queries),
         task_id=task_id,
         title=title,
         description=description,
@@ -799,15 +797,81 @@ def _update_task(task_id: int, title: str, description: str, tdd_phase: str,
     )
 
 
-def _delete_task(task_id: int, db_manager: DatabaseManager) -> bool:
+def _delete_task(task_id: int, db_queries) -> bool:
     """Delete a task."""
     return safe_streamlit_operation(
-        db_manager.delete_task,
+        lambda task_id: _delete_task_modular(task_id, db_queries),
         task_id,
         soft_delete=True,
         default_return=False,
         operation_name="delete_task",
     )
+
+
+# Modular database operations
+def _create_task_modular(task_data: Dict[str, Any], db_queries) -> Dict[str, Any]:
+    """Create task using modular database API."""
+    try:
+        with transaction() as conn:
+            cursor = conn.execute("""
+                INSERT INTO framework_tasks (task_key, epic_id, title, description, tdd_phase, status, estimate_minutes)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            """, (
+                task_data.get('task_key'), task_data.get('epic_id'), task_data.get('title'),
+                task_data.get('description', ''), task_data.get('tdd_phase', 'Red'),
+                task_data.get('status', 'active'), task_data.get('estimate_minutes', 0)
+            ))
+            task_id = cursor.lastrowid
+            return {'id': task_id, **task_data}
+    except Exception as e:
+        raise RuntimeError(f"Failed to create task: {e}")
+
+
+def _update_task_status_modular(task_id: int, new_status: str, db_queries) -> bool:
+    """Update task status using modular database API."""
+    try:
+        with transaction() as conn:
+            cursor = conn.execute("""
+                UPDATE framework_tasks SET status = ?, updated_at = CURRENT_TIMESTAMP
+                WHERE id = ?
+            """, (new_status, task_id))
+            return cursor.rowcount > 0
+    except Exception:
+        return False
+
+
+def _update_task_modular(task_id: int, task_data: Dict[str, Any], db_queries) -> bool:
+    """Update task using modular database API."""
+    try:
+        with transaction() as conn:
+            cursor = conn.execute("""
+                UPDATE framework_tasks 
+                SET title = ?, description = ?, tdd_phase = ?, status = ?, 
+                    estimate_minutes = ?, updated_at = CURRENT_TIMESTAMP
+                WHERE id = ?
+            """, (
+                task_data.get('title'), task_data.get('description'),
+                task_data.get('tdd_phase'), task_data.get('status'),
+                task_data.get('estimate_minutes'), task_id
+            ))
+            return cursor.rowcount > 0
+    except Exception:
+        return False
+
+
+def _delete_task_modular(task_id: int, db_queries) -> bool:
+    """Delete task using modular database API."""
+    try:
+        with transaction() as conn:
+            # Soft delete by updating status
+            cursor = conn.execute("""
+                UPDATE framework_tasks 
+                SET status = 'deleted', updated_at = CURRENT_TIMESTAMP
+                WHERE id = ?
+            """, (task_id,))
+            return cursor.rowcount > 0
+    except Exception:
+        return False
 
 
 if __name__ == "__main__":

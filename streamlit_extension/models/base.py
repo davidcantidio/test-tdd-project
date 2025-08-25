@@ -306,21 +306,14 @@ def reset_database(database_url: Optional[str] = None) -> None:
 
 def integrate_with_existing_db_manager() -> None:
     """
-    Integra a URL do SQLAlchemy com o DatabaseManager existente, quando presente.
-    Usa o resolvedor central para obter a URL correta (sqlite+pysqlite).
+    Legacy integration function - no longer needed with modular architecture.
+    Kept for backward compatibility but does nothing.
     """
     try:
-        # Import tardio para evitar dependência forte
-        from streamlit_extension.utils.database import DatabaseManager  # type: ignore
-
-        db_manager = DatabaseManager()
-        # Se o DatabaseManager expõe .db_path, resolvemos via camada central para não errar o driver.
-        if hasattr(db_manager, "db_path") and db_manager.db_path:
-            database_url = get_database_url(str(db_manager.db_path))
-            get_session_manager(database_url)  # reconfigura singleton com URL correta
-
-        logger.info("Integração com DatabaseManager concluída com sucesso.")
-    except ImportError:
-        logger.info("DatabaseManager não disponível para integração.")
+        # Use modular database path resolution instead
+        database_url = get_database_url(None)  # Will resolve to framework.db
+        get_session_manager(database_url)  # Configure with modular approach
+        
+        logger.info("Integração modular concluída com sucesso.")
     except Exception as e:
-        logger.warning(f"Falha na integração com DatabaseManager: {e}")
+        logger.warning(f"Falha na integração modular: {e}")

@@ -1,10 +1,10 @@
 """
 📅 Gantt Chart Page
 
-SAFE LEGACY DATABASE ACCESS:
-- Uses proven DatabaseManager for all operations
-- No experimental modular API usage
-- Guaranteed compatibility
+MODULAR DATABASE ACCESS:
+- Uses modular database API for better performance
+- Direct queries with connection pooling
+- Production-ready architecture
 """
 
 from __future__ import annotations  
@@ -12,16 +12,15 @@ from typing import Dict, Any, List, Optional
 import logging
 import streamlit as st
 
-# SAFE IMPORT: Use only proven legacy API
-from streamlit_extension.utils.database import DatabaseManager
+# MODULAR IMPORT: Use optimized database API
+from streamlit_extension.database import queries
 
 def get_gantt_data() -> Dict[str, Any]:
-    """Get Gantt data using safe legacy database access"""
-    db_manager = DatabaseManager()
+    """Get Gantt data using modular database API."""
     
     try:
-        epics = db_manager.get_epics()
-        tasks = db_manager.get_tasks()
+        epics = queries.list_epics()
+        tasks = queries.list_all_tasks()
         
         return {
             'epics': epics,
@@ -39,7 +38,7 @@ def get_gantt_data() -> Dict[str, Any]:
         }
 
 def render_gantt_page():
-    """Render Gantt chart page with safe database access"""
+    """Render Gantt chart page with modular database access."""
     st.title("📅 Gantt Chart")
     
     data = get_gantt_data()

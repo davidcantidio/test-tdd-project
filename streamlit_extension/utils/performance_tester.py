@@ -37,16 +37,17 @@ from pathlib import Path
 import datetime
 import gc
 
-# Legacy import - keeping for hybrid compatibility
-from streamlit_extension.utils.database import DatabaseManager  # Legacy compatibility
-from streamlit_extension.database import get_connection, list_epics, list_tasks
+# Modular database imports - complete migration from DatabaseManager
+from streamlit_extension.database import (
+    get_connection, transaction, list_epics, list_tasks, list_projects,
+    execute_cached_query, get_connection_context
+)
 from streamlit_extension.services import ServiceContainer
 # Performance testing imports
 try:  # pragma: no cover
     from streamlit_extension.utils.performance_monitor import PerformanceTester
 except ImportError:  # pragma: no cover
     PerformanceTester = None  # type: ignore
-from streamlit_extension.database import get_connection
 
 
 @dataclass
@@ -187,30 +188,30 @@ class PerformanceProfiler:
 class DatabasePerformanceTester:
     """Specialized database performance testing."""
 
-    def __init__(self, db_manager: Optional[DatabaseManager] = None):
-        self.db_manager = db_manager or DatabaseManager()  # Legacy fallback
-        # Performance testing with direct connection
-        self.performance_connection = get_connection()
+    def __init__(self, connection_path: Optional[str] = None):
+        # Modular database integration - no more DatabaseManager
+        self.connection_path = connection_path
+        self.connection_context = get_connection_context(connection_path)
         # Service container for business logic testing  
-        self.service_container = ServiceContainer(self.db_manager)
+        self.service_container = ServiceContainer()
         self.profiler = PerformanceProfiler()
         
     def benchmark_crud_operations(self, iterations: int = 1000) -> Dict[str, Any]:
         """Benchmark CRUD operations performance."""
         results = {}
         
-        # Test project operations
+        # Test project operations using modular API
         with self.profiler.profile_operation("project_create"):
             for i in range(iterations):
-                self.db_manager.create_project(
-                    project_key=f"test_project_{i}",
-                    name=f"Test Project {i}",
-                    description="Performance test project"
-                )
+                with transaction() as conn:
+                    conn.execute(
+                        "INSERT INTO framework_projects (project_key, name, description, status) VALUES (?, ?, ?, 'active')",
+                        (f"test_project_{i}", f"Test Project {i}", "Performance test project")
+                    )
         
         with self.profiler.profile_operation("project_read"):
             for i in range(iterations):
-                self.db_manager.get_projects(limit=10)
+                list_projects(limit=10)
         
         # Collect statistics
         results["project_create"] = self.profiler.get_statistics("project_create")
@@ -249,13 +250,13 @@ class DatabasePerformanceTester:
         return results
 
     def benchmark_hybrid_operations(self) -> Dict[str, Any]:
-        """Benchmark mix of legacy and modular operations."""
+        """Benchmark modular operations (no more legacy)."""
         results = {}
-        with self.profiler.profile_operation("legacy_get_projects"):
-            self.db_manager.get_projects(limit=5)
+        with self.profiler.profile_operation("modular_list_projects"):
+            list_projects(limit=5)
         with self.profiler.profile_operation("modular_list_epics"):
             list_epics()
-        results["legacy_get_projects"] = self.profiler.get_statistics("legacy_get_projects")
+        results["modular_list_projects"] = self.profiler.get_statistics("modular_list_projects")
         results["modular_list_epics"] = self.profiler.get_statistics("modular_list_epics")
         return results
 
@@ -273,22 +274,26 @@ class DatabasePerformanceTester:
     def benchmark_service_layer(self) -> Dict[str, Any]:
         """Benchmark operations through the service layer."""
         results = {}
-        epic_service = self.service_container.get_epic_service()
-        task_service = self.service_container.get_task_service()
-        with self.profiler.profile_operation("svc_list_epics"):
-            epic_service.list_epics()
-        with self.profiler.profile_operation("svc_list_tasks"):
-            task_service.list_tasks()
-        results["svc_list_epics"] = self.profiler.get_statistics("svc_list_epics")
-        results["svc_list_tasks"] = self.profiler.get_statistics("svc_list_tasks")
+        try:
+            epic_service = self.service_container.get_epic_service()
+            task_service = self.service_container.get_task_service()
+            with self.profiler.profile_operation("svc_list_epics"):
+                epic_service.list_epics()
+            with self.profiler.profile_operation("svc_list_tasks"):
+                task_service.list_tasks()
+            results["svc_list_epics"] = self.profiler.get_statistics("svc_list_epics")
+            results["svc_list_tasks"] = self.profiler.get_statistics("svc_list_tasks")
+        except Exception as e:
+            results["error"] = f"Service layer benchmark failed: {str(e)}"
         return results
 
 
 class LoadTester:
     """Multi-threaded load testing system."""
     
-    def __init__(self, db_manager):
-        self.db_manager = db_manager
+    def __init__(self, connection_path: Optional[str] = None):
+        self.connection_path = connection_path
+        self.connection_context = get_connection_context(connection_path)
         self.profiler = PerformanceProfiler()
         self.stop_event = threading.Event()
         
@@ -564,12 +569,12 @@ class PerformanceReporter:
             f.write("\n```\n")
 
 
-def create_performance_test_suite(db_manager) -> Dict[str, Any]:
+def create_performance_test_suite(connection_path: Optional[str] = None) -> Dict[str, Any]:
     """Create comprehensive performance test suite."""
     
-    # Initialize components
-    db_tester = DatabasePerformanceTester(db_manager)
-    load_tester = LoadTester(db_manager)
+    # Initialize components with modular API
+    db_tester = DatabasePerformanceTester(connection_path)
+    load_tester = LoadTester(connection_path)
     monitor = PerformanceMonitor()
     reporter = PerformanceReporter()
     
@@ -590,7 +595,12 @@ def create_performance_test_suite(db_manager) -> Dict[str, Any]:
     logging.info("⚡ Running load tests...")
     
     def project_creation_test(data):
-        return db_manager.create_project(**data)
+        with transaction() as conn:
+            cursor = conn.execute(
+                "INSERT INTO framework_projects (project_key, name, description, status) VALUES (?, ?, ?, 'active')",
+                (data.get('project_key'), data.get('name'), data.get('description', ''), data.get('status', 'active'))
+            )
+            return cursor.lastrowid
 
     results["load_test_light"] = load_tester.run_load_test(light_load, project_creation_test)
     results["load_test_heavy"] = load_tester.run_load_test(heavy_load, project_creation_test)
@@ -605,30 +615,30 @@ def create_performance_test_suite(db_manager) -> Dict[str, Any]:
 
 
 # Example usage and integration functions
-def run_quick_performance_check(db_manager) -> Dict[str, Any]:
+def run_quick_performance_check(connection_path: Optional[str] = None) -> Dict[str, Any]:
     """Run quick performance check for monitoring."""
     profiler = PerformanceProfiler()
     
-    # Test basic operations
-    with profiler.profile_operation("get_projects"):
-        db_manager.get_projects(limit=10)
+    # Test basic operations using modular API
+    with profiler.profile_operation("list_projects"):
+        list_projects(limit=10)
 
     return {
-        "get_projects": profiler.get_statistics("get_projects"),
+        "list_projects": profiler.get_statistics("list_projects"),
         "timestamp": datetime.datetime.now().isoformat()
     }
 
 
 if __name__ == "__main__":
-    # Example usage
-    db_manager = DatabaseManager("framework.db", "task_timer.db")  # Legacy fallback
+    # Example usage with modular API
+    connection_path = "framework.db"
     # Performance testing with direct connection
     performance_connection = get_connection()
     # Service container for business logic testing  
-    service_container = ServiceContainer(db_manager)
+    service_container = ServiceContainer()
 
     # Run comprehensive test suite
-    results = create_performance_test_suite(db_manager)
+    results = create_performance_test_suite(connection_path)
 
     logging.info("Performance testing completed!")
     logging.info(f"Results: {len(results)} test categories executed")

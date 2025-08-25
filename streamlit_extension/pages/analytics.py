@@ -18,32 +18,40 @@ try:
 except ImportError:
     list_epics = None  # Fallback handling
 
-from streamlit_extension.utils.database import DatabaseManager  # Legacy - always works
+# Migrated to modular database API
+from streamlit_extension.database import queries
 
 def get_analytics_data() -> Dict[str, Any]:
-    """Get analytics data using hybrid database approach"""
-    db_manager = DatabaseManager()
+    """Get analytics data using modular database API."""
     
     try:
-        # Use modular API for operations that work
-        if list_epics:
-            epics = list_epics()
-        else:
-            # Fallback to legacy
-            epics = db_manager.get_epics()
-            
-        # Use legacy for operations that don't work in modular API
-        tasks = db_manager.get_tasks()  # SAFE: No epic_id required in legacy
+        # Use modular queries for all data operations
+        epics = queries.list_epics()
+        tasks = queries.list_all_tasks()
         
-        # Use legacy for complex analytics operations
-        analytics = {}
-        if hasattr(db_manager, 'get_analytics'):
-            analytics = db_manager.get_analytics()
-            
-        user_stats = {}
-        if hasattr(db_manager, 'get_user_stats'):
-            user_stats = db_manager.get_user_stats()
-            
+        # Get user statistics using optimized query
+        user_stats = queries.get_user_stats_optimized(user_id=1)
+        
+        # Calculate analytics from the retrieved data
+        analytics = {
+            'total_epics': len(epics),
+            'total_tasks': len(tasks),
+            'completed_tasks': len([t for t in tasks if t.get('status') == 'completed']),
+            'active_tasks': len([t for t in tasks if t.get('status') == 'active']),
+            'epics_by_status': {},
+            'tasks_by_tdd_phase': {}
+        }
+        
+        # Calculate epics by status
+        for epic in epics:
+            status = epic.get('status', 'unknown')
+            analytics['epics_by_status'][status] = analytics['epics_by_status'].get(status, 0) + 1
+        
+        # Calculate tasks by TDD phase
+        for task in tasks:
+            phase = task.get('tdd_phase', 'unknown')
+            analytics['tasks_by_tdd_phase'][phase] = analytics['tasks_by_tdd_phase'].get(phase, 0) + 1
+        
         return {
             'epics': epics,
             'tasks': tasks,  
@@ -55,10 +63,9 @@ def get_analytics_data() -> Dict[str, Any]:
         
     except Exception as e:
         logging.error(f"Analytics data error: {e}")
-        # Full fallback to legacy
         return {
-            'epics': db_manager.get_epics(),
-            'tasks': db_manager.get_tasks(),
+            'epics': [],
+            'tasks': [],
             'analytics': {},
             'user_stats': {},
             'total_epics': 0,

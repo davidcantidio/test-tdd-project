@@ -38,7 +38,7 @@ from streamlit_extension.utils.exception_handler import (
     handle_streamlit_exceptions,
     streamlit_error_boundary,
 )
-from streamlit_extension.utils.database import DatabaseManager
+# Migrated to modular database API
 from streamlit_extension.utils.security import sanitize_display, check_rate_limit
 from streamlit_extension.config import load_config
 from streamlit_extension.config.constants import StatusValues, ErrorMessages, UIConstants
@@ -205,17 +205,14 @@ def render_projects_page() -> Dict[str, Any]:
     st.markdown("Manage your projects, timelines, and deliverables")
     st.markdown("---")
 
-    # --- DB init ---
+    # --- DB init (modular API) ---
     try:
-        config = load_config()
-        db_manager = DatabaseManager(
-            framework_db_path=str(config.get_database_path()),
-            timer_db_path=str(config.get_timer_database_path()),
-        )
+        from streamlit_extension.database import queries
+        # Using modular database API instead of DatabaseManager
     except Exception as e:
-        logger.exception("Database connection error: %s", e)
-        st.error(ErrorMessages.LOADING_ERROR.format(entity="database connection", error=e))
-        return {"error": f"Database connection error: {e}"}
+        logger.exception("Database module import error: %s", e)
+        st.error(ErrorMessages.LOADING_ERROR.format(entity="database module", error=e))
+        return {"error": f"Database module import error: {e}"}
 
     # --- Filters ---
     col1, col2, col3 = st.columns([3, 2, 1])
@@ -249,7 +246,8 @@ def render_projects_page() -> Dict[str, Any]:
             return {"error": "Database rate limited"}
 
         try:
-            projects_result = db_manager.get_projects(include_inactive=True)
+            # Using modular query instead of legacy DatabaseManager
+            projects_result = queries.list_all_projects()  # Equivalent to get_projects(include_inactive=True)
             all_projects = _normalize_db_list_result(projects_result)
         except Exception as e:
             logger.exception("Error loading projects: %s", e)

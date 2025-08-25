@@ -14,7 +14,8 @@ from .base import (
     BaseService, ServiceResult, ServiceError, ServiceErrorType,
     BaseRepository, PaginatedResult, FilterCriteria, SortCriteria
 )
-from ..utils.database import DatabaseManager
+from ..database import queries as db_queries
+from ..database.connection import transaction, get_connection_context, execute
 from ..config.constants import ValidationRules, EpicStatus, TaskStatus
 
 
@@ -42,8 +43,8 @@ class EpicRepository(BaseRepository):
         self._epicrepositoryserialization = EpicRepositorySerialization()
     """Repository for epic data access operations."""
     
-    def __init__(self, db_manager: DatabaseManager):
-        super().__init__(db_manager)
+    def __init__(self):
+        super().__init__()
     
     def find_by_id(self, epic_id: int) -> Optional[Dict[str, Any]]:
         """Find epic by ID with project information."""
@@ -365,8 +366,8 @@ class EpicRepository(BaseRepository):
 class EpicService(BaseService):
     """Service for epic business logic operations with gamification."""
     
-    def __init__(self, db_manager: DatabaseManager):
-        self.repository = EpicRepository(db_manager)
+    def __init__(self):
+        self.repository = EpicRepository()
         super().__init__(self.repository)
     
     def validate_business_rules(self, data: Dict[str, Any]) -> List[ServiceError]:
