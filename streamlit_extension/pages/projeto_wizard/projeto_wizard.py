@@ -11,10 +11,13 @@
 
 from __future__ import annotations
 
+import logging
 from datetime import date
 from typing import Any, Dict, List, Optional
 
 import streamlit as st
+
+logger = logging.getLogger(__name__)
 
 # --- Autenticação -------------------------------------------------------------
 # Import absoluto (corrige erro crítico do relatório):
@@ -36,63 +39,122 @@ except ImportError:
 # --- Banco (padrão híbrido) ---------------------------------------------------
 # Preferimos o híbrido, mas funcionamos mesmo que alguma API não esteja disponível
 _DBM = None
-_create_project_fn = None
+_queries = None
 _transaction_ctx = None
+_db_initialized = False
 
 def _init_db_layer() -> None:
-    global _DBM, _create_project_fn, _transaction_ctx
-    # Tentamos APIs em ordem: híbrido (modular + manager) → apenas manager
+    """Inicializa camada de banco com fallbacks robustos."""
+    global _DBM, _queries, _transaction_ctx, _db_initialized
+    
+    if _db_initialized:
+        logger.info("Database layer already initialized")
+        return
+    
+    logger.info("Initializing database layer for projeto wizard...")
+    
+    # Try modular database API first
     try:
-        # Modular API (transação)
-        from streamlit_extension.database import transaction  # type: ignore
-        _transaction_ctx = transaction
-    except Exception:
-        _transaction_ctx = None
-
-    # Using modular database API
-    try:
+        logger.info("Attempting to import modular database API...")
         from streamlit_extension.database import queries
-        from streamlit_extension.database.connection import get_connection_context, transaction
+        from streamlit_extension.database.connection import transaction
+        
         _queries = queries
         _transaction_ctx = transaction
-    except Exception:
-        _queries = None
-        _transaction_ctx = None
-
-    # Create project function will be implemented inline
+        _db_initialized = True
+        logger.info("✅ Modular database API successfully initialized")
+        return
+        
+    except ImportError as e:
+        logger.warning(f"Modular database API import failed: {e}")
+        st.info("🔄 Using fallback database system...")
+    except Exception as e:
+        logger.error(f"Unexpected error with modular database API: {e}")
+        st.warning(f"Database API error: {e}")
+    
+    # Fallback to DatabaseManager
+    try:
+        logger.info("Attempting DatabaseManager fallback...")
+        from streamlit_extension.utils.database import DatabaseManager
+        _DBM = DatabaseManager()
+        _db_initialized = True
+        logger.info("✅ DatabaseManager fallback successfully initialized")
+        return
+        
+    except ImportError as e:
+        logger.error(f"DatabaseManager import failed: {e}")
+        st.error("❌ Sistema de banco de dados indisponível")
+        _db_initialized = False
+    except Exception as e:
+        logger.error(f"DatabaseManager initialization failed: {e}")
+        st.error(f"❌ Falha na inicialização do banco: {e}")
+        _db_initialized = False
 
 
 def _create_project_safely(payload: Dict[str, Any]) -> Dict[str, Any]:
     """
-    Cria projeto usando API modular com transação.
+    Cria projeto usando API modular com fallback para DatabaseManager.
     """
+    # Ensure database layer is initialized
+    _init_db_layer()
+    
+    if not _db_initialized:
+        return {"ok": False, "error": "Sistema de banco de dados indisponível"}
+    
     try:
-        if _queries is None or _transaction_ctx is None:
-            raise RuntimeError("Modular database API not available")
+        # Try modular API first
+        if _queries is not None and _transaction_ctx is not None:
+            return _create_project_with_modular_api(payload)
+        
+        # Fallback to DatabaseManager
+        if _DBM is not None:
+            return _create_project_with_manager(payload)
             
-        # Create project using direct SQL with transaction
-        with _transaction_ctx() as conn:
-            # Insert into framework_projects table
-            cursor = conn.execute("""
-                INSERT INTO framework_projects (project_key, name, description, status)
-                VALUES (?, ?, ?, 'active')
-            """, (payload.get('project_key'), payload.get('name'), payload.get('description', '')))
-            
-            project_id = cursor.lastrowid
-            
-            # Return created project data
-            created_project = {
-                'id': project_id,
-                'project_key': payload.get('project_key'),
-                'name': payload.get('name'),
-                'description': payload.get('description', ''),
-                'status': 'active'
-            }
-            
-            return {"ok": True, "data": created_project}
-            
+        return {"ok": False, "error": "Nenhuma API de banco disponível"}
+        
     except Exception as e:
         return {"ok": False, "error": f"Falha ao criar projeto: {e}"}
+
+
+def _create_project_with_modular_api(payload: Dict[str, Any]) -> Dict[str, Any]:
+    """Create project using modular database API."""
+    with _transaction_ctx() as conn:
+        # Insert into framework_projects table
+        cursor = conn.execute("""
+            INSERT INTO framework_projects (project_key, name, description, status)
+            VALUES (?, ?, ?, 'active')
+        """, (payload.get('project_key'), payload.get('name'), payload.get('description', '')))
+        
+        project_id = cursor.lastrowid
+        
+        # Return created project data
+        created_project = {
+            'id': project_id,
+            'project_key': payload.get('project_key'),
+            'name': payload.get('name'),
+            'description': payload.get('description', ''),
+            'status': 'active'
+        }
+        
+        return {"ok": True, "data": created_project}
+
+
+def _create_project_with_manager(payload: Dict[str, Any]) -> Dict[str, Any]:
+    """Create project using DatabaseManager fallback.""" 
+    project_data = {
+        'project_key': payload.get('project_key'),
+        'name': payload.get('name'),
+        'description': payload.get('description', ''),
+        'status': 'active'
+    }
+    
+    # Use DatabaseManager method to create project
+    result = _DBM.create_project(project_data)
+    
+    if result and result.get('id'):
+        return {"ok": True, "data": result}
+    else:
+        return {"ok": False, "error": "Falha ao criar projeto via DatabaseManager"}
 
 # --- UI Helpers ----------------------------------------------------------------
 def _form_validation(
@@ -153,13 +215,20 @@ def _render() -> None:
                     st.error(e)
                 st.stop()
 
+            # Generate project key from name (normalized)
+            project_key = project_name.strip().lower().replace(' ', '_').replace('-', '_')
+            # Remove special characters and limit length
+            import re
+            project_key = re.sub(r'[^\w]', '', project_key)[:50]
+            
             payload: Dict[str, Any] = {
+                "project_key": project_key,
                 "name": project_name.strip(),
                 "description": (description or "").strip(),
                 "start_date": str(start_date),
                 "end_date": str(end_date),
                 "budget": float(budget),
-                "status": status,
+                "status": status.lower().replace(' ', '_'),
             }
 
             try:
@@ -188,6 +257,19 @@ def _render() -> None:
             "- Defina datas realistas; você pode ajustar depois.\n"
             "- Orçamento pode ser zero se o projeto não tiver CAPEX/OPEX definido."
         )
+
+def render_projeto_wizard_page() -> Dict[str, Any]:
+    """Public interface for rendering the project wizard page."""
+    logger.info("🚀 Project wizard page requested - rendering...")
+    try:
+        _render()
+        logger.info("✅ Project wizard page rendered successfully")
+        return {"status": "success", "page": "projeto_wizard"}
+    except Exception as e:
+        logger.error(f"❌ Error rendering project wizard page: {e}")
+        st.error("⚠️ Erro ao carregar página do wizard")
+        return {"status": "error", "error": str(e), "page": "projeto_wizard"}
+
 
 if __name__ == "__main__":
     _render()

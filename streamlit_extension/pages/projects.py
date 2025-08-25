@@ -43,6 +43,7 @@ from streamlit_extension.utils.security import sanitize_display, check_rate_limi
 from streamlit_extension.config import load_config
 from streamlit_extension.config.constants import StatusValues, ErrorMessages, UIConstants
 from streamlit_extension.utils.app_setup import STREAMLIT_AVAILABLE
+from streamlit_extension.utils.session_manager import set_current_page
 
 logger = logging.getLogger(__name__)
 
@@ -172,9 +173,16 @@ def render_wizard_call_to_action() -> None:
             use_container_width=True,
             help="Wizard completo: Visão → Épicos → Stories → Tasks → Preview",
         ):
-            from streamlit_extension.utils.session_manager import set_current_page
-            set_current_page("projeto_wizard")
-            st.rerun()
+            logger.info("🚀 Button 'Criar Projeto com Wizard IA' clicked!")
+            try:
+                logger.info("Navigating to wizard page using st.switch_page...")
+                # Use Streamlit's native navigation method with wrapper file
+                st.switch_page("pages/projeto_wizard.py")
+                logger.info("✅ Navigation completed successfully")
+            except Exception as e:
+                logger.error(f"❌ Error in navigation callback: {e}")
+                st.error(f"Erro na navegação: {e}")
+                raise
     st.markdown("---")
 
 
