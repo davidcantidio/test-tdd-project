@@ -8,9 +8,7 @@ from .connection import execute_cached_query, get_optimized_connection, get_conn
 # Removed legacy DatabaseManager dependencies
 
 
-# Auth imports
-from streamlit_extension.auth.middleware import require_auth, require_admin
-from streamlit_extension.auth.user_model import UserRole
+# Auth imports removed - using official Streamlit OAuth
 
 
 # =============================================================================
@@ -117,7 +115,7 @@ def list_epics_optimized(cache_ttl: int = 300) -> List[Dict[str, Any]]:
     Lista epics com SELECT enxuto + cache.
 
     Columns existentes (schema atual):
-      - id, epic_key, name, description, status, priority, duration_days, progress,
+      - id, epic_key, name, description, status, priority, duration_days,
         created_at, updated_at
     """
     sql = """
@@ -129,7 +127,6 @@ def list_epics_optimized(cache_ttl: int = 300) -> List[Dict[str, Any]]:
             status,
             priority,
             duration_days,
-            progress,
             created_at,
             updated_at
         FROM framework_epics

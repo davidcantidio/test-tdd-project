@@ -69,9 +69,31 @@ class DatabaseManager:
         )
 
 
-# Prevent any imports of the old monolithic API
+# Prevent imports of the old monolithic API while allowing system attributes
 def __getattr__(name):
-    raise DeprecationWarning(
-        f"'{name}' from DatabaseManager is deprecated. "
-        "Use streamlit_extension.database modular API instead."
-    )
+    # Allow system attributes that Python and Streamlit need
+    system_attributes = {
+        '__path__', '__file__', '__name__', '__package__', '__spec__',
+        '__loader__', '__cached__', '__builtins__', '__doc__'
+    }
+    
+    if name in system_attributes:
+        # Let Python handle these attributes normally
+        raise AttributeError(f"module '{__name__}' has no attribute '{name}'")
+    
+    # Block deprecated DatabaseManager API attributes
+    deprecated_attributes = {
+        'DatabaseManager', 'get_connection', 'execute_query', 
+        'create_tables', 'get_epics', 'get_tasks', 'create_task',
+        'update_task', 'delete_task', 'get_projects', 'create_project',
+        'dict_rows'  # This should now come from the modular API
+    }
+    
+    if name in deprecated_attributes:
+        raise DeprecationWarning(
+            f"'{name}' from DatabaseManager is deprecated. "
+            "Use streamlit_extension.database modular API instead."
+        )
+    
+    # For any other attribute, raise AttributeError (standard Python behavior)
+    raise AttributeError(f"module '{__name__}' has no attribute '{name}'")

@@ -151,11 +151,17 @@ def render_current_page(user: Dict[str, Any]) -> None:
         return
 
     try:
-        # Check for login page via query params first
+        # Check for page navigation via query params first
         query_params = st.query_params or {}
-        if query_params.get("page") == "login":
+        query_page = query_params.get("page")
+        
+        if query_page == "login":
             _render_login_page()
             return
+        elif query_page and query_page != "login":
+            # Update session state with query param page
+            set_current_page(query_page)
+            logger.info(f"📄 Page navigation via query param: {query_page}")
         
         current_page = (get_current_page() or "Dashboard").strip()  # robusto a None/"" 
         add_to_page_history(current_page)

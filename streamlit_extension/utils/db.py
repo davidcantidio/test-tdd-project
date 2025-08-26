@@ -9,7 +9,7 @@ This module specifically provides context managers and utilities needed
 by the repository pattern implementation.
 """
 
-from .database import dict_rows
+from ..database.connection import dict_rows
 # Auth imports
 from streamlit_extension.auth.middleware import require_auth, require_admin
 from streamlit_extension.auth.user_model import UserRole

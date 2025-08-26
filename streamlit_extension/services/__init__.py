@@ -21,15 +21,17 @@ from .analytics_service import AnalyticsService
 from .timer_service import TimerService
 from .service_container import (
     ServiceContainer,
-    initialize_service_container,
     get_service_container,
+    reset_service_container,
+    initialize_service_container,
     shutdown_service_container,
     get_project_service,
     get_epic_service,
     get_task_service,
     get_analytics_service,
     get_timer_service,
-    check_service_health
+    check_services_health,
+    get_app_service_container
 )
 
 __all__ = [
@@ -41,12 +43,13 @@ __all__ = [
     'AnalyticsService', 'TimerService',
     
     # Service container
-    'ServiceContainer', 'initialize_service_container', 'get_service_container', 'shutdown_service_container',
+    'ServiceContainer', 'get_service_container', 'reset_service_container', 
+    'initialize_service_container', 'shutdown_service_container', 'get_app_service_container',
     
     # Service accessors
     'get_project_service', 'get_epic_service', 
     'get_task_service', 'get_analytics_service', 'get_timer_service',
     
     # Utilities
-    'check_service_health'
+    'check_services_health'
 ]

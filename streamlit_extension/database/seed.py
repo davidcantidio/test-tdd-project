@@ -22,9 +22,7 @@ def set_database_manager(dbm: Any) -> None:
     pass
 
 
-# Auth imports
-from streamlit_extension.auth.middleware import require_auth, require_admin
-from streamlit_extension.auth.user_model import UserRole
+# Auth imports removed - using official Streamlit OAuth
 
 
 def seed_initial_data(kind: Optional[str] = None) -> int:

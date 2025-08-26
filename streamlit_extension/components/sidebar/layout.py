@@ -47,11 +47,26 @@ def render_sidebar(user_id: int = 1) -> Dict[str, Any]:
             except ImportError:
                 st.error("Navigation not available")
         
-        # Add login link
-        if st.button("🔐 Login", use_container_width=True):
-            st.query_params.clear()
-            st.query_params["page"] = "login"
-            st.rerun()
+        # 🔐 OFFICIAL STREAMLIT OAUTH - USER INFO & LOGOUT
+        st.markdown("### 👤 User Info")
+        
+        if hasattr(st, 'user') and st.user.is_logged_in:
+            # Show user information
+            user_name = getattr(st.user, 'name', 'User')
+            user_email = getattr(st.user, 'email', '')
+            
+            st.success(f"✅ **{user_name}**")
+            if user_email:
+                st.caption(f"📧 {user_email}")
+            
+            st.text("Role: User")  # Default role, will be fixed later
+            
+            # Official logout button
+            if st.button("🔓 Logout", use_container_width=True, type="secondary"):
+                st.logout()
+        else:
+            st.warning("🔒 Not logged in")
+            st.info("Login via main app")
         
         st.markdown("---")
         

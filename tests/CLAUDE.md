@@ -1,20 +1,21 @@
 # 🤖 CLAUDE.md - Testing Framework
 
 **Module:** tests/  
-**Purpose:** Comprehensive test suite with 1,300+ tests across multiple categories  
+**Purpose:** Streamlined test suite with 650+ focused tests across production categories  
 **Architecture:** Multi-layered testing strategy (unit, integration, performance, security, load)  
-**Last Updated:** 2025-08-17
+**Last Updated:** 2025-08-25 - Test Suite Cleanup Complete
 
 ---
 
 ## 🧪 **Testing Framework Overview**
 
 Enterprise-grade testing system featuring:
-- **1,300+ Tests** across all system components
+- **650+ Production Tests** - Streamlined and focused on active functionality
 - **Multi-Category Testing**: Unit, integration, performance, security, load testing
-- **Comprehensive Coverage**: 98%+ average code coverage
+- **Comprehensive Coverage**: 98%+ average code coverage maintained
 - **CI/CD Integration**: Automated testing pipeline with pytest
 - **Production Certification**: Full system validation before deployment
+- **Clean Architecture**: Obsolete development artifacts eliminated (Aug 2025)
 
 ---
 
@@ -36,10 +37,17 @@ tests/
 ├── unit/                       # 🧪 Unit Tests
 ├── performance/                # ⚡ Performance & Stress Tests
 ├── load_testing/               # 📊 Load & Concurrent User Tests
-├── migration/                  # 🔀 Data Migration Tests
-├── optimization/               # 🎨 Code Optimization Tests
-└── scripts/                    # 📝 Script & Tool Tests
+├── migration/                  # 🔀 Data Migration Tests (Active)
+├── models/                     # 📊 ORM and Data Model Tests
+├── repos/                      # 🗂️ Repository Pattern Tests
+└── scripts/                    # 📝 System Validation Scripts
 ```
+
+### **⚡ Recent Cleanup (August 2025)**
+**Eliminated Obsolete Categories:**
+- `optimization/` - Intelligent audit system development artifacts (REMOVED)
+- `test_agno_tools/` - Agno integration development tests (REMOVED)
+- Obsolete integration tests for completed migration phases (CLEANED)
 
 ### **Test Categories**
 
@@ -480,16 +488,28 @@ pytest tests/performance/test_stress_suite.py --stress --duration=1800 -v
 - **Security Tests**: 100% attack vector coverage
 - **Performance Tests**: Key operation coverage
 
-### **Test Categories Breakdown**
-- **Unit Tests**: 1,200+ tests across 55 test files
-- **Duration System Tests**: 175+ tests (98%+ coverage)
-- **Security Tests**: 80+ tests (including rate limiting)
-- **Database Tests**: 85+ tests (96% coverage)
-- **UI Component Tests**: 60+ tests (92% coverage)
-- **Integration Tests**: 40+ tests (90% coverage)
-- **Performance Tests**: 10+ tests (key operations)
-- **Load Tests**: 15+ tests (scalability validation)
-- **Rate Limiting Tests**: New comprehensive test suite
+### **Test Categories Breakdown** *(Post-Cleanup Aug 2025)*
+- **Unit Tests**: 650+ focused tests across active modules
+- **Duration System Tests**: 175+ tests (98%+ coverage) - MAINTAINED
+- **Security Tests**: 80+ tests (including rate limiting) - MAINTAINED
+- **Database Tests**: 85+ tests (96% coverage) - MAINTAINED
+- **UI Component Tests**: 60+ tests (92% coverage) - MAINTAINED
+- **Integration Tests**: 25+ core integration tests - STREAMLINED
+- **Performance Tests**: 10+ tests (key operations) - MAINTAINED
+- **Load Tests**: 15+ tests (scalability validation) - MAINTAINED
+- **Cache Performance**: 47+ tests verified passing - MAINTAINED
+
+### **🧹 Eliminated Obsolete Tests** *(Aug 2025 Cleanup)*
+- **Intelligent Audit System Tests**: ~150+ development artifacts removed
+  - `optimization/` directory with god code test files
+  - `test_agno_tools/` directory with development utilities
+  - Integration tests for completed audit phases
+- **Migration Development Tests**: Obsolete validation tests removed
+  - Phase-specific migration validation artifacts  
+  - Completed system integration tests
+- **Duplicate Test Files**: Empty/minimal duplicates eliminated
+  - Consolidated product vision controller tests
+  - Removed placeholder test stubs
 
 ### **Quality Gates**
 ```bash
@@ -775,6 +795,24 @@ python comprehensive_integrity_test.py
 - [ ] Regression tests added
 - [ ] Related functionality verified
 - [ ] Security implications reviewed
+
+---
+
+## 🔗 **See Also - Related Documentation**
+
+**Main Project Documentation:**
+- **📜 [Root CLAUDE.md](../CLAUDE.md)** - Complete system overview, quick start, architecture
+- **📊 [Project README](../README.md)** - Features, installation, testing commands
+
+**Module Testing Integration:**
+- **📱 [Streamlit Extension](../streamlit_extension/CLAUDE.md)** - UI component testing, authentication tests
+- **⏱️ [Duration System](../duration_system/CLAUDE.md)** - Security testing, performance validation
+- **🔧 [Scripts](../scripts/CLAUDE.md)** - Analysis tools, maintenance scripts, system validation
+
+**Operations & Quality:**
+- **⚙️ [Config](../config/CLAUDE.md)** - Environment setup, testing configurations
+- **📊 [Monitoring](../monitoring/CLAUDE.md)** - Performance tracking, health monitoring
+- **🔄 [Migration](../migration/CLAUDE.md)** - Data migration testing, schema validation
 
 ---
 

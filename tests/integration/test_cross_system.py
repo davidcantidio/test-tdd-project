@@ -33,7 +33,12 @@ sys.path.append(str(Path(__file__).parent.parent.parent))
 
 # Test authentication/security if available
 try:
-    from streamlit_extension.utils.auth_manager import AuthManager
+    # Note: Using new authentication system or falling back to mocks
+    # from streamlit_extension.utils.auth_manager import AuthManager  # Deprecated - removed
+    from streamlit_extension.utils.auth_streamlit_native import (
+        is_user_authenticated, 
+        get_authenticated_user
+    )
     from streamlit_extension.security.csrf_protection import CSRFProtection
     from streamlit_extension.security.xss_protection import XSSProtection
     AUTH_AVAILABLE = True
@@ -180,7 +185,9 @@ class CrossSystemTestFramework:
         """Initialize security system components."""
         if AUTH_AVAILABLE:
             try:
-                self.auth_manager = AuthManager(db_path=self.db_path)
+                # Use mock for auth manager since we migrated to Streamlit native OAuth
+                self.auth_manager = Mock()
+                self.auth_manager.authenticate.return_value = {"id": 1, "username": "test_user"}
                 self.csrf_protection = CSRFProtection(secret_key="test-csrf-key")
                 self.xss_protection = XSSProtection()
             except:

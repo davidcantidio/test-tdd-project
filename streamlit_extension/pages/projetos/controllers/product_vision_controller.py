@@ -278,3 +278,46 @@ def refine_with_service(current: Dict[str, Any], service) -> Dict[str, Any]:
         # Convert to ValueError for consistent error handling in tests and UI
         raise ValueError(str(e))
     return merged
+
+# --- APPEND: Controller orientado a casos de uso (mantendo os helpers acima) ---
+
+from typing import Protocol, Tuple
+
+class VisionRefinePort(Protocol):
+    def refine(self, payload: Dict[str, Any]) -> Dict[str, Any]: ...
+
+class ProductVisionRepositoryPort(Protocol):
+    def save(self, project_id: str, data: Dict[str, Any]) -> None: ...
+    def load(self, project_id: str) -> Dict[str, Any]: ...
+
+class ProductVisionController:
+    """
+    Orquestra os casos de uso da Product Vision.
+    Delegamos regras ao domínio (product_vision_state) e serviços externos via portas.
+    """
+    def __init__(self, refine_service: VisionRefinePort, repository: ProductVisionRepositoryPort):
+        self.refine_service = refine_service
+        self.repository = repository
+
+    def refine_with_ai(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        # valida dados antes de chamar IA
+        ok, msg = validate_product_vision(_ensure_shape(payload))
+        if not ok:
+            raise ValueError(msg or "Campos obrigatórios ausentes/invalidos.")
+        # reutiliza o fluxo já implementado nos helpers (normaliza + chama service + merge)
+        try:
+            return refine_with_service(payload, self.refine_service)
+        except Exception as e:
+            # padroniza erro para os testes/UI
+            raise ValueError(str(e))
+
+    def save_draft(self, project_id: str, data: Dict[str, Any]) -> Tuple[bool, str | None]:
+        ok, msg = validate_product_vision(_ensure_shape(data))
+        if not ok:
+            return False, msg or "Campos obrigatórios ausentes/invalidos."
+        try:
+            self.repository.save(project_id, data)
+            return True, None
+        except Exception as e:
+            return False, f"Falha ao salvar: {e}"
+

@@ -93,13 +93,27 @@ def _fallback_require_authentication(func: F) -> F:  # pragma: no cover
 
 # Tentativa de importar a implementação real de OAuth
 try:
-    from ..utils.auth import (  # type: ignore
-        GoogleOAuthManager as _GoogleOAuthManagerReal,
+    from ..utils.auth_streamlit_native import (  # type: ignore
         get_authenticated_user as _get_authenticated_user_real,
         is_user_authenticated as _is_user_authenticated_real,
         render_login_page as _render_login_page_real,
-        require_authentication as _require_authentication_real,
     )
+    # Create a mock GoogleOAuthManager since we're using native Streamlit OAuth
+    class _GoogleOAuthManagerReal:
+        def __init__(self, *args, **kwargs):
+            logger.info("Using Streamlit native OAuth - GoogleOAuthManager is a compatibility wrapper")
+    
+    # Create a mock require_authentication decorator
+    def _require_authentication_real(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            if not _is_user_authenticated_real():
+                _render_login_page_real()
+                if _STREAMLIT_AVAILABLE and st:
+                    st.stop()
+                return None
+            return func(*args, **kwargs)
+        return wrapper
     # Marcar como disponível e expor símbolos reais
     _OAUTH_AVAILABLE = True
 

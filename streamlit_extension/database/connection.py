@@ -11,8 +11,7 @@ from typing import Any, Dict, Iterable, Iterator, Optional, Tuple
 
 # Legacy compatibility layer - removed monolith dependency
 
-# Auth decorators
-from streamlit_extension.auth.middleware import require_auth, require_admin
+# Auth decorators removed - using official Streamlit OAuth
 
 # =============================================================================
 # Config & Utils
@@ -35,8 +34,6 @@ def _resolve_db_path() -> str:
     return os.path.join(os.getcwd(), DEFAULT_DB_FILENAME)
 
 
-@require_admin
-@require_auth()
 def _configure_sqlite_connection(conn: sqlite3.Connection) -> None:
     """
     Configura a conexão para melhor concorrência e ergonomia.
@@ -52,7 +49,6 @@ def _configure_sqlite_connection(conn: sqlite3.Connection) -> None:
     conn.execute("PRAGMA foreign_keys = ON;")
 
 
-@require_admin
 def _new_sqlite_connection() -> sqlite3.Connection:
     """
     Cria uma nova conexão SQLite com configurações padrão do módulo.
@@ -78,20 +74,17 @@ def set_database_manager(dbm: Any) -> None:
     pass
 
 
-# Auth imports
-from streamlit_extension.auth.user_model import UserRole
+# Auth imports removed - using official Streamlit OAuth
 
 # Keep old function for backward compatibility but delegate to centralized implementation  
 # def _db() -> DatabaseManager:
 #     """DEPRECATED: Use database_singleton.get_database_manager() instead"""
 #     return get_database_manager()
-@require_admin
 def get_connection() -> sqlite3.Connection:
     """Obtém uma conexão do pool otimizado."""
     # Use the optimized pool instead of legacy DatabaseManager
     return _new_sqlite_connection()
 
-@require_admin
 def release_connection(conn: Any) -> None:
     """Libera uma conexão - no-op com pool otimizado (auto-managed)."""
     # With optimized connection pool, connections are managed automatically
@@ -126,6 +119,35 @@ def get_connection_context() -> Iterator[sqlite3.Connection]:
         yield conn
     finally:
         conn.close()
+
+
+@contextmanager
+def dict_rows(connection: sqlite3.Connection) -> Iterator[None]:
+    """
+    Context manager to temporarily set SQLite connection to return dict-like rows.
+    
+    Since connections are already configured with sqlite3.Row factory,
+    this function maintains compatibility with legacy code that expected
+    a dict_rows context manager.
+    
+    Args:
+        connection: SQLite connection (already configured with Row factory)
+        
+    Yields:
+        None (context manager for temporary row factory configuration)
+        
+    Note:
+        sqlite3.Row objects already provide dict-like access with keys(),
+        so this mainly ensures compatibility with existing repository code.
+    """
+    original_row_factory = connection.row_factory
+    try:
+        # Ensure dict-like row access (sqlite3.Row already provides this)
+        connection.row_factory = sqlite3.Row
+        yield
+    finally:
+        # Restore original row factory
+        connection.row_factory = original_row_factory
 
 
 def _is_select(sql: str) -> bool:
@@ -414,7 +436,6 @@ _optimized_pool = OptimizedConnectionPool()
 
 # =============================================================================
 # Facade Helpers
-@require_admin
 # =============================================================================
 
 def get_optimized_connection() -> Iterator[sqlite3.Connection]:
@@ -434,7 +455,6 @@ def execute_cached_query(
 def invalidate_cache() -> None:
     """Invalida todo o cache de consultas."""
     _optimized_pool.clear_cache()
-@require_admin
 def get_connection_metrics() -> Dict[str, Any]:
     """Retorna métricas de performance do pool e cache."""
     return _optimized_pool.get_performance_metrics()

@@ -177,7 +177,7 @@ def auth_middleware() -> Optional[User]:
     """
     # Import the OAuth system
     try:
-        from ..utils.auth import is_user_authenticated, get_authenticated_user
+        from ..utils.auth_streamlit_native import is_user_authenticated, get_authenticated_user
         
         # Check OAuth authentication
         if not is_user_authenticated():

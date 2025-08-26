@@ -95,7 +95,7 @@ class ProductVisionORM(Base, AuditMixin, JSONFieldMixin):
     
     # Additional metadata
     notes: Mapped[Optional[str]] = mapped_column(Text)
-    metadata: Mapped[Optional[JsonVal]] = mapped_column(JSON)  # Extensibility field
+    extra_metadata: Mapped[Optional[JsonVal]] = mapped_column("metadata", JSON)  # Extensibility field
 
     # AuditMixin provides: created_at, updated_at, created_by, updated_by
 

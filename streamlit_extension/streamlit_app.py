@@ -26,6 +26,15 @@ if not logging.getLogger().handlers:
 
 logger = logging.getLogger("orchestrator")
 
+# === STREAMLIT IMPORT ========================================================
+# Safe streamlit import for OAuth functionality
+try:
+    import streamlit as st
+    STREAMLIT_AVAILABLE = True
+except ImportError:
+    st = None
+    STREAMLIT_AVAILABLE = False
+
 # === CENTRALIZED IMPORTS (helpers do projeto) =================================
 from streamlit_extension.utils.streamlit_helpers import (
     is_ui,
@@ -48,12 +57,8 @@ from streamlit_extension.components.page_manager import render_current_page
 # Painel de debug (opcional)
 from streamlit_extension.components.debug_widgets import render_debug_panel
 
-# Autenticação
-from streamlit_extension.utils.auth import (
-    render_login_page,
-    get_authenticated_user,
-    is_user_authenticated,
-)
+# 🔐 OFFICIAL STREAMLIT OAUTH - NO FALLBACKS
+# Following: https://docs.streamlit.io/develop/tutorials/authentication/google
 
 # Banco (para headless)
 from streamlit_extension.database.queries import list_epics
@@ -116,46 +121,68 @@ def setup_application() -> None:
     logger.info("Session state initialized.")
 
 def _render_login_inline() -> None:
-    """Renderiza a página de login de forma segura (somente em UI)."""
+    """
+    🔐 OFFICIAL STREAMLIT OAUTH LOGIN - NO FALLBACKS
+    Following official documentation exactly.
+    """
     if not is_ui():
         return
-    try:
-        render_login_page()
-    except Exception as e:
-        # Evita hard-fail na tela de login; mostra erro amigável e loga detalhes.
-        logger.exception("Authentication UI error: %s", e)
-        safe_streamlit_error("🔒 Authentication system unavailable at the moment.")
+    
+    # Check if streamlit is available and has OAuth capabilities
+    if not STREAMLIT_AVAILABLE or st is None:
+        logger.error("Streamlit not available for OAuth login rendering")
+        return
+        
+    if not hasattr(st, 'login'):
+        logger.error("Streamlit OAuth not available - missing st.login method")
+        return
+    
+    # Official Streamlit OAuth login screen
+    st.header("🔐 TDD Framework")
+    st.subheader("Please log in with your Google account")
+    
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        st.button(
+            "🔐 Log in with Google", 
+            on_click=st.login,
+            type="primary",
+            use_container_width=True
+        )
+    
+    st.markdown("---")
+    st.caption("🔒 Secure authentication via Google OAuth 2.0")
 
 def authenticate_user() -> Optional[AuthenticatedUser]:
     """
-    Controla autenticação com fallback simples e seguro.
-    - Headless: retorna usuário sentinel.
-    - UI sem sessão: mostra login e interrompe render do app por agora.
-    - UI com sessão: retorna dados do usuário (normalizados).
+    🔐 OFFICIAL STREAMLIT OAUTH AUTHENTICATION - NO FALLBACKS
+    Uses ONLY st.user.is_logged_in and st.user properties.
     """
     if not is_ui():
-        # Em headless não há sessão UI: retorna sentinel para seguir smoke test.
+        # Headless mode - return sentinel for smoke tests
         return AuthenticatedUser(name="Headless", id="headless")
 
-    if not is_user_authenticated():
+    # Check if streamlit is available and has OAuth capabilities
+    if not STREAMLIT_AVAILABLE or st is None:
+        logger.error("Streamlit not available for OAuth authentication")
+        return None
+    
+    if not hasattr(st, 'user'):
+        logger.error("Streamlit OAuth not available - missing st.user attribute")
+        return None
+
+    # OFFICIAL STREAMLIT OAUTH CHECK - NO FALLBACKS
+    if not st.user.is_logged_in:
         _render_login_inline()
         return None
 
-    user = get_authenticated_user()
-    
-    # Normalização defensiva do retorno do auth layer
-    if isinstance(user, dict):
-        # Mapeia chaves padrão, tolerando ausência.
-        return AuthenticatedUser(
-            id=str(user.get("id", "")),
-            name=str(user.get("name", "User")),
-            email=str(user.get("email", "")),
-            role=str(user.get("role", "")),
-        )
-
-    # Fallback seguro (não quebra UI, mas deixa evidente o estado)
-    logger.warning("Authenticated user returned in unexpected format: %r", user)
-    return AuthenticatedUser(name="User")
+    # OFFICIAL STREAMLIT USER DATA - NO PROCESSING
+    return AuthenticatedUser(
+        id=getattr(st.user, 'id', 'streamlit_user'),
+        name=getattr(st.user, 'name', 'User'),
+        email=getattr(st.user, 'email', ''),
+        role="User"  # Default role - can be enhanced later
+    )
 
 def render_application_ui(user: AuthenticatedUser) -> None:
     """Renderiza a UI principal com segurança e isolando falhas."""

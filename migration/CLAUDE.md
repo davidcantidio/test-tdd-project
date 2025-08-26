@@ -844,4 +844,22 @@ sync = BidirectionalSync(db_manager=db_manager)
 
 ---
 
+## 🔗 **See Also - Related Documentation**
+
+**Main Project Documentation:**
+- **📜 [Root CLAUDE.md](../CLAUDE.md)** - System architecture, database overview, migration status
+- **📊 [Project README](../README.md)** - Quick start, database setup, migration commands
+
+**Data & Integration:**
+- **📱 [Streamlit Extension](../streamlit_extension/CLAUDE.md)** - Database integration, service layer architecture
+- **⏱️ [Duration System](../duration_system/CLAUDE.md)** - Data protection, security validation, JSON handling
+- **🧪 [Testing](../tests/CLAUDE.md)** - Migration testing, data integrity validation
+
+**Operations & Tools:**
+- **🔧 [Scripts](../scripts/CLAUDE.md)** - Migration scripts, data analysis tools, ETL utilities
+- **⚙️ [Config](../config/CLAUDE.md)** - Database configuration, environment settings
+- **📊 [Monitoring](../monitoring/CLAUDE.md)** - Migration monitoring, performance tracking
+
+---
+
 *This migration system provides enterprise-grade data synchronization with comprehensive integrity validation, rollback capabilities, and performance optimization for production deployment.*

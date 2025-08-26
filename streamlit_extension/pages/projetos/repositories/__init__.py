@@ -53,3 +53,7 @@ Testing Strategy:
     - Integration tests use DatabaseProductVisionRepository
     - Repository interfaces enable test doubles and mocking
 """
+
+from .product_vision_repository import InMemoryProductVisionRepository
+
+__all__ = ["InMemoryProductVisionRepository"]

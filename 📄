@@ -1,0 +1,124 @@
+import pytest
+
+# Estado (já criado no passo anterior / shim disponível):
+from streamlit_extension.pages.projeto_wizard.product_vision_state import (
+    DEFAULT_PV,
+    validate_product_vision,
+)
+
+# Controller (ALVO DESTE PASSO — vamos implementar depois):
+from streamlit_extension.pages.projeto_wizard import product_vision_controller as pvc
+
+
+def _pv(**over):
+    d = {**DEFAULT_PV}
+    d.update(over)
+    return d
+
+
+def test_can_refine_false_when_incomplete():
+    pv = _pv(
+        vision_statement="V",
+        problem_statement="P",
+        target_audience="",  # faltando
+        value_proposition="VP",
+        constraints=["c1"],
+    )
+    assert pvc.can_refine(pv) is False
+    assert pvc.can_save(pv) is False  # mesma regra de validação
+
+
+def test_can_refine_true_when_complete():
+    pv = _pv(
+        vision_statement="V",
+        problem_statement="P",
+        target_audience="T",
+        value_proposition="VP",
+        constraints=["c1"],
+    )
+    assert pvc.can_refine(pv) is True
+    assert pvc.can_save(pv) is True
+
+
+def test_build_summary_returns_human_friendly_keys_and_strings():
+    pv = _pv(
+        vision_statement="Visão A",
+        problem_statement="Problema B",
+        target_audience="Público C",
+        value_proposition="Valor D",
+        constraints=["LGPD", "90 dias"],
+    )
+    summary = pvc.build_summary(pv)
+    # chaves humanizadas
+    assert "Declaração de Visão" in summary
+    assert "Problema" in summary
+    assert "Público-alvo" in summary
+    assert "Proposta de Valor" in summary
+    assert "Restrições" in summary
+    # valores: strings fáceis de renderizar
+    assert isinstance(summary["Restrições"], str)
+    assert "LGPD" in summary["Restrições"]
+    assert "90 dias" in summary["Restrições"]
+
+
+def test_apply_refinement_merges_without_erasing():
+    current = _pv(
+        vision_statement="V atual",
+        problem_statement="P atual",
+        target_audience="T atual",
+        value_proposition="VP atual",
+        constraints=["atual"],
+    )
+    refined = {
+        "vision_statement": "V lapidado",
+        # não retorna os outros campos -> merge não deve apagar
+    }
+    merged = pvc.apply_refinement(current, refined)
+    assert merged["vision_statement"] == "V lapidado"
+    assert merged["problem_statement"] == "P atual"
+    assert merged["constraints"] == ["atual"]
+
+
+class FakeServicePartial:
+    def refine(self, payload: dict) -> dict:
+        # retorna só parte, para testarmos o merge
+        assert set(payload.keys()) == {
+            "vision_statement",
+            "problem_statement",
+            "target_audience",
+            "value_proposition",
+            "constraints",
+        }
+        return {"target_audience": "Novo Público"}
+
+
+def test_refine_with_service_applies_merge(monkeypatch):
+    current = _pv(
+        vision_statement="V",
+        problem_statement="P",
+        target_audience="T",
+        value_proposition="VP",
+        constraints=["c1"],
+    )
+    merged = pvc.refine_with_service(current, FakeServicePartial())
+    assert merged["target_audience"] == "Novo Público"
+    # demais intactos
+    assert merged["vision_statement"] == "V"
+    assert merged["constraints"] == ["c1"]
+
+
+class FakeServiceError:
+    def refine(self, payload: dict) -> dict:
+        raise ValueError("Resposta inválida da IA")
+
+
+def test_refine_with_service_propagates_errors():
+    current = _pv(
+        vision_statement="V",
+        problem_statement="P",
+        target_audience="T",
+        value_proposition="VP",
+        constraints=["c1"],
+    )
+    with pytest.raises(ValueError):
+        pvc.refine_with_service(current, FakeServiceError())

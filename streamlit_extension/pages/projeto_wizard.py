@@ -20,7 +20,7 @@ parent_dir = os.path.dirname(current_dir)
 sys.path.append(parent_dir)
 
 # Now import using absolute path
-from streamlit_extension.pages.projeto_wizard.projeto_wizard import render_projeto_wizard_page
+from streamlit_extension.pages.projetos.projeto_wizard import render_projeto_wizard_page
 
 # This file serves as a Streamlit page entry point
 if __name__ == "__main__":

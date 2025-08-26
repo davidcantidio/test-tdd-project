@@ -888,4 +888,22 @@ spec:
 
 ---
 
+## 🔗 **See Also - Related Documentation**
+
+**Main Project Documentation:**
+- **📜 [Root CLAUDE.md](../CLAUDE.md)** - System overview, performance metrics, health status
+- **📊 [Project README](../README.md)** - Quick start, system requirements, basic monitoring
+
+**System Integration:**
+- **📱 [Streamlit Extension](../streamlit_extension/CLAUDE.md)** - Application monitoring, performance tracking
+- **⏱️ [Duration System](../duration_system/CLAUDE.md)** - Security monitoring, performance optimization
+- **🧪 [Testing](../tests/CLAUDE.md)** - Performance testing, system validation
+
+**Operations & Configuration:**
+- **⚙️ [Config](../config/CLAUDE.md)** - Monitoring configuration, environment settings
+- **🔧 [Scripts](../scripts/CLAUDE.md)** - Health check scripts, performance benchmarks
+- **🔄 [Migration](../migration/CLAUDE.md)** - Migration monitoring, data integrity tracking
+
+---
+
 *This comprehensive monitoring system provides enterprise-grade observability with real-time health monitoring, performance tracking, and proactive alerting for production-ready deployment.*

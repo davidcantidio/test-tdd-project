@@ -43,3 +43,7 @@ Architecture Notes:
     business logic implementation. Business rules belong in the domain layer,
     while technical concerns belong in the infrastructure layer.
 """
+
+from .product_vision_controller import ProductVisionController
+
+__all__ = ["ProductVisionController"]

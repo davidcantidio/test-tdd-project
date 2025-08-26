@@ -59,17 +59,14 @@ from ..services import (  # type: ignore
 
 # For detailed service health (if available)
 try:
-    from ..services.service_container import check_service_health  # type: ignore
+    from ..services.service_container import check_services_health as check_service_health  # type: ignore
 except Exception:  # pragma: no cover - minimal environment
     check_service_health = None  # type: ignore
 
-# Legacy DatabaseManager: used ONLY to compose ServiceContainer (until complete migration)
-try:
-    from ..utils.database import DatabaseManager  # type: ignore
-    DATABASE_UTILS_AVAILABLE = True
-except Exception:  # pragma: no cover
-    DatabaseManager = None  # type: ignore
-    DATABASE_UTILS_AVAILABLE = False
+# Legacy DatabaseManager: DEPRECATED - Phase 4.2 Clean Architecture Complete
+# DatabaseManager is no longer needed - services use modular database API directly
+DatabaseManager = None  # type: ignore
+DATABASE_UTILS_AVAILABLE = False
 
 # ======================================================================================
 # Exports
@@ -148,34 +145,26 @@ _service_container_singleton: Optional["ServiceContainer"] = None
 
 def get_database_manager(force_new: bool = False) -> Optional["DatabaseManager"]:
     """
-    Returns (or creates) DatabaseManager legacy instance.
-    Used only to initialize ServiceContainer while services depend on it.
+    DEPRECATED - Phase 4.2 Clean Architecture Complete.
+    DatabaseManager is no longer used. Services use modular database API directly.
+    This function now always returns None for backward compatibility.
     """
-    global _db_manager_singleton
+    _logger.debug("DatabaseManager is deprecated - services use modular database API")
+    return None
 
-    if DatabaseManager is None:
-        _logger.warning("Legacy DatabaseManager unavailable; services may not initialize.")
-        return None
-
-    with _db_lock:
-        if _db_manager_singleton is None or force_new:
-            try:
-                _db_manager_singleton = DatabaseManager()  # type: ignore[call-arg]
-                _logger.info("DatabaseManager (legacy) initialized.")
-            except Exception as e:  # pragma: no cover
-                _logger.error("Failed to create DatabaseManager: %s", e, exc_info=True)
-                _db_manager_singleton = None
-        return _db_manager_singleton
-
-def _create_service_container(dbm: Optional["DatabaseManager"]) -> Optional["ServiceContainer"]:
+def _create_service_container(dbm: Optional["DatabaseManager"] = None) -> Optional["ServiceContainer"]:
+    """
+    Create ServiceContainer using modular database API.
+    The dbm parameter is kept for backward compatibility but is no longer used.
+    """
     if DISABLE_SERVICES:
         _logger.warning("Services disabled by TDD_DISABLE_SERVICES.")
         return None
-    if not dbm:
-        return None
+    
     try:
-        container = initialize_service_container(db_manager=dbm, lazy_loading=True)
-        _logger.info("ServiceContainer initialized successfully.")
+        # Services now use modular database API directly - no DatabaseManager needed
+        container = initialize_service_container(db_manager=None, lazy_loading=True)
+        _logger.info("ServiceContainer initialized successfully with modular architecture.")
         return container
     except Exception as e:  # pragma: no cover
         _logger.error("Failed to initialize ServiceContainer: %s", e, exc_info=True)
@@ -202,16 +191,16 @@ def get_app_service_container(force_new: bool = False) -> Optional["ServiceConta
     if _is_streamlit():
         @st.cache_resource(show_spinner=False)  # type: ignore
         def _cached_container(_key: int) -> Optional["ServiceContainer"]:
-            dbm = get_database_manager(force_new=False)
-            return _create_service_container(dbm)
+            # Services use modular database API directly - no DatabaseManager needed
+            return _create_service_container(None)
 
         return _cached_container(_cache_key_for_container(force_new))
 
     # Environment without Streamlit → use manual singleton
     with _container_lock:
         if _service_container_singleton is None or force_new:
-            dbm = get_database_manager(force_new=force_new)
-            _service_container_singleton = _create_service_container(dbm)
+            # Services use modular database API directly - no DatabaseManager needed
+            _service_container_singleton = _create_service_container(None)
         return _service_container_singleton
 
 # ======================================================================================
@@ -350,32 +339,30 @@ def initialize_streamlit_session() -> None:
         return
 
     with st.spinner("🔧 Initializing application services..."):
-        dbm = get_database_manager()
-        if dbm is None and not DISABLE_SERVICES:
-            st.error("❌ Failed to initialize DatabaseManager (legacy).")
-            return
-
-        ss.db_manager = dbm
+        # Skip DatabaseManager - services use modular database API directly
+        ss.db_manager = None  # Legacy compatibility - always None in Phase 4.2
+        
         container = get_app_service_container()
         if container or DISABLE_SERVICES:
             ss.service_container = container
             ss.services_initialized = True
-            _logger.info("Streamlit session services initialized.")
+            _logger.info("Streamlit session services initialized with modular architecture.")
         else:
             st.error("❌ Failed to initialize ServiceContainer.")
 
 def get_session_services() -> Tuple[Optional["DatabaseManager"], Optional["ServiceContainer"]]:
     """
     Returns (DatabaseManager legacy, ServiceContainer) from Streamlit session.
+    DatabaseManager is always None in Phase 4.2 Clean Architecture.
     In environments without Streamlit, returns global values.
     """
     if _is_streamlit():
         if not st.session_state.get("services_initialized", False):
             initialize_streamlit_session()
-        return st.session_state.get("db_manager"), st.session_state.get("service_container")
+        return None, st.session_state.get("service_container")
 
-    # Without Streamlit: try to use singletons
-    return get_database_manager(), get_app_service_container()
+    # Without Streamlit: DatabaseManager is always None, return ServiceContainer
+    return None, get_app_service_container()
 
 # ======================================================================================
 # Lifecycle / cleanup

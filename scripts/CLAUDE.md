@@ -1126,3 +1126,25 @@ python scripts/[script].py --help  # teste versão atual
 - [ ] Monitoring não afetado
 
 **Regra Absoluta:** Nunca commitar scripts sem completar checklist e gerar lista de arquivos modificados.
+
+---
+
+## 🔗 **See Also - Related Documentation**
+
+**Main Project Documentation:**
+- **📜 [Root CLAUDE.md](../CLAUDE.md)** - Complete system overview, essential commands
+- **📊 [Project README](../README.md)** - Quick start, installation, basic maintenance commands
+
+**System Integration:**
+- **🧪 [Testing](../tests/CLAUDE.md)** - Test execution, validation scripts, coverage analysis
+- **📱 [Streamlit Extension](../streamlit_extension/CLAUDE.md)** - Application architecture, debugging tools
+- **⏱️ [Duration System](../duration_system/CLAUDE.md)** - Security utilities, performance tools
+
+**Operations & Maintenance:**
+- **⚙️ [Config](../config/CLAUDE.md)** - Environment configuration, deployment scripts
+- **📊 [Monitoring](../monitoring/CLAUDE.md)** - Health monitoring, observability tools
+- **🔄 [Migration](../migration/CLAUDE.md)** - Data migration tools, schema management
+
+---
+
+*Comprehensive utility toolkit for development, operations, and system management with enterprise-grade automation and validation.*

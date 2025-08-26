@@ -786,4 +786,22 @@ def test_with_config(test_config):
 
 ---
 
+## 🔗 **See Also - Related Documentation**
+
+**Main Project Documentation:**
+- **📜 [Root CLAUDE.md](../CLAUDE.md)** - System overview, environment setup, quick start
+- **📊 [Project README](../README.md)** - Installation, environment variables, configuration
+
+**Integration Documentation:**
+- **📱 [Streamlit Extension](../streamlit_extension/CLAUDE.md)** - Application configuration, security settings
+- **⏱️ [Duration System](../duration_system/CLAUDE.md)** - Security configuration, data protection settings
+- **🧪 [Testing](../tests/CLAUDE.md)** - Test configuration, environment-specific testing
+
+**Operations & Deployment:**
+- **📊 [Monitoring](../monitoring/CLAUDE.md)** - Observability configuration, logging settings
+- **🔧 [Scripts](../scripts/CLAUDE.md)** - Environment setup scripts, configuration validation
+- **🔄 [Migration](../migration/CLAUDE.md)** - Migration configuration, database settings
+
+---
+
 *This configuration architecture provides enterprise-grade configuration management with comprehensive environment support, security best practices, and seamless integration capabilities for production deployment.*

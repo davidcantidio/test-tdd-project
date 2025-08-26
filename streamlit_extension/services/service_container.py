@@ -275,6 +275,44 @@ def check_services_health() -> Dict[str, Any]:
 
 # --- Service Setup Integration ---
 
+def initialize_service_container(db_manager=None, lazy_loading=True) -> ServiceContainer:
+    """
+    Legacy compatibility function - initialize service container.
+    
+    Args:
+        db_manager: Legacy database manager (ignored in new architecture)
+        lazy_loading: If False, pre-initialize all services
+    
+    Returns:
+        ServiceContainer instance
+    """
+    container = get_service_container()
+    
+    # Pre-initialize services if lazy_loading=False
+    if not lazy_loading:
+        try:
+            container.get_project_service()
+            container.get_epic_service()
+            container.get_task_service()
+            container.get_analytics_service()
+            container.get_timer_service()
+            logger.info("All core services pre-initialized")
+        except Exception as e:
+            logger.error(f"Failed to pre-initialize services: {e}")
+            raise RuntimeError(f"Service pre-initialization failed: {e}")
+    
+    return container
+
+
+def shutdown_service_container() -> None:
+    """Legacy compatibility function - shutdown service container."""
+    try:
+        reset_service_container()
+        logger.info("Service container shutdown completed")
+    except Exception as e:
+        logger.error(f"Error during service container shutdown: {e}")
+
+
 def get_app_service_container() -> ServiceContainer:
     """Get application service container with all services initialized."""
     container = get_service_container()
