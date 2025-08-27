@@ -1,0 +1,172 @@
+vamos deixar esse “estado do wizard em memória” redondo e à prova de sustos. Abaixo vai um guia bem prático + snippets prontos para colar.
+
+O que guardar no st.session_state
+
+pv: dicionário com a taxonomia final
+
+vision_statement: str
+
+problem_statement: str
+
+target_audience: str
+
+value_proposition: str
+
+constraints: list[str]
+
+pv_mode: "form" ou "steps" (a “terceira via”)
+
+pv_step_idx: int no range 0..4 (há 5 campos)
+
+Helpers de estado (iniciais e seguros)
+# streamlit_extension/pages/projetos/steps/_pv_state.py
+from __future__ import annotations
+from typing import Any, Dict, List
+
+DEFAULT_PV: Dict[str, Any] = {
+    "vision_statement": "",
+    "problem_statement": "",
+    "target_audience": "",
+    "value_proposition": "",
+    "constraints": [],  # list[str]
+}
+
+PV_FIELDS = [
+    ("vision_statement", "Declaração de Visão"),
+    ("problem_statement", "Problema a Resolver"),
+    ("target_audience", "Público-alvo"),
+    ("value_proposition", "Proposta de Valor"),
+    ("constraints", "Restrições (uma por linha)"),
+]
+
+def init_pv_state(ss) -> None:
+    """Garante chaves e tipos corretos no session_state."""
+    if "pv" not in ss or not isinstance(ss.pv, dict):
+        ss.pv = dict(DEFAULT_PV)
+    else:
+        # corrige tipos e campos ausentes
+        for k, v in DEFAULT_PV.items():
+            if k not in ss.pv:
+                ss.pv[k] = v
+        if not isinstance(ss.pv.get("constraints"), list):
+            ss.pv["constraints"] = []
+
+    if "pv_mode" not in ss or ss.pv_mode not in {"form", "steps"}:
+        ss.pv_mode = "form"
+
+    if "pv_step_idx" not in ss or not isinstance(ss.pv_step_idx, int):
+        ss.pv_step_idx = 0
+    clamp_pv_step_idx(ss)
+
+def clamp_pv_step_idx(ss) -> None:
+    """Mantém o índice de passo dentro do range válido."""
+    max_idx = len(PV_FIELDS) - 1
+    ss.pv_step_idx = max(0, min(ss.pv_step_idx, max_idx))
+
+def set_pv_mode(ss, mode: str) -> None:
+    """Alterna entre 'form' e 'steps' sem perder dados."""
+    ss.pv_mode = "form" if mode not in {"form", "steps"} else mode
+
+def next_step(ss) -> None:
+    ss.pv_step_idx += 1
+    clamp_pv_step_idx(ss)
+
+def prev_step(ss) -> None:
+    ss.pv_step_idx -= 1
+    clamp_pv_step_idx(ss)
+
+def constraints_to_text(lst: List[str]) -> str:
+    return "\n".join([x for x in (lst or []) if isinstance(x, str) and x.strip()])
+
+def constraints_from_text(txt: str) -> List[str]:
+    items = [line.strip() for line in (txt or "").splitlines()]
+    return [x for x in items if x]
+
+Como usar esses helpers na página/step
+# dentro do render do step (ex.: product_vision_step.py)
+import streamlit as st
+from ._pv_state import (
+    init_pv_state, PV_FIELDS, set_pv_mode, next_step, prev_step,
+    constraints_to_text, constraints_from_text
+)
+
+def render_product_vision_step(controller, project_id: int | None = None) -> None:
+    init_pv_state(st.session_state)
+
+    # toggle de modo
+    st.session_state.pv_mode = st.radio(
+        "Modo",
+        options=["form", "steps"],
+        index=0 if st.session_state.pv_mode == "form" else 1,
+        horizontal=True,
+        format_func=lambda x: "Formulário" if x == "form" else "Passo a passo",
+        key="pv_mode_radio",
+    )
+    set_pv_mode(st.session_state, st.session_state.pv_mode)
+
+    left, right = st.columns([2, 1])
+
+    with left:
+        if st.session_state.pv_mode == "form":
+            # renderiza todos os campos
+            for key, label in PV_FIELDS:
+                if key == "constraints":
+                    txt = st.text_area(label, constraints_to_text(st.session_state.pv.get("constraints", [])), height=120, key=f"pv_{key}")
+                    st.session_state.pv["constraints"] = constraints_from_text(txt)
+                else:
+                    st.session_state.pv[key] = st.text_area(label, st.session_state.pv.get(key, ""), height=120, key=f"pv_{key}")
+        else:
+            # 1 campo por vez
+            idx = st.session_state.pv_step_idx
+            key, label = PV_FIELDS[idx]
+            if key == "constraints":
+                txt = st.text_area(label, constraints_to_text(st.session_state.pv.get("constraints", [])), height=120, key=f"pv_{key}")
+                st.session_state.pv["constraints"] = constraints_from_text(txt)
+            else:
+                st.session_state.pv[key] = st.text_area(label, st.session_state.pv.get(key, ""), height=120, key=f"pv_{key}")
+
+            nav = st.columns([1, 1, 2])
+            if nav[0].button("⬅ Anterior", disabled=idx == 0):
+                prev_step(st.session_state)
+                st.rerun()
+            if nav[1].button("Próximo ➡", disabled=idx == len(PV_FIELDS) - 1):
+                next_step(st.session_state)
+                st.rerun()
+
+    with right:
+        st.subheader("Resumo")
+        # use sua função de resumo do controller
+        summary = controller.build_summary(st.session_state.pv)
+        for k, v in summary.items():
+            st.markdown(f"**{k}:** {v if str(v).strip() else '—'}")
+
+Boas práticas e pegadinhas
+
+Sempre chame init_pv_state(st.session_state) no topo do render para garantir tipos e chaves corretos.
+
+Ao alternar modo (form ↔ steps), não zere o dicionário pv; só mude pv_mode.
+
+Para constraints, mantenha o formato interno list[str] e só converta para textarea quando renderizar.
+
+Índice de passo: hoje há 5 campos → pv_step_idx vai de 0 a 4. Se alterar os campos, o clamp já protege.
+
+Se quiser resetar a etapa, faça:
+
+st.session_state.pv = dict(DEFAULT_PV)
+st.session_state.pv_step_idx = 0
+st.session_state.pv_mode = "form"
+
+
+Evite salvar em DB durante a digitação. Mantenha tudo em session_state e só persista quando o usuário clicar em “Salvar rascunho” (ou no fim da fase).
+
+Para acessibilidade/UX TDAH:
+
+Use st.progress ou um pequeno indicador de passo: (passo {pv_step_idx+1}/5).
+
+Mostre feedback rápido ao mudar de passo/refinar (ex.: st.toast, st.info).
+
+Mantenha ações principais (Refinar, Salvar) visíveis e consistentes nas duas modalidades.
+
+Se quiser, eu já te mando um patch criando steps/_pv_state.py e plugando esses helpers no seu product_vision_step.py.
+
+O ChatGPT pode cometer erros. Considere verificar informações importantes.

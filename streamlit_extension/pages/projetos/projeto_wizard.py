@@ -1,16 +1,35 @@
-# streamlit_extension/pages/projeto_wizard/projeto_wizard.py
+# streamlit_extension/pages/projetos/projeto_wizard.py
+"""
+🧙‍♂️ Project Wizard - Multi-Step Implementation
+
+This module implements a true multi-step wizard following official Streamlit patterns
+as outlined in the taxonomia.txt instructions. It provides a "Third Way" approach
+that combines both form and step-by-step modes for Product Vision creation.
+
+Key Features:
+    - Session state-based navigation
+    - Multi-step wizard with Next/Back buttons  
+    - Toggle between Form and Steps mode
+    - Real-time summary sidebar
+    - Integration with existing Clean Architecture
+    - AI-powered refinement capabilities
+
+Architecture:
+    This wizard coordinates between UI layer and business logic while maintaining
+    clean architecture principles. It uses the new _pv_state.py helpers for
+    robust state management.
+"""
+
 from __future__ import annotations
 
 import logging
-from datetime import date
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 import streamlit as st
 
 logger = logging.getLogger(__name__)
 
-# --- Autenticação -------------------------------------------------------------
-# Import absoluto; em dev caímos num fallback simples
+# --- Authentication layer ---
 try:
     from streamlit_extension.auth.middleware import init_protected_page, require_auth
 except ImportError:
@@ -24,188 +43,205 @@ except ImportError:
             return _inner
         return _decorator
 
-# --- Camada de banco (padrão híbrido com fallback) ---------------------------
-_DBM = None
-_queries = None
-_transaction_ctx = None
-_db_initialized = False
+# --- Import Product Vision step implementation ---
+from .steps.product_vision_step import render_product_vision_with_toggle
+from .steps._pv_state import init_pv_state
 
-def _init_db_layer() -> None:
-    """Inicializa camada de banco com fallbacks robustos."""
-    global _DBM, _queries, _transaction_ctx, _db_initialized
+# Wizard step definitions following Streamlit official pattern
+WIZARD_STEPS = {
+    1: "product_vision",
+    # Future steps can be added here:
+    # 2: "project_details", 
+    # 3: "resources_budget",
+    # 4: "review_create"
+}
 
-    if _db_initialized:
-        return
+def get_step_name(step_num: int) -> str:
+    """Get human-readable step name from step number."""
+    return WIZARD_STEPS.get(step_num, "unknown")
 
-    # Tenta API modular primeiro
-    try:
-        from streamlit_extension.database import queries
-        from streamlit_extension.database.connection import transaction
 
-        _queries = queries
-        _transaction_ctx = transaction
-        _db_initialized = True
-        return
-    except Exception:
-        pass
+def init_wizard_state() -> None:
+    """Initialize wizard session state following official Streamlit pattern."""
+    # Current step tracking (following official blog pattern)
+    if 'wizard_current_step' not in st.session_state:
+        st.session_state.wizard_current_step = 1
+        
+    # Initialize Product Vision state
+    init_pv_state(st.session_state)
 
-    # Fallback para DatabaseManager
-    try:
-        from streamlit_extension.utils.database import DatabaseManager
-        _DBM = DatabaseManager()
-        _db_initialized = True
-    except Exception as e:
-        st.error(f"❌ Sistema de banco indisponível: {e}")
-        _db_initialized = False
 
-def _create_project_safely(payload: Dict[str, Any]) -> Dict[str, Any]:
+def set_wizard_step(action: str, step: Optional[int] = None) -> None:
     """
-    Cria projeto usando API modular com fallback para DatabaseManager.
+    Navigate between wizard steps following official Streamlit pattern.
+    
+    Args:
+        action: 'Next', 'Back', or 'Jump'
+        step: Target step number (only for 'Jump' action)
     """
-    _init_db_layer()
+    if action == 'Next':
+        st.session_state.wizard_current_step += 1
+    elif action == 'Back':
+        st.session_state.wizard_current_step -= 1  
+    elif action == 'Jump' and step is not None:
+        st.session_state.wizard_current_step = step
+    
+    # Clamp to valid range
+    max_step = max(WIZARD_STEPS.keys())
+    min_step = min(WIZARD_STEPS.keys())
+    st.session_state.wizard_current_step = max(min_step, min(st.session_state.wizard_current_step, max_step))
 
-    if not _db_initialized:
-        return {"ok": False, "error": "Sistema de banco de dados indisponível"}
 
-    try:
-        if _queries is not None and _transaction_ctx is not None:
-            return _create_project_with_modular_api(payload)
+def render_wizard_header() -> None:
+    """Render wizard header with step indicators."""
+    st.title("🧙‍♂️ Assistente de Criação de Projetos")
+    
+    # Step indicators (visual progress)
+    current_step = st.session_state.wizard_current_step
+    max_steps = len(WIZARD_STEPS)
+    
+    # Progress bar
+    progress = current_step / max_steps
+    st.progress(progress)
+    
+    # Step navigation breadcrumb
+    step_cols = st.columns(max_steps)
+    for i, (step_num, step_name) in enumerate(WIZARD_STEPS.items(), 1):
+        with step_cols[i-1]:
+            # Determine button type based on current step
+            if step_num == current_step:
+                button_type = "primary"
+            elif step_num < current_step:
+                button_type = "secondary" 
+            else:
+                button_type = "secondary"
+            
+            # Step button (for navigation)
+            step_label = f"{step_num}. {step_name.replace('_', ' ').title()}"
+            if st.button(step_label, 
+                        type=button_type, 
+                        disabled=(step_num > current_step),
+                        key=f"step_nav_{step_num}",
+                        help=f"Ir para passo {step_num}"):
+                set_wizard_step('Jump', step_num)
+                st.rerun()
 
-        if _DBM is not None:
-            return _create_project_with_manager(payload)
 
-        return {"ok": False, "error": "Nenhuma API de banco disponível"}
-    except Exception as e:
-        return {"ok": False, "error": f"Falha ao criar projeto: {e}"}
+def render_wizard_navigation() -> None:
+    """Render wizard navigation buttons (Back/Next)."""
+    current_step = st.session_state.wizard_current_step
+    max_steps = len(WIZARD_STEPS)
+    
+    st.markdown("---")
+    
+    # Navigation buttons
+    nav_cols = st.columns([1, 1, 2])
+    
+    with nav_cols[0]:
+        # Back button
+        if st.button("⬅ Voltar", 
+                    disabled=(current_step <= 1),
+                    use_container_width=True):
+            set_wizard_step('Back')
+            st.rerun()
+    
+    with nav_cols[1]:
+        # Next button
+        next_disabled = current_step >= max_steps
+        next_label = "Próximo ➡" if not next_disabled else "Concluído ✅"
+        
+        if st.button(next_label, 
+                    disabled=next_disabled,
+                    use_container_width=True,
+                    type="primary"):
+            if current_step < max_steps:
+                set_wizard_step('Next')
+                st.rerun()
+            else:
+                st.success("🎉 Wizard concluído!")
+    
+    with nav_cols[2]:
+        # Step info
+        st.caption(f"Passo {current_step} de {max_steps} - {get_step_name(current_step).replace('_', ' ').title()}")
 
-def _create_project_with_modular_api(payload: Dict[str, Any]) -> Dict[str, Any]:
-    """Cria projeto usando a API modular (com transação)."""
-    with _transaction_ctx() as conn:
-        cursor = conn.execute(
-            """
-            INSERT INTO framework_projects (project_key, name, description, status)
-            VALUES (?, ?, ?, 'active')
-            """,
-            (payload.get("project_key"), payload.get("name"), payload.get("description", "")),
-        )
-        project_id = cursor.lastrowid
-        created = {
-            "id": project_id,
-            "project_key": payload.get("project_key"),
-            "name": payload.get("name"),
-            "description": payload.get("description", ""),
-            "status": "active",
-        }
-        return {"ok": True, "data": created}
 
-def _create_project_with_manager(payload: Dict[str, Any]) -> Dict[str, Any]:
-    """Cria projeto usando DatabaseManager (fallback)."""
-    data = {
-        "project_key": payload.get("project_key"),
-        "name": payload.get("name"),
-        "description": payload.get("description", ""),
-        "status": "active",
-    }
-    result = _DBM.create_project(data)  # type: ignore[attr-defined]
-    if result and result.get("id"):
-        return {"ok": True, "data": result}
-    return {"ok": False, "error": "Falha ao criar projeto via DatabaseManager"}
+def render_current_step() -> None:
+    """Render the current wizard step content."""
+    current_step = st.session_state.wizard_current_step
+    step_name = get_step_name(current_step)
+    
+    # Route to appropriate step renderer
+    if step_name == "product_vision":
+        render_product_vision_with_toggle()
+    else:
+        # Placeholder for future steps
+        st.info(f"🚧 Passo '{step_name}' em desenvolvimento")
+        st.markdown(f"**Passo {current_step}:** {step_name.replace('_', ' ').title()}")
 
-# --- UI helpers ---------------------------------------------------------------
-def _form_validation(project_name: str, start: date, end: date, budget: float) -> List[str]:
-    errors: List[str] = []
-    if not project_name or len(project_name.strip()) < 3:
-        errors.append("Informe um nome de projeto com pelo menos 3 caracteres.")
-    if end < start:
-        errors.append("A data de término não pode ser anterior à data de início.")
-    if budget < 0:
-        errors.append("O orçamento não pode ser negativo.")
-    return errors
 
 @require_auth()
-def _render() -> None:
-    st.set_page_config(page_title="Projeto Wizard", layout="wide")
-    init_protected_page("Projeto Wizard")
-    st.title("🧙‍♂️ Projeto Wizard")
-
-    _init_db_layer()
-
-    col_left, col_right = st.columns([2, 1], vertical_alignment="top")
-
-    with col_left:
-        st.subheader("1) Informações do Projeto")
-        with st.form("project_wizard_form", clear_on_submit=False):
-            project_name = st.text_input("Nome do Projeto", placeholder="Ex.: Plataforma X")
-            description = st.text_area("Descrição (opcional)", placeholder="Contexto, objetivos e escopo…")
-            col1, col2 = st.columns(2)
-            with col1:
-                start_date = st.date_input("Início", value=date.today())
-            with col2:
-                end_date = st.date_input("Término", value=date.today())
-            col3, col4 = st.columns(2)
-            with col3:
-                budget = st.number_input("Orçamento (R$)", min_value=0.0, step=1000.0, value=0.0)
-            with col4:
-                status = st.selectbox("Status", ["Planned", "In Progress", "On Hold", "Completed"], index=0)
-
-            submitted = st.form_submit_button("Criar Projeto", use_container_width=True)
-
-        if submitted:
-            errors = _form_validation(project_name, start_date, end_date, budget)
-            if errors:
-                for e in errors:
-                    st.error(e)
-                st.stop()
-
-            # Gera project_key simples e estável
-            import re
-            project_key = re.sub(r"[^\w]", "", project_name.strip().lower().replace(" ", "_").replace("-", "_"))[:50]
-
-            payload: Dict[str, Any] = {
-                "project_key": project_key,
-                "name": project_name.strip(),
-                "description": (description or "").strip(),
-                "start_date": str(start_date),
-                "end_date": str(end_date),
-                "budget": float(budget),
-                "status": status.lower().replace(" ", "_"),
-            }
-
-            result = _create_project_safely(payload)
-            if result.get("ok"):
-                st.success("✅ Projeto criado com sucesso!")
-                st.json(result.get("data", {}))
-                st.toast("Projeto criado", icon="✅")
-            else:
-                st.error(result.get("error", "Falha desconhecida ao criar projeto."))
-
-    with col_right:
-        st.subheader("2) Resumo")
-        st.caption("Revise as informações antes de criar o projeto.")
-        st.info(
-            "• Este assistente usa o **padrão híbrido de banco** automaticamente.\n"
-            "• Em **desenvolvimento**, a página permite acesso mesmo sem login.\n"
-            "• Em **produção**, o middleware real de autenticação deve estar ativo.",
-            icon="ℹ️",
-        )
-        st.write("### Dicas")
-        st.write(
-            "- Use nomes claros e padronizados para facilitar analytics.\n"
-            "- Defina datas realistas; você pode ajustar depois.\n"
-            "- Orçamento pode ser zero se o projeto não tiver CAPEX/OPEX definido."
-        )
-
 def render_projeto_wizard_page() -> Dict[str, Any]:
-    """Interface pública para a página do wizard (usada pelo roteador de páginas)."""
-    logger.info("🚀 Project wizard page requested - rendering…")
+    """
+    Main wizard page renderer following official Streamlit multi-step pattern.
+    
+    This function implements the complete wizard workflow using session state
+    for navigation and the "Third Way" approach for Product Vision input.
+    
+    Returns:
+        Dict with page status and metadata
+    """
+    # Page configuration
+    st.set_page_config(
+        page_title="🧙‍♂️ Assistente de Projetos", 
+        layout="wide"
+    )
+    
     try:
-        _render()
-        return {"status": "success", "page": "projeto_wizard"}
+        # Initialize wizard state
+        init_wizard_state()
+        
+        # Protected page initialization
+        init_protected_page("🧙‍♂️ Assistente de Projetos")
+        
+        # Main wizard layout
+        with st.container():
+            # Header with step indicators
+            render_wizard_header()
+            
+            # Current step content
+            render_current_step()
+            
+            # Navigation controls
+            render_wizard_navigation()
+        
+        # Debug info (only in development)
+        with st.expander("🔧 Debug Info", expanded=False):
+            st.json({
+                "current_step": st.session_state.wizard_current_step,
+                "step_name": get_step_name(st.session_state.wizard_current_step),
+                "pv_mode": getattr(st.session_state, 'pv_mode', 'not_set'),
+                "pv_step_idx": getattr(st.session_state, 'pv_step_idx', 'not_set'),
+                "session_keys": list(st.session_state.keys())
+            })
+        
+        logger.info(f"✅ Wizard page rendered successfully - Step {st.session_state.wizard_current_step}")
+        return {
+            "status": "success", 
+            "page": "projeto_wizard",
+            "current_step": st.session_state.wizard_current_step
+        }
+        
     except Exception as e:
-        logger.error(f"❌ Error rendering project wizard page: {e}")
-        st.error("⚠️ Erro ao carregar página do wizard")
-        return {"status": "error", "error": str(e), "page": "projeto_wizard"}
+        logger.error(f"❌ Error rendering wizard page: {e}")
+        st.error("⚠️ Erro ao carregar assistente de projetos")
+        st.exception(e)
+        return {
+            "status": "error", 
+            "error": str(e), 
+            "page": "projeto_wizard"
+        }
 
-# Importar este módulo não deve renderizar nada automaticamente.
+
+# Support direct execution
 if __name__ == "__main__":
-    _render()
+    render_projeto_wizard_page()
