@@ -1,433 +1,191 @@
- (cd "$(git rev-parse --show-toplevel)" && git apply --3way <<'EOF' 
-diff --git a/src/ia/services/vision_refine_service.py b/src/ia/services/vision_refine_service.py
-index 19299e4e10de7d3603b4450a67f64291da230097..d7460558663d8e27a4e3bee226cf91eae037d5ee 100644
---- a/src/ia/services/vision_refine_service.py
-+++ b/src/ia/services/vision_refine_service.py
-@@ -1,48 +1,49 @@
--from dataclasses import dataclass
--from typing import Dict, List
--from agno.agent import Agent
--from agno.models.openai import OpenAIChat  # use o provider que você já configurou
--
--@dataclass
--class ProductVisionDTO:
--    product_name: str
--    target_user: str
--    problem: str
--    outcome: str
--    constraints: List[str]
+*** Begin Patch
+*** Add File: streamlit_extension/pages/projetos/projects.py
 +from __future__ import annotations
-+
++"""
++Wrapper de compatibilidade para a página de Projetos dentro de /pages/projetos.
++Mantém a página atual funcionando (que vive em /pages/projects.py) e permite
++referenciar daqui sem duplicar código.
++"""
 +from typing import Any
 +
-+REQUIRED_KEYS = {
-+    "vision_statement",
-+    "problem_statement",
-+    "target_audience",
-+    "value_proposition",
-+    "constraints",
-+}
++# Importa a página raiz existente e expõe a mesma função pública
++from .. import projects as _root_projects  # type: ignore
 +
- 
- class VisionRefineService:
--    """
--    Serviço fino: recebe o dict cru do form, chama o agente e retorna DTO.
--    """
++
++def render_projects_page(*args: Any, **kwargs: Any) -> None:
++    """Reencaminha para streamlit_extension.pages.projects.render_projects_page"""
++    return _root_projects.render_projects_page(*args, **kwargs)  # type: ignore
++
++
++def render_page(*args: Any, **kwargs: Any) -> None:
++    """Alias padrão usado pelo roteador genérico (se houver)."""
++    return render_projects_page(*args, **kwargs)
++
+*** End Patch
+diff
+Copiar
+Editar
+*** Begin Patch
+*** Add File: streamlit_extension/pages/projetos/projeto.py
++from __future__ import annotations
++"""
++Página de detalhes de Projeto (placeholder).
++Implemente aqui a visão detalhada de um único projeto.
++"""
++from typing import Any, Optional
++
++def render_projeto_page(project_id: Optional[int] = None, *args: Any, **kwargs: Any) -> None:
++    # TODO: Implementar UI real (carregar projeto, mostrar dados, permitir clonar/editar, etc.)
++    try:
++        import streamlit as st  # type: ignore
++        st.header("Projeto")
++        st.write("Página de detalhes do projeto (em construção).")
++        if project_id is not None:
++            st.write(f"ID do projeto: {project_id}")
++    except Exception:
++        # Modo headless / testes
++        pass
++
++
++def render_page(*args: Any, **kwargs: Any) -> None:
++    return render_projeto_page(*args, **kwargs)
++
+*** End Patch
+diff
+Copiar
+Editar
+*** Begin Patch
+*** Add File: streamlit_extension/pages/projetos/project_wizard/__init__.py
++"""
++Pacote do Project Wizard (estrutura nova).
++Nesta primeira etapa, criamos "shims" que reexportam o conteúdo dos módulos
++existentes em streamlit_extension.pages.projetos.* para não quebrar nada.
++Quando quiser, mova o código real para cá e remova os shims.
++"""
+*** End Patch
+diff
+Copiar
+Editar
+*** Begin Patch
+*** Add File: streamlit_extension/pages/projetos/project_wizard/projeto_wizard.py
++from __future__ import annotations
++"""
++Shim: reexporta a implementação atual do wizard que vive em
++streamlit_extension.pages.projetos.projeto_wizard
++"""
++from ..projeto_wizard import *  # type: ignore  # noqa: F401,F403
+*** End Patch
+diff
+Copiar
+Editar
+*** Begin Patch
+*** Add File: streamlit_extension/pages/projetos/project_wizard/actions.py
++from __future__ import annotations
++"""
++Shim para manter compatibilidade enquanto a implementação real ainda está em
++streamlit_extension.pages.projetos.actions
++"""
++from ..actions import *  # type: ignore  # noqa: F401,F403
+*** End Patch
+diff
+Copiar
+Editar
+*** Begin Patch
+*** Add File: streamlit_extension/pages/projetos/project_wizard/state.py
++from __future__ import annotations
++"""
++Shim para manter compatibilidade enquanto a implementação real ainda está em
++streamlit_extension.pages.projetos.state
++"""
++from ..state import *  # type: ignore  # noqa: F401,F403
+*** End Patch
+diff
+Copiar
+Editar
+*** Begin Patch
+*** Add File: streamlit_extension/pages/projetos/project_wizard/project_wizard_state.py
++from __future__ import annotations
++"""
++Shim para manter compatibilidade enquanto a implementação real ainda está em
++streamlit_extension.pages.projetos.project_wizard_state
++"""
++from ..project_wizard_state import *  # type: ignore  # noqa: F401,F403
+*** End Patch
+diff
+Copiar
+Editar
+*** Begin Patch
+*** Add File: streamlit_extension/pages/projetos/project_wizard/controllers/__init__.py
++from __future__ import annotations
++"""
++Shim de controllers: reexporta do caminho antigo.
++"""
++from ...controllers import *  # type: ignore  # noqa: F401,F403
+*** End Patch
+diff
+Copiar
+Editar
+*** Begin Patch
+*** Add File: streamlit_extension/pages/projetos/project_wizard/domain/__init__.py
++from __future__ import annotations
++"""
++Shim de domain: reexporta do caminho antigo.
++"""
++from ...domain import *  # type: ignore  # noqa: F401,F403
+*** End Patch
+diff
+Copiar
+Editar
+*** Begin Patch
+*** Add File: streamlit_extension/pages/projetos/project_wizard/repositories/__init__.py
++from __future__ import annotations
++"""
++Shim de repositories: reexporta do caminho antigo.
++"""
++from ...repositories import *  # type: ignore  # noqa: F401,F403
+*** End Patch
+diff
+Copiar
+Editar
+*** Begin Patch
+*** Add File: streamlit_extension/pages/projetos/project_wizard/steps/__init__.py
++from __future__ import annotations
++"""
++Shim de steps: reexporta do caminho antigo (steps seguem em /projetos/steps por ora).
++"""
++from ...steps import *  # type: ignore  # noqa: F401,F403
+*** End Patch
+diff
+Copiar
+Editar
+*** Begin Patch
+*** Update File: streamlit_extension/pages/projeto_wizard.py
+@@
+-from __future__ import annotations
+-"""
+-Wrapper da página Project Wizard no nível raiz de /pages.
+-Ele simplesmente reencaminha para a implementação real em
+-streamlit_extension.pages.projetos.projeto_wizard.
+-"""
 -
--    def __init__(self, model: str = "gpt-5-nano"):
--        self.agent = Agent(
--            model=OpenAIChat(id=model),
--            instructions=(
--                "Você é um assistente de produto. Refine a visão recebida e devolva "
--                "apenas um JSON válido com: product_name, target_user, problem, outcome, constraints (lista)."
--            ),
--            structured_outputs=False,  # vamos parsear do texto
--        )
+-from typing import Any
 -
--    def refine(self, raw: Dict) -> ProductVisionDTO:
--        prompt = (
--            "Refine esta visão de produto e devolva SOMENTE JSON válido, sem comentários.\n"
--            "Campos: product_name, target_user, problem, outcome, constraints (lista de strings).\n"
--            f"Visão bruta: {raw}"
--        )
--        run = self.agent.run(prompt)  # Agno retorna um objeto com .output_text
--        text = run.output_text or "{}"
--
--        # parsing defensivo
--        import json
--        data = json.loads(text)
--
--        return ProductVisionDTO(
--            product_name=data["product_name"].strip(),
--            target_user=data["target_user"].strip(),
--            problem=data["problem"].strip(),
--            outcome=data["outcome"].strip(),
--            constraints=[c.strip() for c in data.get("constraints", []) if c and str(c).strip()],
--        )
-+    """Service that delegates Product Vision refinement to an injected agent."""
+-# Import tardio para evitar problemas de import circular nos testes headless
+-def render_projeto_wizard_page(*args: Any, **kwargs: Any) -> None:
+-    from .projetos.projeto_wizard import render_projeto_wizard_page as _impl  # type: ignore
+-    return _impl(*args, **kwargs)
++from __future__ import annotations
++"""
++Wrapper da página Project Wizard no nível raiz de /pages.
++Agora aponta para a nova estrutura /projetos/project_wizard, mantendo compatibilidade.
++"""
++from typing import Any
 +
-+    def __init__(self, agent: Any | None = None) -> None:
-+        if agent is None:
-+            class _EchoAgent:
-+                def run(self, payload: dict[str, Any]) -> dict[str, Any]:
-+                    return payload
 +
-+            agent = _EchoAgent()
-+        self._agent = agent
-+
-+    def refine(self, raw: dict[str, Any]) -> dict[str, Any]:
-+        payload: dict[str, Any] = {
-+            "vision_statement": str(raw.get("vision_statement", "")).strip(),
-+            "problem_statement": str(raw.get("problem_statement", "")).strip(),
-+            "target_audience": str(raw.get("target_audience", "")).strip(),
-+            "value_proposition": str(raw.get("value_proposition", "")).strip(),
-+            "constraints": raw.get("constraints", []),
-+        }
-+        result = self._agent.run(payload)
-+
-+        missing = REQUIRED_KEYS - result.keys()
-+        if missing:
-+            raise ValueError(f"Missing keys from agent response: {sorted(missing)}")
-+
-+        constraints = result.get("constraints")
-+        if isinstance(constraints, str):
-+            constraints_list = [c.strip() for c in constraints.splitlines() if c.strip()]
-+        elif isinstance(constraints, list):
-+            constraints_list = [str(c).strip() for c in constraints if str(c).strip()]
-+        else:
-+            raise ValueError("constraints inválido")
-+
-+        result["constraints"] = constraints_list
-+        return result
-diff --git a/streamlit_extension/pages/__init__.py b/streamlit_extension/pages/__init__.py
-index 539a87eff6959081b337ea5e458e5422b9bd6be8..b24483ad8e72cd35b53b9a7259343d093ae6323a 100644
---- a/streamlit_extension/pages/__init__.py
-+++ b/streamlit_extension/pages/__init__.py
-@@ -1,48 +1,60 @@
- """
- 📄 Pages Package - Streamlit Extension (Optimized)
- 
- Sistema de navegação multi-páginas do TDD Framework:
- - Analytics, Kanban, Gantt, Timer, Settings, Projects, Health, Projeto Wizard
- - Página de login isolada (oculta na navegação principal)
- - Registro tipado com validações leves e proteção de execução
- 
- Notas:
- - Mantém compatibilidade de nomes exportados.
- - Usa tipagem forte e dataclass para reduzir erros sutis.
- """
- 
- from __future__ import annotations
- 
- from dataclasses import dataclass
- from importlib import import_module
- from typing import Callable, Dict, Iterable, List, Optional, Tuple
- 
--from streamlit_extension.utils.exception_handler import (
--    streamlit_error_boundary,
--    safe_streamlit_operation,
--)
-+try:
-+    from streamlit_extension.utils.exception_handler import (
-+        streamlit_error_boundary,
-+        safe_streamlit_operation,
++def render_projeto_wizard_page(*args: Any, **kwargs: Any) -> None:
++    # aponta para o novo pacote (que hoje reexporta do caminho antigo)
++    from .projetos.project_wizard.projeto_wizard import (  # type: ignore
++        render_projeto_wizard_page as _impl
 +    )
-+except ModuleNotFoundError:
-+    def streamlit_error_boundary(func, *args, **kwargs):
-+        return func(*args, **kwargs)
-+
-+    def safe_streamlit_operation(func, *args, **kwargs):
-+        default_return = kwargs.pop("default_return", None)
-+        kwargs.pop("operation_name", None)
-+        try:
-+            return func(*args, **kwargs)
-+        except Exception:
-+            return default_return
- 
- RenderFunc = Callable[[], Optional[object]]  # páginas podem retornar dict/None
- 
- 
- # =============================================================================
- # Helpers de import dinâmico (com proteção)
- # =============================================================================
- 
- def _import_page(module_name: str, func_name: str) -> Tuple[Optional[RenderFunc], bool]:
-     """Importa módulo/func dinamicamente com proteção e retorna (callable, disponível)."""
-     module = safe_streamlit_operation(
-         import_module,
-         f"{__name__}.{module_name}",
-         default_return=None,
-         operation_name=f"import_{module_name}",
-     )
-     if module and hasattr(module, func_name):
-         return getattr(module, func_name), True
-     return None, False
- 
- 
- # =============================================================================
- # Import das páginas (lazy-friendly via safe_streamlit_operation)
- # =============================================================================
- 
-diff --git a/streamlit_extension/pages/projetos/__init__.py b/streamlit_extension/pages/projetos/__init__.py
-new file mode 100644
-index 0000000000000000000000000000000000000000..1f04bd84c86a37417b1aa25ba30490f4eba799ce
---- /dev/null
-+++ b/streamlit_extension/pages/projetos/__init__.py
-@@ -0,0 +1 @@
-+# Pacote de páginas e lógica do módulo Projetos (wizard + steps + controllers + repositories)
-diff --git a/streamlit_extension/pages/projetos/controllers/__init__.py b/streamlit_extension/pages/projetos/controllers/__init__.py
-new file mode 100644
-index 0000000000000000000000000000000000000000..4da6e1930931d4544532aa2eb653bc9bb89cad82
---- /dev/null
-+++ b/streamlit_extension/pages/projetos/controllers/__init__.py
-@@ -0,0 +1,3 @@
-+from .product_vision_controller import ProductVisionController
-+
-+__all__ = ["ProductVisionController"]
-diff --git a/streamlit_extension/pages/projetos/controllers/product_vision_controller.py b/streamlit_extension/pages/projetos/controllers/product_vision_controller.py
-new file mode 100644
-index 0000000000000000000000000000000000000000..f629c8704ac6940369d802c1e2b9c6021a5036a9
---- /dev/null
-+++ b/streamlit_extension/pages/projetos/controllers/product_vision_controller.py
-@@ -0,0 +1,45 @@
-+"""
-+Product Vision Controller (camada de orquestração de regras)
-+Movido para: streamlit_extension/pages/projetos/controllers/product_vision_controller.py
-+"""
-+from __future__ import annotations
-+
-+from typing import Any, Protocol
-+
-+from ..product_vision_state import apply_refine_result, validate_product_vision
-+
-+
-+class VisionRefinePort(Protocol):
-+    def refine(self, payload: dict[str, Any]) -> dict[str, Any]: ...
-+
-+
-+class ProductVisionRepositoryPort(Protocol):
-+    def save(self, project_id: int, data: dict[str, Any]) -> None: ...
-+    def load(self, project_id: int) -> dict[str, Any]: ...
-+
-+
-+class ProductVisionController:
-+    def __init__(self, refiner: VisionRefinePort, repo: ProductVisionRepositoryPort):
-+        self._refiner = refiner
-+        self._repo = repo
-+
-+    def refine_with_ai(self, current: dict[str, Any]) -> dict[str, Any]:
-+        ok, msg = validate_product_vision(current)
-+        if not ok:
-+            raise ValueError(msg or "Dados inválidos para refino")
-+        result = self._refiner.refine(
-+            {
-+                "vision_statement": current.get("vision_statement", "").strip(),
-+                "problem_statement": current.get("problem_statement", "").strip(),
-+                "target_audience": current.get("target_audience", "").strip(),
-+                "value_proposition": current.get("value_proposition", "").strip(),
-+                "constraints": current.get("constraints", []),
-+            }
-+        )
-+        return apply_refine_result(current, result)
-+
-+    def save_draft(self, project_id: int, data: dict[str, Any]) -> None:
-+        ok, msg = validate_product_vision(data)
-+        if not ok:
-+            raise ValueError(msg or "Preencha todos os campos antes de salvar")
-+        self._repo.save(project_id, data)
-diff --git a/streamlit_extension/pages/projetos/product_vision_state.py b/streamlit_extension/pages/projetos/product_vision_state.py
-new file mode 100644
-index 0000000000000000000000000000000000000000..6b489ba3ea7bd34cda030780b0bf7bb05a620923
---- /dev/null
-+++ b/streamlit_extension/pages/projetos/product_vision_state.py
-@@ -0,0 +1,72 @@
-+from __future__ import annotations
-+
-+from typing import Any
-+
-+DEFAULT_PV: dict[str, Any] = {
-+    "vision_statement": "",
-+    "problem_statement": "",
-+    "target_audience": "",
-+    "value_proposition": "",
-+    "constraints": [],
-+}
-+
-+def all_fields_filled(data: dict[str, Any]) -> bool:
-+    required = [
-+        "vision_statement",
-+        "problem_statement",
-+        "target_audience",
-+        "value_proposition",
-+    ]
-+    for key in required:
-+        value = str(data.get(key, ""))
-+        if not value.strip():
-+            return False
-+    constraints = data.get("constraints", [])
-+    return bool(normalize_constraints(constraints))
-+
-+def normalize_constraints(items: list[str]) -> list[str]:
-+    return [x.strip() for x in items if isinstance(x, str) and x.strip()]
-+
-+
-+def validate_product_vision(data: dict[str, Any]) -> tuple[bool, str | None]:
-+    for field in [
-+        "vision_statement",
-+        "problem_statement",
-+        "target_audience",
-+        "value_proposition",
-+    ]:
-+        if not str(data.get(field, "")).strip():
-+            return False, f"{field} inválido ou ausente"
-+
-+    if not normalize_constraints(data.get("constraints", [])):
-+        return False, "constraints inválido ou ausente"
-+    return True, None
-+
-+
-+def apply_refine_result(current: dict[str, Any], result: dict[str, Any]) -> dict[str, Any]:
-+    merged = dict(current)
-+    for key in [
-+        "vision_statement",
-+        "problem_statement",
-+        "target_audience",
-+        "value_proposition",
-+    ]:
-+        val = result.get(key)
-+        if isinstance(val, str) and val.strip():
-+            merged[key] = val.strip()
-+    res_constraints = result.get("constraints")
-+    if isinstance(res_constraints, list) and res_constraints:
-+        merged["constraints"] = normalize_constraints(res_constraints)
-+    return merged
-+
-+
-+def refine_all_and_apply(current: dict[str, Any], refiner: Any) -> dict[str, Any]:
-+    payload = {
-+        "vision_statement": current.get("vision_statement", "").strip(),
-+        "problem_statement": current.get("problem_statement", "").strip(),
-+        "target_audience": current.get("target_audience", "").strip(),
-+        "value_proposition": current.get("value_proposition", "").strip(),
-+        "constraints": normalize_constraints(current.get("constraints", [])),
-+    }
-+    result = refiner.refine(payload)
-+    return apply_refine_result(current, result)
-diff --git a/streamlit_extension/pages/projetos/product_vision_step.py b/streamlit_extension/pages/projetos/product_vision_step.py
-new file mode 100644
-index 0000000000000000000000000000000000000000..0b514d4b3606a78a666b805ea94c67463a8647b0
---- /dev/null
-+++ b/streamlit_extension/pages/projetos/product_vision_step.py
-@@ -0,0 +1,9 @@
-+from __future__ import annotations
-+
-+from .controllers import ProductVisionController
-+
-+
-+def render_product_vision_step(controller: ProductVisionController) -> None:
-+    """Placeholder de UI da visão de produto."""
-+    # Implementar UI real posteriormente
-+    _ = controller
-diff --git a/streamlit_extension/pages/projetos/projeto_wizard.py b/streamlit_extension/pages/projetos/projeto_wizard.py
-new file mode 100644
-index 0000000000000000000000000000000000000000..e03a641dfba3a7b22caa668c281a70f0efd11c7c
---- /dev/null
-+++ b/streamlit_extension/pages/projetos/projeto_wizard.py
-@@ -0,0 +1,18 @@
-+from __future__ import annotations
-+
-+from .controllers import ProductVisionController
-+from .product_vision_step import render_product_vision_step
-+from .repositories import InMemoryProductVisionRepository
-+
-+# Exemplo de wiring simples (substituir por DI/container quando disponível)
-+_repo = InMemoryProductVisionRepository()
-+# _refiner será injetado pela camada de serviços/IA quando necessário
-+
-+
-+def render() -> None:
-+    class _NoopRefiner:
-+        def refine(self, payload):
-+            return payload
-+
-+    controller = ProductVisionController(_NoopRefiner(), _repo)
-+    render_product_vision_step(controller)
-diff --git a/streamlit_extension/pages/projetos/repositories/__init__.py b/streamlit_extension/pages/projetos/repositories/__init__.py
-new file mode 100644
-index 0000000000000000000000000000000000000000..85075a71e1e4fb1f5988450f4ee205001339bb03
---- /dev/null
-+++ b/streamlit_extension/pages/projetos/repositories/__init__.py
-@@ -0,0 +1,3 @@
-+from .product_vision_repository import InMemoryProductVisionRepository
-+
-+__all__ = ["InMemoryProductVisionRepository"]
-diff --git a/streamlit_extension/pages/projetos/repositories/product_vision_repository.py b/streamlit_extension/pages/projetos/repositories/product_vision_repository.py
-new file mode 100644
-index 0000000000000000000000000000000000000000..14d7acfc018f6ed6b4f4dd2af9480b79c24a252e
---- /dev/null
-+++ b/streamlit_extension/pages/projetos/repositories/product_vision_repository.py
-@@ -0,0 +1,16 @@
-+from __future__ import annotations
-+
-+from typing import Any
-+
-+
-+class InMemoryProductVisionRepository:
-+    """Repositório fake/in-memory para testes de controller."""
-+
-+    def __init__(self) -> None:
-+        self._store: dict[int, dict[str, Any]] = {}
-+
-+    def save(self, project_id: int, data: dict[str, Any]) -> None:
-+        self._store[project_id] = dict(data)
-+
-+    def load(self, project_id: int) -> dict[str, Any]:
-+        return dict(self._store.get(project_id, {}))
-diff --git a/streamlit_extension/pages/projetos/state.py b/streamlit_extension/pages/projetos/state.py
-new file mode 100644
-index 0000000000000000000000000000000000000000..633be9656ac2a3e4c54eba590ec5edac9593f96c
---- /dev/null
-+++ b/streamlit_extension/pages/projetos/state.py
-@@ -0,0 +1,39 @@
-+from __future__ import annotations
-+
-+from typing import Any
-+
-+DEFAULT_DRAFT: dict[str, Any] = {"name": ""}
-+
-+
-+def init_wizard_state(ss: dict[str, Any]) -> None:
-+    if "projeto_wizard" not in ss:
-+        ss["projeto_wizard"] = {
-+            "current_step": "project_name",
-+            "project_draft": dict(DEFAULT_DRAFT),
-+        }
-+
-+
-+def current_step(ss: dict[str, Any]) -> str:
-+    return ss.get("projeto_wizard", {}).get("current_step", "project_name")
-+
-+
-+def move_to(ss: dict[str, Any], step: str) -> None:
-+    init_wizard_state(ss)
-+    ss["projeto_wizard"]["current_step"] = step
-+
-+
-+def validate_project_name(name: str) -> tuple[bool, str | None]:
-+    if not isinstance(name, str) or len(name.strip()) < 3:
-+        return False, "Nome do projeto inválido"
-+    return True, None
-+
-+
-+def advance_from_name(ss: dict[str, Any], name: str) -> tuple[bool, str | None]:
-+    ok, msg = validate_project_name(name)
-+    if not ok:
-+        return False, msg
-+    init_wizard_state(ss)
-+    wiz = ss["projeto_wizard"]
-+    wiz["project_draft"]["name"] = name.strip()
-+    wiz["current_step"] = "product_vision"
-+    return True, None
- 
-EOF
-)
++    return _impl(*args, **kwargs)
+*** End Patch
