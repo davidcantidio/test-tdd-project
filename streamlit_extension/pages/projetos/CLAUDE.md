@@ -9,6 +9,8 @@
 
 ## 📋 **Current State - Phase 4.5 COMPLETE**
 
+> 💡 **Quick Context?** See **[WIZARD_STATUS.md](../../../WIZARD_STATUS.md)** for instant context reset guide
+
 ### ✅ **Implemented Features**
 - **Multi-Step Wizard**: True step-by-step navigation following official Streamlit patterns  
 - **"Third Way" UX**: Toggle between Form mode (all fields) and Steps mode (one-by-one)  
@@ -210,6 +212,7 @@ is_valid, error = validate_step_data(st.session_state, 1)
 ## 📖 **References**
 
 ### **Related Documentation**
+- **🚨 [WIZARD_STATUS.md](../../../WIZARD_STATUS.md)** - Current state & quick context reset guide
 - **[Main CLAUDE.md](../../../CLAUDE.md)** - Complete system overview
 - **[Streamlit Extension CLAUDE.md](../../CLAUDE.md)** - Module documentation  
 - **`taxonomia.txt`** - Official Streamlit wizard patterns (project root)
