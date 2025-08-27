@@ -10,7 +10,7 @@ on:
       - 'epics/*.json'          # Epic JSON files
       - 'epic_*.json'           # Legacy epic format
       - 'scripts/analysis/generate_all_diagrams.py'
-      - 'scripts/testing/gantt_tracker.py'
+      - 'tests/scripts/gantt_tracker.py'
       - 'commit_helper.py'
       - '.github/workflows/tdd-automation.yml'
       - 'trigger_workflow.txt'
@@ -157,7 +157,7 @@ jobs:
           pip install plotly pandas
           
           # Generate progress dashboard
-          python3 scripts/testing/gantt_tracker.py --output docs/gantt_progress.html --no-open
+          python3 tests/scripts/gantt_tracker.py --output docs/gantt_progress.html --no-open
           
           echo "✅ Enhanced Gantt progress tracker generated"
       

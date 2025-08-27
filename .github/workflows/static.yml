@@ -40,7 +40,7 @@ jobs:
       - name: Generate Interactive Gantt Chart
         run: |
           echo "🎯 Generating interactive Gantt chart with Plotly..."
-          python3 scripts/testing/gantt_tracker.py --output docs/gantt_progress.html --no-open
+          python3 tests/scripts/gantt_tracker.py --output docs/gantt_progress.html --no-open
           echo "✅ Interactive Gantt chart generated"
         
       - name: Setup Ruby
