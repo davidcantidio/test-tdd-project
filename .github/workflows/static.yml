@@ -1,9 +1,13 @@
 # Jekyll workflow for deploying to GitHub Pages
+# Updated for Phase 4.5 - simplified to focus on deployment only
 name: Deploy Jekyll site to Pages
 
 on:
   push:
-    branches: ["main"]
+    branches: ["main"] 
+    paths:
+      - 'docs/**'              # Only trigger on docs changes
+      - '.github/workflows/static.yml'
   workflow_dispatch:
 
 permissions:
@@ -24,24 +28,6 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        
-      - name: Setup Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.11'
-          cache: 'pip'
-        
-      - name: Install Python dependencies
-        run: |
-          pip install --upgrade pip
-          pip install plotly pandas
-          echo "✅ Python dependencies installed"
-        
-      - name: Generate Interactive Gantt Chart
-        run: |
-          echo "🎯 Generating interactive Gantt chart with Plotly..."
-          python3 tests/scripts/gantt_tracker.py --output docs/gantt_progress.html --no-open
-          echo "✅ Interactive Gantt chart generated"
         
       - name: Setup Ruby
         uses: ruby/setup-ruby@v1
