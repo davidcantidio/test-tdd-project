@@ -20,6 +20,14 @@ from .task_service import TaskService
 from .analytics_service import AnalyticsService
 from .timer_service import TimerService
 
+# Database connection for services that need it
+try:
+    from ..database.connection import get_connection_context, execute
+except ImportError:
+    # Fallback for older database patterns
+    get_connection_context = None
+    execute = None
+
 T = TypeVar("T", bound=BaseService)
 logger = logging.getLogger(__name__)
 
@@ -34,6 +42,10 @@ class ServiceContainer:
         self._services: Dict[Type[BaseService], BaseService] = {}
         self._lock = threading.RLock()
         self._logger = logging.getLogger(f"{__name__}.ServiceContainer")
+        
+        # Initialize database connection context
+        self._db_context = self._initialize_database_context()
+        
         self._logger.debug("ServiceContainer initialized with modular architecture")
 
     # --- Core Service Registration ---
@@ -60,12 +72,25 @@ class ServiceContainer:
 
     # --- Generic Service Management ---
 
+    def _initialize_database_context(self) -> Optional[Any]:
+        """Initialize database context for services that need database access."""
+        try:
+            if get_connection_context is not None:
+                return get_connection_context
+            else:
+                # Services use the new modular database API directly
+                return None
+        except Exception as e:
+            self._logger.warning(f"Database context initialization failed: {e}")
+            return None
+    
     def _get_or_create_service(self, service_class: Type[T]) -> T:
         """Get existing service or create new instance."""
         with self._lock:
             if service_class not in self._services:
                 try:
-                    # All services now use modular architecture with no dependencies
+                    # Services use modular architecture - no explicit db injection needed
+                    # They use streamlit_extension.database.connection directly
                     service_instance = service_class()
                     self._services[service_class] = service_instance
                     self._logger.debug(f"Created new service instance: {service_class.__name__}")

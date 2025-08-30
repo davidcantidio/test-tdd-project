@@ -54,7 +54,11 @@ def get_authenticated_user() -> Optional[Dict[str, Any]]:
             'is_logged_in': st.user.is_logged_in
         }
         
-        logger.info(f"✅ User authenticated via Streamlit native OAuth: {user_data.get('email', 'unknown')}")
+        # Log only on first authentication per session to avoid spam
+        if not st.session_state.get("_auth_logged", False):
+            logger.info(f"✅ User authenticated via Streamlit native OAuth: {user_data.get('email', 'unknown')}")
+            st.session_state["_auth_logged"] = True
+        
         return user_data
         
     except Exception as e:

@@ -70,7 +70,10 @@ class AnalyticsRepository(BaseRepository):
     """Repository for analytics data access operations."""
     
     def __init__(self):
-        super().__init__(db_manager)
+        # Use modular database architecture - no db_manager needed
+        from ..database.connection import get_connection_context, execute
+        self.get_connection_context = get_connection_context
+        self.execute = execute
     
     
     def get_project_progress_metrics(self, project_id: Optional[int] = None) -> List[Dict[str, Any]]:

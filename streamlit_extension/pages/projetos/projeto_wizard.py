@@ -29,6 +29,12 @@ import streamlit as st
 
 logger = logging.getLogger(__name__)
 
+
+def _wiz_key(name: str, step: int | str = "global") -> str:
+    """Gera chave única para elementos do wizard para evitar IDs duplicados."""
+    session_id = st.session_state.get("session_id", "anon")
+    return f"wiz::{session_id}::s{step}::{name}"
+
 # --- Authentication layer ---
 try:
     from streamlit_extension.auth.middleware import init_protected_page, require_auth
@@ -121,7 +127,7 @@ def render_wizard_header() -> None:
             if st.button(step_label, 
                         type=button_type, 
                         disabled=(step_num > current_step),
-                        key=f"step_nav_{step_num}",
+                        key=_wiz_key(f"step_nav_{step_num}", step_num),
                         help=f"Ir para passo {step_num}"):
                 set_wizard_step('Jump', step_num)
                 st.rerun()
@@ -141,7 +147,8 @@ def render_wizard_navigation() -> None:
         # Back button
         if st.button("⬅ Voltar", 
                     disabled=(current_step <= 1),
-                    use_container_width=True):
+                    use_container_width=True,
+                    key=_wiz_key("btn_voltar", current_step)):
             set_wizard_step('Back')
             st.rerun()
     
@@ -153,7 +160,8 @@ def render_wizard_navigation() -> None:
         if st.button(next_label, 
                     disabled=next_disabled,
                     use_container_width=True,
-                    type="primary"):
+                    type="primary",
+                    key=_wiz_key("btn_proximo", current_step)):
             if current_step < max_steps:
                 set_wizard_step('Next')
                 st.rerun()
