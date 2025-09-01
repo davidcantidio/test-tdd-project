@@ -23,30 +23,30 @@ def validate_all_fields(pv_data: Dict[str, Any]) -> Tuple[bool, List[str]]:
     
     # Check vision statement
     if not pv_data.get("vision_statement", "").strip():
-        issues.append("DeclaraÁ„o de Vis„o est· vazia")
+        issues.append("Declara√ß√£o de Vis√£o est√° vazia")
     elif len(pv_data.get("vision_statement", "")) < 10:
-        issues.append("DeclaraÁ„o de Vis„o muito curta (mÌnimo 10 caracteres)")
+        issues.append("Declara√ß√£o de Vis√£o muito curta (m√≠nimo 10 caracteres)")
         
     # Check problem statement
     if not pv_data.get("problem_statement", "").strip():
-        issues.append("DeclaraÁ„o do Problema est· vazia")
+        issues.append("Declara√ß√£o do Problema est√° vazia")
     elif len(pv_data.get("problem_statement", "")) < 20:
-        issues.append("DeclaraÁ„o do Problema muito curta (mÌnimo 20 caracteres)")
+        issues.append("Declara√ß√£o do Problema muito curta (m√≠nimo 20 caracteres)")
         
     # Check target audience
     if not pv_data.get("target_audience", "").strip():
-        issues.append("P˙blico-alvo n„o definido")
+        issues.append("P√∫blico-alvo n√£o definido")
         
     # Check value proposition
     if not pv_data.get("value_proposition", "").strip():
-        issues.append("Proposta de Valor est· vazia")
+        issues.append("Proposta de Valor est√° vazia")
         
     # Check constraints
     constraints = pv_data.get("constraints", [])
     if not constraints or len(constraints) == 0:
-        issues.append("Nenhuma restriÁ„o definida")
+        issues.append("Nenhuma restri√ß√£o definida")
     elif len(constraints) < 2:
-        issues.append("Defina pelo menos 2 restriÁıes do projeto")
+        issues.append("Defina pelo menos 2 restri√ß√µes do projeto")
         
     return len(issues) == 0, issues
 
@@ -61,11 +61,11 @@ def render_validation_feedback(pv_data: Dict[str, Any]):
     is_valid, issues = validate_all_fields(pv_data)
     
     if is_valid:
-        st.success(" Todos os campos est„o preenchidos corretamente!")
+        st.success("‚úÖ Todos os campos est√£o preenchidos corretamente!")
     else:
-        with st.expander(f"† {len(issues)} campo(s) precisam de atenÁ„o", expanded=True):
+        with st.expander(f"‚ö†Ô∏è {len(issues)} campo(s) precisam de aten√ß√£o", expanded=True):
             for issue in issues:
-                st.warning(f"" {issue}")
+                st.warning(f"‚Ä¢ {issue}")
 
 
 def get_field_quality_score(field_key: str, value: Any) -> int:
@@ -122,14 +122,14 @@ def render_quality_indicators(pv_data: Dict[str, Any]):
     Args:
         pv_data: Dictionary with Product Vision data
     """
-    st.markdown("### =  Qualidade do Preenchimento")
+    st.markdown("### üìä Qualidade do Preenchimento")
     
     field_labels = {
-        "vision_statement": "DeclaraÁ„o de Vis„o",
+        "vision_statement": "Declara√ß√£o de Vis√£o",
         "problem_statement": "Problema a Resolver",
-        "target_audience": "P˙blico-alvo",
+        "target_audience": "P√∫blico-alvo",
         "value_proposition": "Proposta de Valor",
-        "constraints": "RestriÁıes"
+        "constraints": "Restri√ß√µes"
     }
     
     total_score = 0
@@ -143,13 +143,13 @@ def render_quality_indicators(pv_data: Dict[str, Any]):
         # Color based on score
         if score >= 80:
             color = "green"
-            icon = ""
+            icon = "‚úÖ"
         elif score >= 50:
             color = "orange"
-            icon = "†"
+            icon = "‚ö†Ô∏è"
         else:
             color = "red"
-            icon = "L"
+            icon = "‚ùå"
             
         st.progress(score / 100, text=f"{icon} {label}: {score}%")
     
@@ -157,8 +157,8 @@ def render_quality_indicators(pv_data: Dict[str, Any]):
     overall_score = total_score // field_count if field_count > 0 else 0
     
     if overall_score >= 80:
-        st.success(f"<∆ Qualidade Geral: {overall_score}% - Excelente!")
+        st.success(f"üéâ Qualidade Geral: {overall_score}% - Excelente!")
     elif overall_score >= 60:
-        st.info(f"=» Qualidade Geral: {overall_score}% - Bom, mas pode melhorar")
+        st.info(f"üìà Qualidade Geral: {overall_score}% - Bom, mas pode melhorar")
     else:
-        st.warning(f"† Qualidade Geral: {overall_score}% - Precisa de mais detalhes")
+        st.warning(f"‚ö†Ô∏è Qualidade Geral: {overall_score}% - Precisa de mais detalhes")
