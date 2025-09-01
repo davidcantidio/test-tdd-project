@@ -21,11 +21,26 @@ DEFAULT_PV: Dict[str, Any] = {
     "constraints": [],  # list[str]
 }
 
+#: Mapeamento das perguntas por etapa macro
+QUESTIONS_BY_STEP = {
+    1: [  # Etapa "O Quê"
+        ("vision_statement", "O que você quer criar?"),
+        ("problem_statement", "Qual problema isso resolve?"),
+        ("target_audience", "Quem vai usar?"),
+    ],
+    2: [  # Etapa "Como" 
+        ("value_proposition", "Como isso ajuda essa pessoa?"),
+    ],
+    3: [  # Etapa "Restrições"
+        ("constraints", "O quê não pode ter, ou não pode faltar?"),
+    ]
+}
+
 #: Ordem dos campos do fluxo step-by-step (tuplas: (chave, rótulo para UI))
 PV_FIELDS = [
-    ("vision_statement", "Declaração de Visão"),
-    ("problem_statement", "Problema a Resolver"),
-    ("target_audience", "Público-alvo"),
-    ("value_proposition", "Proposta de Valor"),
-    ("constraints", "Restrições (uma por linha)"),
+    ("vision_statement", "O que você quer criar?"),
+    ("problem_statement", "Qual problema isso resolve?"),
+    ("target_audience", "Quem vai usar?"),
+    ("value_proposition", "Como isso ajuda essa pessoa?"),
+    ("constraints", "O quê não pode ter, ou não pode faltar?"),
 ]

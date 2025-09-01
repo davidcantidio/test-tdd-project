@@ -1,5 +1,6 @@
 import pytest
-from src.ai.product_vision_refiner import FakeClaudeRefiner, ProductVisionDTO
+from src.ia.product_vision_refiner import FakeClaudeRefiner
+from src.ia.agents.agno_agent import ProductVisionDTO
 
 def test_refiner_requires_all_fields_present():
     """A IA só deve aceitar rodar se TODOS os campos da visão forem preenchidos."""
@@ -8,10 +9,10 @@ def test_refiner_requires_all_fields_present():
 
     # Caso com campo vazio → deve falhar
     incomplete = {
-        "product_name": "App Cursos",
-        "target_user": "",
-        "problem": "Dificuldade em vender cursos",
-        "outcome": "Ajudar professores",
+        "vision_statement": "App Cursos",
+        "target_audience": "",
+        "problem_statement": "Dificuldade em vender cursos",
+        "value_proposition": "Ajudar professores",
         "constraints": ["Compatível com LGPD"]
     }
     with pytest.raises(ValueError):
@@ -23,10 +24,10 @@ def test_refiner_runs_when_all_fields_filled():
     refiner = FakeClaudeRefiner()
 
     complete = {
-        "product_name": "Plataforma Financeira",
-        "target_user": "jovens adultos",
-        "problem": "falta de controle de gastos pessoais",
-        "outcome": "ajudar usuários a economizar dinheiro",
+        "vision_statement": "Plataforma Financeira",
+        "target_audience": "jovens adultos",
+        "problem_statement": "falta de controle de gastos pessoais",
+        "value_proposition": "ajudar usuários a economizar dinheiro",
         "constraints": ["deve funcionar em mobile"]
     }
 
@@ -34,8 +35,8 @@ def test_refiner_runs_when_all_fields_filled():
 
     assert isinstance(result, ProductVisionDTO)
     # Todos os campos continuam preenchidos
-    assert result.product_name != ""
-    assert result.target_user != ""
-    assert result.problem != ""
-    assert result.outcome != ""
+    assert result.vision_statement != ""
+    assert result.target_audience != ""
+    assert result.problem_statement != ""
+    assert result.value_proposition != ""
     assert isinstance(result.constraints, list) and len(result.constraints) > 0

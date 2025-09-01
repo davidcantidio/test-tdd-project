@@ -20,6 +20,13 @@ from .task_service import TaskService
 from .analytics_service import AnalyticsService
 from .timer_service import TimerService
 
+# Vision service import - lazy loaded to avoid circular imports
+try:
+    from .vision_service import UnifiedVisionService, create_vision_service
+except ImportError:
+    UnifiedVisionService = None
+    create_vision_service = None
+
 # Database connection for services that need it
 try:
     from ..database.connection import get_connection_context, execute
@@ -69,6 +76,34 @@ class ServiceContainer:
     def get_timer_service(self) -> TimerService:
         """Get or create TimerService instance."""
         return self._get_or_create_service(TimerService)
+
+    def get_vision_refine_service(self) -> 'UnifiedVisionService':
+        """
+        Get or create VisionRefineService instance.
+        
+        Uses environment-based factory to select Mock or Real AI service.
+        
+        Returns:
+            UnifiedVisionService configured for current environment
+            
+        Raises:
+            RuntimeError: If vision service is not available
+        """
+        if UnifiedVisionService is None or create_vision_service is None:
+            raise RuntimeError("VisionService not available - check vision_service.py import")
+            
+        # Cache vision service instance
+        if not hasattr(self, '_vision_service'):
+            with self._lock:
+                if not hasattr(self, '_vision_service'):
+                    try:
+                        self._vision_service = create_vision_service()
+                        self._logger.info(f"Vision service created: {self._vision_service.service_type}")
+                    except Exception as e:
+                        self._logger.error(f"Failed to create vision service: {e}")
+                        raise RuntimeError(f"Vision service creation failed: {e}")
+        
+        return self._vision_service
 
     # --- Generic Service Management ---
 
@@ -281,6 +316,11 @@ def get_timer_service() -> TimerService:
     return get_service_container().get_timer_service()
 
 
+def get_vision_refine_service() -> 'UnifiedVisionService':
+    """Convenience function to get VisionRefineService."""
+    return get_service_container().get_vision_refine_service()
+
+
 # --- Health Check Integration ---
 
 def check_services_health() -> Dict[str, Any]:
@@ -321,6 +361,7 @@ def initialize_service_container(db_manager=None, lazy_loading=True) -> ServiceC
             container.get_task_service()
             container.get_analytics_service()
             container.get_timer_service()
+            container.get_vision_refine_service()  # Add vision service to pre-initialization
             logger.info("All core services pre-initialized")
         except Exception as e:
             logger.error(f"Failed to pre-initialize services: {e}")
@@ -349,6 +390,7 @@ def get_app_service_container() -> ServiceContainer:
         container.get_task_service()
         container.get_analytics_service()
         container.get_timer_service()
+        container.get_vision_refine_service()  # Add vision service to app container
         
         logger.info("All core services initialized successfully")
         return container

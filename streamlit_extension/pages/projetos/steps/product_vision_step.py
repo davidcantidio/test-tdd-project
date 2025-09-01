@@ -3,11 +3,53 @@ from __future__ import annotations
 import streamlit as st
 from typing import Dict, Any, Optional
 
-# Serviço de IA — mock até Phase 5.1
-from .mock_refiner import MockVisionRefineService as VisionRefineService
-# Quando o serviço real estiver pronto:
-# from src.ia.services.vision_refine_service import VisionRefineService
-# from src.ia.agents.agno_agent import VisionRefinerAgent
+# Serviço de IA — Sistema real com fallback para mock
+try:
+    from src.ia.services.vision_refine_service import VisionRefineService as RealVisionService
+    from src.ia.agents.agno_agent import VisionRefinerAgent, ProductVisionDTO
+    
+    # Criar instância do agente real com gpt-5-nano
+    _agent = VisionRefinerAgent(model_id="gpt-5-nano")
+    
+    # Adapter para compatibilizar VisionRefinerAgent com VisionRefineService
+    class AgentAdapter:
+        def __init__(self, agent):
+            self.agent = agent
+        
+        def run(self, payload):
+            # VisionRefineService espera run(), mas VisionRefinerAgent tem refine()
+            result = self.agent.refine(payload)
+            
+            # Agno retorna RunResponse, extrair o content
+            if hasattr(result, 'content'):
+                actual_result = result.content
+                if isinstance(actual_result, ProductVisionDTO):
+                    # Usar model_dump() em vez de dict() depreciado
+                    return actual_result.model_dump()
+                return actual_result
+            
+            # Fallback para compatibilidade
+            if isinstance(result, ProductVisionDTO):
+                return result.model_dump()
+            return result
+    
+    # Criar adapter
+    _adapted_agent = AgentAdapter(_agent)
+    
+    # Wrapper para compatibilidade com código existente
+    class VisionRefineService:
+        def __init__(self):
+            self.service = RealVisionService(_adapted_agent)
+        
+        def refine(self, payload):
+            return self.service.refine(payload)
+    
+    print("✅ Sistema real de IA ativado com gpt-5-nano")
+    
+except Exception as e:
+    # Fallback para mock se houver problema com sistema real
+    from .mock_refiner import MockVisionRefineService as VisionRefineService
+    print(f"⚠️ Usando mock devido a: {e}")
 
 # State helpers (ficam no MESMO pacote "steps")
 from ._pv_state import (

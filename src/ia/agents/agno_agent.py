@@ -6,22 +6,26 @@ from dataclasses import dataclass
 from agno.agent import Agent
 from agno.models.openai import OpenAIChat  # Model object (não use string)
 
-# ===== Saída estruturada (Pydantic) =====
+# ===== Saída estruturada (Pydantic) - Schema Compatível com Wizard =====
 class ProductVisionDTO(BaseModel):
-    product_name: str = Field(..., description="Nome do produto")
-    target_user: str = Field(..., description="Público-alvo primário")
-    problem: str = Field(..., description="Problema a resolver")
-    outcome: str = Field(..., description="Resultado/benefício esperado")
+    vision_statement: str = Field(..., description="Visão do produto")
+    problem_statement: str = Field(..., description="Problema a resolver")
+    target_audience: str = Field(..., description="Público-alvo primário")
+    value_proposition: str = Field(..., description="Proposta de valor")
     constraints: List[str] = Field(default_factory=list, description="Restrições/limitações")
 
-# ===== Prompt base =====
+# ===== Prompt base - Compatível com Wizard Schema =====
 PROMPT_REFINE = """Você é um Product Manager Sênior.
-Refine a visão de produto recebida, mantendo intenção e escopo, mas:
-- Clareie público-alvo, problema e resultado
-- Evite jargão e redundâncias
-- Liste restrições objetivas (ou vazio, se não existirem)
+Refine a visão de produto nos seguintes campos específicos:
+- vision_statement: Visão clara e inspiradora do produto
+- problem_statement: Problema específico a resolver
+- target_audience: Público-alvo bem definido
+- value_proposition: Valor único oferecido
+- constraints: Limitações objetivas (ou vazio, se não existirem)
 
+Mantendo intenção e escopo, mas evitando jargão e redundâncias.
 Retorne SOMENTE nos campos do schema solicitado.
+
 Visão bruta:
 {raw_json}
 """
@@ -43,7 +47,7 @@ class VisionRefinerAgent:
             markdown=False,
         )
 
-    REQUIRED_FIELDS = ["product_name", "target_user", "problem", "outcome", "constraints"]
+    REQUIRED_FIELDS = ["vision_statement", "problem_statement", "target_audience", "value_proposition", "constraints"]
 
     def refine(self, raw: Dict) -> ProductVisionDTO:
         # Validação: só roda se TODOS os campos estiverem preenchidos

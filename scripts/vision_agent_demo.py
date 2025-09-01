@@ -22,7 +22,6 @@ import os
 from textwrap import dedent
 
 from dotenv import load_dotenv
-from pydantic import BaseModel, Field
 from typing import List
 
 from agno.agent import Agent, RunResponse
@@ -38,15 +37,10 @@ if not os.getenv("OPENAI_API_KEY"):
     )
 
 # ---------------------------------------------------------------------
-# 2) Definir o schema de saída estruturada (Pydantic)
-#    -> o modelo define exatamente o JSON que queremos de volta
+# 2) Importar o schema centralizado (evita duplicação)
+#    -> ProductVisionDTO centralizado em src.ia.agents.agno_agent
 # ---------------------------------------------------------------------
-class ProductVisionDTO(BaseModel):
-    product_name: str = Field(..., description="Nome claro e memorável do produto.")
-    target_user: str = Field(..., description="Público‑alvo primário (personas).")
-    problem: str = Field(..., description="Problema/necessidade central resolvida.")
-    outcome: str = Field(..., description="Resultado/benefício desejado pelo usuário.")
-    constraints: List[str] = Field(default_factory=list, description="Restrições e limites (escopo, compliance, etc.).")
+from src.ia.agents.agno_agent import ProductVisionDTO
 
 
 # ---------------------------------------------------------------------

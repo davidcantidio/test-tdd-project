@@ -243,20 +243,14 @@ def render_product_vision_with_toggle(
     """
     init_pv_state(st.session_state)
 
-    st.subheader("🎯 Product Vision")
+    # Dynamic title for current macro phase
+    current_wizard_step = getattr(st.session_state, 'wizard_current_step', 1)
+    from ...projeto_wizard import get_step_name
+    macro_phase = get_step_name(current_wizard_step)
+    st.subheader(f"{current_wizard_step}. {macro_phase}")
 
-    # Toggle de modo (default já é "steps" via init_pv_state)
-    col1, col2 = st.columns([3, 1])
-    with col2:
-        mode = st.radio(
-            "Modo de preenchimento",
-            options=["steps", "form"],
-            index=0 if st.session_state.pv_mode == "steps" else 1,
-            horizontal=False,
-            format_func=lambda x: "👣 Passo a passo" if x == "steps" else "📝 Formulário",
-            key="pv_mode_radio",
-        )
-        set_pv_mode(st.session_state, mode)
+    # Forçar fluxo: primeiro steps, depois form na revisão final
+    set_pv_mode(st.session_state, "steps")
 
     # Área principal: conteúdo + resumo
     left_col, right_col = st.columns([2, 1])
@@ -292,14 +286,15 @@ def _render_form_mode() -> None:
                 st.session_state.pv[field_key] = st.text_area(
                     field_label,
                     st.session_state.pv.get(field_key, ""),
-                    height=100,
+                    height=120,  # Mais vertical
                     key=f"form_{field_key}",
                 )
 
             else:
-                st.session_state.pv[field_key] = st.text_input(
+                st.session_state.pv[field_key] = st.text_area(
                     field_label,
                     st.session_state.pv.get(field_key, ""),
+                    height=80,  # Transformar text_input em text_area para ser mais vertical
                     key=f"form_{field_key}",
                 )
 
@@ -328,12 +323,12 @@ def _render_form_mode() -> None:
 # Step-by-step (IA por campo) + revisão final
 # ---------------------------------------------
 def _render_steps_mode() -> None:
-    """Renderiza um campo por vez; último passo = revisão final (form completo)."""
+    """Renderiza um campo por vez das 5 perguntas dentro da fase Roteiro."""
     idx = st.session_state.pv_step_idx
     total = total_steps()  # len(PV_FIELDS) + 1 (revisão final)
 
     st.progress((idx + 1) / total)
-    st.caption(f"Passo {idx + 1} de {total}")
+    st.caption(f"Pergunta {idx + 1} de {total}")
 
     # Passo extra de revisão: formulário completo (com IA global)
     if is_review_step(st.session_state):
@@ -350,11 +345,11 @@ def _render_steps_mode() -> None:
         with nav_col2:
             st.success(
                 "Revise o formulário completo. "
-                "Você pode voltar, salvar/validar ou alternar para ‘Formulário’."
+                "Você pode voltar, salvar/validar ou prosseguir para próxima fase."
             )
         return
 
-    # Campo atual no fluxo step-by-step
+    # Campo atual no fluxo step-by-step das 5 perguntas
     field_key, field_label = PV_FIELDS[idx]
 
     if field_key == "constraints":
@@ -363,7 +358,7 @@ def _render_steps_mode() -> None:
             constraints_to_text(st.session_state.pv.get(field_key, [])),
             height=150,
             help="Ex.: orçamento limitado\natender LGPD\nlançar em 90 dias",
-            key=f"step_{field_key}",
+            key=f"roteiro_{field_key}",
         )
         st.session_state.pv[field_key] = constraints_from_text(constraints_text)
 
@@ -371,15 +366,16 @@ def _render_steps_mode() -> None:
         st.session_state.pv[field_key] = st.text_area(
             field_label,
             st.session_state.pv.get(field_key, ""),
-            height=150,
-            key=f"step_{field_key}",
+            height=200,  # Mais vertical
+            key=f"roteiro_{field_key}",
         )
 
     else:
-        st.session_state.pv[field_key] = st.text_input(
+        st.session_state.pv[field_key] = st.text_area(
             field_label,
             st.session_state.pv.get(field_key, ""),
-            key=f"step_{field_key}",
+            height=120,  # Transformar text_input em text_area para ser mais vertical
+            key=f"roteiro_{field_key}",
         )
 
     # Navegação + refino por campo
@@ -427,11 +423,12 @@ def _render_summary() -> None:
             else:
                 st.markdown(f"**{field_label}:** _vazio_")
         else:
-            display_value = value if _is_nonempty_str(value) else "_vazio_"
-            s = str(display_value)
-            if len(s) > 100:
-                s = s[:100] + "…"
-            st.markdown(f"**{field_label}:** {s}")
+            if _is_nonempty_str(value):
+                # Mostrar texto completo, sem truncar
+                st.markdown(f"**{field_label}:**")
+                st.markdown(f"{value}")
+            else:
+                st.markdown(f"**{field_label}:** _vazio_")
 
 
 # ---------------------------------------------

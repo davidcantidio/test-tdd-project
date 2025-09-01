@@ -31,9 +31,22 @@ __all__ = [
     "get_summary",
 ]
 
+# IMPORTANTE: Reexportar o VisionRefineService para garantir que o sistema real seja usado
+try:
+    import sys
+    import os
+    # Importar o módulo .py diretamente, não o pacote
+    sys.path.insert(0, os.path.dirname(__file__))
+    from product_vision_step import VisionRefineService as RealVisionRefineService
+    VisionRefineService = RealVisionRefineService
+    print("✅ Sistema real importado via __init__.py")
+except Exception as import_error:
+    print(f"⚠️ Falha ao importar sistema real via __init__.py: {import_error}")
+    VisionRefineService = None
+
 # Reexports de compatibilidade com fallback amigável
 try:
-    from ._legacy import (  # type: ignore
+    from .main import (  # type: ignore
         render_product_vision_with_toggle,
         render_step,
         validate,
@@ -44,7 +57,7 @@ except Exception as _e:  # ModuleNotFoundError, ImportError, etc.
     def _missing(*_args, **_kwargs):  # pragma: no cover
         raise RuntimeError(
             "As funções de compatibilidade de product_vision_step não estão "
-            "disponíveis. Verifique se o módulo `._legacy` existe e exporta "
+            "disponíveis. Verifique se o módulo `.main` existe e exporta "
             "`render_product_vision_with_toggle`, `render_step`, `validate`, "
             "e `get_summary`."
         ) from _e

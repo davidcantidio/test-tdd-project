@@ -53,18 +53,27 @@ except ImportError:
 from .steps.product_vision_step import render_product_vision_with_toggle
 from .steps._pv_state import init_pv_state
 
-# Wizard step definitions following Streamlit official pattern
+# Wizard step definitions - Generic project structure
 WIZARD_STEPS = {
-    1: "product_vision",
-    # Future steps can be added here:
-    # 2: "project_details", 
-    # 3: "resources_budget",
-    # 4: "review_create"
+    1: "roteiro",
+    2: "capitulos", 
+    3: "historias",
+    4: "tarefas"
 }
 
 def get_step_name(step_num: int) -> str:
     """Get human-readable step name from step number."""
-    return WIZARD_STEPS.get(step_num, "unknown")
+    step_key = WIZARD_STEPS.get(step_num, "unknown")
+    
+    # Mapeamento para macro fases genéricas
+    step_names = {
+        "roteiro": "Roteiro",
+        "capitulos": "Capítulos", 
+        "historias": "Histórias",
+        "tarefas": "Tarefas"
+    }
+    
+    return step_names.get(step_key, step_key)
 
 
 def init_wizard_state() -> None:
@@ -100,7 +109,7 @@ def set_wizard_step(action: str, step: Optional[int] = None) -> None:
 
 def render_wizard_header() -> None:
     """Render wizard header with step indicators."""
-    st.title("🧙‍♂️ Assistente de Criação de Projetos")
+    # Título removido - já existe um título principal na página
     
     # Step indicators (visual progress)
     current_step = st.session_state.wizard_current_step
@@ -110,81 +119,71 @@ def render_wizard_header() -> None:
     progress = current_step / max_steps
     st.progress(progress)
     
-    # Step navigation breadcrumb
-    step_cols = st.columns(max_steps)
-    for i, (step_num, step_name) in enumerate(WIZARD_STEPS.items(), 1):
-        with step_cols[i-1]:
-            # Determine button type based on current step
+    # Navigation by individual questions
+    nav_cols = st.columns(max_steps)
+    for i, (step_num, step_name) in enumerate(WIZARD_STEPS.items()):
+        with nav_cols[i]:
+            # Determine button state
             if step_num == current_step:
                 button_type = "primary"
+                is_disabled = False
             elif step_num < current_step:
-                button_type = "secondary" 
+                button_type = "secondary"
+                is_disabled = False
             else:
                 button_type = "secondary"
+                is_disabled = True
             
-            # Step button (for navigation)
-            step_label = f"{step_num}. {step_name.replace('_', ' ').title()}"
-            if st.button(step_label, 
-                        type=button_type, 
-                        disabled=(step_num > current_step),
-                        key=_wiz_key(f"step_nav_{step_num}", step_num),
-                        help=f"Ir para passo {step_num}"):
-                set_wizard_step('Jump', step_num)
-                st.rerun()
+            # Question as button label
+            question_text = get_step_name(step_num)
+            
+            if st.button(
+                question_text,
+                type=button_type,
+                disabled=is_disabled,
+                key=_wiz_key(f"question_{step_num}", step_num),
+                help=f"{'Pergunta atual' if step_num == current_step else 'Ir para esta pergunta' if not is_disabled else 'Pergunta não disponível'}",
+                use_container_width=True
+            ):
+                if not is_disabled and step_num != current_step:
+                    set_wizard_step('Jump', step_num)
+                    st.rerun()
 
 
 def render_wizard_navigation() -> None:
     """Render wizard navigation buttons (Back/Next)."""
-    current_step = st.session_state.wizard_current_step
-    max_steps = len(WIZARD_STEPS)
-    
-    st.markdown("---")
-    
-    # Navigation buttons
-    nav_cols = st.columns([1, 1, 2])
-    
-    with nav_cols[0]:
-        # Back button
-        if st.button("⬅ Voltar", 
-                    disabled=(current_step <= 1),
-                    use_container_width=True,
-                    key=_wiz_key("btn_voltar", current_step)):
-            set_wizard_step('Back')
-            st.rerun()
-    
-    with nav_cols[1]:
-        # Next button
-        next_disabled = current_step >= max_steps
-        next_label = "Próximo ➡" if not next_disabled else "Concluído ✅"
-        
-        if st.button(next_label, 
-                    disabled=next_disabled,
-                    use_container_width=True,
-                    type="primary",
-                    key=_wiz_key("btn_proximo", current_step)):
-            if current_step < max_steps:
-                set_wizard_step('Next')
-                st.rerun()
-            else:
-                st.success("🎉 Wizard concluído!")
-    
-    with nav_cols[2]:
-        # Step info
-        st.caption(f"Passo {current_step} de {max_steps} - {get_step_name(current_step).replace('_', ' ').title()}")
+    # Navigation removed - using only macro phase buttons
 
 
 def render_current_step() -> None:
     """Render the current wizard step content."""
     current_step = st.session_state.wizard_current_step
-    step_name = get_step_name(current_step)
+    step_key = WIZARD_STEPS.get(current_step, "unknown")
     
-    # Route to appropriate step renderer
-    if step_name == "product_vision":
+    # Route to appropriate step renderer based on macro phases
+    if step_key == "roteiro":
+        # Phase 1: All 5 questions are handled by the product vision component
         render_product_vision_with_toggle()
+    elif step_key == "capitulos":
+        # Phase 2: Chapters/Epics (future)
+        st.info("🚧 **Capítulos** - Estruturação em grandes blocos")
+        st.markdown("Esta fase permitirá organizar seu projeto em capítulos ou módulos principais.")
+        st.write("📚 Em desenvolvimento...")
+    elif step_key == "historias":
+        # Phase 3: Stories (future)
+        st.info("🚧 **Histórias** - Detalhamento das funcionalidades")
+        st.markdown("Esta fase permitirá criar narrativas detalhadas para cada funcionalidade.")
+        st.write("📖 Em desenvolvimento...")
+    elif step_key == "tarefas":
+        # Phase 4: Tasks (future)
+        st.info("🚧 **Tarefas** - Quebra operacional")
+        st.markdown("Esta fase permitirá dividir o projeto em tarefas executáveis específicas.")
+        st.write("✅ Em desenvolvimento...")
     else:
-        # Placeholder for future steps
-        st.info(f"🚧 Passo '{step_name}' em desenvolvimento")
-        st.markdown(f"**Passo {current_step}:** {step_name.replace('_', ' ').title()}")
+        # Placeholder for unknown steps
+        step_name = get_step_name(current_step)
+        st.info(f"🚧 Fase '{step_name}' em desenvolvimento")
+        st.markdown(f"**Fase {current_step}:** {step_name}")
 
 
 @require_auth()
@@ -200,7 +199,7 @@ def render_projeto_wizard_page() -> Dict[str, Any]:
     """
     # Page configuration
     st.set_page_config(
-        page_title="🧙‍♂️ Assistente de Projetos", 
+        page_title="Assistente de Projetos", 
         layout="wide"
     )
     
@@ -209,7 +208,7 @@ def render_projeto_wizard_page() -> Dict[str, Any]:
         init_wizard_state()
         
         # Protected page initialization
-        init_protected_page("🧙‍♂️ Assistente de Projetos")
+        init_protected_page("Assistente de Projetos")
         
         # Main wizard layout
         with st.container():
