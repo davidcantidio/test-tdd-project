@@ -26,14 +26,15 @@ Sistema avançado de refinamento por IA que oferece **duas modalidades**:
 ### **Estrutura de Arquivos**
 ```
 product_vision_step/
-├── main.py                 # ✅ Sistema real + refinamento individual  
-├── product_vision_step.py  # ✅ Sistema real (compatibilidade)
-├── mock_refiner.py         # Sistema mock para desenvolvimento
-├── steps_mode.py           # Utilitários do modo steps
-├── form_mode.py            # Utilitários do modo form
-├── summary.py              # Componentes de resumo
-├── ai_refine.py            # Interface unificada (deprecated)
-└── __init__.py             # Exports de compatibilidade
+├── CLAUDE.md               # This documentation
+├── main.py                 # ✅ Main implementation with AI refinement
+├── mock_refiner.py         # Mock AI service for development
+├── form_mode.py            # Form mode UI components
+├── steps_mode.py           # Steps mode UI components
+├── summary.py              # Summary display components
+├── ai_refine.py            # AI refinement handlers
+├── legacy_api.py           # Backward compatibility layer
+└── __init__.py             # Package exports
 ```
 
 ### **Classes Principais**
@@ -328,9 +329,11 @@ export OPENAI_API_KEY="sua-chave-real"
 - **Factory Pattern**: Criação dinâmica baseada em disponibilidade de API
 
 ### **Arquivos Relacionados**
-- `/src/ia/agents/agno_agent.py`: VisionRefinerAgent base
-- `/src/ia/services/vision_refine_service.py`: Serviço de validação completa
-- `/streamlit_extension/services/vision_service.py`: UnifiedVisionService (alternativo)
+- **[AI Core Module](../../../../../src/CLAUDE.md)** - Documentação completa do módulo IA
+- **[VisionRefinerAgent](../../../../../src/ia/agents/agno_agent.py)** - Agente base com GPT-5-nano
+- **[VisionRefineService](../../../../../src/ia/services/vision_refine_service.py)** - Serviço de validação
+- **[Product Vision Refiners](../../../../../src/ia/product_vision_refiner.py)** - Implementações Real/Mock
+- **[Project Wizard](../../CLAUDE.md)** - Documentação do wizard completo
 
 ---
 

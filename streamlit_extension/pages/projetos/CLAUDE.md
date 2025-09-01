@@ -33,19 +33,40 @@
 
 ## 🏗️ **Architecture Overview**
 
-### **File Structure (Current)**
+### **Directory Structure (Clean)**
 ```
 streamlit_extension/pages/projetos/
-├── projeto_wizard.py          # Main wizard orchestration (multi-step)
-├── project_wizard_state.py    # Global wizard state (351 lines)
-├── steps/
-│   ├── _pv_state.py           # Product Vision helpers (62 lines) 
-│   └── product_vision_step.py # PV step with form/steps toggle
-├── controllers/               # Business logic (unchanged)
-├── domain/                   # Pure domain logic (unchanged)
-├── repositories/             # Repository pattern (unchanged)
-├── projects.py               # Main projects page
-└── projeto.py                # Individual project details
+├── CLAUDE.md                  # This documentation
+├── projeto_wizard.py          # Main wizard orchestration
+├── project_wizard_state.py    # Global wizard state management
+├── projects.py                # Projects list page
+├── projeto.py                 # Individual project details
+├── state.py                   # Legacy state management
+├── actions.py                 # Action handlers
+│
+├── steps/                     # Wizard steps implementation
+│   ├── _pv_state.py          # Product Vision state helpers
+│   ├── product_vision_step.py # Legacy single-file implementation
+│   ├── product_vision_step/  # Modular implementation (current)
+│   │   ├── main.py           # Main entry point with AI refinement
+│   │   ├── mock_refiner.py  # Mock AI for development
+│   │   ├── form_mode.py     # Form mode components
+│   │   ├── steps_mode.py    # Steps mode components
+│   │   ├── summary.py       # Summary display
+│   │   ├── ai_refine.py     # AI refinement handlers
+│   │   └── CLAUDE.md         # AI refinement documentation
+│   └── pv_state/             # State management utilities
+│       ├── state_core.py    # Core state definitions
+│       ├── init_nav.py      # Navigation initialization
+│       ├── flow_order.py    # Field flow ordering
+│       └── constraints_utils.py # Constraints handling
+│
+├── controllers/              # Business logic layer
+│   └── product_vision_controller.py
+├── domain/                   # Domain models
+│   └── product_vision_state.py
+└── repositories/             # Data persistence
+    └── product_vision_repository.py
 ```
 
 ### **Clean Architecture Layers**
@@ -272,19 +293,24 @@ is_valid, error = validate_step_data(st.session_state, 1)
 
 ---
 
-## 📖 **References**
+## 📖 **References & Links**
 
-### **Related Documentation**
-- **🚨 [WIZARD_STATUS.md](../../../WIZARD_STATUS.md)** - Current state & quick context reset guide
-- **[Main CLAUDE.md](../../../CLAUDE.md)** - Complete system overview
-- **[Streamlit Extension CLAUDE.md](../../CLAUDE.md)** - Module documentation  
-- **`taxonomia.txt`** - Official Streamlit wizard patterns (project root)
+### **Module Documentation**
+- **🤖 [AI Services](../../../src/CLAUDE.md)** - Core AI refinement implementation
+- **📄 [Product Vision AI](steps/product_vision_step/CLAUDE.md)** - Detailed AI refinement docs
+- **🏢 [Streamlit Extension](../../CLAUDE.md)** - Parent module documentation
+- **📚 [Main System](../../../CLAUDE.md)** - Complete system overview
 
-### **Key Files Reference**
-- **`project_wizard_state.py:365-374`** - Phase 4.5 implementation details
-- **`_pv_state.py:21-43`** - State initialization and helpers
-- **`product_vision_step.py:38-74`** - "Third Way" toggle implementation
-- **`projeto_wizard.py:182-242`** - Main wizard page renderer
+### **Key Implementation Files**
+- **`projeto_wizard.py`** - Main wizard with 4-phase navigation
+- **`steps/product_vision_step/main.py`** - AI refinement integration
+- **`steps/_pv_state.py`** - State management helpers
+- **`project_wizard_state.py`** - Global wizard state
+
+### **AI Integration Points**
+- **`src/ia/agents/agno_agent.py`** - Core AI agent (GPT-5-nano)
+- **`src/ia/services/vision_refine_service.py`** - Service layer
+- **`src/ia/product_vision_refiner.py`** - Refiner implementations
 
 ---
 
