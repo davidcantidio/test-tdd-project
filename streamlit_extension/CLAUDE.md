@@ -149,6 +149,40 @@ else:
 
 ---
 
+## 🌍 **Generic Project Framework (Phase 4.7)**
+
+### **✅ Universal Application - PRODUCTION READY**
+
+**Status:** Complete transformation to generic project structure  
+**Implementation Date:** 2025-09-01  
+**Architecture:** 4 macro phases applicable to any project type  
+
+#### **Framework Structure**
+```python
+# Universal project phases (not software-specific)
+WIZARD_STEPS = {
+    1: "roteiro",    # Script/Plan - What needs to be done
+    2: "capitulos",  # Chapters - Major divisions
+    3: "historias",  # Stories - Detailed narratives  
+    4: "tarefas"     # Tasks - Executable items
+}
+```
+
+#### **Applications by Domain**
+- **🏗️ Construction:** Planning → Foundations → Structure → Finishes
+- **💻 Software:** Vision → Architecture → Features → Implementation
+- **📚 Content:** Concept → Outline → Writing → Publishing
+- **🎬 Film:** Script → Pre-production → Production → Post-production
+- **🎓 Education:** Curriculum → Modules → Lessons → Activities
+
+#### **UI/UX Improvements**
+- **Vertical Forms:** text_area fields with 120px height for better writing
+- **Complete Display:** Full content shown without truncation
+- **Clean Navigation:** Macro phase buttons with intuitive states
+- **Natural Language:** Questions like "O que você quer criar?" instead of technical terms
+
+---
+
 ## 🔐 **Security Stack**
 
 ### **Authentication (Google OAuth 2.0)**

@@ -1,23 +1,26 @@
-# 🧙‍♂️ Project Wizard - Multi-Step Implementation
+# 🧙‍♂️ Project Wizard - Generic Framework Implementation
 
 **Module:** `streamlit_extension/pages/projetos`  
-**Purpose:** Multi-step project creation wizard with official Streamlit patterns  
-**Status:** ✅ **PRODUCTION READY** - Phase 4.5 Complete  
-**Last Updated:** 2025-08-27 - Complete Wizard Refactoring
+**Purpose:** Universal project creation wizard applicable to any domain  
+**Status:** ✅ **PRODUCTION READY** - Phase 4.7 Complete  
+**Last Updated:** 2025-09-01 - Generic Project Framework Transformation
 
 ---
 
-## 📋 **Current State - Phase 4.5 COMPLETE**
+## 📋 **Current State - Phase 4.7 COMPLETE**
 
 > 💡 **Quick Context?** See **[WIZARD_STATUS.md](../../../WIZARD_STATUS.md)** for instant context reset guide
 
 ### ✅ **Implemented Features**
-- **Multi-Step Wizard**: True step-by-step navigation following official Streamlit patterns  
-- **"Third Way" UX**: Toggle between Form mode (all fields) and Steps mode (one-by-one)  
-- **Session State Management**: Robust data persistence across mode switches  
-- **Official Compliance**: Follows `taxonomia.txt` Streamlit wizard instructions  
+- **Generic Project Framework**: Universal structure with 4 macro phases (Roteiro → Capítulos → Histórias → Tarefas)
+- **Domain Agnostic**: Works for construction, software, content creation, education, film production, etc.
+- **Vertical Form Design**: All fields use text_area with 120px height for better writing experience
+- **Complete Content Display**: Summary shows full content without truncation, proper scrolling enabled
+- **Simplified Navigation**: Clean macro phase buttons with color states (active, completed, disabled)
+- **Natural Language**: Intuitive questions like "O que você quer criar?" instead of technical jargon
+- **Professional UI**: Monochromatic ET icon, clean design, focused on content over chrome
+- **Session State Management**: Robust data persistence across navigation  
 - **Clean Architecture**: Maintained separation of UI, Controllers, Domain, and Infrastructure  
-- **Comprehensive Testing**: User workflow simulation + integration tests passed  
 
 ### 📊 **Implementation Metrics**
 - **`project_wizard_state.py`**: 351 lines - Global wizard state management  
@@ -70,6 +73,63 @@ streamlit_extension/pages/projetos/
 - **Zero data loss** when switching between modes
 - **Real-time summary** sidebar always visible
 - **Session state persistence** maintains user progress
+
+---
+
+## 🌍 **Generic Project Framework - Phase 4.7**
+
+### **Universal 4-Phase Structure**
+
+The wizard now implements a generic project framework applicable to any domain:
+
+```python
+WIZARD_STEPS = {
+    1: "roteiro",    # Script/Plan - The blueprint
+    2: "capitulos",  # Chapters - Major divisions
+    3: "historias",  # Stories - Detailed narratives
+    4: "tarefas"     # Tasks - Actionable items
+}
+```
+
+### **Domain Applications**
+
+#### **🏗️ Construction Projects**
+- **Roteiro:** Project blueprint and specifications
+- **Capítulos:** Foundation, Structure, Systems, Finishes
+- **Histórias:** Detailed work for each phase
+- **Tarefas:** Specific construction tasks
+
+#### **💻 Software Development**
+- **Roteiro:** Product vision and requirements
+- **Capítulos:** Architecture, Backend, Frontend, Testing
+- **Histórias:** User stories and features
+- **Tarefas:** Development tasks and bugs
+
+#### **📚 Content Creation**
+- **Roteiro:** Content strategy and outline
+- **Capítulos:** Main topics or sections
+- **Histórias:** Detailed content for each section
+- **Tarefas:** Writing, editing, publishing tasks
+
+#### **🎓 Educational Programs**
+- **Roteiro:** Curriculum design
+- **Capítulos:** Course modules
+- **Histórias:** Individual lessons
+- **Tarefas:** Activities and assessments
+
+### **UI/UX Transformation**
+
+#### **Before (Software-specific)**
+- Individual question navigation (5 steps)
+- Technical field labels ("Vision Statement")
+- Horizontal text_input fields
+- Mode selection toggles
+
+#### **After (Universal Framework)**
+- Macro phase navigation (4 phases)
+- Natural language questions ("O que você quer criar?")
+- Vertical text_area fields (120px height)
+- Clean, focused interface
 
 ---
 
