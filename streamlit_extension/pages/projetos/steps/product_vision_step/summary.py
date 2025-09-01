@@ -17,37 +17,37 @@ def render_compact_summary(pv_data: Dict[str, Any]):
         pv_data: Dictionary with Product Vision data
     """
     if not pv_data:
-        st.info("Nenhum dado de Product Vision disponível")
+        st.info("Nenhum dado de Product Vision disponÃ­vel")
         return
         
     # Vision Statement
     vision = pv_data.get("vision_statement", "")
     if vision:
-        st.markdown(f"**<¯ Visão:** {_truncate(vision, 100)}")
+        st.markdown(f"**ðŸŽ¯ VisÃ£o:** {_truncate(vision, 100)}")
     
     # Problem Statement
     problem = pv_data.get("problem_statement", "")
     if problem:
-        st.markdown(f"**S Problema:** {_truncate(problem, 100)}")
+        st.markdown(f"**â— Problema:** {_truncate(problem, 100)}")
     
     # Target Audience
     audience = pv_data.get("target_audience", "")
     if audience:
-        st.markdown(f"**=e Público:** {_truncate(audience, 50)}")
+        st.markdown(f"**ðŸ‘¥ PÃºblico:** {_truncate(audience, 50)}")
     
     # Value Proposition
     value = pv_data.get("value_proposition", "")
     if value:
-        st.markdown(f"**=Ž Valor:** {_truncate(value, 100)}")
+        st.markdown(f"**ðŸ’Ž Valor:** {_truncate(value, 100)}")
     
     # Constraints
     constraints = pv_data.get("constraints", [])
     if constraints:
-        st.markdown("**  Restrições:**")
+        st.markdown("**ðŸš§ RestriÃ§Ãµes:**")
         for i, constraint in enumerate(constraints[:3]):  # Show first 3
-            st.markdown(f"  " {constraint}")
+            st.markdown(f"  â€¢ {constraint}")
         if len(constraints) > 3:
-            st.markdown(f"  _...e mais {len(constraints) - 3} restrições_")
+            st.markdown(f"  _...e mais {len(constraints) - 3} restriÃ§Ãµes_")
 
 
 def render_detailed_summary(pv_data: Dict[str, Any]):
@@ -58,43 +58,43 @@ def render_detailed_summary(pv_data: Dict[str, Any]):
         pv_data: Dictionary with Product Vision data
     """
     if not pv_data:
-        st.info("Nenhum dado de Product Vision disponível")
+        st.info("Nenhum dado de Product Vision disponÃ­vel")
         return
     
-    st.markdown("### =Ë Product Vision Completo")
+    st.markdown("### ðŸ“‹ Product Vision Completo")
     
     # Vision Statement
-    with st.expander("<¯ Declaração de Visão", expanded=True):
-        vision = pv_data.get("vision_statement", "_Não definido_")
+    with st.expander("ðŸŽ¯ DeclaraÃ§Ã£o de VisÃ£o", expanded=True):
+        vision = pv_data.get("vision_statement", "_NÃ£o definido_")
         st.write(vision)
         _render_field_metrics("vision_statement", vision)
     
     # Problem Statement
-    with st.expander("S Problema a Resolver", expanded=True):
-        problem = pv_data.get("problem_statement", "_Não definido_")
+    with st.expander("â— Problema a Resolver", expanded=True):
+        problem = pv_data.get("problem_statement", "_NÃ£o definido_")
         st.write(problem)
         _render_field_metrics("problem_statement", problem)
     
     # Target Audience
-    with st.expander("=e Público-alvo", expanded=True):
-        audience = pv_data.get("target_audience", "_Não definido_")
+    with st.expander("ðŸ‘¥ PÃºblico-alvo", expanded=True):
+        audience = pv_data.get("target_audience", "_NÃ£o definido_")
         st.write(audience)
         _render_field_metrics("target_audience", audience)
     
     # Value Proposition
-    with st.expander("=Ž Proposta de Valor", expanded=True):
-        value = pv_data.get("value_proposition", "_Não definido_")
+    with st.expander("ðŸ’Ž Proposta de Valor", expanded=True):
+        value = pv_data.get("value_proposition", "_NÃ£o definido_")
         st.write(value)
         _render_field_metrics("value_proposition", value)
     
     # Constraints
-    with st.expander("  Restrições", expanded=True):
+    with st.expander("ðŸš§ RestriÃ§Ãµes", expanded=True):
         constraints = pv_data.get("constraints", [])
         if constraints:
             for constraint in constraints:
-                st.markdown(f"" {constraint}")
+                st.markdown(f"â€¢ {constraint}")
         else:
-            st.write("_Nenhuma restrição definida_")
+            st.write("_Nenhuma restriÃ§Ã£o definida_")
         _render_field_metrics("constraints", constraints)
 
 
@@ -113,27 +113,27 @@ def export_as_markdown(pv_data: Dict[str, Any]) -> str:
     # Vision Statement
     vision = pv_data.get("vision_statement", "")
     if vision:
-        md_lines.append(f"## <¯ Declaração de Visão\n{vision}\n")
+        md_lines.append(f"## ðŸŽ¯ DeclaraÃ§Ã£o de VisÃ£o\n{vision}\n")
     
     # Problem Statement
     problem = pv_data.get("problem_statement", "")
     if problem:
-        md_lines.append(f"## S Problema a Resolver\n{problem}\n")
+        md_lines.append(f"## â— Problema a Resolver\n{problem}\n")
     
     # Target Audience
     audience = pv_data.get("target_audience", "")
     if audience:
-        md_lines.append(f"## =e Público-alvo\n{audience}\n")
+        md_lines.append(f"## ðŸ‘¥ PÃºblico-alvo\n{audience}\n")
     
     # Value Proposition
     value = pv_data.get("value_proposition", "")
     if value:
-        md_lines.append(f"## =Ž Proposta de Valor\n{value}\n")
+        md_lines.append(f"## ðŸ’Ž Proposta de Valor\n{value}\n")
     
     # Constraints
     constraints = pv_data.get("constraints", [])
     if constraints:
-        md_lines.append("##   Restrições")
+        md_lines.append("## ðŸš§ RestriÃ§Ãµes")
         for constraint in constraints:
             md_lines.append(f"- {constraint}")
         md_lines.append("")
@@ -211,9 +211,9 @@ def _render_field_metrics(field_key: str, value: Any):
     
     with col2:
         if field_key == "constraints":
-            status = " Definido" if value and len(value) > 0 else "ó Pendente"
+            status = "âœ… Definido" if value and len(value) > 0 else "âŒ Pendente"
         else:
-            status = " Preenchido" if value and str(value).strip() else "ó Vazio"
+            status = "âœ… Preenchido" if value and str(value).strip() else "âŒ Vazio"
         st.metric("Status", status)
     
     with col3:
@@ -227,5 +227,5 @@ def _render_field_metrics(field_key: str, value: Any):
             elif text_len >= 20:
                 quality = "Adequado"
             else:
-                quality = "Básico"
+                quality = "BÃ¡sico"
         st.metric("Qualidade", quality)
