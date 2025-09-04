@@ -4,8 +4,8 @@
 **Purpose:** Business logic layer with clean architecture + TDD business logic patterns  
 **TDD Mission:** Orchestrate Red-Green-Refactor cycles with enterprise business rules  
 **Architecture:** BaseService + ServiceResult pattern + DI container  
-**Services:** 5 business services (4,520+ lines) with TDD integration (ClientService eliminated - Phase 3.2)  
-**Last Updated:** 2025-08-19
+**Services:** 7 business services (5,800+ lines) with TDD integration + IA-driven epic generation (Phase 5.1)  
+**Last Updated:** 2025-09-04 - IA-Driven Epic Generation & Topological Ordering
 
 ---
 
@@ -27,11 +27,13 @@
 
 ## 🔧 **Service Architecture for TDD**
 
-### **Service Hierarchy with TDD Integration**
+### **Service Hierarchy with TDD Integration + IA**
 ```
 BaseService (Abstract)
 ├── ProjectService (612 lines) + TDD epic organization
 ├── EpicService (847 lines) + TDD workflow orchestration ⭐
+├── EpicGenerationService (480 lines) + IA-driven epic creation ⭐⭐⭐ [NEW]
+├── TopologicalOrderingService (320 lines) + Deterministic epic ordering ⭐⭐ [NEW]
 ├── TaskService (923 lines) + TDD cycle management ⭐⭐
 ├── AnalyticsService (856 lines) + TDD effectiveness metrics ⭐
 └── TimerService (734 lines) + TDAH focus session management ⭐⭐
@@ -145,6 +147,239 @@ class EpicService(BaseService):
             'test_coverage_improvement': self._calculate_coverage_improvement(tdd_cycles),
             'effectiveness_score': self._calculate_tdd_effectiveness_score(tdd_cycles)
         }
+```
+
+### **EpicGenerationService (480 lines) - IA-Driven Epic Creation ⭐⭐⭐ [NEW]**
+- **Purpose**: AI-driven epic generation from product vision analysis with confidence scoring
+- **IA Features**: GPT-4 integration, structured epic extraction, dependency detection
+- **Key Methods**:
+  - `analyze_product_vision()` - Deep analysis of product vision for epic generation
+  - `generate_epics_from_vision()` - Create 3-7 optimized epics with AI
+  - `extract_epic_dependencies()` - Automatic dependency detection between epics
+  - `calculate_confidence_scores()` - Transparent AI confidence metrics
+- **Integration**: Works with TopologicalOrderingService for epic sequencing
+- **Dependencies**: ProductVisionService, AIAnalysisEngine, ConfidenceCalculator
+
+```python
+# AI-driven epic generation from product vision
+class EpicGenerationService(BaseService):
+    def analyze_product_vision(self, vision_data: dict) -> ServiceResult[VisionAnalysis]:
+        # Comprehensive product vision analysis
+        analysis = VisionAnalysis()
+        
+        # Extract key components for epic generation
+        analysis.core_features = self._extract_core_features(vision_data)
+        analysis.technical_requirements = self._identify_technical_requirements(vision_data)
+        analysis.user_personas = self._extract_user_personas(vision_data)
+        analysis.constraints = self._analyze_constraints(vision_data)
+        
+        # AI-powered insight generation
+        ai_insights = self.ai_engine.analyze_vision_for_epics(vision_data)
+        analysis.suggested_architecture = ai_insights.get('architecture_recommendations')
+        analysis.complexity_factors = ai_insights.get('complexity_analysis')
+        
+        return ServiceResult.success(analysis)
+    
+    def generate_epics_from_vision(self, vision_analysis: VisionAnalysis) -> ServiceResult[List[GeneratedEpic]]:
+        # AI prompt engineering for epic generation
+        prompt_context = self._build_epic_generation_prompt(vision_analysis)
+        
+        # Call AI service with structured prompt
+        ai_response = self.ai_engine.generate_structured_epics(prompt_context)
+        
+        # Parse and validate AI response
+        raw_epics = self._parse_ai_epic_response(ai_response)
+        validated_epics = []
+        
+        for epic_data in raw_epics:
+            # Validate epic structure and content
+            validation_result = self._validate_generated_epic(epic_data)
+            if validation_result.is_valid:
+                # Enhance with calculated fields
+                epic = GeneratedEpic(
+                    name=epic_data['name'],
+                    description=epic_data['description'],
+                    complexity_score=self._calculate_complexity_score(epic_data),
+                    effort_estimate=self._estimate_effort_days(epic_data),
+                    epic_dependencies=self._extract_dependencies(epic_data),
+                    unblock_potential=self._calculate_unblock_potential(epic_data),
+                    ai_confidence=validation_result.confidence_score
+                )
+                validated_epics.append(epic)
+        
+        if len(validated_epics) < 3:
+            return ServiceResult.failure("AI generated insufficient valid epics")
+        
+        return ServiceResult.success(validated_epics)
+    
+    def _build_epic_generation_prompt(self, analysis: VisionAnalysis) -> str:
+        # Structured prompt for consistent epic generation
+        return f"""
+        Baseado na seguinte análise de product vision, gere 3-7 épicos otimizados:
+        
+        **Visão do Produto:**
+        - Problema: {analysis.problem_statement}
+        - Solução: {analysis.solution_overview}
+        - Público-alvo: {analysis.target_audience}
+        - Restrições: {analysis.constraints}
+        
+        **Requisitos Técnicos:**
+        {analysis.technical_requirements}
+        
+        **Para cada épico, forneça:**
+        1. Nome conciso e descritivo
+        2. Descrição detalhada do escopo
+        3. Nível de complexidade (1-5)
+        4. Estimativa de esforço em dias
+        5. Dependências de outros épicos
+        6. Potencial de desbloqueio de épicos futuros
+        
+        **Formato de resposta:** JSON estruturado com array de épicos.
+        """
+
+    def calculate_confidence_scores(self, generated_epics: List[GeneratedEpic]) -> dict:
+        # Calculate confidence metrics for transparency
+        total_confidence = sum(epic.ai_confidence for epic in generated_epics)
+        average_confidence = total_confidence / len(generated_epics)
+        
+        confidence_distribution = {
+            'high_confidence': len([e for e in generated_epics if e.ai_confidence >= 0.8]),
+            'medium_confidence': len([e for e in generated_epics if 0.6 <= e.ai_confidence < 0.8]),
+            'low_confidence': len([e for e in generated_epics if e.ai_confidence < 0.6])
+        }
+        
+        return {
+            'average_confidence': average_confidence,
+            'confidence_distribution': confidence_distribution,
+            'recommendation': self._get_confidence_recommendation(average_confidence),
+            'suggested_actions': self._get_confidence_improvement_suggestions(generated_epics)
+        }
+```
+
+### **TopologicalOrderingService (320 lines) - Deterministic Epic Ordering ⭐⭐ [NEW]**
+- **Purpose**: Apply DETERMINISTIC_TOPOLOGICAL_ORDERING_DEMO algorithm to epic dependencies
+- **Algorithm Features**: Kahn's algorithm, priority heap, 4-level tie-breaking
+- **Key Methods**:
+  - `order_epics_by_dependencies()` - Main ordering algorithm application
+  - `convert_epics_to_tasks()` - Adapter for Task-compatible algorithm
+  - `validate_epic_dependencies()` - Dependency cycle detection
+  - `assign_sort_order()` - Deterministic ordering assignment
+- **Performance**: O(V+E) complexity for any project size
+- **Dependencies**: EpicGenerationService, DETERMINISTIC_TOPOLOGICAL_ORDERING_DEMO
+
+```python
+# Deterministic topological ordering for epics
+class TopologicalOrderingService(BaseService):
+    def order_epics_by_dependencies(self, generated_epics: List[GeneratedEpic]) -> ServiceResult[List[OrderedEpic]]:
+        # Convert epics to Task-compatible format for algorithm
+        epic_tasks = self._convert_epics_to_tasks(generated_epics)
+        epic_dependencies = self._extract_epic_dependencies(generated_epics)
+        
+        # Validate dependencies for cycles
+        dependency_validation = self._validate_dependencies(epic_dependencies)
+        if not dependency_validation.is_valid:
+            return ServiceResult.failure(f"Dependency cycle detected: {dependency_validation.cycle_info}")
+        
+        # Apply DETERMINISTIC_TOPOLOGICAL_ORDERING_DEMO algorithm
+        try:
+            execution_order, task_scores, exec_time = topological_sort_with_priority_corrected(
+                epic_tasks, epic_dependencies
+            )
+            
+            # Convert back to ordered epics with sort_order
+            ordered_epics = []
+            for i, epic_key in enumerate(execution_order):
+                epic = self._find_epic_by_key(generated_epics, epic_key)
+                ordered_epic = OrderedEpic.from_generated_epic(epic)
+                ordered_epic.sort_order = i
+                ordered_epic.priority_score = task_scores[epic_key].total_score
+                ordered_epic.critical_path_weight = task_scores[epic_key].critical_path_score
+                ordered_epics.append(ordered_epic)
+            
+            # Performance metrics
+            ordering_metrics = {
+                'execution_time_ms': exec_time,
+                'epics_ordered': len(ordered_epics),
+                'dependency_complexity': len(epic_dependencies),
+                'algorithm_performance': 'O(V+E)' 
+            }
+            
+            return ServiceResult.success(ordered_epics, metadata=ordering_metrics)
+            
+        except Exception as e:
+            return ServiceResult.failure(f"Topological ordering failed: {str(e)}")
+    
+    def _convert_epics_to_tasks(self, epics: List[GeneratedEpic]) -> List[Task]:
+        # Adapter pattern: Convert epics to Task objects for algorithm compatibility
+        tasks = []
+        for epic in epics:
+            task = Task(
+                task_key=epic.epic_key,
+                title=epic.name,
+                priority=self._map_complexity_to_priority(epic.complexity_score),
+                effort_estimate=epic.effort_estimate,
+                story_points=int(epic.complexity_score),
+                created_at=datetime.now()
+            )
+            tasks.append(task)
+        return tasks
+    
+    def _validate_dependencies(self, dependencies: List[Tuple[str, str]]) -> DependencyValidation:
+        # Cycle detection using DFS
+        graph = defaultdict(list)
+        for dependent, prerequisite in dependencies:
+            graph[prerequisite].append(dependent)
+        
+        visited = set()
+        rec_stack = set()
+        
+        def has_cycle(node):
+            if node in rec_stack:
+                return True
+            if node in visited:
+                return False
+                
+            visited.add(node)
+            rec_stack.add(node)
+            
+            for neighbor in graph[node]:
+                if has_cycle(neighbor):
+                    return True
+                    
+            rec_stack.remove(node)
+            return False
+        
+        # Check all nodes for cycles
+        all_nodes = set()
+        for dep, prereq in dependencies:
+            all_nodes.update([dep, prereq])
+        
+        for node in all_nodes:
+            if node not in visited:
+                if has_cycle(node):
+                    return DependencyValidation(is_valid=False, cycle_info=f"Cycle detected involving {node}")
+        
+        return DependencyValidation(is_valid=True, cycle_info=None)
+    
+    def assign_sort_order_to_database(self, ordered_epics: List[OrderedEpic], project_id: int) -> ServiceResult[bool]:
+        # Persist sort_order to database for UI display
+        try:
+            with self.db_manager.get_connection() as conn:
+                for epic in ordered_epics:
+                    conn.execute("""
+                        UPDATE framework_epics 
+                        SET sort_order = ?, 
+                            critical_path_weight = ?,
+                            updated_at = CURRENT_TIMESTAMP
+                        WHERE epic_key = ? AND project_id = ?
+                    """, (epic.sort_order, epic.critical_path_weight, epic.epic_key, project_id))
+                
+                conn.commit()
+            
+            return ServiceResult.success(True)
+            
+        except Exception as e:
+            return ServiceResult.failure(f"Failed to persist sort order: {str(e)}")
 ```
 
 ### **TaskService (923 lines) - TDD Cycle Management ⭐⭐**

@@ -2,17 +2,19 @@
 
 **Module:** `streamlit_extension/pages/projetos`  
 **Purpose:** Universal project creation wizard applicable to any domain  
-**Status:** ✅ **PRODUCTION READY** - Phase 4.7 Complete  
-**Last Updated:** 2025-09-01 - Generic Project Framework Transformation
+**Status:** ✅ **PRODUCTION READY** - Phase 5.1 Complete  
+**Last Updated:** 2025-09-04 - IA-Driven Epic Generation Implementation
 
 ---
 
-## 📋 **Current State - Phase 4.7 COMPLETE**
+## 📋 **Current State - Phase 5.1 COMPLETE**
 
 > 💡 **Quick Context?** See **[WIZARD_STATUS.md](../../../WIZARD_STATUS.md)** for instant context reset guide
 
 ### ✅ **Implemented Features**
 - **Generic Project Framework**: Universal structure with 4 macro phases (Roteiro → Capítulos → Histórias → Tarefas)
+- **IA-Driven Epic Generation**: Automated Roteiro → Capítulos transition via AI analysis
+- **Topological Ordering**: Deterministic epic sequencing based on dependencies
 - **Domain Agnostic**: Works for construction, software, content creation, education, film production, etc.
 - **Vertical Form Design**: All fields use text_area with 120px height for better writing experience
 - **Complete Content Display**: Summary shows full content without truncation, proper scrolling enabled
@@ -20,7 +22,8 @@
 - **Natural Language**: Intuitive questions like "O que você quer criar?" instead of technical jargon
 - **Professional UI**: Monochromatic ET icon, clean design, focused on content over chrome
 - **Session State Management**: Robust data persistence across navigation  
-- **Clean Architecture**: Maintained separation of UI, Controllers, Domain, and Infrastructure  
+- **Clean Architecture**: Maintained separation of UI, Controllers, Domain, and Infrastructure
+- **AI Confidence Scoring**: Transparent confidence metrics for generated epics  
 
 ### 📊 **Implementation Metrics**
 - **`project_wizard_state.py`**: 351 lines - Global wizard state management  
@@ -94,6 +97,76 @@ streamlit_extension/pages/projetos/
 - **Zero data loss** when switching between modes
 - **Real-time summary** sidebar always visible
 - **Session state persistence** maintains user progress
+
+---
+
+## 🧠 **IA-Driven Epic Generation - Phase 5.1**
+
+### **🔄 Automated Roteiro → Capítulos Workflow**
+
+The system now features fully automated transition from Roteiro (product vision) to Capítulos (epics) using advanced AI analysis and deterministic topological ordering.
+
+#### **1. AI Analysis Process**
+```python
+# Product Vision Analysis Pipeline
+vision_data = st.session_state.pv  # Complete Roteiro data
+ai_response = EpicGenerationService.analyze_vision(vision_data)
+generated_epics = ai_response.extract_structured_epics()
+```
+
+#### **2. Epic Generation Fields**
+Each AI-generated epic includes:
+- **`name`**: Context-aware epic naming (e.g., "Backend Infrastructure", "User Interface")
+- **`description`**: Detailed scope and deliverables 
+- **`complexity_score`**: 1.0-5.0 difficulty rating for resource planning
+- **`effort_estimate`**: Days estimation (1-30) based on scope analysis  
+- **`epic_dependencies`**: Array of prerequisite epic relationships
+- **`unblock_potential`**: Number of future epics this epic enables
+- **`ai_confidence`**: Confidence score (0.0-1.0) for transparency
+
+#### **3. Deterministic Topological Ordering**
+```python
+# Algorithm: DETERMINISTIC_TOPOLOGICAL_ORDERING_DEMO.py adaptation
+def order_epics(generated_epics):
+    # Convert epics to Task-like objects for algorithm compatibility
+    epic_tasks = [convert_epic_to_task(epic) for epic in generated_epics]
+    
+    # Apply Kahn's algorithm with priority heap
+    execution_order, scores, timing = topological_sort_with_priority_corrected(
+        epic_tasks, epic_dependencies
+    )
+    
+    # Assign deterministic sort_order
+    for i, epic_key in enumerate(execution_order):
+        epics[epic_key].sort_order = i
+```
+
+#### **4. User Approval Interface**
+- **Epic Preview**: Ordered list with confidence scores and dependencies
+- **Approval Actions**: Accept all, modify individual epics, or regenerate
+- **Dependency Visualization**: Clear display of epic relationships
+- **Confidence Indicators**: Visual confidence levels for each generated epic
+
+#### **5. Database Integration**
+```python
+# Enhanced framework_epics schema (8 new fields)
+ALTER TABLE framework_epics ADD COLUMN complexity_score DECIMAL(5,2) DEFAULT 3.0;
+ALTER TABLE framework_epics ADD COLUMN effort_estimate INTEGER DEFAULT 7;
+ALTER TABLE framework_epics ADD COLUMN sort_order INTEGER DEFAULT 0;
+ALTER TABLE framework_epics ADD COLUMN epic_dependencies JSON DEFAULT '[]';
+ALTER TABLE framework_epics ADD COLUMN unblock_potential INTEGER DEFAULT 0;
+ALTER TABLE framework_epics ADD COLUMN critical_path_weight DECIMAL(5,2) DEFAULT 1.0;
+ALTER TABLE framework_epics ADD COLUMN ai_generated BOOLEAN DEFAULT FALSE;
+ALTER TABLE framework_epics ADD COLUMN ai_confidence DECIMAL(3,2) DEFAULT 0.8;
+```
+
+### **🎯 Benefits of IA-Driven Approach**
+- ⚡ **Speed**: Instant epic generation from product vision
+- 🧠 **Intelligence**: Context-aware epic structure and dependencies  
+- 📊 **Optimization**: Dependency-aware ordering minimizes project bottlenecks
+- 🔄 **Consistency**: Deterministic algorithm ensures reproducible results
+- ✅ **Control**: Full user oversight with approval/modification workflow
+- 📈 **Scalability**: Works for projects of any size or complexity
 
 ---
 
@@ -171,11 +244,25 @@ WIZARD_STEPS = {
 
 ---
 
-## 🚀 **Next Phase - 5.0 Roadmap**
+## 🚀 **Next Phase - 5.2 Roadmap**
 
 ### **🎯 Current Status & Next Steps**
 
-#### **1. ✅ Real AI Integration Complete** 🤖
+#### **1. ✅ IA-Driven Epic Generation Complete** 🧠
+```python
+# ✅ IMPLEMENTED: Automated epic generation system
+class EpicGenerationService:
+    """AI-driven epic creation from product vision"""
+    def analyze_vision(self, vision_data: Dict) -> EpicGenerationResponse:
+        # Analyzes product vision and generates optimized epics
+        
+class TopologicalOrderingService:
+    """Deterministic epic ordering"""  
+    def order_epics(self, epics: List[Epic]) -> List[Epic]:
+        # Applies DETERMINISTIC_TOPOLOGICAL_ORDERING_DEMO algorithm
+```
+
+#### **2. ✅ Real AI Integration Complete** 🤖
 ```python
 # ✅ IMPLEMENTED: Dual-mode AI system (v2.0)
 class SingleFieldRealRefiner:
@@ -189,50 +276,48 @@ class VisionRefineService:
         # Full payload refinement with all field validation
 ```
 
-#### **2. Database Persistence (Next Priority)** 💾
+#### **3. Database Persistence (Next Priority)** 💾
 ```python  
-# Current: Session state only
+# Current: Enhanced session state + epic generation
 st.session_state.pv = {"vision_statement": "...", ...}
+st.session_state.capitulos = {"generated_epics": [...]}
 
-# Next: Real database saves
+# Next: Complete database persistence
 with transaction():
-    vision_repo.save_draft(project_id=123, data=st.session_state.pv)
+    project_id = project_repo.create_from_vision(st.session_state.pv)
+    epic_repo.save_generated_epics(project_id, st.session_state.capitulos)
 ```
 
-#### **3. Complete Multi-Step Wizard (Future)** 🧙‍♂️
+#### **4. Complete Multi-Step Wizard (Future)** 🧙‍♂️
 ```python
-# Current: Single step
-WIZARD_STEPS = {1: "product_vision"}
-
-# Next: Full wizard flow
+# Current: IA-enhanced 2 steps
 WIZARD_STEPS = {
-    1: "product_vision",      # ✅ COMPLETED
-    2: "project_details",     # 📋 PLANNED
-    3: "resources_budget",    # 💰 PLANNED  
-    4: "team_setup",         # 👥 PLANNED
-    5: "review_create"       # ✅ PLANNED
+    1: "roteiro",     # ✅ COMPLETED - Product vision with AI refinement
+    2: "capitulos",   # ✅ COMPLETED - IA-generated epics with topological ordering
+    3: "historias",   # 📋 PLANNED - User stories from epics
+    4: "tarefas"      # ✅ PLANNED - Tasks with TDD workflow
 }
 ```
 
 ### **🔧 Technical Implementation Plan**
 
-#### **Phase 5.1: ✅ AI Integration Complete**
-- ✅ **Individual Field Refinement**: SingleFieldRealRefiner implemented
-- ✅ **Global Refinement**: VisionRefineService with validation
-- ✅ **Dual AI Architecture**: Individual vs global refinement modes
-- ✅ **Error Handling**: Fallback system with mock for development
-- ✅ **Real AI Backend**: GPT-5-nano via Agno framework
+#### **Phase 5.1: ✅ IA-Driven Epic Generation Complete**
+- ✅ **Epic Generation Service**: EpicGenerationService with AI analysis
+- ✅ **Topological Ordering**: DETERMINISTIC_TOPOLOGICAL_ORDERING_DEMO integration
+- ✅ **Schema Enhancement**: 8 new fields in framework_epics  
+- ✅ **User Approval Interface**: Epic review and modification workflow
+- ✅ **AI Confidence Scoring**: Transparent confidence metrics
 
-#### **Phase 5.2: Database Persistence**
-- Implement `DatabaseProductVisionRepository`
-- Add draft saving with project association
-- Implement load/resume functionality
-- **Estimated effort**: 2-3 days
+#### **Phase 5.2: Complete Database Persistence** 
+- Implement full wizard data persistence beyond session state
+- Create `DatabaseProjectRepository` for complete project lifecycle
+- Add draft/resume functionality for all wizard steps
+- **Estimated effort**: 3-4 days
 
-#### **Phase 5.3: Complete Wizard**
-- Implement steps 2-5 following same patterns
-- Add step validation and progression rules
-- Implement final project creation from all steps
+#### **Phase 5.3: Complete Wizard (Histórias + Tarefas)**
+- Implement Histórias phase with user story generation
+- Implement Tarefas phase with TDD task breakdown
+- Add cross-phase validation and data flow
 - **Estimated effort**: 1-2 weeks
 
 ---

@@ -5,7 +5,8 @@
 **TDD Mission:** Reliable data persistence for Red-Green-Refactor cycles  
 **Architecture:** OptimizedConnectionPool + LRU cache + Legacy compatibility  
 **Performance:** 4,600x+ improvement with sub-millisecond queries  
-**Last Updated:** 2025-08-19
+**IA Enhancement:** Enhanced framework_epics schema for topological ordering (Phase 5.1)  
+**Last Updated:** 2025-09-04 - IA-Driven Epic Generation Schema Extensions
 
 ---
 
@@ -43,8 +44,9 @@
 - **connection.py**: OptimizedConnectionPool implementation with TDD session awareness
 - **health.py**: Real-time database health monitoring with TDAH-friendly status display
 - **queries.py**: Optimized query implementations for TDD and analytics workflows
-- **schema.py**: Database schema definitions with TDD and TDAH data structures
+- **schema.py**: Database schema definitions with TDD and TDAH data structures + IA epic generation fields
 - **database_singleton.py**: Singleton pattern for connection management with session preservation
+- **epic_migrations.py**: IA-enhanced schema migrations for topological ordering
 
 ---
 
@@ -197,6 +199,191 @@ class TDAHPerformanceMonitor:
             
             # Track patterns for optimization
             self.record_tdah_performance_metric(user_id, query, duration)
+```
+
+---
+
+## 🧠 **IA-Enhanced Schema Extensions - Phase 5.1**
+
+### **Enhanced framework_epics Table for Topological Ordering**
+
+The database schema has been enhanced to support AI-driven epic generation and deterministic topological ordering using the DETERMINISTIC_TOPOLOGICAL_ORDERING_DEMO algorithm.
+
+#### **New Epic Fields for IA Integration**
+```sql
+-- Phase 5.1 Schema Extensions for IA-Driven Epic Generation
+ALTER TABLE framework_epics ADD COLUMN complexity_score DECIMAL(5,2) DEFAULT 3.0;
+ALTER TABLE framework_epics ADD COLUMN effort_estimate INTEGER DEFAULT 7;
+ALTER TABLE framework_epics ADD COLUMN sort_order INTEGER DEFAULT 0;
+ALTER TABLE framework_epics ADD COLUMN epic_dependencies JSON DEFAULT '[]';
+ALTER TABLE framework_epics ADD COLUMN unblock_potential INTEGER DEFAULT 0;
+ALTER TABLE framework_epics ADD COLUMN critical_path_weight DECIMAL(5,2) DEFAULT 1.0;
+ALTER TABLE framework_epics ADD COLUMN ai_generated BOOLEAN DEFAULT FALSE;
+ALTER TABLE framework_epics ADD COLUMN ai_confidence DECIMAL(3,2) DEFAULT 0.8;
+
+-- Performance indexes for topological ordering
+CREATE INDEX IF NOT EXISTS idx_epics_sort_order ON framework_epics(project_id, sort_order);
+CREATE INDEX IF NOT EXISTS idx_epics_ai_generated ON framework_epics(ai_generated, ai_confidence);
+CREATE INDEX IF NOT EXISTS idx_epics_complexity ON framework_epics(complexity_score, effort_estimate);
+```
+
+#### **Field Definitions and Usage**
+```python
+# IA-Enhanced Epic Data Structure
+@dataclass
+class IAEnhancedEpic:
+    # Existing fields
+    id: int
+    project_id: int  
+    epic_key: str
+    name: str
+    description: str
+    status: str
+    priority: int
+    duration_days: int
+    
+    # NEW: IA-generated fields (Phase 5.1)
+    complexity_score: float      # 1.0-5.0 AI-calculated complexity
+    effort_estimate: int         # Days estimate from AI analysis  
+    sort_order: int             # Topological ordering position
+    epic_dependencies: List[str] # Array of prerequisite epic_keys
+    unblock_potential: int      # Number of epics this epic enables
+    critical_path_weight: float # Critical path algorithm weight
+    ai_generated: bool          # Flag for IA-generated epics
+    ai_confidence: float        # AI confidence score (0.0-1.0)
+```
+
+#### **Database Operations for IA Epic Generation**
+```python
+# IA-enhanced database operations
+class IAEpicDatabaseOperations:
+    def create_ai_generated_epic(self, project_id: int, epic_data: dict) -> int:
+        """Create an IA-generated epic with all enhanced fields"""
+        with self.db_manager.get_connection("framework") as conn:
+            cursor = conn.execute("""
+                INSERT INTO framework_epics (
+                    project_id, epic_key, name, description, status,
+                    complexity_score, effort_estimate, epic_dependencies,
+                    unblock_potential, ai_generated, ai_confidence,
+                    created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                project_id, epic_data['epic_key'], epic_data['name'], 
+                epic_data['description'], 'generated',
+                epic_data['complexity_score'], epic_data['effort_estimate'],
+                json.dumps(epic_data['epic_dependencies']), 
+                epic_data['unblock_potential'], True, epic_data['ai_confidence'],
+                datetime.now(), datetime.now()
+            ))
+            
+            epic_id = cursor.lastrowid
+            conn.commit()
+            return epic_id
+    
+    def update_epic_sort_order(self, epic_id: int, sort_order: int, critical_path_weight: float):
+        """Update epic with topological ordering results"""
+        with self.db_manager.get_connection("framework") as conn:
+            conn.execute("""
+                UPDATE framework_epics 
+                SET sort_order = ?, critical_path_weight = ?, updated_at = ?
+                WHERE id = ?
+            """, (sort_order, critical_path_weight, datetime.now(), epic_id))
+            conn.commit()
+    
+    def get_epics_by_topological_order(self, project_id: int) -> List[dict]:
+        """Retrieve epics ordered by topological sort_order"""
+        with self.db_manager.get_connection("framework") as conn:
+            cursor = conn.execute("""
+                SELECT 
+                    id, epic_key, name, description, complexity_score,
+                    effort_estimate, sort_order, epic_dependencies,
+                    unblock_potential, critical_path_weight, ai_confidence
+                FROM framework_epics 
+                WHERE project_id = ? AND deleted_at IS NULL
+                ORDER BY sort_order ASC, created_at ASC
+            """, (project_id,))
+            
+            return [dict(row) for row in cursor.fetchall()]
+    
+    def get_epic_dependency_graph(self, project_id: int) -> Dict[str, List[str]]:
+        """Extract dependency graph for topological ordering"""
+        epics = self.get_epics_by_topological_order(project_id)
+        dependency_graph = {}
+        
+        for epic in epics:
+            epic_key = epic['epic_key']
+            dependencies = json.loads(epic['epic_dependencies']) if epic['epic_dependencies'] else []
+            dependency_graph[epic_key] = dependencies
+            
+        return dependency_graph
+```
+
+#### **Migration Strategy for Existing Data**
+```python
+# Safe migration preserving existing epic data
+class EpicSchemaMigration:
+    def migrate_existing_epics_to_ia_enhanced(self):
+        """Safely migrate existing epics with default IA values"""
+        with self.db_manager.get_connection("framework") as conn:
+            # Add columns with safe defaults
+            conn.execute("ALTER TABLE framework_epics ADD COLUMN complexity_score DECIMAL(5,2) DEFAULT 3.0")
+            conn.execute("ALTER TABLE framework_epics ADD COLUMN effort_estimate INTEGER DEFAULT 7") 
+            conn.execute("ALTER TABLE framework_epics ADD COLUMN sort_order INTEGER DEFAULT 0")
+            conn.execute("ALTER TABLE framework_epics ADD COLUMN epic_dependencies JSON DEFAULT '[]'")
+            conn.execute("ALTER TABLE framework_epics ADD COLUMN unblock_potential INTEGER DEFAULT 0")
+            conn.execute("ALTER TABLE framework_epics ADD COLUMN critical_path_weight DECIMAL(5,2) DEFAULT 1.0")
+            conn.execute("ALTER TABLE framework_epics ADD COLUMN ai_generated BOOLEAN DEFAULT FALSE")
+            conn.execute("ALTER TABLE framework_epics ADD COLUMN ai_confidence DECIMAL(3,2) DEFAULT 0.8")
+            
+            # Initialize sort_order for existing epics
+            conn.execute("""
+                UPDATE framework_epics 
+                SET sort_order = id - (SELECT MIN(id) FROM framework_epics WHERE project_id = framework_epics.project_id)
+                WHERE sort_order = 0
+            """)
+            
+            conn.commit()
+            
+        # Log migration success
+        logger.info("Successfully migrated existing epics to IA-enhanced schema")
+```
+
+#### **Performance Optimizations for IA Operations**
+```python
+# TDAH-friendly IA database operations
+class IAPerformanceOptimizations:
+    @lru_cache(maxsize=200)
+    def get_cached_epic_dependencies(self, project_id: int) -> dict:
+        """Cache epic dependencies for fast topological sorting"""
+        return self.get_epic_dependency_graph(project_id)
+    
+    def bulk_insert_ai_epics(self, project_id: int, epics_data: List[dict]) -> List[int]:
+        """Bulk insert IA-generated epics for better performance"""
+        epic_ids = []
+        with self.db_manager.get_connection("framework") as conn:
+            for epic_data in epics_data:
+                cursor = conn.execute("""
+                    INSERT INTO framework_epics (
+                        project_id, epic_key, name, description,
+                        complexity_score, effort_estimate, epic_dependencies,
+                        unblock_potential, ai_generated, ai_confidence,
+                        created_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, (
+                    project_id, epic_data['epic_key'], epic_data['name'],
+                    epic_data['description'], epic_data['complexity_score'],
+                    epic_data['effort_estimate'], json.dumps(epic_data['epic_dependencies']),
+                    epic_data['unblock_potential'], True, epic_data['ai_confidence'],
+                    datetime.now()
+                ))
+                epic_ids.append(cursor.lastrowid)
+            
+            conn.commit()
+            
+        # Clear dependency cache for project
+        self.get_cached_epic_dependencies.cache_clear()
+        
+        return epic_ids
 ```
 
 ---

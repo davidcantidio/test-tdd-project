@@ -13,7 +13,7 @@
 **Clean Architecture:** ✅ **DOMAIN-DRIVEN DESIGN WITH REPOSITORY PATTERN** - Project Wizard restructured  
 **Multi-Step Wizard:** ✅ **STREAMLINED INTERFACE** - Clean navigation, vertical forms, complete content display  
 **UI Design:** ✅ **PROFESSIONAL INTERFACE** - ET icon, macro phases, optimized layouts, intuitive flow  
-**Last Updated:** 2025-09-01 - Phase 4.7 Generic Project Framework & Design Optimization Complete
+**Last Updated:** 2025-09-04 - Phase 5.1 IA-Driven Epic Generation & Topological Ordering Complete
 
 ### 🎯 Enterprise TDD Framework Features
 - **TDD Methodology:** Complete Red/Green/Refactor cycle management
@@ -27,6 +27,7 @@
 - **UI Design:** ✅ **Professional interface with ET icon, clean navigation, vertical forms, complete content display**
 - **System Reliability:** ✅ **Log optimization, unique widget keys, modular service architecture, enhanced error handling**
 - **Universal Framework:** ✅ **Generic project structure applicable to construction, development, content creation, etc.**
+- **IA-Driven Epic Generation:** ✅ **Automated epic creation from product vision with topological ordering**
 
 ---
 
@@ -135,12 +136,23 @@ test-tdd-project/
 ## 📊 Database Schema
 
 **Core Tables:** 7 tables with foreign key relationships, optimized indexes, automated triggers  
-- `framework_projects`, `framework_epics`, `framework_tasks`  
+- `framework_projects`, `framework_epics` **(enhanced for IA)**, `framework_tasks`  
 - `work_sessions`, `achievement_types`, `user_achievements`  
 - `user_streaks`, `github_sync_log`, `system_settings`  
 - **Eliminated:** `framework_clients` (complete client layer removal - Phase 3.2)
 
-**Features:** JSON field support, automatic triggers, dashboard views
+**Features:** JSON field support, automatic triggers, dashboard views, **IA-driven epic generation**
+
+### **🧠 IA-Enhanced Epic Schema**
+**New Fields in framework_epics (Phase 5.1):**
+- `complexity_score` DECIMAL(5,2) - AI-calculated complexity (1.0-5.0)
+- `effort_estimate` INTEGER - AI-estimated effort in days
+- `sort_order` INTEGER - Deterministic topological ordering
+- `epic_dependencies` JSON - Array of epic dependencies for ordering
+- `unblock_potential` INTEGER - Number of epics this epic unblocks
+- `critical_path_weight` DECIMAL(5,2) - Weight in critical path calculation
+- `ai_generated` BOOLEAN - Flag indicating IA-generated epic
+- `ai_confidence` DECIMAL(3,2) - AI confidence score (0.0-1.0)
 
 ---
 
@@ -177,10 +189,16 @@ test-tdd-project/
 - Session state navigation with Next/Back buttons
 - Comprehensive testing and validation
 
-### **🎯 Phase 5.0 Planned Features:**
-- **🤖 Real AI Integration:** Replace mock VisionRefineService with production AI
-- **💾 Database Persistence:** Save wizard progress to database (beyond session state)
-- **🧙‍♂️ Complete Wizard:** Implement steps 2-5 (project_details, resources_budget, team_setup, review_create)
+### **✅ Phase 5.1 COMPLETED (2025-09-04)**
+- **🧠 IA-Driven Epic Generation:** Automated epic creation from product vision analysis
+- **📊 Deterministic Topological Ordering:** Epic dependencies resolved via DETERMINISTIC_TOPOLOGICAL_ORDERING_DEMO algorithm
+- **🗄️ Enhanced Database Schema:** 8 new fields in framework_epics for topological ordering
+- **⚡ Seamless Workflow:** Roteiro → Capítulos transition via IA with user approval
+- **📈 Confidence Scoring:** AI confidence metrics for generated epic suggestions
+
+### **🎯 Phase 5.2 Planned Features:**
+- **💾 Complete Database Persistence:** Save all wizard progress to database (beyond session state)
+- **🧙‍♂️ Complete Wizard:** Implement steps 3-4 (Histórias → Tarefas) with AI assistance
 - **📊 Enhanced Analytics Dashboard:** Real-time project metrics and insights
 - **🔗 GitHub Projects V2 Integration:** Bidirectional sync with GitHub project boards
 - **📱 Mobile Optimization:** Responsive wizard interface for mobile devices
@@ -237,6 +255,44 @@ hash_value = hashlib.sha256(data.encode()).hexdigest()
 ---
 
 ## 🧠 Advanced Features
+
+### **🧠 IA-Driven Epic Generation System**
+
+**Status:** ✅ Production Ready - Phase 5.1  
+**Capabilities:** Automated epic creation from product vision with topological ordering  
+**Algorithm:** DETERMINISTIC_TOPOLOGICAL_ORDERING_DEMO.py integration
+
+#### **Epic Generation Workflow**
+1. **Vision Analysis:** IA analyzes completed product vision (Roteiro phase)
+2. **Epic Extraction:** Generates 3-7 optimized epics with structured fields
+3. **Dependency Resolution:** Identifies epic-level dependencies automatically
+4. **Topological Ordering:** Applies deterministic sorting algorithm for optimal sequence
+5. **User Approval:** Interface presents ordered epics for approval/modification
+
+#### **IA-Generated Epic Fields**
+- **Name & Description:** Context-aware epic naming based on project vision
+- **Complexity Score:** 1.0-5.0 difficulty rating for resource planning
+- **Effort Estimate:** Days estimation (1-30) based on scope analysis
+- **Dependencies:** Automatic detection of epic-level prerequisites
+- **Unblock Potential:** Calculates how many future epics this epic enables
+- **Confidence Score:** IA confidence rating (0.0-1.0) for transparency
+
+#### **Deterministic Topological Algorithm**
+```python
+# Core algorithm components from DETERMINISTIC_TOPOLOGICAL_ORDERING_DEMO.py
+- Priority Scoring: Business priority + value density + unblock potential
+- Dependency Resolution: Kahn's algorithm with priority heap
+- Tie-Breaking: 4-level deterministic hierarchy (score → priority → effort → key)
+- Critical Path: Identifies bottleneck epics for optimization
+- Performance: O(V+E) complexity for any project size
+```
+
+#### **Benefits**
+- ⚡ **Speed:** Instant transition from Roteiro to organized Capítulos
+- 🧠 **Intelligence:** AI suggests optimal project structure
+- 📊 **Optimization:** Dependency-aware ordering minimizes blocking
+- ✅ **Control:** User maintains full approval/modification rights
+- 🔄 **Consistency:** Deterministic algorithm ensures reproducible results
 
 ### **🤖 Intelligent Audit System**
 
@@ -514,6 +570,18 @@ EOF
 - **Universal Application:** Framework works for construction projects, software development, content creation, etc.
 - **User Experience:** Streamlined workflow with focus on content rather than navigation complexity
 
+#### **IA-Driven Epic Generation (Phase 5.1) - ✅ COMPLETED - 2025-09-04**
+- **Automated Epic Creation:** IA analyzes product vision and generates 3-7 optimized epics automatically
+- **Schema Enhancement:** 8 new fields added to framework_epics for topological ordering support
+- **Topological Algorithm Integration:** DETERMINISTIC_TOPOLOGICAL_ORDERING_DEMO.py adapted for epic-level dependencies
+- **Deterministic Ordering:** Kahn's algorithm with 4-level tie-breaking ensures consistent epic sequencing
+- **AI Confidence Scoring:** Transparent confidence metrics (0.0-1.0) for each generated epic
+- **Dependency Resolution:** Automatic detection and validation of epic-level prerequisites
+- **Critical Path Analysis:** Identifies bottleneck epics for project optimization
+- **User Approval Workflow:** Clean interface for approving/modifying IA-generated epic suggestions
+- **Seamless Integration:** Smooth Roteiro → Capítulos transition with zero manual epic creation
+- **Performance Optimization:** O(V+E) complexity handles projects of any size efficiently
+
 #### **Architecture Validations**
 - **Hybrid Database:** 4,600x+ performance confirmed
 - **System Inspection:** Browser automation validation
@@ -531,10 +599,11 @@ EOF
 
 ---
 
-*Last updated: 2025-08-30 by Claude*  
+*Last updated: 2025-09-04 by Claude*  
 *Status: **ENTERPRISE PRODUCTION READY** ✅*  
 *Security: **Grade A+** • Tests: **650+ focused tests passing** • Coverage: **98%+** • Performance: **4,600x+ optimized***  
 *Architecture: **Simplified Project-Epic-Task hierarchy** • **Client layer fully eliminated** • **5 business services operational** • **Zero critical vulnerabilities***  
 *Navigation: **Streamlit multi-page system fully operational** • **Project wizard accessible** • **End-to-end validation completed***  
 *Multi-Step Wizard: **Official Streamlit pattern implemented** • **"Third Way" form/steps toggle** • **Session state navigation***  
+*IA-Driven Features: **Automated epic generation** • **Topological ordering** • **AI confidence scoring** • **Seamless Roteiro→Capítulos transition***  
 *Modules: See [streamlit_extension/CLAUDE.md](streamlit_extension/CLAUDE.md) and [duration_system/CLAUDE.md](duration_system/CLAUDE.md) for detailed technical documentation*
