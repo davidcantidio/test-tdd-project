@@ -1,15 +1,24 @@
-# 🎯 ProductVisionDTO - História 1.1
+# 🎯 DTOs do Sistema - ✅ CAPÍTULO 1 COMPLETO
 
 ## 📋 Visão Geral
 
-O **ProductVisionDTO** é um Data Transfer Object padronizado implementado seguindo a metodologia TDD para atender aos critérios de aceitação da **História 1.1** do CAPÍTULO 1:
+Este módulo implementa **Data Transfer Objects padronizados** seguindo a metodologia TDD. **CAPÍTULO 1 COMPLETO** com ambas histórias implementadas seguindo TDD rigoroso:
 
+### ✅ **História 1.1** - ProductVisionDTO
 > **Como sistema, eu quero padronizar o Roteiro em DTO**
 
-### ✅ Critérios de Aceitação Implementados
-
+**Critérios de Aceitação:**
 - ✅ DTO valida campos obrigatórios; rejeita strings vazias
 - ✅ constraints sempre lista normalizada (trim, sem duplicatas)
+- ✅ **TDD:** 12+ tests passing, Red-Green-Refactor cycle complete
+
+### ✅ **História 1.2** - EpicSuggestionDTO  
+> **Como sistema, eu quero um DTO para Sugestão de Capítulos**
+
+**Critérios de Aceitação:**
+- ✅ Estrutura: EpicSuggestionDTO(title, rationale, tags[], confidence:0..1, source="ai|heuristic")
+- ✅ Serializa/deserializa (dict) sem perda
+- ✅ **TDD:** 15/15 tests passing, comprehensive validation coverage
 
 ## 🏗️ Arquitetura
 
@@ -17,18 +26,20 @@ O **ProductVisionDTO** é um Data Transfer Object padronizado implementado segui
 streamlit_extension/pages/projetos/
 ├── dto/
 │   ├── __init__.py              # Exportações do módulo
-│   ├── product_vision_dto.py    # DTO principal
+│   ├── product_vision_dto.py    # DTO História 1.1
+│   ├── epic_suggestion_dto.py   # DTO História 1.2
 │   └── README.md               # Esta documentação
 ├── validators/
-│   ├── __init__.py             # Exportações de validação
-│   └── product_vision_validator.py # Funções independentes
+│   ├── __init__.py                    # Exportações de validação
+│   ├── product_vision_validator.py    # Funções História 1.1
+│   └── epic_suggestion_validator.py   # Funções História 1.2
 └── integration/
-    └── product_vision_integration.py # Integração com sistema existente
+    └── product_vision_integration.py # Integração sistema existente
 ```
 
 ## 📝 Como Usar
 
-### Uso Básico
+### Uso Básico - ProductVisionDTO
 
 ```python
 from streamlit_extension.pages.projetos.dto import ProductVisionDTO
@@ -48,6 +59,35 @@ dto = ProductVisionDTO.from_dict(data)
 if dto.is_valid():
     print("✅ DTO válido!")
     print("Constraints normalizadas:", dto.constraints)
+else:
+    print("❌ Erros encontrados:")
+    for error in dto.get_errors():
+        print(f"  - {error}")
+```
+
+### Uso Básico - EpicSuggestionDTO
+
+```python
+from streamlit_extension.pages.projetos.dto import EpicSuggestionDTO
+
+# Criar DTO a partir de dicionário
+data = {
+    "title": "Autenticação de Usuários",
+    "rationale": "Sistema precisa de login seguro e confiável para proteger dados",
+    "tags": ["segurança", "login", "backend", "autenticação"],
+    "confidence": 0.85,
+    "source": "ai"
+}
+
+dto = EpicSuggestionDTO.from_dict(data)
+
+# Verificar se é válido
+if dto.is_valid():
+    print("✅ DTO válido!")
+    print(f"Título: {dto.title}")
+    print(f"Confiança: {dto.confidence}")
+    print(f"Tags normalizadas: {dto.tags}")
+    print(f"Fonte: {dto.source}")
 else:
     print("❌ Erros encontrados:")
     for error in dto.get_errors():

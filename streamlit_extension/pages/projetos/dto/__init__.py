@@ -6,5 +6,6 @@ seguindo os critérios de aceitação das histórias do CAPÍTULO 1.
 """
 
 from .product_vision_dto import ProductVisionDTO
+from .epic_suggestion_dto import EpicSuggestionDTO
 
-__all__ = ['ProductVisionDTO']
+__all__ = ['ProductVisionDTO', 'EpicSuggestionDTO']
