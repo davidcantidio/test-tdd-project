@@ -274,8 +274,29 @@ def toggle_debug_mode() -> None:
 # === USER STATE HELPERS =======================================================
 
 def get_current_user() -> Optional[Dict[str, Any]]:
-    """Get current user from session state."""
-    return get_session_value("current_user")
+    """
+    Get current user from session state.
+    
+    Note: This function now delegates to the canonical implementation in auth.middleware
+    for consistency. The return type is preserved as Dict for backward compatibility.
+    """
+    try:
+        # Import here to avoid circular dependencies
+        from ..auth.middleware import get_current_user as _get_current_user_canonical
+        
+        # Use canonical implementation
+        user = _get_current_user_canonical()
+        
+        # Convert User object to dict for compatibility if needed
+        if user is not None and hasattr(user, '__dict__'):
+            return user.__dict__
+        elif user is not None and isinstance(user, dict):
+            return user
+        else:
+            return user  # None case
+    except ImportError:
+        # Fallback to original implementation if import fails
+        return get_session_value("current_user")
 
 def set_current_user(user: Dict[str, Any]) -> None:
     """Set current user in session state."""

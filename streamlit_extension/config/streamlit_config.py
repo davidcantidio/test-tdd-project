@@ -272,120 +272,273 @@ class StreamlitConfig:
         with open(file_path, 'r') as f:
             config_dict = json.load(f)
         return cls(**config_dict)
-def load_config(env_file: Optional[str] = None) -> StreamlitConfig:
-    """
-    Load configuration from environment variables and .env file.
+# Strategy Pattern for Configuration Loading
+
+class ConfigSource:
+    """Abstract base class for configuration sources."""
     
-    Args:
-        env_file: Path to .env file (defaults to .env in current directory)
+    def load(self) -> Dict[str, Any]:
+        """Load configuration data from this source."""
+        raise NotImplementedError
+
+
+class DefaultConfigSource(ConfigSource):
+    """Provides default configuration values."""
     
-    Returns:
-        StreamlitConfig: Loaded and validated configuration
-    """
-    # Load .env file if available
-    if DOTENV_AVAILABLE:
-        if env_file:
-            load_dotenv(env_file)
-        else:
-            # Try multiple .env file locations
-            env_locations = [
-                Path(".env"),
-                Path("streamlit_extension/.env"),
-                Path("config/.env")
-            ]
+    def load(self) -> Dict[str, Any]:
+        """Return default configuration values."""
+        return {
+            # GitHub
+            "github_token": None,
+            "github_repo_owner": None,
+            "github_repo_name": None,
+            "github_api_calls_per_hour": 4000,
+            "rate_limit_buffer": 500,
             
-            for env_path in env_locations:
-                if env_path.exists():
-                    load_dotenv(env_path)
-                    break
-    else:
-        if env_file or any(Path(p).exists() for p in [".env", "streamlit_extension/.env"]):
-            logging.info("⚠️ Warning: .env file found but python-dotenv not installed. Install with: pip install python-dotenv")
+            # Streamlit
+            "streamlit_theme": "dark",
+            "streamlit_port": 8501,
+            "streamlit_host": "localhost",
+            "streamlit_auto_rerun": True,
+            "streamlit_max_upload_size": 200,
+            
+            # Database
+            "database_url": "sqlite:///./framework.db",
+            "timer_database_url": "sqlite:///./task_timer.db",
+            "db_pool_size": 10,
+            "db_max_overflow": 20,
+            
+            # TDAH
+            "focus_session_duration": 25,
+            "short_break_duration": 5,
+            "long_break_duration": 15,
+            "sessions_until_long_break": 4,
+            "timezone": "America/Fortaleza",
+            "enable_focus_tracking": True,
+            "enable_sound_alerts": False,
+            "enable_notifications": True,
+            
+            # Gamification
+            "enable_gamification": True,
+            "points_per_completed_task": 10,
+            "points_per_tdd_cycle": 5,
+            "streak_bonus_multiplier": 1.5,
+            
+            # Analytics
+            "analytics_retention_days": 90,
+            "enable_performance_metrics": True,
+            "cache_ttl_seconds": 900,
+            
+            # Security
+            "session_timeout": 480,
+            
+            # Development
+            "debug_mode": False,
+            "enable_profiler": False,
+            "log_level": "INFO",
+            "testing_mode": False,
+            "test_database_url": "sqlite:///./test_framework.db"
+        }
+
+
+class EnvFileConfigSource(ConfigSource):
+    """Loads configuration from .env files."""
     
-    # Helper function to get environment variable with type conversion
-    def get_env(key: str, default: Any, convert_type: type = str) -> Any:
+    def __init__(self, env_file: Optional[str] = None):
+        self.env_file = env_file
+    
+    def load(self) -> Dict[str, Any]:
+        """Load .env file if available."""
+        if not DOTENV_AVAILABLE:
+            self._warn_missing_dotenv()
+            return {}
+        
+        self._load_env_file()
+        return {}  # .env files populate os.environ, not return values
+    
+    def _load_env_file(self) -> None:
+        """Load the appropriate .env file."""
+        if self.env_file:
+            load_dotenv(self.env_file)
+        else:
+            self._load_from_default_locations()
+    
+    def _load_from_default_locations(self) -> None:
+        """Try loading .env from default locations."""
+        env_locations = [
+            Path(".env"),
+            Path("streamlit_extension/.env"),
+            Path("config/.env")
+        ]
+        
+        for env_path in env_locations:
+            if env_path.exists():
+                load_dotenv(env_path)
+                break
+    
+    def _warn_missing_dotenv(self) -> None:
+        """Warn if .env files exist but dotenv is not available."""
+        env_files_exist = (
+            self.env_file or 
+            any(Path(p).exists() for p in [".env", "streamlit_extension/.env"])
+        )
+        
+        if env_files_exist:
+            logging.info(
+                "⚠️ Warning: .env file found but python-dotenv not installed. "
+                "Install with: pip install python-dotenv"
+            )
+
+
+class EnvironmentVariableConfigSource(ConfigSource):
+    """Loads configuration from environment variables."""
+    
+    TYPE_CONVERTERS = {
+        bool: lambda x: x.lower() in ('true', '1', 'yes', 'on'),
+        int: int,
+        float: float,
+        str: str
+    }
+    
+    def load(self) -> Dict[str, Any]:
+        """Load configuration from environment variables."""
+        return {
+            # GitHub
+            "github_token": self._get_env("GITHUB_TOKEN", None),
+            "github_repo_owner": self._get_env("GITHUB_REPO_OWNER", None),
+            "github_repo_name": self._get_env("GITHUB_REPO_NAME", None),
+            "github_api_calls_per_hour": self._get_env("GITHUB_API_CALLS_PER_HOUR", 4000, int),
+            "rate_limit_buffer": self._get_env("RATE_LIMIT_BUFFER", 500, int),
+            
+            # Streamlit
+            "streamlit_theme": self._get_env("STREAMLIT_THEME", "dark"),
+            "streamlit_port": self._get_env("STREAMLIT_PORT", 8501, int),
+            "streamlit_host": self._get_env("STREAMLIT_HOST", "localhost"),
+            "streamlit_auto_rerun": self._get_env("STREAMLIT_AUTO_RERUN", True, bool),
+            "streamlit_max_upload_size": self._get_env("STREAMLIT_MAX_UPLOAD_SIZE", 200, int),
+            
+            # Database
+            "database_url": self._get_env("DATABASE_URL", "sqlite:///./framework.db"),
+            "timer_database_url": self._get_env("TIMER_DATABASE_URL", "sqlite:///./task_timer.db"),
+            "db_pool_size": self._get_env("DB_POOL_SIZE", 10, int),
+            "db_max_overflow": self._get_env("DB_MAX_OVERFLOW", 20, int),
+            
+            # TDAH
+            "focus_session_duration": self._get_env("FOCUS_SESSION_DURATION", 25, int),
+            "short_break_duration": self._get_env("SHORT_BREAK_DURATION", 5, int),
+            "long_break_duration": self._get_env("LONG_BREAK_DURATION", 15, int),
+            "sessions_until_long_break": self._get_env("SESSIONS_UNTIL_LONG_BREAK", 4, int),
+            "timezone": self._get_env("TIMEZONE", "America/Fortaleza"),
+            "enable_focus_tracking": self._get_env("ENABLE_FOCUS_TRACKING", True, bool),
+            "enable_sound_alerts": self._get_env("ENABLE_SOUND_ALERTS", False, bool),
+            "enable_notifications": self._get_env("ENABLE_NOTIFICATIONS", True, bool),
+            
+            # Gamification
+            "enable_gamification": self._get_env("ENABLE_GAMIFICATION", True, bool),
+            "points_per_completed_task": self._get_env("POINTS_PER_COMPLETED_TASK", 10, int),
+            "points_per_tdd_cycle": self._get_env("POINTS_PER_TDD_CYCLE", 5, int),
+            "streak_bonus_multiplier": self._get_env("STREAK_BONUS_MULTIPLIER", 1.5, float),
+            
+            # Analytics
+            "analytics_retention_days": self._get_env("ANALYTICS_RETENTION_DAYS", 90, int),
+            "enable_performance_metrics": self._get_env("ENABLE_PERFORMANCE_METRICS", True, bool),
+            "cache_ttl_seconds": self._get_env("CACHE_TTL_SECONDS", 900, int),
+            
+            # Security
+            "session_timeout": self._get_env("SESSION_TIMEOUT", 480, int),
+            
+            # Development
+            "debug_mode": self._get_env("DEBUG_MODE", False, bool),
+            "enable_profiler": self._get_env("ENABLE_PROFILER", False, bool),
+            "log_level": self._get_env("LOG_LEVEL", "INFO"),
+            "testing_mode": self._get_env("TESTING_MODE", False, bool),
+            "test_database_url": self._get_env("TEST_DATABASE_URL", "sqlite:///./test_framework.db")
+        }
+    
+    def _get_env(self, key: str, default: Any, convert_type: type = str) -> Any:
+        """Get environment variable with type conversion."""
         value = os.getenv(key)
         if value is None:
             return default
         
+        return self._convert_value(key, value, default, convert_type)
+    
+    def _convert_value(self, key: str, value: str, default: Any, convert_type: type) -> Any:
+        """Convert string value to specified type."""
         try:
-            if convert_type == bool:
-                return value.lower() in ('true', '1', 'yes', 'on')
-            elif convert_type == int:
-                return int(value)
-            elif convert_type == float:
-                return float(value)
-            else:
-                return value
+            converter = self.TYPE_CONVERTERS.get(convert_type, str)
+            return converter(value)
         except ValueError:
             logging.info(f"⚠️ Warning: Invalid value for {key}: '{value}', using default: {default}")
             return default
+
+
+class ConfigLoader:
+    """Main configuration loader using Strategy pattern."""
     
-    # Load all configuration values
-    config = StreamlitConfig(
-        # GitHub
-        github_token=get_env("GITHUB_TOKEN", None),
-        github_repo_owner=get_env("GITHUB_REPO_OWNER", None),
-        github_repo_name=get_env("GITHUB_REPO_NAME", None),
-        github_api_calls_per_hour=get_env("GITHUB_API_CALLS_PER_HOUR", 4000, int),
-        rate_limit_buffer=get_env("RATE_LIMIT_BUFFER", 500, int),
-        
-        # Streamlit
-        streamlit_theme=get_env("STREAMLIT_THEME", "dark"),
-        streamlit_port=get_env("STREAMLIT_PORT", 8501, int),
-        streamlit_host=get_env("STREAMLIT_HOST", "localhost"),
-        streamlit_auto_rerun=get_env("STREAMLIT_AUTO_RERUN", True, bool),
-        streamlit_max_upload_size=get_env("STREAMLIT_MAX_UPLOAD_SIZE", 200, int),
-        
-        # Database
-        database_url=get_env("DATABASE_URL", "sqlite:///./framework.db"),
-        timer_database_url=get_env("TIMER_DATABASE_URL", "sqlite:///./task_timer.db"),
-        db_pool_size=get_env("DB_POOL_SIZE", 10, int),
-        db_max_overflow=get_env("DB_MAX_OVERFLOW", 20, int),
-        
-        # TDAH
-        focus_session_duration=get_env("FOCUS_SESSION_DURATION", 25, int),
-        short_break_duration=get_env("SHORT_BREAK_DURATION", 5, int),
-        long_break_duration=get_env("LONG_BREAK_DURATION", 15, int),
-        sessions_until_long_break=get_env("SESSIONS_UNTIL_LONG_BREAK", 4, int),
-        timezone=get_env("TIMEZONE", "America/Fortaleza"),
-        enable_focus_tracking=get_env("ENABLE_FOCUS_TRACKING", True, bool),
-        enable_sound_alerts=get_env("ENABLE_SOUND_ALERTS", False, bool),
-        enable_notifications=get_env("ENABLE_NOTIFICATIONS", True, bool),
-        
-        # Gamification
-        enable_gamification=get_env("ENABLE_GAMIFICATION", True, bool),
-        points_per_completed_task=get_env("POINTS_PER_COMPLETED_TASK", 10, int),
-        points_per_tdd_cycle=get_env("POINTS_PER_TDD_CYCLE", 5, int),
-        streak_bonus_multiplier=get_env("STREAK_BONUS_MULTIPLIER", 1.5, float),
-        
-        # Analytics
-        analytics_retention_days=get_env("ANALYTICS_RETENTION_DAYS", 90, int),
-        enable_performance_metrics=get_env("ENABLE_PERFORMANCE_METRICS", True, bool),
-        cache_ttl_seconds=get_env("CACHE_TTL_SECONDS", 900, int),
-        
-        # Security
-        session_timeout=get_env("SESSION_TIMEOUT", 480, int),
-        
-        # Development
-        debug_mode=get_env("DEBUG_MODE", False, bool),
-        enable_profiler=get_env("ENABLE_PROFILER", False, bool),
-        log_level=get_env("LOG_LEVEL", "INFO"),
-        testing_mode=get_env("TESTING_MODE", False, bool),
-        test_database_url=get_env("TEST_DATABASE_URL", "sqlite:///./test_framework.db")
-    )
+    def __init__(self, sources: Optional[List[ConfigSource]] = None):
+        self.sources = sources or []
     
-    # Check for missing dependencies
-    missing_deps = []
-    if not DOTENV_AVAILABLE:
-        missing_deps.append("python-dotenv")
-    if not PYTZ_AVAILABLE:
-        missing_deps.append("pytz")
+    def load(self, env_file: Optional[str] = None) -> StreamlitConfig:
+        """Load configuration from all sources."""
+        # Setup default sources if none provided
+        if not self.sources:
+            self.sources = [
+                DefaultConfigSource(),
+                EnvFileConfigSource(env_file),
+                EnvironmentVariableConfigSource()
+            ]
+        
+        # Load and merge configuration from all sources
+        config_data = self._merge_sources()
+        
+        # Create configuration object
+        config = StreamlitConfig(**config_data)
+        
+        # Add metadata
+        self._add_metadata(config)
+        
+        return config
     
-    config.missing_dependencies = missing_deps
-    config.config_loaded_at = str(Path.cwd())
+    def _merge_sources(self) -> Dict[str, Any]:
+        """Merge configuration from all sources (later sources override earlier ones)."""
+        merged_config = {}
+        
+        for source in self.sources:
+            source_data = source.load()
+            # Only update with non-None values
+            merged_config.update({k: v for k, v in source_data.items() if v is not None})
+        
+        return merged_config
     
-    return config
+    def _add_metadata(self, config: StreamlitConfig) -> None:
+        """Add metadata to configuration."""
+        missing_deps = self._check_missing_dependencies()
+        config.missing_dependencies = missing_deps
+        config.config_loaded_at = str(Path.cwd())
+    
+    def _check_missing_dependencies(self) -> List[str]:
+        """Check for missing optional dependencies."""
+        missing_deps = []
+        if not DOTENV_AVAILABLE:
+            missing_deps.append("python-dotenv")
+        if not PYTZ_AVAILABLE:
+            missing_deps.append("pytz")
+        return missing_deps
+
+
+def load_config(env_file: Optional[str] = None) -> StreamlitConfig:
+    """
+    Load configuration using Strategy pattern.
+    
+    Args:
+        env_file: Path to .env file (defaults to searching common locations)
+    
+    Returns:
+        StreamlitConfig: Loaded and validated configuration
+    """
+    loader = ConfigLoader()
+    return loader.load(env_file)
 
 
 _CONFIG_SINGLETON: Optional[StreamlitConfig] = None

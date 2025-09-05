@@ -90,14 +90,17 @@ def validate_database_paths(config: Dict[str, Any]) -> Tuple[bool, List[str]]:
             elif not db_path.is_file():
                 errors.append(f"{description} path is not a file: {db_path}")
             else:
-                # Check if file is readable
+                # Check if file is readable (use binary mode for SQLite files)
                 try:
-                    with open(db_path, 'r'):
-                        pass
+                    with open(db_path, 'rb') as f:
+                        # Just try to read first few bytes to test accessibility
+                        f.read(16)
                 except PermissionError:
                     errors.append(f"{description} is not readable: {db_path}")
+                except OSError as e:
+                    errors.append(f"{description} access error: {e}")
                 except Exception as e:
-                    errors.append(f"Error accessing {description}: {e}")
+                    errors.append(f"Unexpected error accessing {description}: {e}")
     
     # Return warnings as part of error list (they're not critical)
     return len(errors) == 0, errors + warnings

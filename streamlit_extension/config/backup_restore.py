@@ -608,6 +608,321 @@ def get_backup_manager() -> ConfigurationBackupManager:
     return _backup_manager
 
 
+def _render_backup_list_tab(backup_manager) -> None:
+    """Render the backup list tab."""
+    st.markdown("#### Available Backups")
+    
+    backups = backup_manager.get_backup_list()
+    
+    if not backups:
+        st.info("No backups found. Create your first backup in the 'Create Backup' tab.")
+        return
+    
+    for backup in backups:
+        _render_backup_item(backup, backup_manager)
+
+
+def _render_backup_item(backup, backup_manager) -> None:
+    """Render a single backup item with controls."""
+    with st.expander(f"{backup.name} ({backup.backup_type.value})", expanded=False):
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            _render_backup_metadata(backup)
+        
+        with col2:
+            _render_backup_components(backup)
+        
+        _render_backup_actions(backup, backup_manager)
+
+
+def _render_backup_metadata(backup) -> None:
+    """Render backup metadata information."""
+    st.write(f"**Created:** {backup.created_at.strftime('%Y-%m-%d %H:%M:%S')}")
+    st.write(f"**Size:** {backup.size_bytes / 1024:.1f} KB")
+    if backup.description:
+        st.write(f"**Description:** {backup.description}")
+
+
+def _render_backup_components(backup) -> None:
+    """Render backup components information."""
+    st.write("**Components:**")
+    if backup.includes_streamlit_config:
+        st.write("✅ Streamlit Config")
+    if backup.includes_themes:
+        st.write("✅ Themes")
+    if backup.includes_cache_settings:
+        st.write("✅ Cache Settings")
+    if backup.includes_database_config:
+        st.write("✅ Database Config")
+
+
+def _render_backup_actions(backup, backup_manager) -> None:
+    """Render backup action buttons."""
+    col_restore, col_delete = st.columns(2)
+    
+    with col_restore:
+        if st.button(f"🔄 Restore", key=f"restore_{backup.name}"):
+            if backup_manager.restore_backup(backup.name):
+                st.success("Configuration restored successfully!")
+                st.rerun()
+            else:
+                st.error("Failed to restore configuration.")
+    
+    with col_delete:
+        if backup.backup_type != BackupType.AUTOMATIC:  # Don't allow deleting auto backups
+            if st.button(f"🗑️ Delete", key=f"delete_{backup.name}"):
+                if backup_manager.delete_backup(backup.name):
+                    st.success("Backup deleted successfully!")
+                    st.rerun()
+                else:
+                    st.error("Failed to delete backup.")
+
+
+def _render_create_backup_tab(backup_manager) -> None:
+    """Render the create backup tab."""
+    st.markdown("#### Create New Backup")
+    
+    backup_type = st.radio(
+        "Backup Type:",
+        ["Manual", "Automatic"],
+        help="Manual backups allow custom names and descriptions"
+    )
+    
+    if backup_type == "Manual":
+        _render_manual_backup_form(backup_manager)
+    else:
+        _render_automatic_backup_form(backup_manager)
+
+
+def _render_manual_backup_form(backup_manager) -> None:
+    """Render manual backup creation form."""
+    backup_name = st.text_input(
+        "Backup Name:",
+        placeholder="My Custom Backup",
+        help="Enter a descriptive name for this backup"
+    )
+    
+    backup_description = st.text_area(
+        "Description (optional):",
+        placeholder="Describe what this backup contains or why it was created",
+        height=100
+    )
+    
+    if st.button("💾 Create Manual Backup", type="primary"):
+        if backup_name.strip():
+            backup_info = backup_manager.create_manual_backup(backup_name.strip(), backup_description.strip())
+            if backup_info:
+                st.success(f"Backup '{backup_info.name}' created successfully!")
+                st.rerun()
+            else:
+                st.error("Failed to create backup.")
+        else:
+            st.error("Please enter a backup name.")
+
+
+def _render_automatic_backup_form(backup_manager) -> None:
+    """Render automatic backup creation form."""
+    backup_description = st.text_input(
+        "Description (optional):",
+        placeholder="Optional description for this automatic backup"
+    )
+    
+    if st.button("⚡ Create Automatic Backup", type="primary"):
+        backup_info = backup_manager.create_automatic_backup(backup_description.strip() or None)
+        if backup_info:
+            st.success(f"Automatic backup '{backup_info.name}' created successfully!")
+            st.rerun()
+        else:
+            st.error("Failed to create automatic backup.")
+
+
+def _render_restore_tab(backup_manager) -> None:
+    """Render the restore configuration tab."""
+    st.markdown("#### Restore Configuration")
+    
+    backups = backup_manager.get_backup_list()
+    
+    if not backups:
+        st.info("No backups available for restore.")
+        return
+    
+    selected_backup = _select_backup_for_restore(backups)
+    restore_components = _select_restore_components(selected_backup)
+    
+    if st.button("🔄 Restore Selected Components", type="primary"):
+        _execute_restore(backup_manager, selected_backup, restore_components)
+
+
+def _select_backup_for_restore(backups):
+    """Handle backup selection for restore."""
+    backup_display_names = [f"{backup.name} ({backup.created_at.strftime('%Y-%m-%d %H:%M')})" for backup in backups]
+    
+    selected_backup_idx = st.selectbox(
+        "Select Backup to Restore:",
+        range(len(backups)),
+        format_func=lambda i: backup_display_names[i]
+    )
+    
+    return backups[selected_backup_idx]
+
+
+def _select_restore_components(selected_backup):
+    """Handle component selection for restore."""
+    st.markdown("**Components to Restore:**")
+    
+    restore_components = []
+    
+    if selected_backup.includes_streamlit_config:
+        if st.checkbox("Streamlit Configuration", value=True, key="restore_streamlit"):
+            restore_components.append("streamlit_config")
+    
+    if selected_backup.includes_themes:
+        if st.checkbox("Themes", value=True, key="restore_themes"):
+            restore_components.append("themes")
+    
+    if selected_backup.includes_cache_settings:
+        if st.checkbox("Cache Settings", value=True, key="restore_cache"):
+            restore_components.append("cache_settings")
+    
+    if selected_backup.includes_database_config:
+        if st.checkbox("Database Configuration", value=True, key="restore_db"):
+            restore_components.append("database_config")
+    
+    return restore_components
+
+
+def _execute_restore(backup_manager, selected_backup, restore_components) -> None:
+    """Execute the restore operation."""
+    if restore_components:
+        if backup_manager.restore_backup(selected_backup.name, restore_components):
+            st.success("Selected components restored successfully!")
+            st.info("Some changes may require restarting the application to take effect.")
+        else:
+            st.error("Failed to restore selected components.")
+    else:
+        st.warning("Please select at least one component to restore.")
+
+
+def _render_export_import_tab(backup_manager) -> None:
+    """Render the export/import tab."""
+    st.markdown("#### Export & Import Configuration")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        _render_export_section(backup_manager)
+    
+    with col2:
+        _render_import_section(backup_manager)
+
+
+def _render_export_section(backup_manager) -> None:
+    """Render the export configuration section."""
+    st.markdown("**Export Configuration**")
+    
+    export_filename = st.text_input(
+        "Export Filename:",
+        value=f"config_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+    )
+    
+    include_sensitive = st.checkbox(
+        "Include Sensitive Data",
+        value=False,
+        help="Include API tokens, passwords, and other sensitive information"
+    )
+    
+    if st.button("📤 Export Configuration"):
+        _execute_export(backup_manager, export_filename, include_sensitive)
+
+
+def _execute_export(backup_manager, export_filename: str, include_sensitive: bool) -> None:
+    """Execute the export operation."""
+    export_path = Path.cwd() / export_filename
+    if backup_manager.export_configuration(export_path, include_sensitive):
+        st.success(f"Configuration exported to: {export_path}")
+        
+        # Offer download
+        with open(export_path, 'r') as f:
+            config_data = f.read()
+        
+        st.download_button(
+            "📥 Download Export File",
+            data=config_data,
+            file_name=export_filename,
+            mime="application/json"
+        )
+    else:
+        st.error("Failed to export configuration.")
+
+
+def _render_import_section(backup_manager) -> None:
+    """Render the import configuration section."""
+    st.markdown("**Import Configuration**")
+    
+    uploaded_file = st.file_uploader(
+        "Choose configuration file",
+        type=['json'],
+        help="Upload a previously exported configuration file"
+    )
+    
+    if uploaded_file is not None:
+        _handle_file_import(backup_manager, uploaded_file)
+
+
+def _handle_file_import(backup_manager, uploaded_file) -> None:
+    """Handle the file import process."""
+    # Save uploaded file temporarily
+    with tempfile.NamedTemporaryFile(mode='w+b', delete=False, suffix='.json') as tmp_file:
+        tmp_file.write(uploaded_file.read())
+        tmp_path = Path(tmp_file.name)
+    
+    st.markdown("**Components to Import:**")
+    
+    import_components = _select_import_components()
+    
+    if st.button("📥 Import Configuration"):
+        _execute_import(backup_manager, tmp_path, import_components)
+    
+    # Cleanup temp file
+    _cleanup_temp_file(tmp_path)
+
+
+def _select_import_components():
+    """Handle component selection for import."""
+    import_components = []
+    
+    if st.checkbox("Streamlit Configuration", value=True, key="import_streamlit"):
+        import_components.append("streamlit_config")
+    
+    if st.checkbox("Themes", value=True, key="import_themes"):
+        import_components.append("themes")
+    
+    return import_components
+
+
+def _execute_import(backup_manager, tmp_path: Path, import_components) -> None:
+    """Execute the import operation."""
+    if import_components:
+        if backup_manager.import_configuration(tmp_path, import_components):
+            st.success("Configuration imported successfully!")
+            st.info("Some changes may require restarting the application to take effect.")
+        else:
+            st.error("Failed to import configuration.")
+    else:
+        st.warning("Please select at least one component to import.")
+
+
+def _cleanup_temp_file(tmp_path: Path) -> None:
+    """Clean up temporary file."""
+    try:
+        tmp_path.unlink()
+    except (OSError, PermissionError) as e:
+        # Log temp file cleanup failure but don't fail the operation
+        logger.debug(f"Failed to cleanup temp file {tmp_path}: {e}")
+        # Temp file cleanup failure is not critical for operation success
+
+
 def render_backup_restore_ui() -> None:
     """Render backup and restore UI in Streamlit."""
     if not STREAMLIT_AVAILABLE:
@@ -622,228 +937,16 @@ def render_backup_restore_ui() -> None:
     tab1, tab2, tab3, tab4 = st.tabs(["📋 Backups", "💾 Create Backup", "🔄 Restore", "📤 Export/Import"])
     
     with tab1:
-        st.markdown("#### Available Backups")
-        
-        backups = backup_manager.get_backup_list()
-        
-        if not backups:
-            st.info("No backups found. Create your first backup in the 'Create Backup' tab.")
-        else:
-            for backup in backups:
-                with st.expander(f"{backup.name} ({backup.backup_type.value})", expanded=False):
-                    col1, col2 = st.columns(2)
-                    
-                    with col1:
-                        st.write(f"**Created:** {backup.created_at.strftime('%Y-%m-%d %H:%M:%S')}")
-                        st.write(f"**Size:** {backup.size_bytes / 1024:.1f} KB")
-                        if backup.description:
-                            st.write(f"**Description:** {backup.description}")
-                    
-                    with col2:
-                        st.write("**Components:**")
-                        if backup.includes_streamlit_config:
-                            st.write("✅ Streamlit Config")
-                        if backup.includes_themes:
-                            st.write("✅ Themes")
-                        if backup.includes_cache_settings:
-                            st.write("✅ Cache Settings")
-                        if backup.includes_database_config:
-                            st.write("✅ Database Config")
-                    
-                    col_restore, col_delete = st.columns(2)
-                    
-                    with col_restore:
-                        if st.button(f"🔄 Restore", key=f"restore_{backup.name}"):
-                            if backup_manager.restore_backup(backup.name):
-                                st.success("Configuration restored successfully!")
-                                st.rerun()
-                            else:
-                                st.error("Failed to restore configuration.")
-                    
-                    with col_delete:
-                        if backup.backup_type != BackupType.AUTOMATIC:  # Don't allow deleting auto backups
-                            if st.button(f"🗑️ Delete", key=f"delete_{backup.name}"):
-                                if backup_manager.delete_backup(backup.name):
-                                    st.success("Backup deleted successfully!")
-                                    st.rerun()
-                                else:
-                                    st.error("Failed to delete backup.")
+        _render_backup_list_tab(backup_manager)
     
     with tab2:
-        st.markdown("#### Create New Backup")
-        
-        backup_type = st.radio(
-            "Backup Type:",
-            ["Manual", "Automatic"],
-            help="Manual backups allow custom names and descriptions"
-        )
-        
-        if backup_type == "Manual":
-            backup_name = st.text_input(
-                "Backup Name:",
-                placeholder="My Custom Backup",
-                help="Enter a descriptive name for this backup"
-            )
-            
-            backup_description = st.text_area(
-                "Description (optional):",
-                placeholder="Describe what this backup contains or why it was created",
-                height=100
-            )
-            
-            if st.button("💾 Create Manual Backup", type="primary"):
-                if backup_name.strip():
-                    backup_info = backup_manager.create_manual_backup(backup_name.strip(), backup_description.strip())
-                    if backup_info:
-                        st.success(f"Backup '{backup_info.name}' created successfully!")
-                        st.rerun()
-                    else:
-                        st.error("Failed to create backup.")
-                else:
-                    st.error("Please enter a backup name.")
-        
-        else:  # Automatic
-            backup_description = st.text_input(
-                "Description (optional):",
-                placeholder="Optional description for this automatic backup"
-            )
-            
-            if st.button("⚡ Create Automatic Backup", type="primary"):
-                backup_info = backup_manager.create_automatic_backup(backup_description.strip() or None)
-                if backup_info:
-                    st.success(f"Automatic backup '{backup_info.name}' created successfully!")
-                    st.rerun()
-                else:
-                    st.error("Failed to create automatic backup.")
+        _render_create_backup_tab(backup_manager)
     
     with tab3:
-        st.markdown("#### Restore Configuration")
-        
-        backups = backup_manager.get_backup_list()
-        
-        if not backups:
-            st.info("No backups available for restore.")
-        else:
-            backup_names = [backup.name for backup in backups]
-            backup_display_names = [f"{backup.name} ({backup.created_at.strftime('%Y-%m-%d %H:%M')})" for backup in backups]
-            
-            selected_backup_idx = st.selectbox(
-                "Select Backup to Restore:",
-                range(len(backups)),
-                format_func=lambda i: backup_display_names[i]
-            )
-            
-            selected_backup = backups[selected_backup_idx]
-            
-            st.markdown("**Components to Restore:**")
-            
-            restore_components = []
-            
-            if selected_backup.includes_streamlit_config:
-                if st.checkbox("Streamlit Configuration", value=True, key="restore_streamlit"):
-                    restore_components.append("streamlit_config")
-            
-            if selected_backup.includes_themes:
-                if st.checkbox("Themes", value=True, key="restore_themes"):
-                    restore_components.append("themes")
-            
-            if selected_backup.includes_cache_settings:
-                if st.checkbox("Cache Settings", value=True, key="restore_cache"):
-                    restore_components.append("cache_settings")
-            
-            if selected_backup.includes_database_config:
-                if st.checkbox("Database Configuration", value=True, key="restore_db"):
-                    restore_components.append("database_config")
-            
-            if st.button("🔄 Restore Selected Components", type="primary"):
-                if restore_components:
-                    if backup_manager.restore_backup(selected_backup.name, restore_components):
-                        st.success("Selected components restored successfully!")
-                        st.info("Some changes may require restarting the application to take effect.")
-                    else:
-                        st.error("Failed to restore selected components.")
-                else:
-                    st.warning("Please select at least one component to restore.")
+        _render_restore_tab(backup_manager)
     
     with tab4:
-        st.markdown("#### Export & Import Configuration")
-        
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            st.markdown("**Export Configuration**")
-            
-            export_filename = st.text_input(
-                "Export Filename:",
-                value=f"config_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
-            )
-            
-            include_sensitive = st.checkbox(
-                "Include Sensitive Data",
-                value=False,
-                help="Include API tokens, passwords, and other sensitive information"
-            )
-            
-            if st.button("📤 Export Configuration"):
-                export_path = Path.cwd() / export_filename
-                if backup_manager.export_configuration(export_path, include_sensitive):
-                    st.success(f"Configuration exported to: {export_path}")
-                    
-                    # Offer download
-                    with open(export_path, 'r') as f:
-                        config_data = f.read()
-                    
-                    st.download_button(
-                        "📥 Download Export File",
-                        data=config_data,
-                        file_name=export_filename,
-                        mime="application/json"
-                    )
-                else:
-                    st.error("Failed to export configuration.")
-        
-        with col2:
-            st.markdown("**Import Configuration**")
-            
-            uploaded_file = st.file_uploader(
-                "Choose configuration file",
-                type=['json'],
-                help="Upload a previously exported configuration file"
-            )
-            
-            if uploaded_file is not None:
-                # Save uploaded file temporarily
-                with tempfile.NamedTemporaryFile(mode='w+b', delete=False, suffix='.json') as tmp_file:
-                    tmp_file.write(uploaded_file.read())
-                    tmp_path = Path(tmp_file.name)
-                
-                st.markdown("**Components to Import:**")
-                
-                import_components = []
-                
-                if st.checkbox("Streamlit Configuration", value=True, key="import_streamlit"):
-                    import_components.append("streamlit_config")
-                
-                if st.checkbox("Themes", value=True, key="import_themes"):
-                    import_components.append("themes")
-                
-                if st.button("📥 Import Configuration"):
-                    if import_components:
-                        if backup_manager.import_configuration(tmp_path, import_components):
-                            st.success("Configuration imported successfully!")
-                            st.info("Some changes may require restarting the application to take effect.")
-                        else:
-                            st.error("Failed to import configuration.")
-                    else:
-                        st.warning("Please select at least one component to import.")
-                
-                # Cleanup temp file
-                try:
-                    tmp_path.unlink()
-                except (OSError, PermissionError) as e:
-                    # Log temp file cleanup failure but don't fail the operation
-                    logger.debug(f"Failed to cleanup temp file {tmp_path}: {e}")
-                    # Temp file cleanup failure is not critical for operation success
+        _render_export_import_tab(backup_manager)
 
 
 # Export for convenience

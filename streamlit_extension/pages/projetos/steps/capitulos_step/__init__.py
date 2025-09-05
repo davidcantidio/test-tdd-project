@@ -1,0 +1,17 @@
+"""Módulo Capítulos - Segunda macro etapa do wizard genérico.
+
+Este módulo implementa a gestão de Capítulos (épicos) no framework
+universal de projetos. Capítulos representam as grandes divisões
+de um projeto, aplicável a qualquer domínio (construção, software,
+conteúdo, educação, etc.).
+
+Architecture:
+    - main.py: Interface principal com formulário vertical
+    - form_mode.py: Modo formulário completo
+    - summary.py: Resumo e listagem dos capítulos
+    - ai_refine.py: Refinamento por IA (futuro)
+"""
+
+from .main import render_capitulos_step
+
+__all__ = ['render_capitulos_step']

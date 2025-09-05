@@ -380,7 +380,14 @@ class AuthManager:
                         created_at=datetime.fromisoformat(row[5]),
                         last_login=datetime.fromisoformat(row[6]) if row[6] else None
                     )
-        except Exception:
-            pass
+        except sqlite3.Error as e:
+            logger.warning(f"Database error getting user {user_id}: {e}")
+            return None
+        except ValueError as e:
+            logger.warning(f"Data parsing error for user {user_id}: {e}")
+            return None
+        except Exception as e:
+            logger.error(f"Unexpected error getting user {user_id}: {e}")
+            return None
         
         return None
