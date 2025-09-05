@@ -16,7 +16,7 @@
 - ✅ **"Third Way" UX** - toggle between Form and Steps modes
 - ✅ **Zero Data Loss** - robust data persistence across mode switches
 - ✅ **Comprehensive Testing** - user workflow simulation passed
-- ✅ **Official Pattern Compliance** - follows `taxonomia.txt` instructions
+- ✅ **Official Pattern Compliance** - follows Streamlit best practices
 
 ### **Technical Implementation**
 ```
@@ -26,7 +26,7 @@
 │   ├── steps/_pv_state.py         # 62 lines - PV state helpers  
 │   ├── steps/product_vision_step.py # Refactored with toggle
 │   └── projeto_wizard.py          # Complete rewrite - multi-step
-└── taxonomia.txt                   # Official Streamlit patterns
+└── # Based on official Streamlit patterns
 ```
 
 ### **Functionality Verified** 
@@ -190,7 +190,7 @@ streamlit_extension/pages/projetos/
 ├── CLAUDE.md                                 # Main system overview  
 ├── streamlit_extension/CLAUDE.md            # Module documentation
 ├── streamlit_extension/pages/projetos/CLAUDE.md # Wizard-specific docs
-└── taxonomia.txt                           # Official Streamlit patterns
+└── # Documentation based on official Streamlit patterns
 ```
 
 ---

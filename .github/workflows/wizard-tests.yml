@@ -14,7 +14,7 @@ on:
       - 'tests/integration/test_*wizard*.py'          # Integration tests
       - 'streamlit_extension/CLAUDE.md'               # Module documentation
       - 'WIZARD_STATUS.md'                            # Phase status
-      - 'taxonomia.txt'                               # Streamlit patterns
+      # Based on Streamlit patterns
       - '.github/workflows/wizard-tests.yml'
   
   # Trigger on PR to main
@@ -67,7 +67,6 @@ jobs:
             "streamlit_extension/pages/projetos/steps/product_vision_step.py"
             "streamlit_extension/pages/projeto_wizard.py"
             "WIZARD_STATUS.md"
-            "taxonomia.txt"
           )
           
           missing_files=0

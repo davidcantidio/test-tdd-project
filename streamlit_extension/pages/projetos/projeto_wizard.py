@@ -2,9 +2,9 @@
 """
 🧙‍♂️ Project Wizard - Multi-Step Implementation
 
-This module implements a true multi-step wizard following official Streamlit patterns
-as outlined in the taxonomia.txt instructions. It provides a "Third Way" approach
-that combines both form and step-by-step modes for Product Vision creation.
+This module implements a true multi-step wizard following official Streamlit patterns.
+It provides a "Third Way" approach that combines both form and step-by-step modes 
+for Product Vision creation.
 
 Key Features:
     - Session state-based navigation

@@ -14,7 +14,7 @@ on:
       - 'streamlit_extension/pages/projetos/**/*.py'  # Phase 4.5 wizard files
       - 'WIZARD_STATUS.md'      # Phase 4.5 status documentation
       - 'streamlit_extension/CLAUDE.md'  # Module documentation
-      - 'taxonomia.txt'         # Official Streamlit patterns
+      # Based on official Streamlit patterns
       - '.github/workflows/tdd-automation.yml'
   
   # Trigger on Issues related to epics  
@@ -173,7 +173,6 @@ jobs:
             "streamlit_extension/pages/projetos/steps/product_vision_step.py"
             "streamlit_extension/pages/projetos/projeto_wizard.py"
             "WIZARD_STATUS.md"
-            "taxonomia.txt"
           )
           
           missing_files=0

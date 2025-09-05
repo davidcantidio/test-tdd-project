@@ -116,7 +116,7 @@ streamlit_extension/pages/
 - **Zero Data Loss**: Robust data persistence across mode switches
 - **Real AI Integration**: Individual + global field refinement with GPT-5-nano
 - **Dual Refinement System**: SingleFieldRealRefiner + VisionRefineService
-- **Official Compliance**: Follows taxonomia.txt Streamlit wizard instructions
+- **Official Compliance**: Follows Streamlit wizard best practices
 - **Future-Ready**: Extensible architecture for steps 2-5
 
 #### **Implementation Example**
