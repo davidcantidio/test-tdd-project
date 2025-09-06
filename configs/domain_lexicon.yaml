@@ -1,0 +1,173 @@
+# Domain Lexicon Configuration
+# This file defines domain-specific terminology for the TDD Framework
+
+domain:
+  name: "TDD Framework"
+  version: "1.0"
+  description: "Enterprise Test-Driven Development Framework with Streamlit"
+
+# Terminology mappings for the framework
+# Original terms -> Localized/domain-specific terms
+terminology:
+  # Project hierarchy terms
+  epic: "capítulo"
+  task: "tarefa"
+  sprint: "iteração"
+  milestone: "marco"
+  
+  # TDD-specific terms
+  test: "teste"
+  feature: "funcionalidade"
+  story: "história"
+  scenario: "cenário"
+  
+  # Status terms
+  pending: "pendente"
+  in_progress: "em andamento"
+  completed: "concluído"
+  blocked: "bloqueado"
+  
+  # Priority terms
+  high: "alta"
+  medium: "média"
+  low: "baixa"
+  critical: "crítica"
+  
+  # Role terms
+  developer: "desenvolvedor"
+  tester: "testador"
+  product_owner: "dono do produto"
+  scrum_master: "facilitador"
+
+# Priority weights for epic scoring
+priorities:
+  critical: 1.0
+  high: 0.8
+  medium: 0.5
+  low: 0.3
+
+# Keywords for domain context
+keywords:
+  - test-driven-development
+  - red-green-refactor
+  - continuous-integration
+  - agile
+  - scrum
+  - kanban
+  - user-story
+  - acceptance-criteria
+  - code-coverage
+  - unit-testing
+  - integration-testing
+  - behavior-driven-development
+  - clean-architecture
+  - domain-driven-design
+  - repository-pattern
+
+# TDD phases for epic workflow
+tdd_phases:
+  - name: "analysis"
+    label: "análise"
+    description: "Análise e definição de requisitos"
+    
+  - name: "red"
+    label: "vermelho"
+    description: "Escrever testes que falham"
+    
+  - name: "green"
+    label: "verde"
+    description: "Implementar código mínimo para passar"
+    
+  - name: "refactor"
+    label: "refatorar"
+    description: "Melhorar código mantendo testes verdes"
+    
+  - name: "review"
+    label: "revisão"
+    description: "Revisão de código e documentação"
+
+# Epic categories
+categories:
+  - name: "infrastructure"
+    label: "infraestrutura"
+    description: "Configuração e setup do sistema"
+    
+  - name: "user-experience"
+    label: "experiência-do-usuário"
+    description: "Interface e interação com usuário"
+    
+  - name: "business-logic"
+    label: "lógica-de-negócio"
+    description: "Regras e processos de negócio"
+    
+  - name: "data-management"
+    label: "gestão-de-dados"
+    description: "Persistência e manipulação de dados"
+    
+  - name: "security"
+    label: "segurança"
+    description: "Autenticação, autorização e proteção"
+    
+  - name: "testing"
+    label: "testes"
+    description: "Testes automatizados e validação"
+    
+  - name: "documentation"
+    label: "documentação"
+    description: "Documentação técnica e de usuário"
+    
+  - name: "deployment"
+    label: "implantação"
+    description: "Deploy e configuração de produção"
+
+# Complexity scoring guidelines
+complexity_levels:
+  trivial:
+    score: 1.0
+    effort_days: 1
+    description: "Tarefa simples sem dependências"
+    
+  simple:
+    score: 2.0
+    effort_days: 3
+    description: "Tarefa direta com poucas dependências"
+    
+  moderate:
+    score: 3.0
+    effort_days: 5
+    description: "Tarefa moderada com algumas dependências"
+    
+  complex:
+    score: 4.0
+    effort_days: 10
+    description: "Tarefa complexa com múltiplas dependências"
+    
+  very_complex:
+    score: 5.0
+    effort_days: 20
+    description: "Tarefa muito complexa afetando múltiplos sistemas"
+
+# Environment-specific configurations
+environments:
+  development:
+    debug: true
+    mock_ai: true
+    cache_enabled: false
+    
+  production:
+    debug: false
+    mock_ai: false
+    cache_enabled: true
+
+# Validation rules for epic suggestions
+validation:
+  min_epics: 3
+  max_epics: 8
+  min_confidence: 0.3
+  max_title_length: 100
+  max_description_length: 500
+  required_fields:
+    - title
+    - rationale
+    - confidence
+    - source

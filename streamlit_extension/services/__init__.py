@@ -19,6 +19,9 @@ from .epic_service import EpicService
 from .task_service import TaskService
 from .analytics_service import AnalyticsService
 from .timer_service import TimerService
+from .config_loader_base import ConfigLoaderBase, ConfigResult
+from .prompt_template_loader import PromptTemplateLoader
+from .domain_lexicon_loader import DomainLexiconLoader
 from .service_container import (
     ServiceContainer,
     get_service_container,
@@ -41,6 +44,9 @@ __all__ = [
     # Service implementations
     'ProjectService', 'EpicService', 'TaskService',
     'AnalyticsService', 'TimerService',
+    
+    # Configuration loaders (História 2.2)
+    'ConfigLoaderBase', 'ConfigResult', 'PromptTemplateLoader', 'DomainLexiconLoader',
     
     # Service container
     'ServiceContainer', 'get_service_container', 'reset_service_container', 

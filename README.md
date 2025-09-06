@@ -4,7 +4,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
-[![Tests](https://img.shields.io/badge/tests-525%2B%20passing-success.svg)](tests/)
+[![Tests](https://img.shields.io/badge/tests-672%2B%20passing-success.svg)](tests/)
 [![Security](https://img.shields.io/badge/security-A%2B-success.svg)](CODEX_AUDIT_REMEDIATION_REPORT.md)
 [![Enterprise Ready](https://img.shields.io/badge/enterprise-ready-brightgreen.svg)](https://github.com/dbcantidio/tdd-project-template)
 
@@ -23,20 +23,46 @@
 - **🎯 Epic & Task Tracking**: TDD phase tracking (Red/Green/Refactor)
 - **⏱️ Focus Timer**: TDAH-optimized productivity sessions
 - **🛡️ Security Stack**: Enterprise-grade protection and monitoring
+- **🤖 AI Configuration**: Customizable prompt templates and domain lexicons for epic generation
 
 ### 🔧 **Technical Stack**
 - **Frontend**: Streamlit with multi-page navigation
 - **Backend**: Modular SQLite architecture with enterprise transaction handling
 - **Database**: Modular architecture with optimized connection pooling (4,600x+ performance)
 - **Security**: SHA-256 authentication, CSRF/XSS protection, enterprise rate limiting (multi-backend)
-- **Testing**: 525+ tests with 98%+ coverage
+- **Testing**: 672+ tests with 98%+ coverage
 - **Code Quality**: 98%+ type hints, DRY architecture, centralized constants
+- **AI Integration**: Configurable prompt templates and domain lexicons with validation
 
 ## 🔐 **Enterprise Ready**
 
 - **Authentication**: SHA-256 hashing, session management, role-based access
 - **Security**: CSRF/XSS protection, input validation, enterprise rate limiting (Memory/SQLite/Redis)
 - **Operations**: Multi-environment config, health monitoring, performance tracking
+
+### 🤖 **AI Configuration System** (História 2.2)
+- **Prompt Templates**: Configurable markdown templates for AI epic generation (`prompts/epic_suggestion.md`)
+- **Domain Lexicons**: YAML-based terminology customization (`configs/domain_lexicon.yaml`)
+- **Template Validation**: Syntax validation with variable requirement checking
+- **Lexicon Translation**: Intelligent text transformation with case preservation
+- **Cache System**: LRU caching for optimal performance
+- **Enterprise Grade**: Type-safe with Result pattern error handling
+
+```python
+# Usage example
+from streamlit_extension.services import PromptTemplateLoader, DomainLexiconLoader
+
+# Load and render templates
+template_loader = PromptTemplateLoader(enable_cache=True)
+template = template_loader.load_template("prompts/epic_suggestion.md")
+rendered = template_loader.render_template(template, {"product_name": "My Product"})
+
+# Apply domain terminology
+lexicon_loader = DomainLexiconLoader(enable_cache=True)
+lexicon = lexicon_loader.load_lexicon("configs/domain_lexicon.yaml")
+localized_text = lexicon_loader.apply_lexicon("Create epic tasks", lexicon)
+# Result: "Create capítulo tarefas"
+```
 
 ## 🌟 **Why This Framework?**
 
@@ -145,7 +171,7 @@ with transaction():     # Optimized transactions
 
 ### **Core Development Commands**
 ```bash
-pytest tests/                                       # Run tests (525+ tests, 98%+ coverage)
+pytest tests/                                       # Run tests (672+ tests, 98%+ coverage)
 python scripts/maintenance/database_maintenance.py  # Database maintenance
 python scripts/testing/comprehensive_integrity_test.py  # Production certification
 ```
@@ -265,7 +291,7 @@ TDD methodology (Kent Beck) • TDAH productivity research • Agile development
 ## 🔐 Security
 
 **Grade A+ Enterprise Security** - Zero critical vulnerabilities  
-**525+ comprehensive tests** (100% passing) • Zero critical vulnerabilities • SOC 2/ISO 27001/GDPR ready  
+**672+ comprehensive tests** (100% passing) • Zero critical vulnerabilities • SOC 2/ISO 27001/GDPR ready  
 **Features:** CSRF/XSS protection • Enterprise rate limiting • Input validation (240+ patterns) • Attack detection • Audit trails
 
 ---
