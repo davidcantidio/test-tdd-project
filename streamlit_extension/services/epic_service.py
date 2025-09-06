@@ -995,3 +995,201 @@ class EpicService(BaseService):
             badges.append("⏱️ Focus Champion")
         
         return badges
+    
+    def get_epics_by_priority(self, project_id: int, weights: Optional['EpicScoringWeights'] = None) -> ServiceResult[List[Dict[str, Any]]]:
+        """
+        Get epics ordered by priority with project-specific weights.
+        
+        História 3.1 + 3.2: Implementa priorização de épicos com:
+        - Score ponderado (valor, risco, esforço, alinhamento)
+        - Ordenação determinística com tie-breaking
+        - UI responsável (ranking + breakdown, sem scores brutos)
+        - História 3.2: Pesos personalizados por projeto via repository
+        
+        Args:
+            project_id: ID do projeto
+            weights: Pesos customizados explícitos (opcional, tem precedência)
+            
+        Returns:
+            ServiceResult com lista de épicos ordenados por prioridade
+        """
+        from .priority_scorer import PriorityScorer, EpicScoringWeights  # ✅ Import local (micro-checagem 1)
+        from .service_container import get_priority_settings_repository  # História 3.2 - DI
+        
+        self.log_operation("get_epics_by_priority", project_id=project_id)
+        
+        try:
+            # Get epics from database
+            epics_result = self.get_epics_by_project(project_id)
+            if not epics_result.success:
+                return epics_result
+            
+            # Convert to DTOs for priority scoring
+            epic_dtos = [self._convert_to_epic_dto(epic) for epic in epics_result.data]
+            
+            # Calculate priorities with project-specific weights (História 3.2)
+            if weights:
+                # Explicit weights take precedence
+                scorer = PriorityScorer(weights=weights)
+            else:
+                # Load project-specific weights from repository
+                settings_repo = get_priority_settings_repository()
+                scorer = PriorityScorer(
+                    project_id=project_id,
+                    settings_repo=settings_repo,
+                    total_scale=12.0  # Preserves 5:3:2:2 proportion
+                )
+            
+            ordered_epics = scorer.order_epics_by_priority(epic_dtos)
+            scores = scorer.calculate_epic_scores(epic_dtos)
+            
+            # Build UI-friendly response (micro-checagem 6: ranking + breakdown)
+            result = []
+            for i, epic_dto in enumerate(ordered_epics, 1):
+                epic_data = epic_dto.to_dict()
+                score = scores[epic_dto.id]
+                
+                # UI responsável: ranking ao invés de score bruto
+                epic_data.update({
+                    'priority_rank': i,
+                    'total_epics': len(ordered_epics),
+                    'score_breakdown': {
+                        # Porcentagens precisas (micro-checagem: round(x*100, 1))
+                        'valor_percent': round(score.valor_score * 100, 1),
+                        'risco_percent': round(score.risco_score * 100, 1),
+                        'esforco_percent': round(score.esforco_score * 100, 1),
+                        'alinhamento_percent': round(score.alinhamento_score * 100, 1),
+                        
+                        # Valores brutos também disponíveis
+                        'valor_raw': round(score.valor_score, 3),
+                        'risco_raw': round(score.risco_score, 3),
+                        'esforco_raw': round(score.esforco_score, 3),
+                        'alinhamento_raw': round(score.alinhamento_score, 3)
+                        
+                        # ✅ NÃO expor total_score bruto (evita leitura equivocada)
+                    }
+                })
+                result.append(epic_data)
+            
+            self.log_operation("get_epics_by_priority_success", 
+                             total_epics=len(result),
+                             project_id=project_id)
+            
+            return ServiceResult.ok(result)
+            
+        except Exception as e:
+            return self.handle_database_error("get_epics_by_priority", e)
+    
+    def _convert_to_epic_dto(self, epic_data: Dict[str, Any]) -> 'EpicSuggestionDTO':
+        """
+        Convert database epic to EpicSuggestionDTO for priority scoring.
+        
+        Args:
+            epic_data: Dados do épico do banco
+            
+        Returns:
+            EpicSuggestionDTO compatível com PriorityScorer
+        """
+        from ..core.dto.epic_suggestion_dto import EpicSuggestionDTO
+        
+        # Mapear campos do banco para DTO (adaptação necessária)
+        dto_data = {
+            # Campos História 1.2
+            "title": epic_data.get("title", ""),
+            "rationale": epic_data.get("description", ""),  # description → rationale
+            "tags": [],  # Pode ser extraído de outros campos se existir
+            "confidence": 0.8,  # Default para épicos existentes
+            "source": "heuristic",  # Épicos existentes são heurísticos
+            
+            # Campos História 3.1 - mapear ou usar defaults seguros
+            "id": str(epic_data.get("id", "")),  # ID do banco
+            "business_priority": epic_data.get("priority", 3),  # priority → business_priority
+            "complexity_score": float(epic_data.get("difficulty", 3)),  # difficulty → complexity
+            "effort_estimate": max(1, epic_data.get("estimated_hours", 7) or 7),  # hours → days (aproximação)
+            "alignment_score": 3  # Default (pode ser calculado baseado em outros campos)
+        }
+        
+        return EpicSuggestionDTO.from_dict(dto_data)
+    
+    def update_priority_weights(self, project_id: int, weights: 'PriorityWeightsDTO') -> ServiceResult[bool]:
+        """
+        Update project-specific priority weights for epic scoring.
+        
+        História 3.2: Permite ao PO ajustar pesos de priorização por projeto.
+        
+        Args:
+            project_id: ID do projeto
+            weights: Nova configuração de pesos
+            
+        Returns:
+            ServiceResult indicando sucesso ou falha
+        """
+        from ..core.dto.priority_weights_dto import PriorityWeightsDTO
+        from .service_container import get_priority_settings_repository
+        
+        self.log_operation("update_priority_weights", project_id=project_id)
+        
+        try:
+            # Validate weights sum to ~1.0
+            total = (weights.valor_weight + weights.risco_weight + 
+                    weights.esforco_weight + weights.alinhamento_weight + 
+                    weights.confidence_weight)
+            
+            if abs(total - 1.0) > 0.0001:
+                return ServiceResult.validation_error(
+                    f"Weights must sum to 1.0 (±0.0001). Current sum: {total:.4f}"
+                )
+            
+            # Ensure project_id is set
+            weights.project_id = project_id
+            
+            # Save to repository
+            settings_repo = get_priority_settings_repository()
+            saved_weights = settings_repo.save(weights)
+            
+            if saved_weights:
+                self.log_operation("update_priority_weights_success", 
+                                 project_id=project_id,
+                                 weights={
+                                     "valor": weights.valor_weight,
+                                     "risco": weights.risco_weight,
+                                     "esforco": weights.esforco_weight,
+                                     "alinhamento": weights.alinhamento_weight
+                                 })
+                return ServiceResult.ok(True)
+            else:
+                return ServiceResult.business_rule_violation("Failed to save priority weights")
+                
+        except Exception as e:
+            return self.handle_database_error("update_priority_weights", e)
+    
+    def get_priority_weights(self, project_id: int) -> ServiceResult['PriorityWeightsDTO']:
+        """
+        Get current priority weights for a project.
+        
+        História 3.2: Recupera pesos personalizados ou defaults.
+        
+        Args:
+            project_id: ID do projeto
+            
+        Returns:
+            ServiceResult com PriorityWeightsDTO
+        """
+        from ..core.dto.priority_weights_dto import PriorityWeightsDTO
+        from .service_container import get_priority_settings_repository
+        
+        self.log_operation("get_priority_weights", project_id=project_id)
+        
+        try:
+            settings_repo = get_priority_settings_repository()
+            weights = settings_repo.get_by_project_id(project_id)
+            
+            if not weights:
+                # Return defaults if no custom weights
+                weights = PriorityWeightsDTO.get_defaults()
+                weights.project_id = project_id
+            
+            return ServiceResult.ok(weights)
+            
+        except Exception as e:
+            return self.handle_database_error("get_priority_weights", e)

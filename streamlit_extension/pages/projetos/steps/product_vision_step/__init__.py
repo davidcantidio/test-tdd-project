@@ -31,18 +31,9 @@ __all__ = [
     "get_summary",
 ]
 
-# IMPORTANTE: Reexportar o VisionRefineService para garantir que o sistema real seja usado
-try:
-    import sys
-    import os
-    # Importar o módulo .py diretamente, não o pacote
-    sys.path.insert(0, os.path.dirname(__file__))
-    from product_vision_step import VisionRefineService as RealVisionRefineService
-    VisionRefineService = RealVisionRefineService
-    print("✅ Sistema real importado via __init__.py")
-except Exception as import_error:
-    print(f"⚠️ Falha ao importar sistema real via __init__.py: {import_error}")
-    VisionRefineService = None
+# IMPORTANTE: Sistema de IA disponível via main.py quando necessário
+# Removido import circular que causava problemas desnecessários
+print("✅ Sistema de IA configurado via main.py (sem imports circulares)")
 
 # Reexports de compatibilidade com fallback amigável
 try:

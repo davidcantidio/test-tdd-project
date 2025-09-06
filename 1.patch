@@ -1,0 +1,161 @@
+cat > /tmp/priority_scorer.patch <<'PATCH'
+diff --git a/streamlit_extension/services/priority_scorer.py b/streamlit_extension/services/priority_scorer.py
+new file mode 100644
+index 0000000..1111111
+--- /dev/null
++++ b/streamlit_extension/services/priority_scorer.py
+@@ -0,0 +1,197 @@
++"""
++🎯 PriorityScorer - História 3.1 FINAL
++
++Epic priority scoring with mathematically correct normalization,
++stable UUID keying, and deterministic tie-breaking.
++
++Features:
++- All components normalized to [0,1] with corrected formulas
++- No double counting of business value in effort
++- Deterministic tie-breaking (score → priority → effort → UUID)
++- Robust validation with clear error messages
++- Quantization for floating point determinism
++- Clean architecture with DTO imports from core
++"""
++
++from dataclasses import dataclass
++from typing import Dict, List, Optional, Tuple
++from ..core.dto.epic_suggestion_dto import EpicSuggestionDTO  # Clean import
++
++
++@dataclass(frozen=True)
++class EpicScoringWeights:
++    """Balanced weights for epic prioritization (post-normalization)"""
++    valor: float = 5.0          # Business value (highest priority)
++    risco: float = 3.0          # Risk mitigation importance
++    esforco: float = 2.0        # Effort efficiency preference
++    alinhamento: float = 2.0    # Strategic alignment importance
++    confidence: float = 0.0     # AI confidence (feature flag OFF)
++
++
++@dataclass
++class EpicPriorityScore:
++    """Epic priority score breakdown with normalized components [0,1]"""
++    epic_key: str
++    total_score: float          # Quantized for determinism
++    valor_score: float          # [0,1] Business priority
++    risco_score: float          # [0,1] Risk (inverted complexity)
++    esforco_score: float        # [0,1] Effort efficiency
++    alinhamento_score: float    # [0,1] Strategic alignment
++    confidence_score: float     # [0,1] AI confidence
++
++
++class PriorityScorer:
++    """
++    Epic priority scorer with mathematically correct implementation.
++
++    Features:
++    - Normalized components [0,1] with corrected formulas
++    - Stable UUID keying (no title collisions)
++    - Deterministic tie-breaking with quantization
++    - Readable priority ordering
++    - Consistent clamps throughout
++    - Robust validation with clear error messages
++    """
++
++    def __init__(self, weights: Optional[EpicScoringWeights] = None):
++        self.weights = weights or EpicScoringWeights()
++
++    def calculate_epic_scores(self, epics: List[EpicSuggestionDTO]) -> Dict[str, EpicPriorityScore]:
++        """Calculate priority scores with stable UUID keying"""
++        scores: Dict[str, EpicPriorityScore] = {}
++
++        for epic in epics:
++            self._validate_epic(epic)
++
++            # Normalized components [0,1]
++            valor = self._calculate_valor_score(epic)
++            risco = self._calculate_risco_score(epic)
++            esforco = self._calculate_esforco_score(epic)
++            alinhamento = self._calculate_alinhamento_score(epic)
++            confidence = self._calculate_confidence_score(epic)
++
++            # Weighted total with quantization for determinism
++            total = (
++                self.weights.valor * valor +
++                self.weights.risco * risco +
++                self.weights.esforco * esforco +
++                self.weights.alinhamento * alinhamento +
++                self.weights.confidence * confidence
++            )
++
++            scores[epic.id] = EpicPriorityScore(
++                epic_key=epic.id,
++                total_score=round(total, 9),  # quantized
++                valor_score=valor,
++                risco_score=risco,
++                esforco_score=esforco,
++                alinhamento_score=alinhamento,
++                confidence_score=confidence
++            )
++
++        return scores
++
++    def order_epics_by_priority(self, epics: List[EpicSuggestionDTO]) -> List[EpicSuggestionDTO]:
++        """Order epics with deterministic tie-breaking"""
++        scores = self.calculate_epic_scores(epics)
++        return sorted(epics, key=lambda e: self._priority_tuple(e, scores[e.id]))
++
++    # ── validation ──────────────────────────────────────────────────────────────
++    def _validate_epic(self, epic: EpicSuggestionDTO) -> None:
++        """Validate epic with clear error messages"""
++        if not epic.title or not epic.title.strip():
++            raise ValueError("Epic must have title")
++
++        if epic.effort_estimate <= 0:
++            raise ValueError(f"effort_estimate must be > 0, got {epic.effort_estimate}")
++
++        if not epic.id or not epic.id.strip():
++            raise ValueError("Epic must have ID")
++
++    # ── normalized component scorers [0,1] ─────────────────────────────────────
++    def _calculate_valor_score(self, epic: EpicSuggestionDTO) -> float:
++        """Business value [0,1]: priority 1→1.0, 5→0.0"""
++        priority = max(1, min(5, epic.business_priority))
++        return (5 - priority) / 4
++
++    def _calculate_risco_score(self, epic: EpicSuggestionDTO) -> float:
++        """Risk [0,1]: complexity 1→1.0, 5→0.0 (lower complexity = higher score)"""
++        complexity = max(1.0, min(5.0, epic.complexity_score))
++        return (5 - complexity) / 4
++
++    def _calculate_esforco_score(self, epic: EpicSuggestionDTO) -> float:
++        """Effort efficiency [0,1]: independent of business value (no double counting)"""
++        effort_days = max(1, epic.effort_estimate)
++        return 1 / (1 + effort_days)
++
++    def _calculate_alinhamento_score(self, epic: EpicSuggestionDTO) -> float:
++        """Alignment [0,1]: alignment 1→0.0, 5→1.0"""
++        alignment = max(1, min(5, epic.alignment_score))
++        return (alignment - 1) / 4
++
++    def _calculate_confidence_score(self, epic: EpicSuggestionDTO) -> float:
++        """AI confidence [0,1]: already normalized"""
++        return max(0.0, min(1.0, epic.confidence))
++
++    # ── deterministic tie-breaking (4 levels) ──────────────────────────────────
++    def _priority_tuple(self, epic: EpicSuggestionDTO, score: EpicPriorityScore) -> Tuple[float, int, int, str]:
++        """
++        4-level deterministic tie-breaking (legible):
++        1) higher total_score first (quantized)
++        2) lower business_priority (1=critical) first
++        3) lower effort first
++        4) alphabetical by UUID
++        """
++        business_priority = max(1, min(5, epic.business_priority))
++        effort_days = max(1, epic.effort_estimate)
++
++        return (
++            -round(score.total_score, 9),
++            business_priority,
++            effort_days,
++            epic.id
++        )
+PATCH

@@ -19,6 +19,7 @@ from .epic_service import EpicService
 from .task_service import TaskService
 from .analytics_service import AnalyticsService
 from .timer_service import TimerService
+from .priority_settings_repository import DatabasePrioritySettingsRepository
 
 # Vision service import - lazy loaded to avoid circular imports
 try:
@@ -76,6 +77,15 @@ class ServiceContainer:
     def get_timer_service(self) -> TimerService:
         """Get or create TimerService instance."""
         return self._get_or_create_service(TimerService)
+
+    # --- Repositories (lightweight DI) ---
+
+    def get_priority_settings_repository(self) -> DatabasePrioritySettingsRepository:
+        """Get singleton instance of DatabasePrioritySettingsRepository."""
+        with self._lock:
+            if not hasattr(self, "_priority_settings_repository"):
+                self._priority_settings_repository = DatabasePrioritySettingsRepository()
+            return self._priority_settings_repository
 
     def get_vision_refine_service(self) -> 'UnifiedVisionService':
         """
@@ -314,6 +324,11 @@ def get_analytics_service() -> AnalyticsService:
 def get_timer_service() -> TimerService:
     """Convenience function to get TimerService."""
     return get_service_container().get_timer_service()
+
+
+def get_priority_settings_repository() -> DatabasePrioritySettingsRepository:
+    """Convenience function to get PrioritySettings repository."""
+    return get_service_container().get_priority_settings_repository()
 
 
 def get_vision_refine_service() -> 'UnifiedVisionService':
