@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from typing import Dict, Any, Optional
+import logging
 
 import streamlit as st
 
@@ -11,149 +12,135 @@ def _wiz_key(name: str, step: int | str = "pv") -> str:
     session_id = st.session_state.get("session_id", "anon")
     return f"pv::{session_id}::s{step}::{name}"
 
-# Serviço de IA — Sistema real com fallback para mock
+# Serviço de IA — Unified service com fallback automático (Real ↔ Mock)
 try:
-    from src.ia.services.vision_refine_service import VisionRefineService as RealVisionService
-    from src.ia.agents.agno_agent import VisionRefinerAgent, ProductVisionDTO
-    
-    # Criar instância do agente real com gpt-5-nano
-    _agent = VisionRefinerAgent(model_id="gpt-5-nano")
-    
-    # Adapter para compatibilizar VisionRefinerAgent com VisionRefineService
-    class AgentAdapter:
-        def __init__(self, agent):
-            self.agent = agent
-        
-        def run(self, payload):
-            # VisionRefineService espera run(), mas VisionRefinerAgent tem refine()
-            result = self.agent.refine(payload)
-            
-            # Agno retorna RunResponse, extrair o content
-            if hasattr(result, 'content'):
-                actual_result = result.content
-                if isinstance(actual_result, ProductVisionDTO):
-                    # Usar model_dump() em vez de dict() depreciado
-                    return actual_result.model_dump()
-                return actual_result
-            
-            # Fallback para compatibilidade
-            if isinstance(result, ProductVisionDTO):
-                return result.model_dump()
-            return result
-    
-    # Criar adapter
-    _adapted_agent = AgentAdapter(_agent)
-    
-    # Wrapper para compatibilidade com código existente
+    from streamlit_extension.services.vision_service import create_vision_service
+    from src.ia.agents.agno_agent import VisionRefinerAgent, SingleFieldAgent
+
+    # Lazy init: criar serviços somente quando necessários (evita falha antes de carregar .env)
     class VisionRefineService:
         def __init__(self):
-            self.service = RealVisionService(_adapted_agent)
-        
-        def refine(self, payload):
-            return self.service.refine(payload)
-    
-    # Refinador para campo individual com IA real
-    class SingleFieldRealRefiner:
-        """Refinador de campo individual para IA real."""
-        
-        def __init__(self, vision_agent):
-            self.vision_agent = vision_agent
-        
-        def refine_field(self, field_key: str, field_value: Any, context: Dict[str, Any]) -> Any:
-            """
-            Refina um campo específico usando IA real.
+            self._vision = None
             
-            Args:
-                field_key: chave do campo a refinar
-                field_value: valor atual do campo  
-                context: payload completo com demais campos (podem estar vazios)
-                
-            Returns:
-                Valor refinado do campo
-            """
-            try:
-                # Prompt especializado para refinamento individual
-                field_labels = {
-                    "vision_statement": "Visão do Produto",
-                    "problem_statement": "Problema a Resolver", 
-                    "target_audience": "Público-Alvo",
-                    "value_proposition": "Proposta de Valor",
-                    "constraints": "Restrições"
-                }
-                
-                field_label = field_labels.get(field_key, field_key)
-                
-                # Preparar contexto disponível
-                context_info = []
-                for key, value in context.items():
-                    if key != field_key and value:
-                        if isinstance(value, list) and value:
-                            context_info.append(f"- {field_labels.get(key, key)}: {', '.join(value)}")
-                        elif isinstance(value, str) and value.strip():
-                            context_info.append(f"- {field_labels.get(key, key)}: {value.strip()}")
-                
-                context_text = "\\n".join(context_info) if context_info else "Nenhum contexto adicional disponível."
-                
-                # Prompt focado no campo específico
-                prompt = f'''Você é um especialista em Product Management.
+        def refine(self, payload: Dict[str, Any]):
+            if self._vision is None:
+                self._vision = create_vision_service(strict=True)
+            return self._vision.refine(payload)
 
-Preciso que você refine o campo "{field_label}" de um produto.
+    class SingleFieldRefiner:
+        """Refinador de campo individual (prompt dedicado com agente real)."""
 
-Valor atual do campo: "{field_value}"
+        def __init__(self, agent: SingleFieldAgent):
+            self.agent = agent
 
-Contexto disponível:
-{context_text}
+        def refine_field(self, field_key: str, field_value: Any, context: Dict[str, Any]) -> Any:
+            # Construir prompt específico para reescrever apenas o campo, sem mudar significado
+            field_labels = {
+                "vision_statement": "Visão do Produto",
+                "problem_statement": "Problema a Resolver", 
+                "target_audience": "Público-Alvo",
+                "value_proposition": "Proposta de Valor",
+                "constraints": "Restrições"
+            }
 
-Por favor, melhore APENAS o campo "{field_label}", mantendo o significado original mas tornando-o mais claro, profissional e impactante.
+            label = field_labels.get(field_key, field_key)
 
-IMPORTANTE: 
-- Retorne APENAS o valor refinado do campo, sem explicações
-- Mantenha o escopo original 
-- Se o campo já estiver bom, pode retornar o mesmo valor
-- Use português brasileiro'''
+            # Contexto textual enxuto
+            ctx_lines = []
+            for k, v in context.items():
+                if k == field_key or not v:
+                    continue
+                if isinstance(v, list) and v:
+                    ctx_lines.append(f"- {field_labels.get(k, k)}: {', '.join([str(x) for x in v])}")
+                elif isinstance(v, str) and v.strip():
+                    ctx_lines.append(f"- {field_labels.get(k, k)}: {v.strip()}")
+            ctx_text = "\n".join(ctx_lines) if ctx_lines else "(sem contexto adicional)"
 
-                # Usar agente Agno diretamente (bypassa validação do VisionRefinerAgent)
-                result = self.vision_agent.agent.run(prompt)
-                
-                # Extrair conteúdo da resposta
-                if hasattr(result, 'content'):
-                    content = result.content
-                    
-                    # Se o content for um ProductVisionDTO, é porque o agente ainda está usando o response_model
-                    if hasattr(content, field_key):
-                        # Extrair o campo específico do DTO
-                        refined_content = getattr(content, field_key, field_value)
-                    else:
-                        # Content é string direta
-                        refined_content = str(content).strip()
-                        
-                    # Limpar formatação
-                    if isinstance(refined_content, str):
-                        refined_content = refined_content.strip()
-                        if refined_content.startswith('"') and refined_content.endswith('"'):
-                            refined_content = refined_content[1:-1]
-                            
-                    return refined_content if refined_content else field_value
-                
-                return field_value
-                
-            except Exception as e:
-                print(f"Erro no refinamento individual: {e}")
-                return field_value
-    
-    # Criar refinador individual
-    _single_field_refiner = SingleFieldRealRefiner(_agent)
-    
-    print("✅ Sistema real de IA ativado em main.py com gpt-5-nano")
-    
+            current_text = str(field_value or "").strip()
+            if not current_text:
+                raise ValueError(f"Campo obrigatório '{field_key}' não preenchido")
+
+            # Diretrizes específicas por campo, alinhadas a Product Vision do Scrum
+            guidance_map = {
+                "vision_statement": (
+                    "- Foque no resultado para o usuário (user-centric).\n"
+                    "- Valor de negócio claro; evite jargões.\n"
+                    "- 1 a 2 frases, voz ativa, sem promessas vagas.\n"
+                    "- Evite solução detalhada; descreva o propósito/resultado."
+                ),
+                "problem_statement": (
+                    "- Descreva o problema do usuário de forma objetiva e mensurável.\n"
+                    "- Evite soluções ou implementação; mantenha-se no 'quê/por quê'.\n"
+                    "- Linguagem simples, foco na dor/necessidade prioritária."
+                ),
+                "target_audience": (
+                    "- Defina a persona/segmento primário com clareza.\n"
+                    "- Inclua contexto relevante (perfil, cenário de uso).\n"
+                    "- Seja conciso (1 frase curta ou 2 no máximo)."
+                ),
+                "value_proposition": (
+                    "- Expresse o valor entregue e o benefício principal.\n"
+                    "- Diferenciação em relação a alternativas; foco em resultado.\n"
+                    "- Evite detalhes técnicos; linguagem orientada a valor."
+                ),
+                "constraints": (
+                    "- Liste apenas restrições essenciais (normas, prazos, limites).\n"
+                    "- Formato claro e direto; sem expandir escopo."
+                ),
+            }
+
+            guidance = guidance_map.get(field_key, "- Clareza, concisão e foco em valor para o usuário.")
+
+            prompt = f"""Você é um Product Owner experiente em Scrum. Reescreva o campo "{label}" abaixo em português brasileiro, alinhado às melhores práticas de Product Vision do Scrum, com pertinência semântica e foco em valor.
+
+Texto atual (entre marcadores):
+<<BEGIN_TXT>>
+{current_text}
+<<END_TXT>>
+
+Contexto do produto (entre marcadores):
+<<BEGIN_CTX>>
+{ctx_text}
+<<END_CTX>>
+
+Diretrizes específicas para "{label}":
+{guidance}
+
+Regras gerais:
+- Reescreva o texto sem adicionar novas informações factuais.
+- Seja claro, direto e profissional, em voz ativa.
+- Evite repetir o texto original palavra por palavra; faça paráfrase natural.
+- 1 a 2 frases para campos textuais; para restrições, mantenha concisão.
+- Retorne APENAS o novo texto, sem comentários."""
+
+            # Chamar agente real (resposta deve ser string)
+            result = self.agent.refine_field(prompt)
+            # O SingleFieldAgent já retorna string pura
+            new_text = result.strip().strip('"') if result else ""
+            return new_text or current_text
+
+    def _get_single_field_refiner() -> "SingleFieldRefiner":
+        # Guardar em session_state para não recriar a cada chamada
+        key = "_pv_single_agent"
+        if key not in st.session_state or not isinstance(st.session_state[key], SingleFieldAgent):
+            st.session_state[key] = SingleFieldAgent(model_id="gpt-5-nano")
+        return SingleFieldRefiner(st.session_state[key])
+
+    print(f"✅ Vision service (main.py): pronto para strict real (lazy init)")
+
 except Exception as e:
-    # Fallback para mock se houver problema com sistema real  
-    from .mock_refiner import MockVisionRefineService as VisionRefineService, SingleFieldMockRefiner
-    
-    # Usar SingleFieldMockRefiner para compatibilidade
-    _single_field_refiner = SingleFieldMockRefiner()
-    
-    print(f"⚠️ main.py usando mock devido a: {e}")
+    # Strict: não realizar fallback; levanta erro nas chamadas
+    class VisionRefineService:
+        def refine(self, payload: Dict[str, Any]):
+            raise RuntimeError(f"Vision service unavailable: {e}")
+
+    class SingleFieldRefiner:
+        def refine_field(self, field_key: str, field_value: Any, context: Dict[str, Any]) -> Any:
+            raise RuntimeError(f"Vision service unavailable: {e}")
+
+    def _get_single_field_refiner() -> "SingleFieldRefiner":
+        return SingleFieldRefiner()
+    print("❌ main.py em modo estrito: Vision service indisponível.")
 
 # State helpers
 from .._pv_state import (
@@ -162,8 +149,6 @@ from .._pv_state import (
     set_pv_mode,
     next_step,
     prev_step,
-    constraints_to_text,
-    constraints_from_text,
     is_review_step,
     total_steps,
 )
@@ -202,16 +187,7 @@ def _is_nonempty_str(x: Any) -> bool:
     return isinstance(x, str) and x.strip() != ""
 
 
-def _sanitize_constraints(value: Any) -> list[str]:
-    if not isinstance(value, list):
-        return []
-    cleaned: list[str] = []
-    for c in value:
-        if isinstance(c, str):
-            s = c.strip()
-            if s:
-                cleaned.append(s)
-    return cleaned
+# _sanitize_constraints removed - constraints now work as regular string field
 
 
 # ---------------------------------------------
@@ -221,12 +197,8 @@ def _all_fields_filled(pv_data: Dict[str, Any]) -> bool:
     """Verifica se todos os campos do Product Vision estão preenchidos corretamente."""
     for field_key, _ in PV_FIELDS:
         v = pv_data.get(field_key)
-        if field_key == "constraints":
-            if len(_sanitize_constraints(v)) == 0:
-                return False
-        else:
-            if not _is_nonempty_str(v):
-                return False
+        if not _is_nonempty_str(v):
+            return False
     return True
 
 
@@ -237,16 +209,16 @@ def render_product_vision_with_toggle(
     controller=None, project_id: Optional[int] = None
 ) -> None:
     """
-    Renderiza o passo Product Vision com o “Third Way”:
+    Renderiza o passo Product Vision com o "Third Way":
       - Modo steps (um campo por vez + revisão final)
       - Modo formulário (todos os campos)
     """
     init_pv_state(st.session_state)
 
-    # Dynamic title for current macro phase
+    # Dynamic title for current macro phase (avoid circular import)
     current_wizard_step = getattr(st.session_state, 'wizard_current_step', 1)
-    from ...projeto_wizard import get_step_name
-    macro_phase = get_step_name(current_wizard_step)
+    step_names = {1: "Roteiro", 2: "Capítulos", 3: "Histórias", 4: "Tarefas"}
+    macro_phase = step_names.get(current_wizard_step, "Roteiro")
     st.subheader(f"{current_wizard_step}. {macro_phase}")
 
     # Forçar fluxo: primeiro steps, depois form na revisão final
@@ -271,19 +243,20 @@ def render_product_vision_with_toggle(
 def _render_form_mode() -> None:
     """Renderiza todos os campos de uma vez (formulário completo)."""
     with st.form("pv_form_mode", clear_on_submit=False):
+        # Coletar valores dos widgets sem sobrescrever o session_state durante renderização
+        form_values = {}
+        
         for field_key, field_label in PV_FIELDS:
             if field_key == "constraints":
-                constraints_text = st.text_area(
+                form_values[field_key] = st.text_area(
                     field_label,
-                    constraints_to_text(st.session_state.pv.get(field_key, [])),
+                    st.session_state.pv.get(field_key, ""),
                     height=100,
                     help="Ex.: orçamento limitado\natender LGPD\nlançar em 90 dias",
                     key=f"form_{field_key}",
                 )
-                st.session_state.pv[field_key] = constraints_from_text(constraints_text)
-
             elif field_key in {"problem_statement", "value_proposition"}:
-                st.session_state.pv[field_key] = st.text_area(
+                form_values[field_key] = st.text_area(
                     field_label,
                     st.session_state.pv.get(field_key, ""),
                     height=120,  # Mais vertical
@@ -291,7 +264,7 @@ def _render_form_mode() -> None:
                 )
 
             else:
-                st.session_state.pv[field_key] = st.text_area(
+                form_values[field_key] = st.text_area(
                     field_label,
                     st.session_state.pv.get(field_key, ""),
                     height=80,  # Transformar text_input em text_area para ser mais vertical
@@ -300,12 +273,29 @@ def _render_form_mode() -> None:
 
         col1, col2, col3 = st.columns(3)
         with col1:
-            refine_all = st.form_submit_button("✨ Refinar Tudo", use_container_width=True)
+            refine_all = st.form_submit_button(
+                "✨ Refinar Tudo", use_container_width=True, key=_wiz_key("form_refinar_tudo")
+            )
         with col2:
-            save_draft = st.form_submit_button("💾 Salvar Rascunho", use_container_width=True)
+            save_draft = st.form_submit_button(
+                "💾 Salvar Rascunho", use_container_width=True, key=_wiz_key("form_salvar_rascunho")
+            )
         with col3:
-            validate_form = st.form_submit_button("✅ Validar", use_container_width=True)
+            validate_form = st.form_submit_button(
+                "✅ Validar", use_container_width=True, key=_wiz_key("form_validar")
+            )
 
+    # Processar ações do formulário
+    if refine_all or save_draft or validate_form:
+        # Inicializar flag se não existir
+        if 'refinement_in_progress' not in st.session_state:
+            st.session_state.refinement_in_progress = False
+            
+        # Atualizar session_state apenas quando não está refinando
+        if not st.session_state.refinement_in_progress:
+            for field_key in form_values:
+                st.session_state.pv[field_key] = form_values[field_key]
+    
     if refine_all:
         _handle_refine_all()
 
@@ -337,9 +327,11 @@ def _render_steps_mode() -> None:
 
         nav_col1, nav_col2 = st.columns([1, 1])
         with nav_col1:
-            if st.button("⬅ Anterior", 
-                        use_container_width=True,
-                        key=_wiz_key("btn_anterior_review", "review")):
+            if st.button(
+                "⬅ Anterior",
+                use_container_width=True,
+                key=_wiz_key("btn_anterior_review", "review"),
+            ):
                 prev_step(st.session_state)
                 st.rerun()
         with nav_col2:
@@ -352,21 +344,14 @@ def _render_steps_mode() -> None:
     # Campo atual no fluxo step-by-step das 5 perguntas
     field_key, field_label = PV_FIELDS[idx]
 
-    if field_key == "constraints":
-        constraints_text = st.text_area(
-            field_label,
-            constraints_to_text(st.session_state.pv.get(field_key, [])),
-            height=150,
-            help="Ex.: orçamento limitado\natender LGPD\nlançar em 90 dias",
-            key=f"roteiro_{field_key}",
-        )
-        st.session_state.pv[field_key] = constraints_from_text(constraints_text)
-
-    elif field_key in {"problem_statement", "value_proposition"}:
+    if field_key in {"problem_statement", "value_proposition", "constraints"}:
+        height = 150 if field_key == "constraints" else 200
+        help_text = "Ex.: orçamento limitado\natender LGPD\nlançar em 90 dias" if field_key == "constraints" else None
         st.session_state.pv[field_key] = st.text_area(
             field_label,
             st.session_state.pv.get(field_key, ""),
-            height=200,  # Mais vertical
+            height=height,
+            help=help_text,
             key=f"roteiro_{field_key}",
         )
 
@@ -381,22 +366,28 @@ def _render_steps_mode() -> None:
     # Navegação + refino por campo
     nav_col1, nav_col2, nav_col3 = st.columns([1, 1, 1])
     with nav_col1:
-        if st.button("⬅ Anterior", 
-                    disabled=(idx == 0), 
-                    use_container_width=True,
-                    key=_wiz_key("btn_anterior", idx)):
+        if st.button(
+            "⬅ Anterior",
+            disabled=(idx == 0),
+            use_container_width=True,
+            key=_wiz_key("btn_anterior", idx),
+        ):
             prev_step(st.session_state)
             st.rerun()
     with nav_col2:
-        if st.button("Próximo ➡", 
-                    use_container_width=True,
-                    key=_wiz_key("btn_proximo", idx)):
+        if st.button(
+            "Próximo ➡",
+            use_container_width=True,
+            key=_wiz_key("btn_proximo", idx),
+        ):
             next_step(st.session_state)
             st.rerun()
     with nav_col3:
-        if st.button("✨ Refinar este campo", 
-                    use_container_width=True,
-                    key=_wiz_key("btn_refinar", idx)):
+        if st.button(
+            "✨ Refinar este campo",
+            use_container_width=True,
+            key=_wiz_key("btn_refinar", idx),
+        ):
             _handle_refine_field(field_key)
 
 
@@ -415,11 +406,15 @@ def _render_summary() -> None:
     for field_key, field_label in PV_FIELDS:
         value = st.session_state.pv.get(field_key, "")
         if field_key == "constraints":
-            items = _sanitize_constraints(value)
-            if items:
-                st.markdown(f"**{field_label}:**")
-                for constraint in items:
-                    st.markdown(f"- {constraint}")
+            # Tratar constraints como texto multilinhas e exibir em bullets
+            if _is_nonempty_str(value):
+                lines = [line.strip() for line in value.split('\n') if line.strip()]
+                if lines:
+                    st.markdown(f"**{field_label}:**")
+                    for line in lines:
+                        st.markdown(f"- {line}")
+                else:
+                    st.markdown(f"**{field_label}:** _vazio_")
             else:
                 st.markdown(f"**{field_label}:** _vazio_")
         else:
@@ -440,6 +435,17 @@ def _handle_refine_all() -> None:
         st.warning("⚠️ Para refinar com IA, preencha todos os campos primeiro.")
         return
 
+    # Inicializar flag de refinamento se não existir
+    if 'refinement_in_progress' not in st.session_state:
+        st.session_state.refinement_in_progress = False
+    
+    # Prevenir múltiplas execuções simultâneas
+    if st.session_state.refinement_in_progress:
+        return
+    
+    # Set flag para prevenir ciclo vicioso
+    st.session_state.refinement_in_progress = True
+
     service = _get_refine_service()
     with _status_ctx("🤖 Refinando com IA...", expanded=True) as status:
         try:
@@ -457,11 +463,7 @@ def _handle_refine_all() -> None:
                 if field_key not in result:
                     continue
 
-                if field_key == "constraints" and isinstance(result[field_key], list):
-                    new_value = _sanitize_constraints(result[field_key])
-                    st.session_state.pv[field_key] = new_value
-                    fields_updated += 1
-                elif _is_nonempty_str(result[field_key]):
+                if _is_nonempty_str(result[field_key]):
                     st.session_state.pv[field_key] = result[field_key].strip()
                     fields_updated += 1
 
@@ -470,21 +472,22 @@ def _handle_refine_all() -> None:
                 state="complete",
             )
             st.success(f"✨ {fields_updated} campos foram refinados com sucesso!")
+            
+            # Reset flag antes de rerun
+            st.session_state.refinement_in_progress = False
             st.rerun()
         except Exception as e:  # pragma: no cover - apenas UI
             status.update(label="❌ Erro no refinamento", state="error")
             st.error(f"❌ Erro ao refinar: {e}")
+            # Reset flag em caso de erro
+            st.session_state.refinement_in_progress = False
 
 
 def _handle_refine_field(field_key: str) -> None:
     """Refina apenas um campo (IA por campo) com contexto completo."""
     current_value = st.session_state.pv.get(field_key)
 
-    if field_key == "constraints":
-        if len(_sanitize_constraints(current_value)) == 0:
-            st.warning("⚠️ Preencha o campo antes de refinar.")
-            return
-    elif not _is_nonempty_str(current_value):
+    if not _is_nonempty_str(current_value):
         st.warning("⚠️ Preencha o campo antes de refinar.")
         return
 
@@ -493,46 +496,61 @@ def _handle_refine_field(field_key: str) -> None:
     # Monta contexto completo (outros campos podem estar vazios)
     context: Dict[str, Any] = {}
     for key, _ in PV_FIELDS:
-        if key == "constraints":
-            context[key] = _sanitize_constraints(st.session_state.pv.get(key, []))
-        else:
-            context[key] = st.session_state.pv.get(key, "")
+        context[key] = st.session_state.pv.get(key, "")
+    # Garantir que o campo alvo vai com o valor atual
+    context[field_key] = (current_value or "").strip()
 
+    logger = logging.getLogger(__name__)
     with _status_ctx(f"🤖 Refinando campo: {field_label}", expanded=True) as status:
         try:
             status.update(label=f"📋 Analisando {field_label}...", state="running")
             status.update(label=f"✨ Aplicando IA ao campo {field_label}...", state="running")
             
             # Usar refinamento individual (não exige todos os campos preenchidos)
-            refined_value = _single_field_refiner.refine_field(field_key, current_value, context)
+            refined_value = _get_single_field_refiner().refine_field(field_key, current_value, context)
+            logger.info(
+                "PV refine_field result | field=%s | before_len=%s | after_len=%s",
+                field_key,
+                len(str(current_value or "")),
+                len(str(refined_value or "")),
+            )
 
             status.update(label=f"📝 Atualizando {field_label}...", state="running")
 
-            if not refined_value or refined_value == current_value:
-                status.update(label=f"ℹ️ Sem sugestões para {field_label}", state="complete")
-                st.info("ℹ️ Nenhuma sugestão de refinamento disponível.")
-                return
+            # Log do valor refinado para debug
+            logger.debug(f"Campo {field_key}: valor original='{current_value}', refinado='{refined_value}'")
+            
+            # Mostrar sugestão recebida para transparência
+            st.expander("🔎 Sugestão da IA (pré-visualização)", expanded=False).write(str(refined_value or ""))
 
-            old_value = st.session_state.pv.get(field_key)
-
-            # Aplicar valor refinado
-            changed = False
-            if field_key == "constraints" and isinstance(refined_value, list):
-                new_value = _sanitize_constraints(refined_value)
-                st.session_state.pv[field_key] = new_value
-                changed = new_value != _sanitize_constraints(old_value)
-            elif _is_nonempty_str(refined_value):
-                new_value = refined_value.strip()
-                st.session_state.pv[field_key] = new_value
-                changed = new_value != (old_value or "")
-
-            if changed:
-                status.update(label=f"✅ Campo {field_label} refinado com sucesso!", state="complete")
-                st.success(f"✨ {field_label} foi aprimorado!")
+            # Aplicar valor refinado sempre que houver um resultado válido
+            old_value = st.session_state.pv.get(field_key, "")
+            
+            # Normalizar valores para comparação
+            refined_str = str(refined_value or "").strip()
+            old_str = str(old_value or "").strip()
+            
+            # Aplicar o valor refinado ao session state (sempre)
+            if refined_str:  # Se há conteúdo refinado
+                st.session_state.pv[field_key] = refined_str
+                logger.info(f"Valor aplicado ao campo {field_key}: '{refined_str[:50]}...'")
+                
+                # Verificar se houve mudança real
+                if refined_str != old_str:
+                    status.update(label=f"✅ Campo {field_label} refinado com sucesso!", state="complete")
+                    st.success(f"✨ {field_label} foi aprimorado!")
+                    logger.info(f"Campo {field_key} atualizado: {len(old_str)} → {len(refined_str)} chars")
+                else:
+                    status.update(label=f"ℹ️ IA manteve o conteúdo otimizado de {field_label}", state="complete")
+                    st.info("ℹ️ A IA confirmou que o texto já está em sua melhor forma.")
+                    
+                # SEMPRE fazer rerun para garantir atualização da interface
                 st.rerun()
-            else:
-                status.update(label=f"ℹ️ Campo {field_label} já está otimizado", state="complete")
-                st.info("ℹ️ O campo já está em sua melhor forma.")
+                
+            else:  # Se a IA não retornou conteúdo válido
+                status.update(label=f"⚠️ IA não gerou conteúdo para {field_label}", state="error")
+                st.warning("⚠️ A IA não conseguiu gerar uma sugestão válida para este campo.")
+                logger.warning(f"Campo {field_key}: IA retornou valor vazio ou inválido")
         except Exception as e:  # pragma: no cover - apenas UI
             status.update(label=f"❌ Erro ao refinar {field_label}", state="error")
             st.error(f"❌ Erro ao refinar: {e}")
@@ -582,7 +600,7 @@ def get_summary(ctx: Dict[str, Any]) -> Dict[str, Any]:
             "Problema a Resolver": step.get("problem_statement", ""),
             "Público-alvo": step.get("target_audience", ""),
             "Proposta de Valor": step.get("value_proposition", ""),
-            "Restrições": step.get("constraints", []),
+            "Restrições": step.get("constraints", ""),
         }
 
     return {}

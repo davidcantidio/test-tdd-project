@@ -139,30 +139,36 @@ class MockVisionRefineService:
             refined = _ensure_period(refined)
             result["value_proposition"] = refined
 
-        # --- Constraints ---
-        cons = pv["constraints"]
-        refined_constraints: List[str] = []
-        for c in cons:
-            c_ref = _capitalize(c)
-            c_ref = _ensure_period(c_ref)
-            refined_constraints.append(c_ref)
-
-        if self.config.auto_suggest_constraints and len(refined_constraints) < 3:
-            suggestions = [
-                "Prazo de entrega deve ser cumprido rigorosamente.",
-                "Orçamento limitado requer otimização de recursos.",
-                "Conformidade com regulamentações do setor.",
-            ]
-            # Inserir no máximo N sugestões, sem duplicar
-            to_add = max(0, min(self.config.max_auto_constraints, 3 - len(refined_constraints)))
-            for s in suggestions:
-                if to_add <= 0:
-                    break
-                if s not in refined_constraints:
-                    refined_constraints.append(s)
-                    to_add -= 1
-
-        result["constraints"] = refined_constraints
+        # --- Constraints (now string field) ---
+        cons_text = pv.get("constraints", "").strip()
+        if cons_text:
+            # Parse constraints from string (one per line)
+            cons_lines = [line.strip() for line in cons_text.splitlines() if line.strip()]
+            refined_constraints_lines = []
+            for c in cons_lines:
+                c_ref = _capitalize(c)
+                c_ref = _ensure_period(c_ref)
+                refined_constraints_lines.append(c_ref)
+            
+            # Auto-suggest if enabled and we have few constraints
+            if self.config.auto_suggest_constraints and len(refined_constraints_lines) < 3:
+                suggestions = [
+                    "Prazo de entrega deve ser cumprido rigorosamente.",
+                    "Orçamento limitado requer otimização de recursos.",
+                    "Conformidade com regulamentações do setor.",
+                ]
+                to_add = max(0, min(self.config.max_auto_constraints, 3 - len(refined_constraints_lines)))
+                for s in suggestions:
+                    if to_add <= 0:
+                        break
+                    if s not in refined_constraints_lines:
+                        refined_constraints_lines.append(s)
+                        to_add -= 1
+            
+            # Join back to string format
+            result["constraints"] = "\n".join(refined_constraints_lines)
+        else:
+            result["constraints"] = cons_text  # Keep empty if was empty
 
         # Garantir presença de todos os campos requeridos (pass-through se necessário)
         for field in REQUIRED_FIELDS:

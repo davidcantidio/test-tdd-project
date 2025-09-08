@@ -41,12 +41,12 @@ def validate_all_fields(pv_data: Dict[str, Any]) -> Tuple[bool, List[str]]:
     if not pv_data.get("value_proposition", "").strip():
         issues.append("Proposta de Valor está vazia")
         
-    # Check constraints
-    constraints = pv_data.get("constraints", [])
-    if not constraints or len(constraints) == 0:
+    # Check constraints (now string field)
+    constraints = pv_data.get("constraints", "").strip()
+    if not constraints:
         issues.append("Nenhuma restrição definida")
-    elif len(constraints) < 2:
-        issues.append("Defina pelo menos 2 restrições do projeto")
+    elif len(constraints.splitlines()) < 2:
+        issues.append("Defina pelo menos 2 restrições do projeto (uma por linha)")
         
     return len(issues) == 0, issues
 

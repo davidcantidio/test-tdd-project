@@ -21,7 +21,6 @@ e facilitando os imports no resto do projeto.
 from .state_core import DEFAULT_PV, PV_FIELDS
 from .init_nav import init_pv_state, clamp_pv_step_idx, set_pv_mode
 from .flow_order import next_step, prev_step, total_steps, is_review_step
-from .constraints_utils import constraints_to_text, constraints_from_text
 
 __all__ = [
     "DEFAULT_PV",
@@ -33,6 +32,4 @@ __all__ = [
     "prev_step",
     "total_steps",
     "is_review_step",
-    "constraints_to_text",
-    "constraints_from_text",
 ]

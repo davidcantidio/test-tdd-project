@@ -40,14 +40,15 @@ def render_compact_summary(pv_data: Dict[str, Any]):
     if value:
         st.markdown(f"**💎 Valor:** {_truncate(value, 100)}")
     
-    # Constraints
-    constraints = pv_data.get("constraints", [])
-    if constraints:
+    # Constraints (now string field)
+    constraints_text = pv_data.get("constraints", "").strip()
+    if constraints_text:
+        constraints_lines = [line.strip() for line in constraints_text.splitlines() if line.strip()]
         st.markdown("**🚧 Restrições:**")
-        for i, constraint in enumerate(constraints[:3]):  # Show first 3
+        for i, constraint in enumerate(constraints_lines[:3]):  # Show first 3
             st.markdown(f"  • {constraint}")
-        if len(constraints) > 3:
-            st.markdown(f"  _...e mais {len(constraints) - 3} restrições_")
+        if len(constraints_lines) > 3:
+            st.markdown(f"  _...e mais {len(constraints_lines) - 3} restrições_")
 
 
 def render_detailed_summary(pv_data: Dict[str, Any]):
@@ -87,15 +88,16 @@ def render_detailed_summary(pv_data: Dict[str, Any]):
         st.write(value)
         _render_field_metrics("value_proposition", value)
     
-    # Constraints
+    # Constraints (now string field)
     with st.expander("🚧 Restrições", expanded=True):
-        constraints = pv_data.get("constraints", [])
-        if constraints:
-            for constraint in constraints:
+        constraints_text = pv_data.get("constraints", "").strip()
+        if constraints_text:
+            constraints_lines = [line.strip() for line in constraints_text.splitlines() if line.strip()]
+            for constraint in constraints_lines:
                 st.markdown(f"• {constraint}")
         else:
             st.write("_Nenhuma restrição definida_")
-        _render_field_metrics("constraints", constraints)
+        _render_field_metrics("constraints", constraints_text)
 
 
 def export_as_markdown(pv_data: Dict[str, Any]) -> str:
@@ -130,11 +132,12 @@ def export_as_markdown(pv_data: Dict[str, Any]) -> str:
     if value:
         md_lines.append(f"## 💎 Proposta de Valor\n{value}\n")
     
-    # Constraints
-    constraints = pv_data.get("constraints", [])
-    if constraints:
+    # Constraints (now string field)
+    constraints_text = pv_data.get("constraints", "").strip()
+    if constraints_text:
+        constraints_lines = [line.strip() for line in constraints_text.splitlines() if line.strip()]
         md_lines.append("## 🚧 Restrições")
-        for constraint in constraints:
+        for constraint in constraints_lines:
             md_lines.append(f"- {constraint}")
         md_lines.append("")
     

@@ -18,7 +18,7 @@ DEFAULT_PV: Dict[str, Any] = {
     "problem_statement": "",
     "target_audience": "",
     "value_proposition": "",
-    "constraints": [],  # list[str]
+    "constraints": "",  # string field
 }
 
 #: Mapeamento das perguntas por etapa macro

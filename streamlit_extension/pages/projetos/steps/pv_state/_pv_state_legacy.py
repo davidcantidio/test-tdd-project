@@ -11,7 +11,7 @@ DEFAULT_PV: Dict[str, Any] = {
     "problem_statement": "",
     "target_audience": "",
     "value_proposition": "",
-    "constraints": [],  # list[str]
+    "constraints": "",  # string field
 }
 
 # Ordem dos campos no fluxo step-by-step
@@ -32,12 +32,10 @@ def init_pv_state(ss) -> None:
     if "pv" not in ss or not isinstance(ss.pv, dict):
         ss.pv = dict(DEFAULT_PV)
     else:
-        # Corrige tipos e campos ausentes
+        # Completa campos ausentes - constraints now works as string field
         for k, v in DEFAULT_PV.items():
             if k not in ss.pv:
                 ss.pv[k] = v
-        if not isinstance(ss.pv.get("constraints"), list):
-            ss.pv["constraints"] = []
 
     # Default agora é step-by-step
     if "pv_mode" not in ss or ss.pv_mode not in {"form", "steps"}:

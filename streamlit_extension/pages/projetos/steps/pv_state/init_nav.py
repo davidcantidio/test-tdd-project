@@ -38,12 +38,10 @@ def init_pv_state(ss: Any) -> None:
     if "pv" not in ss or not isinstance(ss["pv"], dict):
         ss["pv"] = dict(DEFAULT_PV)
     else:
-        # Completa campos ausentes e corrige tipo de constraints
+        # Completa campos ausentes - constraints now works as string field
         for k, v in DEFAULT_PV.items():
             if k not in ss["pv"]:
                 ss["pv"][k] = v
-        if not isinstance(ss["pv"].get("constraints"), list):
-            ss["pv"]["constraints"] = []
 
     # 🎯 Decisão de produto: default é step-by-step
     if "pv_mode" not in ss or ss["pv_mode"] not in {"form", "steps"}:

@@ -3,7 +3,6 @@ from .pv_state import (
     DEFAULT_PV, PV_FIELDS,
     init_pv_state, clamp_pv_step_idx, set_pv_mode,
     next_step, prev_step, total_steps, is_review_step,
-    constraints_to_text, constraints_from_text,
 )
 """
 _pv_state (compat shim)
@@ -27,6 +26,4 @@ from .pv_state import (
     prev_step,
     total_steps,
     is_review_step,
-    constraints_to_text,
-    constraints_from_text,
 )
