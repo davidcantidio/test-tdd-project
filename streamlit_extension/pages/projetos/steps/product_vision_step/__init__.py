@@ -45,13 +45,22 @@ try:
     )
 except Exception as _e:  # ModuleNotFoundError, ImportError, etc.
     # Definimos stubs que falham de forma clara se alguém tentar usar
+    _IMPORT_ERROR = _e  # preserve original exception outside 'except' scope
+
+    # Log detalhado da causa para facilitar diagnóstico
+    try:
+        import traceback as _tb  # local import to avoid global side-effects
+        print("❌ Falha ao importar product_vision_step.main:\n" + _tb.format_exc())
+    except Exception:
+        pass
+
     def _missing(*_args, **_kwargs):  # pragma: no cover
         raise RuntimeError(
             "As funções de compatibilidade de product_vision_step não estão "
             "disponíveis. Verifique se o módulo `.main` existe e exporta "
             "`render_product_vision_with_toggle`, `render_step`, `validate`, "
             "e `get_summary`."
-        ) from _e
+        ) from _IMPORT_ERROR
 
     render_product_vision_with_toggle = _missing
     render_step = _missing

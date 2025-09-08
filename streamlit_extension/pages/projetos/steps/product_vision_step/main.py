@@ -2,6 +2,9 @@
 from __future__ import annotations
 
 from typing import Dict, Any, Optional
+import json
+import os
+from pathlib import Path
 import logging
 
 import streamlit as st
@@ -12,7 +15,56 @@ def _wiz_key(name: str, step: int | str = "pv") -> str:
     session_id = st.session_state.get("session_id", "anon")
     return f"pv::{session_id}::s{step}::{name}"
 
+
+def _widget_key(field_key: str) -> str:
+    """Return a stable-but-bumpable widget key for step-by-step fields.
+
+    We include a lightweight per-field version suffix so we can force a
+    widget to refresh its displayed value after AI refinement without
+    colliding with Streamlit's key uniqueness rules.
+    """
+    ver_key = f"pv_widget_ver_{field_key}"
+    version = int(st.session_state.get(ver_key, 0))
+    return f"roteiro_{field_key}_v{version}"
+
+
+def _form_widget_key(field_key: str) -> str:
+    """Key versioning for full-form widgets (review step)."""
+    ver_key = f"pv_form_widget_ver_{field_key}"
+    version = int(st.session_state.get(ver_key, 0))
+    return f"form_{field_key}_v{version}"
+
 # Serviço de IA — Unified service com fallback automático (Real ↔ Mock)
+
+def _ensure_ai_env_loaded() -> None:
+    """Best-effort .env loading so OPENAI_API_KEY is available during page runs.
+
+    Streamlit pages can be executed without the main orchestrator config loader,
+    so we defensively load a .env from common locations if the key is missing.
+    """
+    if os.getenv("OPENAI_API_KEY"):
+        return
+    try:
+        from dotenv import load_dotenv  # type: ignore
+    except Exception:
+        return
+
+    candidates = [
+        Path.cwd() / ".env",
+        Path(__file__).resolve().parents[5] / ".env",   # project root (heuristic)
+        Path(__file__).resolve().parents[3] / ".env",
+        Path(__file__).resolve().parents[3] / "streamlit_extension/.env",
+        Path(__file__).resolve().parents[3] / "config/.env",
+    ]
+    for env_path in candidates:
+        try:
+            if env_path.exists():
+                load_dotenv(env_path)
+                if os.getenv("OPENAI_API_KEY"):
+                    break
+        except Exception:
+            # Ignore and try next candidate
+            continue
 try:
     from streamlit_extension.services.vision_service import create_vision_service
     from src.ia.agents.agno_agent import VisionRefinerAgent, SingleFieldAgent
@@ -24,6 +76,8 @@ try:
             
         def refine(self, payload: Dict[str, Any]):
             if self._vision is None:
+                # Garantir que OPENAI_API_KEY esteja carregada de .env quando necessário
+                _ensure_ai_env_loaded()
                 self._vision = create_vision_service(strict=True)
             return self._vision.refine(payload)
 
@@ -123,6 +177,7 @@ Regras gerais:
         # Guardar em session_state para não recriar a cada chamada
         key = "_pv_single_agent"
         if key not in st.session_state or not isinstance(st.session_state[key], SingleFieldAgent):
+            _ensure_ai_env_loaded()
             st.session_state[key] = SingleFieldAgent(model_id="gpt-5-nano")
         return SingleFieldRefiner(st.session_state[key])
 
@@ -181,6 +236,19 @@ def _status_ctx(label: str, expanded: bool = True):
     if hasattr(st, "status"):
         return st.status(label, expanded=expanded)  # type: ignore[attr-defined]
     return _NoStatus()
+
+
+def _preview(v: Any, max_len: int = 120) -> str:
+    """Compact string preview for logging/debug UI."""
+    try:
+        if isinstance(v, (dict, list)):
+            s = json.dumps(v, ensure_ascii=False)  # type: ignore[arg-type]
+        else:
+            s = str(v)
+    except Exception:
+        s = str(v)
+    s = s.strip().replace("\n", " ")
+    return (s[:max_len] + "…") if len(s) > max_len else s
 
 
 def _is_nonempty_str(x: Any) -> bool:
@@ -253,14 +321,14 @@ def _render_form_mode() -> None:
                     st.session_state.pv.get(field_key, ""),
                     height=100,
                     help="Ex.: orçamento limitado\natender LGPD\nlançar em 90 dias",
-                    key=f"form_{field_key}",
+                    key=_form_widget_key(field_key),
                 )
             elif field_key in {"problem_statement", "value_proposition"}:
                 form_values[field_key] = st.text_area(
                     field_label,
                     st.session_state.pv.get(field_key, ""),
                     height=120,  # Mais vertical
-                    key=f"form_{field_key}",
+                    key=_form_widget_key(field_key),
                 )
 
             else:
@@ -268,7 +336,7 @@ def _render_form_mode() -> None:
                     field_label,
                     st.session_state.pv.get(field_key, ""),
                     height=80,  # Transformar text_input em text_area para ser mais vertical
-                    key=f"form_{field_key}",
+                    key=_form_widget_key(field_key),
                 )
 
         col1, col2, col3 = st.columns(3)
@@ -352,7 +420,7 @@ def _render_steps_mode() -> None:
             st.session_state.pv.get(field_key, ""),
             height=height,
             help=help_text,
-            key=f"roteiro_{field_key}",
+            key=_widget_key(field_key),
         )
 
     else:
@@ -360,7 +428,7 @@ def _render_steps_mode() -> None:
             field_label,
             st.session_state.pv.get(field_key, ""),
             height=120,  # Transformar text_input em text_area para ser mais vertical
-            key=f"roteiro_{field_key}",
+            key=_widget_key(field_key),
         )
 
     # Navegação + refino por campo
@@ -453,25 +521,88 @@ def _handle_refine_all() -> None:
             status.update(label="📋 Validando campos...", state="running")
             status.update(label="🔧 Preparando dados para IA...", state="running")
 
+            logger = logging.getLogger(__name__)
+            try:
+                logger.info(
+                    "PV refine_all | payload: %s",
+                    {k: _preview(v) for k, v in st.session_state.pv.items()},
+                )
+            except Exception:
+                pass
+
             status.update(label="✨ Refinando conteúdo...", state="running")
             result = service.refine(st.session_state.pv)
 
             status.update(label="📝 Aplicando melhorias...", state="running")
             fields_updated = 0
 
+            try:
+                logger.info(
+                    "PV refine_all | result_type=%s | result_keys=%s",
+                    type(result).__name__,
+                    list(result.keys()) if isinstance(result, dict) else "n/a",
+                )
+            except Exception:
+                pass
+
             for field_key, _ in PV_FIELDS:
                 if field_key not in result:
                     continue
 
-                if _is_nonempty_str(result[field_key]):
-                    st.session_state.pv[field_key] = result[field_key].strip()
+                raw_val = result[field_key]
+                new_text: str = ""
+                if field_key == "constraints":
+                    # Contrato atual: string; manter suporte defensivo a lista
+                    if isinstance(raw_val, str):
+                        new_text = raw_val.strip()
+                    elif isinstance(raw_val, list):
+                        parts = [str(x).strip() for x in raw_val if str(x).strip()]
+                        new_text = "\n".join(parts)
+                else:
+                    if isinstance(raw_val, str):
+                        new_text = raw_val.strip()
+                    else:
+                        # fallback defensivo
+                        new_text = str(raw_val).strip()
+
+                old_text = str(st.session_state.pv.get(field_key, "") or "").strip()
+                if _is_nonempty_str(new_text):
+                    st.session_state.pv[field_key] = new_text
+                    # Forçar refresh dos widgets (formulário e steps)
+                    form_ver_key = f"pv_form_widget_ver_{field_key}"
+                    st.session_state[form_ver_key] = int(st.session_state.get(form_ver_key, 0)) + 1
+                    step_ver_key = f"pv_widget_ver_{field_key}"
+                    st.session_state[step_ver_key] = int(st.session_state.get(step_ver_key, 0)) + 1
                     fields_updated += 1
+
+                    try:
+                        logger.info(
+                            "PV refine_all | field=%s | old_len=%d | new_len=%d | changed=%s | prev=%s | next=%s",
+                            field_key,
+                            len(old_text),
+                            len(new_text),
+                            old_text != new_text,
+                            _preview(old_text),
+                            _preview(new_text),
+                        )
+                    except Exception:
+                        pass
 
             status.update(
                 label=f"✅ Refinamento concluído! {fields_updated} campos aprimorados.",
                 state="complete",
             )
             st.success(f"✨ {fields_updated} campos foram refinados com sucesso!")
+            try:
+                logger.info(
+                    "PV refine_all | fields_updated=%d | versions_form=%s | versions_steps=%s | pv=%s",
+                    fields_updated,
+                    {f: int(st.session_state.get(f"pv_form_widget_ver_{f}", 0)) for f, _ in PV_FIELDS},
+                    {f: int(st.session_state.get(f"pv_widget_ver_{f}", 0)) for f, _ in PV_FIELDS},
+                    {k: _preview(v) for k, v in st.session_state.pv.items()},
+                )
+            except Exception:
+                pass
             
             # Reset flag antes de rerun
             st.session_state.refinement_in_progress = False
@@ -501,6 +632,11 @@ def _handle_refine_field(field_key: str) -> None:
     context[field_key] = (current_value or "").strip()
 
     logger = logging.getLogger(__name__)
+    
+    # Variável para controlar se precisa fazer rerun (fora do context manager)
+    needs_rerun = False
+    refined_str = None
+    
     with _status_ctx(f"🤖 Refinando campo: {field_label}", expanded=True) as status:
         try:
             status.update(label=f"📋 Analisando {field_label}...", state="running")
@@ -532,28 +668,40 @@ def _handle_refine_field(field_key: str) -> None:
             
             # Aplicar o valor refinado ao session state (sempre)
             if refined_str:  # Se há conteúdo refinado
+                # Atualizar tanto o session_state quanto o widget key para forçar refresh
                 st.session_state.pv[field_key] = refined_str
+                
+                # Forçar refresh visual do widget: bump da versão de key
+                ver_key = f"pv_widget_ver_{field_key}"
+                st.session_state[ver_key] = int(st.session_state.get(ver_key, 0)) + 1
+                
                 logger.info(f"Valor aplicado ao campo {field_key}: '{refined_str[:50]}...'")
                 
                 # Verificar se houve mudança real
                 if refined_str != old_str:
                     status.update(label=f"✅ Campo {field_label} refinado com sucesso!", state="complete")
-                    st.success(f"✨ {field_label} foi aprimorado!")
                     logger.info(f"Campo {field_key} atualizado: {len(old_str)} → {len(refined_str)} chars")
+                    needs_rerun = True
                 else:
                     status.update(label=f"ℹ️ IA manteve o conteúdo otimizado de {field_label}", state="complete")
-                    st.info("ℹ️ A IA confirmou que o texto já está em sua melhor forma.")
+                    logger.info("IA confirmou que o texto já está otimizado")
                     
-                # SEMPRE fazer rerun para garantir atualização da interface
-                st.rerun()
-                
             else:  # Se a IA não retornou conteúdo válido
                 status.update(label=f"⚠️ IA não gerou conteúdo para {field_label}", state="error")
-                st.warning("⚠️ A IA não conseguiu gerar uma sugestão válida para este campo.")
                 logger.warning(f"Campo {field_key}: IA retornou valor vazio ou inválido")
+                
         except Exception as e:  # pragma: no cover - apenas UI
             status.update(label=f"❌ Erro ao refinar {field_label}", state="error")
-            st.error(f"❌ Erro ao refinar: {e}")
+            logger.error(f"Erro ao refinar campo {field_key}: {e}")
+    
+    # Fazer rerun FORA do context manager para evitar conflitos
+    if needs_rerun:
+        st.success(f"✨ {field_label} foi aprimorado!")
+        st.rerun()
+    elif refined_str and refined_str == str(st.session_state.pv.get(field_key, "")):
+        st.info("ℹ️ A IA confirmou que o texto já está em sua melhor forma.")
+    else:
+        st.warning("⚠️ A IA não conseguiu gerar uma sugestão válida para este campo.")
 
 
 # ---------------------------------------------
