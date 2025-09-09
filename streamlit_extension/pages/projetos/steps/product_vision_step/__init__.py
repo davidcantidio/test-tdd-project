@@ -1,25 +1,20 @@
-"""
-product_vision_step (pacote)
-============================
+"""Product Vision Step — API pública consolidada.
 
-Este pacote substitui o antigo módulo único `product_vision_step.py`.
+Este pacote expõe a API do passo "Product Vision" do assistente de projetos.
+A implementação atual está consolidada em `main.py` (UI + handlers + IA),
+evitando importações circulares e mantendo um ponto único de manutenção.
 
-Para manter **compatibilidade**, reexportamos as funções públicas a partir do
-módulo `_legacy.py` (que contém a implementação original) enquanto concluímos
-a modularização em submódulos (`form_mode`, `steps_mode`, `summary`, `ai_refine`,
-`legacy_api`).
+Funções exportadas (estáveis):
+    - ``render_product_vision_with_toggle()``: renderiza a fase Roteiro (steps
+      e revisão final), com integração de IA.
+    - ``render_step(ctx)``: compat legada para renderização baseada em contexto.
+    - ``validate(ctx)``: validação legada do passo.
+    - ``get_summary(ctx)``: resumo legada dos campos preenchidos.
 
-Assim, importadores existentes continuam funcionando:
-
-    from streamlit_extension.pages.projetos.steps.product_vision_step import (
-        render_product_vision_with_toggle,
-        render_step,
-        validate,
-        get_summary,
-    )
-
-Quando a migração terminar, estes reexports podem ser removidos e os chamadores
-devem apontar diretamente para os novos submódulos.
+Notas de arquitetura:
+    - O estado e a ordem dos campos vêm de ``steps/_pv_state.py``.
+    - O serviço de IA é criado via ``create_vision_service(strict=True)``.
+    - Todos os campos (incluindo ``constraints``) são tratados como strings.
 """
 
 from __future__ import annotations
@@ -31,8 +26,8 @@ __all__ = [
     "get_summary",
 ]
 
-# IMPORTANTE: Sistema de IA disponível via main.py quando necessário
-# Removido import circular que causava problemas desnecessários
+# IMPORTANTE: Sistema de IA configurado via main.py quando necessário
+# Mantemos import mínimo aqui para evitar efeitos colaterais desnecessários
 print("✅ Sistema de IA configurado via main.py (sem imports circulares)")
 
 # Reexports de compatibilidade com fallback amigável
@@ -56,10 +51,9 @@ except Exception as _e:  # ModuleNotFoundError, ImportError, etc.
 
     def _missing(*_args, **_kwargs):  # pragma: no cover
         raise RuntimeError(
-            "As funções de compatibilidade de product_vision_step não estão "
-            "disponíveis. Verifique se o módulo `.main` existe e exporta "
-            "`render_product_vision_with_toggle`, `render_step`, `validate`, "
-            "e `get_summary`."
+            "Product Vision Step indisponível. Verifique se `product_vision_step/main.py` "
+            "existe e exporta: render_product_vision_with_toggle, render_step, "
+            "validate e get_summary."
         ) from _IMPORT_ERROR
 
     render_product_vision_with_toggle = _missing

@@ -13,5 +13,6 @@ Architecture:
 """
 
 from .main import render_capitulos_step
+from .epic_review import EpicReviewPage, render_epic_review_step, should_show_epic_review_step, is_review_complete
 
-__all__ = ['render_capitulos_step']
+__all__ = ['render_capitulos_step', 'EpicReviewPage', 'render_epic_review_step', 'should_show_epic_review_step', 'is_review_complete']

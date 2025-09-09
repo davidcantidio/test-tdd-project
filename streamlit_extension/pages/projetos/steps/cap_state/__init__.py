@@ -8,7 +8,14 @@ Components:
     - init_nav.py: Inicialização e navegação
 """
 
-from .state_core import CAP_FIELDS, init_cap_state
+from .state_core import (
+    CAP_FIELDS, init_cap_state, get_cap_state, add_capitulo, 
+    remove_capitulo, validate_capitulo_data, is_capitulos_complete
+)
 from .init_nav import init_cap_navigation
 
-__all__ = ['CAP_FIELDS', 'init_cap_state', 'init_cap_navigation']
+__all__ = [
+    'CAP_FIELDS', 'init_cap_state', 'get_cap_state', 'add_capitulo', 
+    'remove_capitulo', 'validate_capitulo_data', 'is_capitulos_complete',
+    'init_cap_navigation'
+]

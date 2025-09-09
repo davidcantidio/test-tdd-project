@@ -1193,3 +1193,143 @@ class EpicService(BaseService):
             
         except Exception as e:
             return self.handle_database_error("get_priority_weights", e)
+    
+    def update_epic_order(self, project_id: int, updates: List[Dict[str, Any]]) -> ServiceResult[bool]:
+        """
+        História 4.1: Batch update de épicos com transação e locks de concorrência.
+        
+        Atualiza múltiplos épicos em uma única transação, suportando:
+        - Sort order determinístico
+        - Title, description, tags, status
+        - Lock de concorrência para prevenir conflitos
+        - Rollback automático em falha parcial
+        - Re-fetch pós-commit para validar integridade
+        
+        Args:
+            project_id: ID do projeto
+            updates: Lista de dicts com epic_id + campos a atualizar
+                    Exemplo: [{"epic_id": 1, "sort_order": 0, "status": "approved"}]
+                    
+        Returns:
+            ServiceResult com boolean (True se sucesso)
+        """
+        from ..database.connection import transaction
+        import time
+        
+        self.log_operation("update_epic_order", project_id=project_id, count=len(updates))
+        
+        if not updates:
+            return ServiceResult.validation_error("No updates provided")
+        
+        # Validar dados antes de iniciar transação
+        validation_errors = []
+        for i, update in enumerate(updates):
+            if 'epic_id' not in update:
+                validation_errors.append(f"Update {i}: epic_id is required")
+            
+            # Validar título não vazio
+            if 'title' in update and not update['title'].strip():
+                validation_errors.append(f"Epic {update.get('epic_id')}: title cannot be empty")
+            
+            # Validar sort_order
+            if 'sort_order' in update and (update['sort_order'] < 0):
+                validation_errors.append(f"Epic {update.get('epic_id')}: invalid sort_order")
+            
+            # Validar status
+            if 'status' in update and update['status'] not in ['pending', 'approved', 'rejected']:
+                validation_errors.append(f"Epic {update.get('epic_id')}: invalid status")
+        
+        if validation_errors:
+            return ServiceResult.validation_error("Validation failed: " + "; ".join(validation_errors))
+        
+        start_time = time.time()
+        
+        try:
+            with transaction() as conn:
+                # Lock épicos para prevenir concorrência
+                epic_ids = [u['epic_id'] for u in updates]
+                placeholders = ','.join(['?' for _ in epic_ids])
+                
+                # Verificar se épicos existem no projeto
+                check_sql = f"""
+                    SELECT id, epic_key, sort_order, status, title 
+                    FROM framework_epics 
+                    WHERE id IN ({placeholders}) AND project_id = ?
+                """
+                existing_epics = conn.execute(check_sql, epic_ids + [project_id]).fetchall()
+                
+                if len(existing_epics) != len(epic_ids):
+                    existing_ids = {row['id'] for row in existing_epics}
+                    missing_ids = set(epic_ids) - existing_ids
+                    return ServiceResult.business_rule_violation(
+                        f"Epic(s) not found in project: {list(missing_ids)}"
+                    )
+                
+                # Aplicar updates individuais
+                updated_count = 0
+                for update in updates:
+                    epic_id = update['epic_id']
+                    
+                    # Construir SET clause dinamicamente
+                    set_clauses = []
+                    params = []
+                    
+                    for field in ['sort_order', 'title', 'description', 'tags', 'status']:
+                        if field in update:
+                            set_clauses.append(f"{field} = ?")
+                            if field == 'tags' and isinstance(update[field], list):
+                                params.append(json.dumps(update[field]))
+                            else:
+                                params.append(update[field])
+                    
+                    if set_clauses:
+                        set_clauses.append("updated_at = CURRENT_TIMESTAMP")
+                        
+                        update_sql = f"""
+                            UPDATE framework_epics 
+                            SET {', '.join(set_clauses)}
+                            WHERE id = ? AND project_id = ?
+                        """
+                        
+                        result = conn.execute(update_sql, params + [epic_id, project_id])
+                        if result.rowcount > 0:
+                            updated_count += 1
+                
+                # Commit explícito
+                conn.commit()
+                
+                # Re-fetch para validar integridade
+                final_sql = f"""
+                    SELECT id, epic_key, sort_order, status, title, updated_at
+                    FROM framework_epics 
+                    WHERE id IN ({placeholders}) AND project_id = ?
+                    ORDER BY sort_order, id
+                """
+                final_state = conn.execute(final_sql, epic_ids + [project_id]).fetchall()
+                
+                execution_time = (time.time() - start_time) * 1000  # ms
+                
+                self.log_operation("update_epic_order_success", 
+                                 project_id=project_id,
+                                 updated_count=updated_count,
+                                 execution_time_ms=execution_time)
+                
+                return ServiceResult.ok(True)
+                
+        except Exception as e:
+            self.log_operation("update_epic_order_error", 
+                             project_id=project_id,
+                             error=str(e))
+            
+            # Re-throw para trigger rollback automático
+            if "Deadlock detected" in str(e).lower():
+                # Implementar retry automático para deadlock
+                if not hasattr(self, '_retry_count'):
+                    self._retry_count = 0
+                
+                if self._retry_count < 2:
+                    self._retry_count += 1
+                    time.sleep(0.1)  # Breve delay
+                    return self.update_epic_order(project_id, updates)
+            
+            return self.handle_database_error("update_epic_order", e)

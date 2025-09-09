@@ -30,13 +30,14 @@ class UnifiedVisionService:
     - Graceful error handling with logging
     """
     
-    def __init__(self, use_real: bool = False):
+    def __init__(self, use_real: bool = False, strict: bool = False):
         """
         Initialize vision service.
         
         Args:
             use_real: If True, use real AI service (requires credentials)
         """
+        self._strict = bool(strict)
         self._use_real = use_real and self._has_credentials()
         self._is_real = self._use_real  # Initialize before _create_service
         self._service = self._create_service()
@@ -78,14 +79,15 @@ class UnifiedVisionService:
                 
         except Exception as e:
             logger.error(f"Vision refinement failed with {type(self._service).__name__}: {e}")
-            
+            if self._is_real and self._strict:
+                # Strict mode: do not fallback
+                raise
             if self._is_real:
-                # Fallback to mock on real AI failure
+                # Non-strict: fallback to mock
                 logger.info("Falling back to mock service due to AI failure")
                 return self._fallback_to_mock(payload)
-            else:
-                # Re-raise if mock also fails
-                raise
+            # If already mock, re-raise
+            raise
     
     def _create_service(self):
         """Create appropriate service based on configuration."""
@@ -128,7 +130,7 @@ class UnifiedVisionService:
         return type(self._service).__name__
 
 
-def create_vision_service() -> UnifiedVisionService:
+def create_vision_service(strict: bool | None = None) -> UnifiedVisionService:
     """
     Factory function to create VisionService based on environment.
     
@@ -143,14 +145,23 @@ def create_vision_service() -> UnifiedVisionService:
     Returns:
         UnifiedVisionService configured for current environment
     """
-    environment = os.getenv("TDD_ENVIRONMENT", "development")
+    environment = os.getenv("TDD_ENVIRONMENT", "development").lower()
     has_credentials = bool(os.getenv("OPENAI_API_KEY"))
+    strict_mode = (
+        (str(strict).lower() in ("true", "1", "yes", "on")) if strict is not None
+        else os.getenv("TDD_REQUIRE_REAL_AI", "false").lower() in ("true", "1", "yes", "on")
+    )
+
+    if strict_mode and not has_credentials:
+        raise RuntimeError("OPENAI_API_KEY required when TDD_REQUIRE_REAL_AI is enabled")
+
+    use_real = strict_mode or (environment == "production" and has_credentials)
+
+    logger.info(
+        f"Creating vision service: env={environment}, has_creds={has_credentials}, use_real={use_real}, strict={strict_mode}"
+    )
     
-    use_real = (environment == "production" and has_credentials)
-    
-    logger.info(f"Creating vision service: env={environment}, has_creds={has_credentials}, use_real={use_real}")
-    
-    return UnifiedVisionService(use_real=use_real)
+    return UnifiedVisionService(use_real=use_real, strict=strict_mode)
 
 
 # Convenience functions for backward compatibility

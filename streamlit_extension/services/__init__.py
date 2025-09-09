@@ -34,7 +34,8 @@ from .service_container import (
     get_analytics_service,
     get_timer_service,
     check_services_health,
-    get_app_service_container
+    get_app_service_container,
+    get_priority_settings_repository
 )
 
 __all__ = [
@@ -55,6 +56,7 @@ __all__ = [
     # Service accessors
     'get_project_service', 'get_epic_service', 
     'get_task_service', 'get_analytics_service', 'get_timer_service',
+    'get_priority_settings_repository',
     
     # Utilities
     'check_services_health'

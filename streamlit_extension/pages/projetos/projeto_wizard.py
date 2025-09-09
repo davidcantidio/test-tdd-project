@@ -32,22 +32,16 @@ logger = logging.getLogger(__name__)
 
 def _wiz_key(name: str, step: int | str = "global") -> str:
     """Gera chave única para elementos do wizard para evitar IDs duplicados."""
-    session_id = st.session_state.get("session_id", "anon")
+    # Gerar session_id único se não existir
+    if "session_id" not in st.session_state:
+        import time
+        st.session_state.session_id = f"sess_{int(time.time() * 1000)}"
+    
+    session_id = st.session_state.session_id
     return f"wiz::{session_id}::s{step}::{name}"
 
 # --- Authentication layer ---
-try:
-    from streamlit_extension.auth.middleware import init_protected_page, require_auth
-except ImportError:
-    def init_protected_page(title: str, *, layout: str = "wide") -> None:
-        st.set_page_config(page_title=title, layout=layout)
-
-    def require_auth(role: Optional[str] = None):
-        def _decorator(fn):
-            def _inner(*args, **kwargs):
-                return fn(*args, **kwargs)
-            return _inner
-        return _decorator
+# Imported inline within the function to avoid circular imports
 
 # --- Import Product Vision step implementation ---
 from .steps.product_vision_step import render_product_vision_with_toggle
@@ -120,6 +114,12 @@ def render_wizard_header() -> None:
     st.progress(progress)
     
     # Navigation by individual questions
+    # Defensive: track header invocation within the current script run to avoid duplicate keys
+    st.session_state["wizard_header_invocations"] = (
+        st.session_state.get("wizard_header_invocations", 0) + 1
+    )
+    header_instance = st.session_state["wizard_header_invocations"]
+
     nav_cols = st.columns(max_steps)
     for i, (step_num, step_name) in enumerate(WIZARD_STEPS.items()):
         with nav_cols[i]:
@@ -136,12 +136,14 @@ def render_wizard_header() -> None:
             
             # Question as button label
             question_text = get_step_name(step_num)
+            # Include header instance in the key to guarantee uniqueness if header renders twice in one run
+            button_key = _wiz_key(f"header{header_instance}_question_{step_num}", step_num)
             
             if st.button(
                 question_text,
                 type=button_type,
                 disabled=is_disabled,
-                key=_wiz_key(f"question_{step_num}", step_num),
+                key=button_key,
                 help=f"{'Pergunta atual' if step_num == current_step else 'Ir para esta pergunta' if not is_disabled else 'Pergunta não disponível'}",
                 use_container_width=True
             ):
@@ -186,7 +188,6 @@ def render_current_step() -> None:
         st.markdown(f"**Fase {current_step}:** {step_name}")
 
 
-@require_auth()
 def render_projeto_wizard_page() -> Dict[str, Any]:
     """
     Main wizard page renderer following official Streamlit multi-step pattern.
@@ -197,18 +198,47 @@ def render_projeto_wizard_page() -> Dict[str, Any]:
     Returns:
         Dict with page status and metadata
     """
-    # Page configuration
+    # Page configuration MUST be the absolute first Streamlit command
     st.set_page_config(
         page_title="Assistente de Projetos", 
         layout="wide"
     )
     
+    # NOW we can track function calls
+    import time
+    current_run_id = str(time.time())
+    
+    if "wizard_last_run_id" not in st.session_state:
+        st.session_state.wizard_last_run_id = ""
+        st.session_state.wizard_page_render_count = 0
+        st.session_state.wizard_header_invocations = 0
+    
+    # If this is a new script run, reset the counter
+    if st.session_state.wizard_last_run_id != current_run_id:
+        st.session_state.wizard_last_run_id = current_run_id
+        st.session_state.wizard_page_render_count = 0
+        # Reset header invocation counter for the new run
+        st.session_state.wizard_header_invocations = 0
+    
+    st.session_state.wizard_page_render_count += 1
+    
     try:
+        # Check authentication (without decorator to avoid double rendering)
+        from streamlit_extension.auth.middleware import auth_middleware
+        user = auth_middleware()
+        if not user:
+            st.error("🔒 Acesso negado. Faça login para continuar.")
+            st.stop()
+            return {
+                "status": "auth_required",
+                "page": "projeto_wizard"
+            }
+        
         # Initialize wizard state
         init_wizard_state()
         
-        # Protected page initialization
-        init_protected_page("Assistente de Projetos")
+        # Title for the page
+        st.title("🧙‍♂️ Assistente de Projetos")
         
         # Main wizard layout
         with st.container():
