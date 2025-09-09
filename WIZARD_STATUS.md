@@ -24,7 +24,7 @@
 ├── streamlit_extension/pages/projetos/
 │   ├── project_wizard_state.py    # 351 lines - Global wizard state
 │   ├── steps/_pv_state.py         # 62 lines - PV state helpers  
-│   ├── steps/product_vision_step.py # Refactored with toggle
+│   ├── steps/product_vision_step/product_vision.py # Refactored with toggle
 │   └── projeto_wizard.py          # Complete rewrite - multi-step
 └── # Based on official Streamlit patterns
 ```
@@ -56,7 +56,7 @@ refined = service.refine(st.session_state.pv)
 ```
 
 **Files to modify:**
-- `streamlit_extension/pages/projetos/steps/product_vision_step.py:215`
+- `streamlit_extension/pages/projetos/steps/product_vision_step/product_vision.py:215`
 - Add error handling for AI failures
 - Add loading states and progress indicators
 
@@ -94,7 +94,7 @@ WIZARD_STEPS = {
 ```
 
 **Implementation Pattern:**
-1. Create `steps/[step_name]_step.py` following `product_vision_step.py`
+1. Create `steps/[step_name]_step.py` following `product_vision_step/product_vision.py`
 2. Create `steps/_[step]_state.py` following `_pv_state.py` 
 3. Add validation function to `project_wizard_state.py`
 4. Add routing in `projeto_wizard.py:render_current_step()`
@@ -136,7 +136,7 @@ grep -A 10 "WIZARD_STEPS" streamlit_extension/pages/projetos/
 # 2. Review step routing mechanism
 grep -A 20 "render_current_step" streamlit_extension/pages/projetos/projeto_wizard.py
 
-# 3. Pattern: Follow product_vision_step.py structure
+# 3. Pattern: Follow product_vision_step/product_vision.py structure
 ```
 
 ---
@@ -174,7 +174,7 @@ streamlit_extension/pages/projetos/
 ├── project_wizard_state.py    # Global wizard state - 351 lines
 └── steps/
     ├── _pv_state.py           # PV helpers - 62 lines
-    └── product_vision_step.py # UI with form/steps toggle
+    └── product_vision_step/product_vision.py # UI with form/steps toggle
 ```
 
 ### **Clean Architecture** (Unchanged)

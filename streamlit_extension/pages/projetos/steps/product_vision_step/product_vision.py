@@ -1,4 +1,16 @@
-# streamlit_extension/pages/projetos/steps/product_vision_step.py
+"""
+Etapa: Roteiro → Product Vision (modo assistido por IA)
+
+Este módulo desenha a tela onde você descreve a visão do produto
+de forma simples e guiada. Ele oferece dois jeitos de preencher:
+- Passo a passo (uma pergunta por vez, com ajuda da IA em cada campo)
+- Formulário completo (todas as perguntas de uma vez, com botão de "Refinar tudo")
+
+Objetivo para pessoas leigas: ajudar você a escrever um texto claro,
+curto e objetivo sobre o produto — o que é, para quem é e qual problema
+resolve — sem exigir termos técnicos. A IA apenas melhora a redação do
+que você já escreveu; ela não inventa fatos novos.
+"""
 from __future__ import annotations
 
 from typing import Dict, Any, Optional
@@ -9,19 +21,28 @@ import logging
 
 import streamlit as st
 
+# Logger de módulo para mensagens de depuração e diagnóstico
+logger = logging.getLogger(__name__)
+
 
 def _wiz_key(name: str, step: int | str = "pv") -> str:
-    """Gera chave única para elementos do product vision para evitar IDs duplicados."""
+    """Gera uma chave única e estável para componentes de tela.
+
+    Em termos simples: o Streamlit precisa de uma "etiqueta" única para
+    lembrar o estado de cada botão/campo. Esta função cria essa etiqueta
+    usando o ID da sessão e o nome do componente.
+    """
     session_id = st.session_state.get("session_id", "anon")
     return f"pv::{session_id}::s{step}::{name}"
 
 
 def _widget_key(field_key: str) -> str:
-    """Return a stable-but-bumpable widget key for step-by-step fields.
+    """Cria uma chave de widget estável, porém "atualizável" (passo a passo).
 
-    We include a lightweight per-field version suffix so we can force a
-    widget to refresh its displayed value after AI refinement without
-    colliding with Streamlit's key uniqueness rules.
+    Em português simples: quando a IA melhora um texto, precisamos que o
+    campo na tela "recarregue" o valor. Fazemos isso aumentando um número
+    de versão na chave do widget, sem quebrar as regras de unicidade do
+    Streamlit.
     """
     ver_key = f"pv_widget_ver_{field_key}"
     version = int(st.session_state.get(ver_key, 0))
@@ -29,7 +50,7 @@ def _widget_key(field_key: str) -> str:
 
 
 def _form_widget_key(field_key: str) -> str:
-    """Key versioning for full-form widgets (review step)."""
+    """Versão de chave para os widgets do formulário completo (revisão)."""
     ver_key = f"pv_form_widget_ver_{field_key}"
     version = int(st.session_state.get(ver_key, 0))
     return f"form_{field_key}_v{version}"
@@ -37,10 +58,11 @@ def _form_widget_key(field_key: str) -> str:
 # Serviço de IA — Unified service com fallback automático (Real ↔ Mock)
 
 def _ensure_ai_env_loaded() -> None:
-    """Best-effort .env loading so OPENAI_API_KEY is available during page runs.
+    """Tenta carregar variáveis do arquivo .env para habilitar a IA.
 
-    Streamlit pages can be executed without the main orchestrator config loader,
-    so we defensively load a .env from common locations if the key is missing.
+    Em algumas execuções, a página pode rodar sem o carregador global
+    de configuração. Aqui fazemos uma busca simples por um arquivo
+    ".env" em pastas comuns do projeto para achar a chave `OPENAI_API_KEY`.
     """
     if os.getenv("OPENAI_API_KEY"):
         return
@@ -49,32 +71,55 @@ def _ensure_ai_env_loaded() -> None:
     except Exception:
         return
 
-    candidates = [
-        Path.cwd() / ".env",
-        Path(__file__).resolve().parents[5] / ".env",   # project root (heuristic)
-        Path(__file__).resolve().parents[3] / ".env",
-        Path(__file__).resolve().parents[3] / "streamlit_extension/.env",
-        Path(__file__).resolve().parents[3] / "config/.env",
-    ]
+    # Monta uma lista segura de caminhos candidatos (sem índices fora de faixa)
+    candidates: list[Path] = []
+    try:
+        candidates.append(Path.cwd() / ".env")
+        for parent in Path(__file__).resolve().parents:
+            candidates.append(parent / ".env")
+            candidates.append(parent / "streamlit_extension/.env")
+            candidates.append(parent / "config/.env")
+    except Exception:
+        # Em último caso, tenta apenas no diretório atual
+        candidates = [Path.cwd() / ".env"]
+
+    seen: set[str] = set()
     for env_path in candidates:
         try:
+            key = str(env_path.resolve())
+            if key in seen:
+                continue
+            seen.add(key)
             if env_path.exists():
                 load_dotenv(env_path)
                 if os.getenv("OPENAI_API_KEY"):
+                    logger.debug("OPENAI_API_KEY carregada de: %s", env_path)
                     break
         except Exception:
-            # Ignore and try next candidate
+            # Ignora e tenta próximo candidato
             continue
 try:
     from streamlit_extension.services.vision_service import create_vision_service
-    from src.ia.agents.agno_agent import VisionRefinerAgent, SingleFieldAgent
+    from src.ia.agents.agno_agent import SingleFieldAgent
 
     # Lazy init: criar serviços somente quando necessários (evita falha antes de carregar .env)
     class VisionRefineService:
+        """Pequena fachada para chamar o serviço de IA real sob demanda.
+
+        A instância real (cliente de IA) só é criada quando a primeira
+        chamada de refino acontece, evitando erros de ambiente e melhorando
+        o tempo de carregamento da página.
+        """
         def __init__(self):
-            self._vision = None
+            self._vision: Any | None = None
             
         def refine(self, payload: Dict[str, Any]):
+            """Envia todos os campos para a IA e retorna sugestões.
+
+            Espera receber de volta um dicionário com os mesmos nomes de
+            campos e textos melhorados. Em linguagem simples: você escreve,
+            a IA dá um polimento e devolve o texto revisado.
+            """
             if self._vision is None:
                 # Garantir que OPENAI_API_KEY esteja carregada de .env quando necessário
                 _ensure_ai_env_loaded()
@@ -174,6 +219,12 @@ Regras gerais:
             return new_text or current_text
 
     def _get_single_field_refiner() -> "SingleFieldRefiner":
+        """Obtém um refinador de campo único com cache em sessão.
+
+        Para leigos: criamos um "ajudante de IA" específico para
+        melhorar um campo por vez. Ele fica guardado em memória para
+        ficar rápido nas próximas vezes.
+        """
         # Guardar em session_state para não recriar a cada chamada
         key = "_pv_single_agent"
         if key not in st.session_state or not isinstance(st.session_state[key], SingleFieldAgent):
@@ -181,7 +232,7 @@ Regras gerais:
             st.session_state[key] = SingleFieldAgent(model_id="gpt-5-nano")
         return SingleFieldRefiner(st.session_state[key])
 
-    print(f"✅ Vision service (main.py): pronto para strict real (lazy init)")
+    logger.debug("Vision service pronto (lazy init, modo estrito)")
 
 except Exception as e:
     # Strict: não realizar fallback; levanta erro nas chamadas
@@ -195,7 +246,7 @@ except Exception as e:
 
     def _get_single_field_refiner() -> "SingleFieldRefiner":
         return SingleFieldRefiner()
-    print("❌ main.py em modo estrito: Vision service indisponível.")
+    logger.warning("Vision service indisponível (modo estrito)")
 
 # State helpers
 from .._pv_state import (
@@ -212,34 +263,24 @@ from .._pv_state import (
 # Utilidades locais (robustez e reutilização)
 # ---------------------------------------------
 def _get_refine_service() -> VisionRefineService:
-    """Instancia única do serviço de refino (cache em session_state)."""
+    """Obtém uma instância única do serviço de IA (com cache na sessão).
+
+    Para leigos: criamos o "motor de IA" uma vez e reaproveitamos
+    durante a navegação, evitando atrasos e erros repetidos.
+    """
     key = "_pv_refine_service"
     if key not in st.session_state:
         st.session_state[key] = VisionRefineService()
     return st.session_state[key]
 
 
-class _NoStatus:
-    """Fallback quando st.status não existir (ex.: versões antigas/ambiente de teste)."""
-    def update(self, **kwargs):  # compatibilidade com .update(label=..., state=...)
-        pass
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, *exc):
-        return False
-
-
 def _status_ctx(label: str, expanded: bool = True):
-    """Context manager que usa st.status quando disponível, senão _NoStatus()."""
-    if hasattr(st, "status"):
-        return st.status(label, expanded=expanded)  # type: ignore[attr-defined]
-    return _NoStatus()
+    """Mostra uma caixa de status durante ações da IA."""
+    return st.status(label, expanded=expanded)
 
 
 def _preview(v: Any, max_len: int = 120) -> str:
-    """Compact string preview for logging/debug UI."""
+    """Gera um texto curtinho para logs/diagnóstico (sem quebrar a tela)."""
     try:
         if isinstance(v, (dict, list)):
             s = json.dumps(v, ensure_ascii=False)  # type: ignore[arg-type]
@@ -252,6 +293,7 @@ def _preview(v: Any, max_len: int = 120) -> str:
 
 
 def _is_nonempty_str(x: Any) -> bool:
+    """Confere se é uma string com algum conteúdo (ignorando espaços)."""
     return isinstance(x, str) and x.strip() != ""
 
 
@@ -262,7 +304,11 @@ def _is_nonempty_str(x: Any) -> bool:
 # Validadores simples
 # ---------------------------------------------
 def _all_fields_filled(pv_data: Dict[str, Any]) -> bool:
-    """Verifica se todos os campos do Product Vision estão preenchidos corretamente."""
+    """Verifica se todos os campos da visão do produto foram preenchidos.
+
+    Em termos simples: impede chamar a IA global antes de completar os
+    campos obrigatórios, evitando resultados ruins.
+    """
     for field_key, _ in PV_FIELDS:
         v = pv_data.get(field_key)
         if not _is_nonempty_str(v):
@@ -276,10 +322,14 @@ def _all_fields_filled(pv_data: Dict[str, Any]) -> bool:
 def render_product_vision_with_toggle(
     controller=None, project_id: Optional[int] = None
 ) -> None:
-    """
-    Renderiza o passo Product Vision com o "Third Way":
-      - Modo steps (um campo por vez + revisão final)
-      - Modo formulário (todos os campos)
+    """Desenha a etapa de Product Vision com dois modos de uso.
+
+    - Passo a passo: responde uma pergunta por vez e pode refinar cada
+      campo com IA.
+    - Formulário completo: vê tudo junto e pode refinar tudo de uma vez.
+
+    Observação: os parâmetros `controller` e `project_id` estão reservados
+    para integrações futuras e hoje não alteram o comportamento da tela.
     """
     init_pv_state(st.session_state)
 
@@ -309,7 +359,11 @@ def render_product_vision_with_toggle(
 # Formulário completo (IA global)
 # ---------------------------------------------
 def _render_form_mode() -> None:
-    """Renderiza todos os campos de uma vez (formulário completo)."""
+    """Mostra todas as perguntas em um único formulário simples.
+
+    Ideal para quem prefere preencher tudo de uma vez e depois pedir para
+    a IA revisar o texto completo.
+    """
     with st.form("pv_form_mode", clear_on_submit=False):
         # Coletar valores dos widgets sem sobrescrever o session_state durante renderização
         form_values = {}
@@ -381,7 +435,10 @@ def _render_form_mode() -> None:
 # Step-by-step (IA por campo) + revisão final
 # ---------------------------------------------
 def _render_steps_mode() -> None:
-    """Renderiza um campo por vez das 5 perguntas dentro da fase Roteiro."""
+    """Mostra as perguntas uma a uma, com barra de progresso.
+
+    Ao final, há uma tela de revisão com o formulário completo.
+    """
     idx = st.session_state.pv_step_idx
     total = total_steps()  # len(PV_FIELDS) + 1 (revisão final)
 
@@ -463,7 +520,7 @@ def _render_steps_mode() -> None:
 # Resumo lateral
 # ---------------------------------------------
 def _render_summary() -> None:
-    """Renderiza o resumo do Product Vision."""
+    """Apresenta um resumo claro do que já foi preenchido."""
     st.subheader("📋 Resumo")
 
     if _all_fields_filled(st.session_state.pv):
@@ -498,7 +555,11 @@ def _render_summary() -> None:
 # Handlers de IA
 # ---------------------------------------------
 def _handle_refine_all() -> None:
-    """Refina todos os campos (IA global). Requer todos os campos preenchidos."""
+    """Pede para a IA polir todos os campos de uma só vez.
+
+    Só funciona quando todos os campos estiverem preenchidos — assim a
+    IA consegue manter coerência e não inventa informação.
+    """
     if not _all_fields_filled(st.session_state.pv):
         st.warning("⚠️ Para refinar com IA, preencha todos os campos primeiro.")
         return
@@ -521,7 +582,6 @@ def _handle_refine_all() -> None:
             status.update(label="📋 Validando campos...", state="running")
             status.update(label="🔧 Preparando dados para IA...", state="running")
 
-            logger = logging.getLogger(__name__)
             try:
                 logger.info(
                     "PV refine_all | payload: %s",
@@ -532,6 +592,14 @@ def _handle_refine_all() -> None:
 
             status.update(label="✨ Refinando conteúdo...", state="running")
             result = service.refine(st.session_state.pv)
+
+            # Robustez: o serviço deve devolver um dicionário
+            if not isinstance(result, dict):
+                status.update(label="⚠️ Resposta inesperada da IA. Tente novamente.", state="error")
+                logger.error("PV refine_all | resultado inesperado do serviço: %s", type(result).__name__)
+                # Reset flag antes de retornar, para não travar o fluxo
+                st.session_state.refinement_in_progress = False
+                return
 
             status.update(label="📝 Aplicando melhorias...", state="running")
             fields_updated = 0
@@ -615,7 +683,11 @@ def _handle_refine_all() -> None:
 
 
 def _handle_refine_field(field_key: str) -> None:
-    """Refina apenas um campo (IA por campo) com contexto completo."""
+    """Pede para a IA melhorar apenas um campo, usando o contexto.
+
+    Em linguagem simples: a IA lê as outras respostas (se existirem)
+    para manter o mesmo tom e sentido, mas só reescreve o campo escolhido.
+    """
     current_value = st.session_state.pv.get(field_key)
 
     if not _is_nonempty_str(current_value):
@@ -631,8 +703,6 @@ def _handle_refine_field(field_key: str) -> None:
     # Garantir que o campo alvo vai com o valor atual
     context[field_key] = (current_value or "").strip()
 
-    logger = logging.getLogger(__name__)
-    
     # Variável para controlar se precisa fazer rerun (fora do context manager)
     needs_rerun = False
     refined_str = None
@@ -708,7 +778,10 @@ def _handle_refine_field(field_key: str) -> None:
 # API legada (compat)
 # ---------------------------------------------
 def render_step(ctx: Dict[str, Any]) -> None:
-    """API legada para compatibilidade com chamadas antigas."""
+    """Ponto de entrada antigo mantido por compatibilidade.
+
+    Aceita um dicionário com dados prévios e renderiza a tela atual.
+    """
     if "data" in ctx and "product_vision" in ctx["data"]:
         old = ctx["data"]["product_vision"]
         init_pv_state(st.session_state)
@@ -719,7 +792,11 @@ def render_step(ctx: Dict[str, Any]) -> None:
 
 
 def validate(ctx: Dict[str, Any]) -> tuple[bool, Optional[str]]:
-    """Validação legada (compat)."""
+    """Validação rápida dos campos (modo legado).
+
+    Retorna (True, None) quando está tudo ok, ou (False, mensagem) quando
+    falta preencher algo importante.
+    """
     if hasattr(st, "session_state") and "pv" in st.session_state:
         if not _all_fields_filled(st.session_state.pv):
             return False, "Todos os campos são obrigatórios para a Product Vision."
@@ -734,7 +811,7 @@ def validate(ctx: Dict[str, Any]) -> tuple[bool, Optional[str]]:
 
 
 def get_summary(ctx: Dict[str, Any]) -> Dict[str, Any]:
-    """Resumo legado (compat)."""
+    """Gera um resumo simples no formato de dicionário (modo legado)."""
     if hasattr(st, "session_state") and "pv" in st.session_state:
         return {
             label: (st.session_state.pv.get(key, [] if key == "constraints" else ""))

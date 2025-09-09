@@ -28,7 +28,7 @@
 ### 📊 **Implementation Metrics**
 - **`project_wizard_state.py`**: 351 lines - Global wizard state management  
 - **`steps/_pv_state.py`**: 62 lines - Product Vision state helpers  
-- **`steps/product_vision_step.py`**: Refactored with toggle functionality  
+- **`steps/product_vision_step/product_vision.py`**: Refactored with toggle functionality  
 - **`projeto_wizard.py`**: Complete rewrite - multi-step orchestration  
 - **Zero Breaking Changes**: All existing functionality preserved  
 
@@ -49,14 +49,9 @@ streamlit_extension/pages/projetos/
 │
 ├── steps/                     # Wizard steps implementation
 │   ├── _pv_state.py          # Product Vision state helpers
-│   ├── product_vision_step.py # Legacy single-file implementation
-│   ├── product_vision_step/  # Modular implementation (current)
-│   │   ├── main.py           # Main entry point with AI refinement
-│   │   ├── mock_refiner.py  # Mock AI for development
-│   │   ├── form_mode.py     # Form mode components
-│   │   ├── steps_mode.py    # Steps mode components
-│   │   ├── summary.py       # Summary display
-│   │   ├── ai_refine.py     # AI refinement handlers
+│   ├── product_vision_step/  # Product Vision (current)
+│   │   ├── product_vision.py # Main entry point with AI refinement
+│   │   ├── AGENTS.md         # Agent notes
 │   │   └── CLAUDE.md         # AI refinement documentation
 │   └── pv_state/             # State management utilities
 │       ├── state_core.py    # Core state definitions
@@ -73,7 +68,7 @@ streamlit_extension/pages/projetos/
 ```
 
 ### **Clean Architecture Layers**
-- **📄 UI Layer**: `produto_wizard.py`, `product_vision_step.py` - Streamlit components
+- **📄 UI Layer**: `produto_wizard.py`, `steps/product_vision_step/product_vision.py` - Streamlit components
 - **🎮 Controllers**: `ProductVisionController` - Business logic orchestration  
 - **🧠 Domain Layer**: `product_vision_state.py` - Pure business rules  
 - **💾 Infrastructure**: Repository pattern - Data persistence abstraction
@@ -365,7 +360,7 @@ is_valid, error = validate_step_data(st.session_state, 1)
 
 ### **Adding New Wizard Steps**
 1. **Update WIZARD_STEPS**: Add new step to both `projeto_wizard.py` and `project_wizard_state.py`
-2. **Create Step Module**: Follow `product_vision_step.py` pattern
+2. **Create Step Module**: Follow `product_vision_step/product_vision.py` pattern
 3. **Add State Helpers**: Create `_[step]_state.py` following `_pv_state.py` pattern
 4. **Implement Validation**: Add validation function to `project_wizard_state.py`
 5. **Update Router**: Add step routing in `render_current_step()`
@@ -373,7 +368,7 @@ is_valid, error = validate_step_data(st.session_state, 1)
 ### **Extending Existing Steps**
 1. **Modify PV_FIELDS**: Update field definitions in `_pv_state.py`  
 2. **Update Validation**: Modify `_validate_product_vision_step()`
-3. **Extend UI**: Add new field rendering in `product_vision_step.py`
+3. **Extend UI**: Add new field rendering in `product_vision_step/product_vision.py`
 4. **Test Integration**: Ensure form/steps modes work with new fields
 
 ---
@@ -388,7 +383,7 @@ is_valid, error = validate_step_data(st.session_state, 1)
 
 ### **Key Implementation Files**
 - **`projeto_wizard.py`** - Main wizard with 4-phase navigation
-- **`steps/product_vision_step/main.py`** - AI refinement integration
+- **`steps/product_vision_step/product_vision.py`** - AI refinement integration
 - **`steps/_pv_state.py`** - State management helpers
 - **`project_wizard_state.py`** - Global wizard state
 

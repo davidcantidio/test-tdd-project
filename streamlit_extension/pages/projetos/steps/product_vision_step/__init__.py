@@ -1,7 +1,7 @@
 """Product Vision Step — API pública consolidada.
 
 Este pacote expõe a API do passo "Product Vision" do assistente de projetos.
-A implementação atual está consolidada em `main.py` (UI + handlers + IA),
+A implementação atual está consolidada em `product_vision.py` (UI + handlers + IA),
 evitando importações circulares e mantendo um ponto único de manutenção.
 
 Funções exportadas (estáveis):
@@ -18,6 +18,7 @@ Notas de arquitetura:
 """
 
 from __future__ import annotations
+import logging
 
 __all__ = [
     "render_product_vision_with_toggle",
@@ -26,13 +27,14 @@ __all__ = [
     "get_summary",
 ]
 
-# IMPORTANTE: Sistema de IA configurado via main.py quando necessário
+# IMPORTANTE: Sistema de IA configurado via product_vision.py quando necessário
 # Mantemos import mínimo aqui para evitar efeitos colaterais desnecessários
-print("✅ Sistema de IA configurado via main.py (sem imports circulares)")
+_logger = logging.getLogger(__name__)
+_logger.debug("Sistema de IA configurado via product_vision.py (sem imports circulares)")
 
 # Reexports de compatibilidade com fallback amigável
 try:
-    from .main import (  # type: ignore
+    from .product_vision import (  # type: ignore
         render_product_vision_with_toggle,
         render_step,
         validate,
@@ -45,13 +47,13 @@ except Exception as _e:  # ModuleNotFoundError, ImportError, etc.
     # Log detalhado da causa para facilitar diagnóstico
     try:
         import traceback as _tb  # local import to avoid global side-effects
-        print("❌ Falha ao importar product_vision_step.main:\n" + _tb.format_exc())
+        _logger.exception("Falha ao importar product_vision_step.product_vision:\n%s", _tb.format_exc())
     except Exception:
         pass
 
     def _missing(*_args, **_kwargs):  # pragma: no cover
         raise RuntimeError(
-            "Product Vision Step indisponível. Verifique se `product_vision_step/main.py` "
+            "Product Vision Step indisponível. Verifique se `product_vision_step/product_vision.py` "
             "existe e exporta: render_product_vision_with_toggle, render_step, "
             "validate e get_summary."
         ) from _IMPORT_ERROR

@@ -12,7 +12,7 @@ Versão: **2.0 - Refinamento Por Campo Implementado**
 
 ### **Arquitetura Implementada v2.0**
 ```
-product_vision_step/main.py
+product_vision_step/product_vision.py
     ↓
 ┌─────────────────────────────────────┐
 │ REFINAMENTO INDIVIDUAL (NOVO)       │
@@ -88,7 +88,7 @@ pytest tests/product_vision/test_ai_refine_integration.py -v
 
 ## 📝 **Arquivos Modificados**
 
-1. **`/streamlit_extension/pages/projetos/steps/product_vision_step.py`**
+1. **`/streamlit_extension/pages/projetos/steps/product_vision_step/product_vision.py`**
    - Linhas 6-44: Sistema de import com fallback inteligente
    - AgentAdapter: Compatibiliza métodos refine() → run()
    - VisionRefineService wrapper: Mantém compatibilidade

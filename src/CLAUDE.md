@@ -421,7 +421,7 @@ refiner = RealGPTRefiner()
 ## 🔗 Integration Points
 
 ### **Used By:**
-- `/streamlit_extension/pages/projetos/steps/product_vision_step/main.py` - Main UI integration
+- `/streamlit_extension/pages/projetos/steps/product_vision_step/product_vision.py` - Main UI integration
 - `/streamlit_extension/services/vision_service.py` - Service layer wrapper
 
 ### **Dependencies:**

@@ -72,7 +72,7 @@ streamlit_extension/pages/
     ├── project_wizard_state.py # Global wizard state (351 lines)
     ├── steps/
     │   ├── _pv_state.py     # Product Vision state helpers (62 lines)
-    │   └── product_vision_step.py # PV step with form/steps toggle
+    │   └── steps/product_vision_step/product_vision.py # PV step (form/steps + IA)
     ├── controllers/         # Business logic
     ├── domain/             # Pure domain logic
     └── repositories/       # Repository pattern
@@ -144,7 +144,7 @@ else:
 #### **Architecture Components**
 - **`_pv_state.py`** (62 lines): Product Vision state helpers
 - **`project_wizard_state.py`** (351 lines): Global wizard state management  
-- **`product_vision_step.py`**: UI components with toggle functionality
+- **`steps/product_vision_step/product_vision.py`**: UI components with toggle functionality
 - **`projeto_wizard.py`**: Main wizard orchestration with session state
 
 ---

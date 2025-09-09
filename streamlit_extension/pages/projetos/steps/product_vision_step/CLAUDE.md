@@ -25,7 +25,7 @@ Status: ✅ Produção — UI estável, logs adicionados, refino global em modo 
 product_vision_step/
 ├── AGENTS.md          # Este documento (fonte da verdade)
 ├── CLAUDE.md          # Espelho exato de AGENTS.md
-└── main.py            # Implementação consolidada (UI + handlers + IA)
+└── product_vision.py  # Implementação consolidada (UI + handlers + IA)
 ```
 
 Dependências diretas do passo (fora da pasta):
@@ -41,7 +41,7 @@ Não existem arquivos `form_mode.py`, `steps_mode.py`, `summary.py`, etc. Toda a
 
 ---
 
-## Principais componentes (main.py)
+## Principais componentes (product_vision.py)
 
 - `_wiz_key(name, step)` — gera prefixos estáveis por sessão para evitar colisões no wizard macro.
 - `_widget_key(field)` e `_form_widget_key(field)` — versionam as keys dos widgets:
