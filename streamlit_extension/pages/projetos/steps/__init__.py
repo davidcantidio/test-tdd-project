@@ -46,3 +46,9 @@ Architecture Notes:
     All business logic should be delegated to controllers, maintaining
     clean separation between UI and business concerns.
 """
+
+# Import step modules for external access
+from . import product_vision_step
+from . import capitulos_step
+
+__all__ = ['product_vision_step', 'capitulos_step']

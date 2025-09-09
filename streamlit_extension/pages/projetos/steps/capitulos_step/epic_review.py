@@ -23,6 +23,7 @@ from streamlit_extension.components.epic_review_adapters import (
     ConversionResult
 )
 from streamlit_extension.services.base import ServiceResult
+from streamlit_extension.core.dto.epic_suggestion_dto import EpicSuggestionDTO
 
 
 @dataclass
