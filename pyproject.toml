@@ -46,6 +46,12 @@ rich = "^13.0.0"
 typer = "^0.9.0"
 PyYAML = "^6.0.0"
 
+# Critical dependencies (moved from optional for CI)
+streamlit = "^1.30.0"
+sqlalchemy = "^2.0.0"
+python-dotenv = "^1.0.0"
+requests = "^2.31.0"
+
 # Security dependencies
 msgpack = "^1.0.0"
 pysqlcipher3 = {version = "^1.2.0", optional = true}
@@ -59,14 +65,10 @@ plotly = {version = "^5.15.0", optional = true}
 jupyter = {version = "^1.0.0", optional = true}
 
 # HTTP requests (optional)
-requests = {version = "^2.31.0", optional = true}
 httpx = {version = "^0.24.0", optional = true}
 
 # Streamlit extension dependencies (optional)
-streamlit = {version = "^1.30.0", optional = true}
 streamlit-elements = {version = "^0.1.0", optional = true}
-sqlalchemy = {version = "^2.0.0", optional = true}
-python-dotenv = {version = "^1.0.0", optional = true}
 gql = {version = "^3.4.0", optional = true}
 # streamlit-dnd = {version = "^0.2.0", optional = true}  # Package not available
 aiohttp = {version = "^3.8.0", optional = true}
@@ -126,10 +128,10 @@ matplotlib = "^3.7.0"
 [tool.poetry.extras]
 # Optional feature sets
 analytics = ["pandas", "numpy", "plotly", "jupyter"]
-web = ["requests", "httpx"]
+web = ["httpx"]
 auth = ["google-auth", "google-auth-oauthlib", "google-auth-httplib2", "streamlit-authenticator", "authlib"]
-streamlit = ["streamlit", "streamlit-elements", "sqlalchemy", "python-dotenv", "gql", "aiohttp", "pytz", "pandas", "plotly", "numpy", "requests", "google-auth", "google-auth-oauthlib", "google-auth-httplib2", "streamlit-authenticator", "authlib"]
-all = ["pandas", "numpy", "plotly", "jupyter", "requests", "httpx", "streamlit", "sqlalchemy", "python-dotenv", "gql", "aiohttp", "pytz", "google-auth", "google-auth-oauthlib", "google-auth-httplib2", "streamlit-authenticator", "authlib"]
+streamlit = ["streamlit-elements", "gql", "aiohttp", "pytz", "pandas", "plotly", "numpy", "google-auth", "google-auth-oauthlib", "google-auth-httplib2", "streamlit-authenticator", "authlib"]
+all = ["pandas", "numpy", "plotly", "jupyter", "httpx", "streamlit-elements", "gql", "aiohttp", "pytz", "google-auth", "google-auth-oauthlib", "google-auth-httplib2", "streamlit-authenticator", "authlib"]
 
 # Optional SQLCipher support is provided via a dedicated extra to avoid
 # system build dependencies on environments without libsqlcipher.

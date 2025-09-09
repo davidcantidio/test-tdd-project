@@ -1,0 +1,1188 @@
+============================= test session starts ==============================
+platform linux -- Python 3.11.13, pytest-8.4.2, pluggy-1.6.0 -- /opt/hostedtoolcache/Python/3.11.13/x64/bin/python
+cachedir: .pytest_cache
+rootdir: /home/runner/work/test-tdd-project/test-tdd-project
+configfile: pytest.ini
+plugins: timeout-2.4.0, cov-7.0.0, xdist-3.8.0
+timeout: 300.0s
+timeout method: thread
+timeout func_only: False
+collecting ... 
+----------------------------- live log collection ------------------------------
+2025-09-09 22:00:53 [    INFO] config.environment: Loading configuration for environment: development
+2025-09-09 22:00:53 [    INFO] config.environment: Loading config from: /home/runner/work/test-tdd-project/test-tdd-project/config/development.toml
+2025-09-09 22:00:53 [    INFO] config.environment: Google OAuth disabled in development - no credentials found
+2025-09-09 22:00:53 [    INFO] config.environment: Configuration validation passed
+2025-09-09 22:00:53 [    INFO] config.environment: Configuration loaded successfully for development
+collected 317 items / 47 errors / 237 deselected / 5 skipped / 80 selected
+
+==================================== ERRORS ====================================
+__________ ERROR collecting tests/api_endpoints/test_api_endpoints.py __________
+ImportError while importing test module '/home/runner/work/test-tdd-project/test-tdd-project/tests/api_endpoints/test_api_endpoints.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/site-packages/_pytest/python.py:498: in importtestmodule
+    mod = import_path(
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/site-packages/_pytest/pathlib.py:587: in import_path
+    importlib.import_module(module_name)
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+<frozen importlib._bootstrap>:1204: in _gcd_import
+    ???
+<frozen importlib._bootstrap>:1176: in _find_and_load
+    ???
+<frozen importlib._bootstrap>:1147: in _find_and_load_unlocked
+    ???
+<frozen importlib._bootstrap>:690: in _load_unlocked
+    ???
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/site-packages/_pytest/assertion/rewrite.py:186: in exec_module
+    exec(co, module.__dict__)
+tests/api_endpoints/test_api_endpoints.py:23: in <module>
+    from streamlit_extension.endpoints.execution_api import (
+E   ModuleNotFoundError: No module named 'streamlit_extension.endpoints'
+_________ ERROR collecting tests/api_endpoints/test_health_endpoint.py _________
+ImportError while importing test module '/home/runner/work/test-tdd-project/test-tdd-project/tests/api_endpoints/test_health_endpoint.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/site-packages/_pytest/python.py:498: in importtestmodule
+    mod = import_path(
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/site-packages/_pytest/pathlib.py:587: in import_path
+    importlib.import_module(module_name)
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+<frozen importlib._bootstrap>:1204: in _gcd_import
+    ???
+<frozen importlib._bootstrap>:1176: in _find_and_load
+    ???
+<frozen importlib._bootstrap>:1147: in _find_and_load_unlocked
+    ???
+<frozen importlib._bootstrap>:690: in _load_unlocked
+    ???
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/site-packages/_pytest/assertion/rewrite.py:186: in exec_module
+    exec(co, module.__dict__)
+tests/api_endpoints/test_health_endpoint.py:4: in <module>
+    from streamlit_extension.endpoints import HealthCheckEndpoint, HealthStatus, ComponentChecker
+E   ModuleNotFoundError: No module named 'streamlit_extension.endpoints'
+__________ ERROR collecting tests/api_endpoints/test_json_handler.py ___________
+ImportError while importing test module '/home/runner/work/test-tdd-project/test-tdd-project/tests/api_endpoints/test_json_handler.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/site-packages/_pytest/python.py:498: in importtestmodule
+    mod = import_path(
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/site-packages/_pytest/pathlib.py:587: in import_path
+    importlib.import_module(module_name)
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+<frozen importlib._bootstrap>:1204: in _gcd_import
+    ???
+<frozen importlib._bootstrap>:1176: in _find_and_load
+    ???
+<frozen importlib._bootstrap>:1147: in _find_and_load_unlocked
+    ???
+<frozen importlib._bootstrap>:690: in _load_unlocked
+    ???
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/site-packages/_pytest/assertion/rewrite.py:186: in exec_module
+    exec(co, module.__dict__)
+tests/api_endpoints/test_json_handler.py:12: in <module>
+    from duration_system.json_handler import (
+E   ModuleNotFoundError: No module named 'duration_system'
+_______ ERROR collecting tests/business_logic/test_business_calendar.py ________
+ImportError while importing test module '/home/runner/work/test-tdd-project/test-tdd-project/tests/business_logic/test_business_calendar.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/site-packages/_pytest/python.py:498: in importtestmodule
+    mod = import_path(
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/site-packages/_pytest/pathlib.py:587: in import_path
+    importlib.import_module(module_name)
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+<frozen importlib._bootstrap>:1204: in _gcd_import
+    ???
+<frozen importlib._bootstrap>:1176: in _find_and_load
+    ???
+<frozen importlib._bootstrap>:1147: in _find_and_load_unlocked
+    ???
+<frozen importlib._bootstrap>:690: in _load_unlocked
+    ???
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/site-packages/_pytest/assertion/rewrite.py:186: in exec_module
+    exec(co, module.__dict__)
+tests/business_logic/test_business_calendar.py:22: in <module>
+    from duration_system.business_calendar import (
+E   ModuleNotFoundError: No module named 'duration_system'
+______ ERROR collecting tests/business_logic/test_duration_calculator.py _______
+ImportError while importing test module '/home/runner/work/test-tdd-project/test-tdd-project/tests/business_logic/test_duration_calculator.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/site-packages/_pytest/python.py:498: in importtestmodule
+    mod = import_path(
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/site-packages/_pytest/pathlib.py:587: in import_path
+    importlib.import_module(module_name)
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+<frozen importlib._bootstrap>:1204: in _gcd_import
+    ???
+<frozen importlib._bootstrap>:1176: in _find_and_load
+    ???
+<frozen importlib._bootstrap>:1147: in _find_and_load_unlocked
+    ???
+<frozen importlib._bootstrap>:690: in _load_unlocked
+    ???
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/site-packages/_pytest/assertion/rewrite.py:186: in exec_module
+    exec(co, module.__dict__)
+tests/business_logic/test_duration_calculator.py:12: in <module>
+    from duration_system.duration_calculator import (
+E   ModuleNotFoundError: No module named 'duration_system'
+_______ ERROR collecting tests/business_logic/test_duration_formatter.py _______
+ImportError while importing test module '/home/runner/work/test-tdd-project/test-tdd-project/tests/business_logic/test_duration_formatter.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/site-packages/_pytest/python.py:498: in importtestmodule
+    mod = import_path(
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/site-packages/_pytest/pathlib.py:587: in import_path
+    importlib.import_module(module_name)
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+<frozen importlib._bootstrap>:1204: in _gcd_import
+    ???
+<frozen importlib._bootstrap>:1176: in _find_and_load
+    ???
+<frozen importlib._bootstrap>:1147: in _find_and_load_unlocked
+    ???
+<frozen importlib._bootstrap>:690: in _load_unlocked
+    ???
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/site-packages/_pytest/assertion/rewrite.py:186: in exec_module
+    exec(co, module.__dict__)
+tests/business_logic/test_duration_formatter.py:11: in <module>
+    from duration_system.duration_formatter import (
+E   ModuleNotFoundError: No module named 'duration_system'
+_____ ERROR collecting tests/business_logic/test_epic_progress_defaults.py _____
+ImportError while importing test module '/home/runner/work/test-tdd-project/test-tdd-project/tests/business_logic/test_epic_progress_defaults.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/site-packages/_pytest/python.py:498: in importtestmodule
+    mod = import_path(
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/site-packages/_pytest/pathlib.py:587: in import_path
+    importlib.import_module(module_name)
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+<frozen importlib._bootstrap>:1204: in _gcd_import
+    ???
+<frozen importlib._bootstrap>:1176: in _find_and_load
+    ???
+<frozen importlib._bootstrap>:1147: in _find_and_load_unlocked
+    ???
+<frozen importlib._bootstrap>:690: in _load_unlocked
+    ???
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/site-packages/_pytest/assertion/rewrite.py:186: in exec_module
+    exec(co, module.__dict__)
+tests/business_logic/test_epic_progress_defaults.py:7: in <module>
+    from streamlit_extension.utils.database import DatabaseManager
+E   ModuleNotFoundError: No module named 'streamlit_extension.utils'
+_____ ERROR collecting tests/cache_performance/test_cache_interrupt_fix.py _____
+ImportError while importing test module '/home/runner/work/test-tdd-project/test-tdd-project/tests/cache_performance/test_cache_interrupt_fix.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/site-packages/_pytest/python.py:498: in importtestmodule
+    mod = import_path(
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/site-packages/_pytest/pathlib.py:587: in import_path
+    importlib.import_module(module_name)
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+<frozen importlib._bootstrap>:1204: in _gcd_import
+    ???
+<frozen importlib._bootstrap>:1176: in _find_and_load
+    ???
+<frozen importlib._bootstrap>:1147: in _find_and_load_unlocked
+    ???
+<frozen importlib._bootstrap>:690: in _load_unlocked
+    ???
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/site-packages/_pytest/assertion/rewrite.py:186: in exec_module
+    exec(co, module.__dict__)
+tests/cache_performance/test_cache_interrupt_fix.py:22: in <module>
+    from duration_system.cache_fix import (
+E   ModuleNotFoundError: No module named 'duration_system'
+_______ ERROR collecting tests/cache_performance/test_cache_security.py ________
+ImportError while importing test module '/home/runner/work/test-tdd-project/test-tdd-project/tests/cache_performance/test_cache_security.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/site-packages/_pytest/python.py:498: in importtestmodule
+    mod = import_path(
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/site-packages/_pytest/pathlib.py:587: in import_path
+    importlib.import_module(module_name)
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+<frozen importlib._bootstrap>:1204: in _gcd_import
+    ???
+<frozen importlib._bootstrap>:1176: in _find_and_load
+    ???
+<frozen importlib._bootstrap>:1147: in _find_and_load_unlocked
+    ???
+<frozen importlib._bootstrap>:690: in _load_unlocked
+    ???
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/site-packages/_pytest/assertion/rewrite.py:186: in exec_module
+    exec(co, module.__dict__)
+tests/cache_performance/test_cache_security.py:25: in <module>
+    from duration_system.cache_fix import InterruptSafeCache
+E   ModuleNotFoundError: No module named 'duration_system'
+_______ ERROR collecting tests/cache_performance/test_connection_pool.py _______
+ImportError while importing test module '/home/runner/work/test-tdd-project/test-tdd-project/tests/cache_performance/test_connection_pool.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/site-packages/_pytest/python.py:498: in importtestmodule
+    mod = import_path(
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/site-packages/_pytest/pathlib.py:587: in import_path
+    importlib.import_module(module_name)
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+<frozen importlib._bootstrap>:1204: in _gcd_import
+    ???
+<frozen importlib._bootstrap>:1176: in _find_and_load
+    ???
+<frozen importlib._bootstrap>:1147: in _find_and_load_unlocked
+    ???
+<frozen importlib._bootstrap>:690: in _load_unlocked
+    ???
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/site-packages/_pytest/assertion/rewrite.py:186: in exec_module
+    exec(co, module.__dict__)
+tests/cache_performance/test_connection_pool.py:6: in <module>
+    from duration_system.database_transactions import DatabaseConnectionPool
+E   ModuleNotFoundError: No module named 'duration_system'
+_____ ERROR collecting tests/cache_performance/test_rate_limit_headers.py ______
+ImportError while importing test module '/home/runner/work/test-tdd-project/test-tdd-project/tests/cache_performance/test_rate_limit_headers.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/site-packages/_pytest/python.py:498: in importtestmodule
+    mod = import_path(
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/site-packages/_pytest/pathlib.py:587: in import_path
+    importlib.import_module(module_name)
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+<frozen importlib._bootstrap>:1204: in _gcd_import
+    ???
+<frozen importlib._bootstrap>:1176: in _find_and_load
+    ???
+<frozen importlib._bootstrap>:1147: in _find_and_load_unlocked
+    ???
+<frozen importlib._bootstrap>:690: in _load_unlocked
+    ???
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/site-packages/_pytest/assertion/rewrite.py:186: in exec_module
+    exec(co, module.__dict__)
+tests/cache_performance/test_rate_limit_headers.py:5: in <module>
+    from streamlit_extension.middleware.rate_limiting.middleware import RateLimitingMiddleware
+E   ModuleNotFoundError: No module named 'streamlit_extension.middleware'
+_ ERROR collecting tests/cache_performance/test_rate_limit_storage_backends.py _
+ImportError while importing test module '/home/runner/work/test-tdd-project/test-tdd-project/tests/cache_performance/test_rate_limit_storage_backends.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/site-packages/_pytest/python.py:498: in importtestmodule
+    mod = import_path(
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/site-packages/_pytest/pathlib.py:587: in import_path
+    importlib.import_module(module_name)
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+<frozen importlib._bootstrap>:1204: in _gcd_import
+    ???
+<frozen importlib._bootstrap>:1176: in _find_and_load
+    ???
+<frozen importlib._bootstrap>:1147: in _find_and_load_unlocked
+    ???
+<frozen importlib._bootstrap>:690: in _load_unlocked
+    ???
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/site-packages/_pytest/assertion/rewrite.py:186: in exec_module
+    exec(co, module.__dict__)
+tests/cache_performance/test_rate_limit_storage_backends.py:3: in <module>
+    from streamlit_extension.middleware.rate_limiting.core import RateLimiter
+E   ModuleNotFoundError: No module named 'streamlit_extension.middleware'
+_ ERROR collecting tests/cache_performance/test_rate_limiting_comprehensive.py _
+ImportError while importing test module '/home/runner/work/test-tdd-project/test-tdd-project/tests/cache_performance/test_rate_limiting_comprehensive.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/site-packages/_pytest/python.py:498: in importtestmodule
+    mod = import_path(
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/site-packages/_pytest/pathlib.py:587: in import_path
+    importlib.import_module(module_name)
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+<frozen importlib._bootstrap>:1204: in _gcd_import
+    ???
+<frozen importlib._bootstrap>:1176: in _find_and_load
+    ???
+<frozen importlib._bootstrap>:1147: in _find_and_load_unlocked
+    ???
+<frozen importlib._bootstrap>:690: in _load_unlocked
+    ???
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/site-packages/_pytest/assertion/rewrite.py:186: in exec_module
+    exec(co, module.__dict__)
+tests/cache_performance/test_rate_limiting_comprehensive.py:7: in <module>
+    from streamlit_extension.middleware.rate_limiting.algorithms import (
+E   ModuleNotFoundError: No module named 'streamlit_extension.middleware'
+_ ERROR collecting tests/database/test_database_manager_duration_extension.py __
+ImportError while importing test module '/home/runner/work/test-tdd-project/test-tdd-project/tests/database/test_database_manager_duration_extension.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/site-packages/_pytest/python.py:498: in importtestmodule
+    mod = import_path(
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/site-packages/_pytest/pathlib.py:587: in import_path
+    importlib.import_module(module_name)
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+<frozen importlib._bootstrap>:1204: in _gcd_import
+    ???
+<frozen importlib._bootstrap>:1176: in _find_and_load
+    ???
+<frozen importlib._bootstrap>:1147: in _find_and_load_unlocked
+    ???
+<frozen importlib._bootstrap>:690: in _load_unlocked
+    ???
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/site-packages/_pytest/assertion/rewrite.py:186: in exec_module
+    exec(co, module.__dict__)
+tests/database/test_database_manager_duration_extension.py:26: in <module>
+    from streamlit_extension.database import (
+E   ModuleNotFoundError: No module named 'streamlit_extension.database'
+________ ERROR collecting tests/database/test_database_transactions.py _________
+ImportError while importing test module '/home/runner/work/test-tdd-project/test-tdd-project/tests/database/test_database_transactions.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/site-packages/_pytest/python.py:498: in importtestmodule
+    mod = import_path(
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/site-packages/_pytest/pathlib.py:587: in import_path
+    importlib.import_module(module_name)
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+<frozen importlib._bootstrap>:1204: in _gcd_import
+    ???
+<frozen importlib._bootstrap>:1176: in _find_and_load
+    ???
+<frozen importlib._bootstrap>:1147: in _find_and_load_unlocked
+    ???
+<frozen importlib._bootstrap>:690: in _load_unlocked
+    ???
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/site-packages/_pytest/assertion/rewrite.py:186: in exec_module
+    exec(co, module.__dict__)
+tests/database/test_database_transactions.py:27: in <module>
+    from duration_system.database_transactions import (
+E   ModuleNotFoundError: No module named 'duration_system'
+__________ ERROR collecting tests/database/test_migration_schemas.py ___________
+ImportError while importing test module '/home/runner/work/test-tdd-project/test-tdd-project/tests/database/test_migration_schemas.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/site-packages/_pytest/python.py:498: in importtestmodule
+    mod = import_path(
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/site-packages/_pytest/pathlib.py:587: in import_path
+    importlib.import_module(module_name)
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+<frozen importlib._bootstrap>:1204: in _gcd_import
+    ???
+<frozen importlib._bootstrap>:1176: in _find_and_load
+    ???
+<frozen importlib._bootstrap>:1147: in _find_and_load_unlocked
+    ???
+<frozen importlib._bootstrap>:690: in _load_unlocked
+    ???
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/site-packages/_pytest/assertion/rewrite.py:186: in exec_module
+    exec(co, module.__dict__)
+tests/database/test_migration_schemas.py:35: in <module>
+    from streamlit_extension.database import (
+E   ModuleNotFoundError: No module named 'streamlit_extension.database'
+_____________ ERROR collecting tests/epics/test_domain_lexicon.py ______________
+ImportError while importing test module '/home/runner/work/test-tdd-project/test-tdd-project/tests/epics/test_domain_lexicon.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/site-packages/_pytest/python.py:498: in importtestmodule
+    mod = import_path(
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/site-packages/_pytest/pathlib.py:587: in import_path
+    importlib.import_module(module_name)
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+<frozen importlib._bootstrap>:1204: in _gcd_import
+    ???
+<frozen importlib._bootstrap>:1176: in _find_and_load
+    ???
+<frozen importlib._bootstrap>:1147: in _find_and_load_unlocked
+    ???
+<frozen importlib._bootstrap>:690: in _load_unlocked
+    ???
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/site-packages/_pytest/assertion/rewrite.py:186: in exec_module
+    exec(co, module.__dict__)
+tests/epics/test_domain_lexicon.py:7: in <module>
+    import yaml
+E   ModuleNotFoundError: No module named 'yaml'
+________ ERROR collecting tests/infrastructure/test_constants_system.py ________
+ImportError while importing test module '/home/runner/work/test-tdd-project/test-tdd-project/tests/infrastructure/test_constants_system.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/site-packages/_pytest/python.py:498: in importtestmodule
+    mod = import_path(
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/site-packages/_pytest/pathlib.py:587: in import_path
+    importlib.import_module(module_name)
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+<frozen importlib._bootstrap>:1204: in _gcd_import
+    ???
+<frozen importlib._bootstrap>:1176: in _find_and_load
+    ???
+<frozen importlib._bootstrap>:1147: in _find_and_load_unlocked
+    ???
+<frozen importlib._bootstrap>:690: in _load_unlocked
+    ???
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/site-packages/_pytest/assertion/rewrite.py:186: in exec_module
+    exec(co, module.__dict__)
+tests/infrastructure/test_constants_system.py:9: in <module>
+    from streamlit_extension.utils.constants import (
+E   ModuleNotFoundError: No module named 'streamlit_extension.utils'
+_______ ERROR collecting tests/infrastructure/test_correlation_system.py _______
+ImportError while importing test module '/home/runner/work/test-tdd-project/test-tdd-project/tests/infrastructure/test_correlation_system.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/site-packages/_pytest/python.py:498: in importtestmodule
+    mod = import_path(
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/site-packages/_pytest/pathlib.py:587: in import_path
+    importlib.import_module(module_name)
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+<frozen importlib._bootstrap>:1204: in _gcd_import
+    ???
+<frozen importlib._bootstrap>:1176: in _find_and_load
+    ???
+<frozen importlib._bootstrap>:1147: in _find_and_load_unlocked
+    ???
+<frozen importlib._bootstrap>:690: in _load_unlocked
+    ???
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/site-packages/_pytest/assertion/rewrite.py:186: in exec_module
+    exec(co, module.__dict__)
+tests/infrastructure/test_correlation_system.py:7: in <module>
+    from streamlit_extension.middleware.correlation import (
+E   ModuleNotFoundError: No module named 'streamlit_extension.middleware'
+_________ ERROR collecting tests/infrastructure/test_documentation.py __________
+ImportError while importing test module '/home/runner/work/test-tdd-project/test-tdd-project/tests/infrastructure/test_documentation.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/site-packages/_pytest/python.py:498: in importtestmodule
+    mod = import_path(
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/site-packages/_pytest/pathlib.py:587: in import_path
+    importlib.import_module(module_name)
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+<frozen importlib._bootstrap>:1204: in _gcd_import
+    ???
+<frozen importlib._bootstrap>:1176: in _find_and_load
+    ???
+<frozen importlib._bootstrap>:1147: in _find_and_load_unlocked
+    ???
+<frozen importlib._bootstrap>:690: in _load_unlocked
+    ???
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/site-packages/_pytest/assertion/rewrite.py:186: in exec_module
+    exec(co, module.__dict__)
+tests/infrastructure/test_documentation.py:8: in <module>
+    from scripts.generate_api_docs import APIDocGenerator
+E   ModuleNotFoundError: No module named 'scripts.generate_api_docs'
+_______ ERROR collecting tests/infrastructure/test_enhanced_recovery.py ________
+ImportError while importing test module '/home/runner/work/test-tdd-project/test-tdd-project/tests/infrastructure/test_enhanced_recovery.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/site-packages/_pytest/python.py:498: in importtestmodule
+    mod = import_path(
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/site-packages/_pytest/pathlib.py:587: in import_path
+    importlib.import_module(module_name)
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+<frozen importlib._bootstrap>:1204: in _gcd_import
+    ???
+<frozen importlib._bootstrap>:1176: in _find_and_load
+    ???
+<frozen importlib._bootstrap>:1147: in _find_and_load_unlocked
+    ???
+<frozen importlib._bootstrap>:690: in _load_unlocked
+    ???
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/site-packages/_pytest/assertion/rewrite.py:186: in exec_module
+    exec(co, module.__dict__)
+tests/infrastructure/test_enhanced_recovery.py:8: in <module>
+    from streamlit_extension.middleware.context_manager import UserContext
+E   ModuleNotFoundError: No module named 'streamlit_extension.middleware'
+_______ ERROR collecting tests/infrastructure/test_environment_config.py _______
+ImportError while importing test module '/home/runner/work/test-tdd-project/test-tdd-project/tests/infrastructure/test_environment_config.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/site-packages/_pytest/python.py:498: in importtestmodule
+    mod = import_path(
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/site-packages/_pytest/pathlib.py:587: in import_path
+    importlib.import_module(module_name)
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+<frozen importlib._bootstrap>:1204: in _gcd_import
+    ???
+<frozen importlib._bootstrap>:1176: in _find_and_load
+    ???
+<frozen importlib._bootstrap>:1147: in _find_and_load_unlocked
+    ???
+<frozen importlib._bootstrap>:690: in _load_unlocked
+    ???
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/site-packages/_pytest/assertion/rewrite.py:186: in exec_module
+    exec(co, module.__dict__)
+tests/infrastructure/test_environment_config.py:12: in <module>
+    from streamlit_extension.config.environment import EnvironmentManager, Environment
+E   ModuleNotFoundError: No module named 'streamlit_extension.config'
+__ ERROR collecting tests/infrastructure/test_type_hints_database_manager.py ___
+ImportError while importing test module '/home/runner/work/test-tdd-project/test-tdd-project/tests/infrastructure/test_type_hints_database_manager.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/site-packages/_pytest/python.py:498: in importtestmodule
+    mod = import_path(
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/site-packages/_pytest/pathlib.py:587: in import_path
+    importlib.import_module(module_name)
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+<frozen importlib._bootstrap>:1204: in _gcd_import
+    ???
+<frozen importlib._bootstrap>:1176: in _find_and_load
+    ???
+<frozen importlib._bootstrap>:1147: in _find_and_load_unlocked
+    ???
+<frozen importlib._bootstrap>:690: in _load_unlocked
+    ???
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/site-packages/_pytest/assertion/rewrite.py:186: in exec_module
+    exec(co, module.__dict__)
+tests/infrastructure/test_type_hints_database_manager.py:11: in <module>
+    from streamlit_extension.database import (
+E   ModuleNotFoundError: No module named 'streamlit_extension.database'
+_________ ERROR collecting tests/load_testing/test_load_concurrent.py __________
+ImportError while importing test module '/home/runner/work/test-tdd-project/test-tdd-project/tests/load_testing/test_load_concurrent.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/site-packages/_pytest/python.py:498: in importtestmodule
+    mod = import_path(
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/site-packages/_pytest/pathlib.py:587: in import_path
+    importlib.import_module(module_name)
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+<frozen importlib._bootstrap>:1204: in _gcd_import
+    ???
+<frozen importlib._bootstrap>:1176: in _find_and_load
+    ???
+<frozen importlib._bootstrap>:1147: in _find_and_load_unlocked
+    ???
+<frozen importlib._bootstrap>:690: in _load_unlocked
+    ???
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/site-packages/_pytest/assertion/rewrite.py:186: in exec_module
+    exec(co, module.__dict__)
+tests/load_testing/test_load_concurrent.py:8: in <module>
+    from streamlit_extension.utils.load_tester import LoadTester
+E   ModuleNotFoundError: No module named 'streamlit_extension.utils'
+__________ ERROR collecting tests/load_testing/test_load_endurance.py __________
+ImportError while importing test module '/home/runner/work/test-tdd-project/test-tdd-project/tests/load_testing/test_load_endurance.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/site-packages/_pytest/python.py:498: in importtestmodule
+    mod = import_path(
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/site-packages/_pytest/pathlib.py:587: in import_path
+    importlib.import_module(module_name)
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+<frozen importlib._bootstrap>:1204: in _gcd_import
+    ???
+<frozen importlib._bootstrap>:1176: in _find_and_load
+    ???
+<frozen importlib._bootstrap>:1147: in _find_and_load_unlocked
+    ???
+<frozen importlib._bootstrap>:690: in _load_unlocked
+    ???
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/site-packages/_pytest/assertion/rewrite.py:186: in exec_module
+    exec(co, module.__dict__)
+tests/load_testing/test_load_endurance.py:7: in <module>
+    from streamlit_extension.utils.load_tester import LoadTester
+E   ModuleNotFoundError: No module named 'streamlit_extension.utils'
+___________ ERROR collecting tests/load_testing/test_load_stress.py ____________
+ImportError while importing test module '/home/runner/work/test-tdd-project/test-tdd-project/tests/load_testing/test_load_stress.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/site-packages/_pytest/python.py:498: in importtestmodule
+    mod = import_path(
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/site-packages/_pytest/pathlib.py:587: in import_path
+    importlib.import_module(module_name)
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+<frozen importlib._bootstrap>:1204: in _gcd_import
+    ???
+<frozen importlib._bootstrap>:1176: in _find_and_load
+    ???
+<frozen importlib._bootstrap>:1147: in _find_and_load_unlocked
+    ???
+<frozen importlib._bootstrap>:690: in _load_unlocked
+    ???
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/site-packages/_pytest/assertion/rewrite.py:186: in exec_module
+    exec(co, module.__dict__)
+tests/load_testing/test_load_stress.py:7: in <module>
+    from streamlit_extension.utils.load_tester import LoadTester
+E   ModuleNotFoundError: No module named 'streamlit_extension.utils'
+_______ ERROR collecting tests/migrations/test_2025_09_01_sort_order.py ________
+import file mismatch:
+imported module 'test_2025_09_01_sort_order' has this __file__ attribute:
+  /home/runner/work/test-tdd-project/test-tdd-project/tests/migration/test_2025_09_01_sort_order.py
+which is not the same as the test file we want to collect:
+  /home/runner/work/test-tdd-project/test-tdd-project/tests/migrations/test_2025_09_01_sort_order.py
+HINT: remove __pycache__ / .pyc files and/or use a unique basename for your test file modules
+____________ ERROR collecting tests/models/test_orm_integration.py _____________
+ImportError while importing test module '/home/runner/work/test-tdd-project/test-tdd-project/tests/models/test_orm_integration.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/site-packages/_pytest/python.py:498: in importtestmodule
+    mod = import_path(
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/site-packages/_pytest/pathlib.py:587: in import_path
+    importlib.import_module(module_name)
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+<frozen importlib._bootstrap>:1204: in _gcd_import
+    ???
+<frozen importlib._bootstrap>:1176: in _find_and_load
+    ???
+<frozen importlib._bootstrap>:1147: in _find_and_load_unlocked
+    ???
+<frozen importlib._bootstrap>:690: in _load_unlocked
+    ???
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/site-packages/_pytest/assertion/rewrite.py:186: in exec_module
+    exec(co, module.__dict__)
+tests/models/test_orm_integration.py:27: in <module>
+    from sqlalchemy import create_engine
+E   ModuleNotFoundError: No module named 'sqlalchemy'
+________ ERROR collecting tests/performance/test_breakpoint_testing.py _________
+ImportError while importing test module '/home/runner/work/test-tdd-project/test-tdd-project/tests/performance/test_breakpoint_testing.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/site-packages/_pytest/python.py:498: in importtestmodule
+    mod = import_path(
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/site-packages/_pytest/pathlib.py:587: in import_path
+    importlib.import_module(module_name)
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+<frozen importlib._bootstrap>:1204: in _gcd_import
+    ???
+<frozen importlib._bootstrap>:1176: in _find_and_load
+    ???
+<frozen importlib._bootstrap>:1147: in _find_and_load_unlocked
+    ???
+<frozen importlib._bootstrap>:690: in _load_unlocked
+    ???
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/site-packages/_pytest/assertion/rewrite.py:186: in exec_module
+    exec(co, module.__dict__)
+tests/performance/test_breakpoint_testing.py:9: in <module>
+    from test_stress_suite import DatabaseStressTester, StressTestResult
+E   ModuleNotFoundError: No module named 'test_stress_suite'
+__________ ERROR collecting tests/performance/test_load_scenarios.py ___________
+ImportError while importing test module '/home/runner/work/test-tdd-project/test-tdd-project/tests/performance/test_load_scenarios.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/site-packages/_pytest/python.py:498: in importtestmodule
+    mod = import_path(
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/site-packages/_pytest/pathlib.py:587: in import_path
+    importlib.import_module(module_name)
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+<frozen importlib._bootstrap>:1204: in _gcd_import
+    ???
+<frozen importlib._bootstrap>:1176: in _find_and_load
+    ???
+<frozen importlib._bootstrap>:1147: in _find_and_load_unlocked
+    ???
+<frozen importlib._bootstrap>:690: in _load_unlocked
+    ???
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/site-packages/_pytest/assertion/rewrite.py:186: in exec_module
+    exec(co, module.__dict__)
+tests/performance/test_load_scenarios.py:15: in <module>
+    from streamlit_extension.utils.database import DatabaseManager
+E   ModuleNotFoundError: No module named 'streamlit_extension.utils'
+_____ ERROR collecting tests/product_vision/test_ai_refine_integration.py ______
+ImportError while importing test module '/home/runner/work/test-tdd-project/test-tdd-project/tests/product_vision/test_ai_refine_integration.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/site-packages/_pytest/python.py:498: in importtestmodule
+    mod = import_path(
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/site-packages/_pytest/pathlib.py:587: in import_path
+    importlib.import_module(module_name)
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+<frozen importlib._bootstrap>:1204: in _gcd_import
+    ???
+<frozen importlib._bootstrap>:1176: in _find_and_load
+    ???
+<frozen importlib._bootstrap>:1147: in _find_and_load_unlocked
+    ???
+<frozen importlib._bootstrap>:690: in _load_unlocked
+    ???
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/site-packages/_pytest/assertion/rewrite.py:186: in exec_module
+    exec(co, module.__dict__)
+tests/product_vision/test_ai_refine_integration.py:11: in <module>
+    from streamlit_extension.pages.projetos.steps.product_vision_step.ai_refine import (
+E   ModuleNotFoundError: No module named 'streamlit_extension.pages.projetos.steps.product_vision_step'
+_ ERROR collecting tests/product_vision/test_product_vision_controller_integration.py _
+ImportError while importing test module '/home/runner/work/test-tdd-project/test-tdd-project/tests/product_vision/test_product_vision_controller_integration.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/site-packages/_pytest/python.py:498: in importtestmodule
+    mod = import_path(
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/site-packages/_pytest/pathlib.py:587: in import_path
+    importlib.import_module(module_name)
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+<frozen importlib._bootstrap>:1204: in _gcd_import
+    ???
+<frozen importlib._bootstrap>:1176: in _find_and_load
+    ???
+<frozen importlib._bootstrap>:1147: in _find_and_load_unlocked
+    ???
+<frozen importlib._bootstrap>:690: in _load_unlocked
+    ???
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/site-packages/_pytest/assertion/rewrite.py:186: in exec_module
+    exec(co, module.__dict__)
+tests/product_vision/test_product_vision_controller_integration.py:3: in <module>
+    from streamlit_extension.pages.projetos.controllers.product_vision_controller import ProductVisionController
+E   ModuleNotFoundError: No module named 'streamlit_extension.pages.projetos.controllers'
+_____ ERROR collecting tests/product_vision/test_product_vision_refiner.py _____
+ImportError while importing test module '/home/runner/work/test-tdd-project/test-tdd-project/tests/product_vision/test_product_vision_refiner.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/site-packages/_pytest/python.py:498: in importtestmodule
+    mod = import_path(
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/site-packages/_pytest/pathlib.py:587: in import_path
+    importlib.import_module(module_name)
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+<frozen importlib._bootstrap>:1204: in _gcd_import
+    ???
+<frozen importlib._bootstrap>:1176: in _find_and_load
+    ???
+<frozen importlib._bootstrap>:1147: in _find_and_load_unlocked
+    ???
+<frozen importlib._bootstrap>:690: in _load_unlocked
+    ???
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/site-packages/_pytest/assertion/rewrite.py:186: in exec_module
+    exec(co, module.__dict__)
+tests/product_vision/test_product_vision_refiner.py:2: in <module>
+    from src.ia.product_vision_refiner import FakeClaudeRefiner
+src/ia/product_vision_refiner.py:4: in <module>
+    from src.ia.agents.agno_agent import VisionRefinerAgent, ProductVisionDTO
+src/ia/agents/agno_agent.py:2: in <module>
+    from pydantic import BaseModel, Field
+E   ModuleNotFoundError: No module named 'pydantic'
+______ ERROR collecting tests/product_vision/test_product_vision_state.py ______
+ImportError while importing test module '/home/runner/work/test-tdd-project/test-tdd-project/tests/product_vision/test_product_vision_state.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/site-packages/_pytest/python.py:498: in importtestmodule
+    mod = import_path(
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/site-packages/_pytest/pathlib.py:587: in import_path
+    importlib.import_module(module_name)
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+<frozen importlib._bootstrap>:1204: in _gcd_import
+    ???
+<frozen importlib._bootstrap>:1176: in _find_and_load
+    ???
+<frozen importlib._bootstrap>:1147: in _find_and_load_unlocked
+    ???
+<frozen importlib._bootstrap>:690: in _load_unlocked
+    ???
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/site-packages/_pytest/assertion/rewrite.py:186: in exec_module
+    exec(co, module.__dict__)
+tests/product_vision/test_product_vision_state.py:2: in <module>
+    from streamlit_extension.pages.projetos.domain.product_vision_state import (
+E   ModuleNotFoundError: No module named 'streamlit_extension.pages.projetos.domain'
+______ ERROR collecting tests/product_vision/test_project_wizard_state.py ______
+ImportError while importing test module '/home/runner/work/test-tdd-project/test-tdd-project/tests/product_vision/test_project_wizard_state.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/site-packages/_pytest/python.py:498: in importtestmodule
+    mod = import_path(
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/site-packages/_pytest/pathlib.py:587: in import_path
+    importlib.import_module(module_name)
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+<frozen importlib._bootstrap>:1204: in _gcd_import
+    ???
+<frozen importlib._bootstrap>:1176: in _find_and_load
+    ???
+<frozen importlib._bootstrap>:1147: in _find_and_load_unlocked
+    ???
+<frozen importlib._bootstrap>:690: in _load_unlocked
+    ???
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/site-packages/_pytest/assertion/rewrite.py:186: in exec_module
+    exec(co, module.__dict__)
+tests/product_vision/test_project_wizard_state.py:2: in <module>
+    from streamlit_extension.pages.projetos.state import (
+E   ModuleNotFoundError: No module named 'streamlit_extension.pages.projetos.state'
+____ ERROR collecting tests/repositories/test_epic_dependency_repository.py ____
+ImportError while importing test module '/home/runner/work/test-tdd-project/test-tdd-project/tests/repositories/test_epic_dependency_repository.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/site-packages/_pytest/python.py:498: in importtestmodule
+    mod = import_path(
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/site-packages/_pytest/pathlib.py:587: in import_path
+    importlib.import_module(module_name)
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+<frozen importlib._bootstrap>:1204: in _gcd_import
+    ???
+<frozen importlib._bootstrap>:1176: in _find_and_load
+    ???
+<frozen importlib._bootstrap>:1147: in _find_and_load_unlocked
+    ???
+<frozen importlib._bootstrap>:690: in _load_unlocked
+    ???
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/site-packages/_pytest/assertion/rewrite.py:186: in exec_module
+    exec(co, module.__dict__)
+tests/repositories/test_epic_dependency_repository.py:9: in <module>
+    from epic_service import EpicDependencyRepository
+E   ModuleNotFoundError: No module named 'epic_service'
+______ ERROR collecting tests/repositories/test_priority_settings_repo.py ______
+ImportError while importing test module '/home/runner/work/test-tdd-project/test-tdd-project/tests/repositories/test_priority_settings_repo.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/site-packages/_pytest/python.py:498: in importtestmodule
+    mod = import_path(
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/site-packages/_pytest/pathlib.py:587: in import_path
+    importlib.import_module(module_name)
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+<frozen importlib._bootstrap>:1204: in _gcd_import
+    ???
+<frozen importlib._bootstrap>:1176: in _find_and_load
+    ???
+<frozen importlib._bootstrap>:1147: in _find_and_load_unlocked
+    ???
+<frozen importlib._bootstrap>:690: in _load_unlocked
+    ???
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/site-packages/_pytest/assertion/rewrite.py:186: in exec_module
+    exec(co, module.__dict__)
+tests/repositories/test_priority_settings_repo.py:16: in <module>
+    from streamlit_extension.core.dto.priority_weights_dto import PriorityWeightsDTO
+E   ModuleNotFoundError: No module named 'streamlit_extension.core'
+_______ ERROR collecting tests/scripts/test_database_extension_quick.py ________
+ImportError while importing test module '/home/runner/work/test-tdd-project/test-tdd-project/tests/scripts/test_database_extension_quick.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/site-packages/_pytest/python.py:498: in importtestmodule
+    mod = import_path(
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/site-packages/_pytest/pathlib.py:587: in import_path
+    importlib.import_module(module_name)
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+<frozen importlib._bootstrap>:1204: in _gcd_import
+    ???
+<frozen importlib._bootstrap>:1176: in _find_and_load
+    ???
+<frozen importlib._bootstrap>:1147: in _find_and_load_unlocked
+    ???
+<frozen importlib._bootstrap>:690: in _load_unlocked
+    ???
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/site-packages/_pytest/assertion/rewrite.py:186: in exec_module
+    exec(co, module.__dict__)
+tests/scripts/test_database_extension_quick.py:14: in <module>
+    from streamlit_extension.utils.database import DatabaseManager
+E   ModuleNotFoundError: No module named 'streamlit_extension.utils'
+____________ ERROR collecting tests/security/test_security_fixes.py ____________
+ImportError while importing test module '/home/runner/work/test-tdd-project/test-tdd-project/tests/security/test_security_fixes.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/site-packages/_pytest/python.py:498: in importtestmodule
+    mod = import_path(
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/site-packages/_pytest/pathlib.py:587: in import_path
+    importlib.import_module(module_name)
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+<frozen importlib._bootstrap>:1204: in _gcd_import
+    ???
+<frozen importlib._bootstrap>:1176: in _find_and_load
+    ???
+<frozen importlib._bootstrap>:1147: in _find_and_load_unlocked
+    ???
+<frozen importlib._bootstrap>:690: in _load_unlocked
+    ???
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/site-packages/_pytest/assertion/rewrite.py:186: in exec_module
+    exec(co, module.__dict__)
+tests/security/test_security_fixes.py:26: in <module>
+    from streamlit_extension.utils.cache import AdvancedCache
+E   ModuleNotFoundError: No module named 'streamlit_extension.utils'
+__________ ERROR collecting tests/security/test_security_scenarios.py __________
+ImportError while importing test module '/home/runner/work/test-tdd-project/test-tdd-project/tests/security/test_security_scenarios.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/site-packages/_pytest/python.py:498: in importtestmodule
+    mod = import_path(
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/site-packages/_pytest/pathlib.py:587: in import_path
+    importlib.import_module(module_name)
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+<frozen importlib._bootstrap>:1204: in _gcd_import
+    ???
+<frozen importlib._bootstrap>:1176: in _find_and_load
+    ???
+<frozen importlib._bootstrap>:1147: in _find_and_load_unlocked
+    ???
+<frozen importlib._bootstrap>:690: in _load_unlocked
+    ???
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/site-packages/_pytest/assertion/rewrite.py:186: in exec_module
+    exec(co, module.__dict__)
+tests/security/test_security_scenarios.py:13: in <module>
+    from streamlit_extension.utils.security import StreamlitSecurityManager, sanitize_input
+E   ModuleNotFoundError: No module named 'streamlit_extension.utils'
+_____ ERROR collecting tests/services/test_priority_scorer_integration.py ______
+ImportError while importing test module '/home/runner/work/test-tdd-project/test-tdd-project/tests/services/test_priority_scorer_integration.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/site-packages/_pytest/python.py:498: in importtestmodule
+    mod = import_path(
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/site-packages/_pytest/pathlib.py:587: in import_path
+    importlib.import_module(module_name)
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+<frozen importlib._bootstrap>:1204: in _gcd_import
+    ???
+<frozen importlib._bootstrap>:1176: in _find_and_load
+    ???
+<frozen importlib._bootstrap>:1147: in _find_and_load_unlocked
+    ???
+<frozen importlib._bootstrap>:690: in _load_unlocked
+    ???
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/site-packages/_pytest/assertion/rewrite.py:186: in exec_module
+    exec(co, module.__dict__)
+tests/services/test_priority_scorer_integration.py:12: in <module>
+    from streamlit_extension.services.priority_scorer import PriorityScorer, EpicScoringWeights
+E   ModuleNotFoundError: No module named 'streamlit_extension.services'
+____________ ERROR collecting tests/services/test_vision_service.py ____________
+ImportError while importing test module '/home/runner/work/test-tdd-project/test-tdd-project/tests/services/test_vision_service.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/site-packages/_pytest/python.py:498: in importtestmodule
+    mod = import_path(
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/site-packages/_pytest/pathlib.py:587: in import_path
+    importlib.import_module(module_name)
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+<frozen importlib._bootstrap>:1204: in _gcd_import
+    ???
+<frozen importlib._bootstrap>:1176: in _find_and_load
+    ???
+<frozen importlib._bootstrap>:1147: in _find_and_load_unlocked
+    ???
+<frozen importlib._bootstrap>:690: in _load_unlocked
+    ???
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/site-packages/_pytest/assertion/rewrite.py:186: in exec_module
+    exec(co, module.__dict__)
+tests/services/test_vision_service.py:11: in <module>
+    from streamlit_extension.services.vision_service import (
+E   ModuleNotFoundError: No module named 'streamlit_extension.services'
+_______ ERROR collecting tests/test_product_vision_controller_refine.py ________
+ImportError while importing test module '/home/runner/work/test-tdd-project/test-tdd-project/tests/test_product_vision_controller_refine.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/site-packages/_pytest/python.py:498: in importtestmodule
+    mod = import_path(
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/site-packages/_pytest/pathlib.py:587: in import_path
+    importlib.import_module(module_name)
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+<frozen importlib._bootstrap>:1204: in _gcd_import
+    ???
+<frozen importlib._bootstrap>:1176: in _find_and_load
+    ???
+<frozen importlib._bootstrap>:1147: in _find_and_load_unlocked
+    ???
+<frozen importlib._bootstrap>:690: in _load_unlocked
+    ???
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/site-packages/_pytest/assertion/rewrite.py:186: in exec_module
+    exec(co, module.__dict__)
+tests/test_product_vision_controller_refine.py:5: in <module>
+    from streamlit_extension.pages.projetos.controllers.product_vision_controller import (
+E   ModuleNotFoundError: No module named 'streamlit_extension.pages.projetos.controllers'
+________ ERROR collecting tests/test_product_vision_controller_save.py _________
+ImportError while importing test module '/home/runner/work/test-tdd-project/test-tdd-project/tests/test_product_vision_controller_save.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/site-packages/_pytest/python.py:498: in importtestmodule
+    mod = import_path(
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/site-packages/_pytest/pathlib.py:587: in import_path
+    importlib.import_module(module_name)
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+<frozen importlib._bootstrap>:1204: in _gcd_import
+    ???
+<frozen importlib._bootstrap>:1176: in _find_and_load
+    ???
+<frozen importlib._bootstrap>:1147: in _find_and_load_unlocked
+    ???
+<frozen importlib._bootstrap>:690: in _load_unlocked
+    ???
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/site-packages/_pytest/assertion/rewrite.py:186: in exec_module
+    exec(co, module.__dict__)
+tests/test_product_vision_controller_save.py:4: in <module>
+    from streamlit_extension.pages.projetos.controllers.product_vision_controller import (
+E   ModuleNotFoundError: No module named 'streamlit_extension.pages.projetos.controllers'
+_____________ ERROR collecting tests/test_repos/test_tasks_repo.py _____________
+ImportError while importing test module '/home/runner/work/test-tdd-project/test-tdd-project/tests/test_repos/test_tasks_repo.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/site-packages/_pytest/python.py:498: in importtestmodule
+    mod = import_path(
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/site-packages/_pytest/pathlib.py:587: in import_path
+    importlib.import_module(module_name)
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+<frozen importlib._bootstrap>:1204: in _gcd_import
+    ???
+<frozen importlib._bootstrap>:1176: in _find_and_load
+    ???
+<frozen importlib._bootstrap>:1147: in _find_and_load_unlocked
+    ???
+<frozen importlib._bootstrap>:690: in _load_unlocked
+    ???
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/site-packages/_pytest/assertion/rewrite.py:186: in exec_module
+    exec(co, module.__dict__)
+tests/test_repos/test_tasks_repo.py:26: in <module>
+    from streamlit_extension.repos.tasks_repo import TasksRepo, RepoError
+E   ModuleNotFoundError: No module named 'streamlit_extension.repos'
+______________ ERROR collecting tests/ui/test_epic_explainers.py _______________
+ImportError while importing test module '/home/runner/work/test-tdd-project/test-tdd-project/tests/ui/test_epic_explainers.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/site-packages/_pytest/python.py:498: in importtestmodule
+    mod = import_path(
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/site-packages/_pytest/pathlib.py:587: in import_path
+    importlib.import_module(module_name)
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+<frozen importlib._bootstrap>:1204: in _gcd_import
+    ???
+<frozen importlib._bootstrap>:1176: in _find_and_load
+    ???
+<frozen importlib._bootstrap>:1147: in _find_and_load_unlocked
+    ???
+<frozen importlib._bootstrap>:690: in _load_unlocked
+    ???
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/site-packages/_pytest/assertion/rewrite.py:186: in exec_module
+    exec(co, module.__dict__)
+tests/ui/test_epic_explainers.py:21: in <module>
+    from streamlit_extension.core.dto.epic_suggestion_dto import EpicSuggestionDTO
+E   ModuleNotFoundError: No module named 'streamlit_extension.core'
+_______ ERROR collecting tests/ui_navigation/test_projects_navigation.py _______
+ImportError while importing test module '/home/runner/work/test-tdd-project/test-tdd-project/tests/ui_navigation/test_projects_navigation.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/site-packages/_pytest/python.py:498: in importtestmodule
+    mod = import_path(
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/site-packages/_pytest/pathlib.py:587: in import_path
+    importlib.import_module(module_name)
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+<frozen importlib._bootstrap>:1204: in _gcd_import
+    ???
+<frozen importlib._bootstrap>:1176: in _find_and_load
+    ???
+<frozen importlib._bootstrap>:1147: in _find_and_load_unlocked
+    ???
+<frozen importlib._bootstrap>:690: in _load_unlocked
+    ???
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/site-packages/_pytest/assertion/rewrite.py:186: in exec_module
+    exec(co, module.__dict__)
+tests/ui_navigation/test_projects_navigation.py:3: in <module>
+    from streamlit_extension.pages.projetos.actions import (
+E   ModuleNotFoundError: No module named 'streamlit_extension.pages.projetos.actions'
+=========================== short test summary info ============================
+ERROR tests/api_endpoints/test_api_endpoints.py
+ERROR tests/api_endpoints/test_health_endpoint.py
+ERROR tests/api_endpoints/test_json_handler.py
+ERROR tests/business_logic/test_business_calendar.py
+ERROR tests/business_logic/test_duration_calculator.py
+ERROR tests/business_logic/test_duration_formatter.py
+ERROR tests/business_logic/test_epic_progress_defaults.py
+ERROR tests/cache_performance/test_cache_interrupt_fix.py
+ERROR tests/cache_performance/test_cache_security.py
+ERROR tests/cache_performance/test_connection_pool.py
+ERROR tests/cache_performance/test_rate_limit_headers.py
+ERROR tests/cache_performance/test_rate_limit_storage_backends.py
+ERROR tests/cache_performance/test_rate_limiting_comprehensive.py
+ERROR tests/database/test_database_manager_duration_extension.py
+ERROR tests/database/test_database_transactions.py
+ERROR tests/database/test_migration_schemas.py
+ERROR tests/epics/test_domain_lexicon.py
+ERROR tests/infrastructure/test_constants_system.py
+ERROR tests/infrastructure/test_correlation_system.py
+ERROR tests/infrastructure/test_documentation.py
+ERROR tests/infrastructure/test_enhanced_recovery.py
+ERROR tests/infrastructure/test_environment_config.py
+ERROR tests/infrastructure/test_type_hints_database_manager.py
+ERROR tests/load_testing/test_load_concurrent.py
+ERROR tests/load_testing/test_load_endurance.py
+ERROR tests/load_testing/test_load_stress.py
+ERROR tests/migrations/test_2025_09_01_sort_order.py
+ERROR tests/models/test_orm_integration.py
+ERROR tests/performance/test_breakpoint_testing.py
+ERROR tests/performance/test_load_scenarios.py
+ERROR tests/product_vision/test_ai_refine_integration.py
+ERROR tests/product_vision/test_product_vision_controller_integration.py
+ERROR tests/product_vision/test_product_vision_refiner.py
+ERROR tests/product_vision/test_product_vision_state.py
+ERROR tests/product_vision/test_project_wizard_state.py
+ERROR tests/repositories/test_epic_dependency_repository.py
+ERROR tests/repositories/test_priority_settings_repo.py
+ERROR tests/scripts/test_database_extension_quick.py
+ERROR tests/security/test_security_fixes.py
+ERROR tests/security/test_security_scenarios.py
+ERROR tests/services/test_priority_scorer_integration.py
+ERROR tests/services/test_vision_service.py
+ERROR tests/test_product_vision_controller_refine.py
+ERROR tests/test_product_vision_controller_save.py
+ERROR tests/test_repos/test_tasks_repo.py
+ERROR tests/ui/test_epic_explainers.py
+ERROR tests/ui_navigation/test_projects_navigation.py
+!!!!!!!!!!!!!!!!!!! Interrupted: 47 errors during collection !!!!!!!!!!!!!!!!!!!
+================ 5 skipped, 237 deselected, 47 errors in 3.94s =================
+Error: Process completed with exit code 2.
+0s
+0s
+0s
