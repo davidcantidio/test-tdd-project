@@ -12,6 +12,8 @@ from .connection import (
     transaction,
     execute,
     set_database_manager as set_dbm,
+    execute_cached_query,
+    get_connection_context,
 )
 from .health import (
     check_health,
@@ -28,6 +30,7 @@ from .queries import (
     list_timer_sessions,
     get_user_stats,
     get_achievements,
+    list_all_projects as list_projects,
 )
 from .schema import create_schema_if_needed
 from .seed import seed_initial_data
@@ -40,6 +43,8 @@ __all__ = [
     "transaction",
     "execute",
     "set_dbm",
+    "execute_cached_query",
+    "get_connection_context",
     "check_health",
     "get_query_stats",
     "optimize",
@@ -49,6 +54,7 @@ __all__ = [
     "list_all_epics",
     "list_tasks",
     "list_all_tasks",
+    "list_projects",
     "list_timer_sessions",
     "get_user_stats",
     "get_achievements",
