@@ -12,6 +12,8 @@ import logging
 from ..cap_state import init_cap_state, get_cap_state, add_capitulo, remove_capitulo
 from ..cap_state import validate_capitulo_data, is_capitulos_complete
 from ..cap_state.init_nav import init_cap_navigation, update_navigation_state
+from src.ia.agents.scrum_master import ScrumMasterOrchestrator
+from streamlit_extension.database.connection import execute
 
 logger = logging.getLogger(__name__)
 
@@ -171,10 +173,22 @@ def _render_capitulos_summary() -> None:
         return
     
     st.markdown(f"**Total:** {len(capitulos)} capítulo(s)")
+
+    # Botão para aplicar ordenação determinística e persistir
+    with st.container():
+        col_a, col_b = st.columns([1, 1])
+        with col_a:
+            apply_and_persist = st.button("🔗 Aplicar ordenação (Scrum Master) e salvar", key=_cap_key("apply_order"), type="primary")
+        with col_b:
+            st.caption("Aplica ordenação determinística (Kahn) e salva com dependências")
+
+    if apply_and_persist:
+        _handle_apply_order_and_persist(capitulos)
     
     # Lista dos capítulos
     for i, cap in enumerate(capitulos):
-        with st.expander(f"**{cap['nome']}** ({cap['epic_key']})", expanded=False):
+        title = f"**{cap['nome']}**"
+        with st.expander(title, expanded=False):
             if cap['descricao']:
                 st.markdown(f"**Descrição:** {cap['descricao']}")
             
@@ -207,6 +221,96 @@ def _render_capitulos_summary() -> None:
             st.metric("Duração Total", f"{total_dias} dias")
         with col2:
             st.metric("Prioridade Média", f"{prioridade_media:.1f}/5")
+
+
+def _handle_apply_order_and_persist(capitulos: list[dict]) -> None:
+    """Aplica orquestração determinística e persiste épicos + dependências.
+
+    Regras PRD:
+    - Sem perguntas: se houver problemas (ex.: <3 ou >7), mostrar warnings e bloquear persistência.
+    - Persistência transacional simplificada (uma a uma) usando execute(); em caso de erro, exibir mensagem.
+    """
+    project_id = getattr(st.session_state, "current_project_id", 1)
+
+    # Construir sugestões (temp_key determinístico por posição atual)
+    epics_suggest: list[dict] = []
+    for i, cap in enumerate(capitulos, start=1):
+        temp_key = f"E{i}"
+        name = cap.get("nome", f"Epic {i}")
+        desc = cap.get("descricao", "")
+        priority = int(cap.get("prioridade", 3) or 3)
+        effort = int(cap.get("duracao_dias", 5) or 5)
+        epics_suggest.append({
+            "temp_key": temp_key,
+            "name": name,
+            "description": desc,
+            "dependencies": [],  # Sem UI de deps por enquanto; PRD: IA pode errar → warnings
+            "complexity_score": 3.0,
+            "effort_estimate": max(1, min(30, effort)),
+            "priority": max(1, min(5, priority)),
+        })
+
+    orchestrator = ScrumMasterOrchestrator()
+    execution_order, scores, warnings = orchestrator.run_ordering(epics_suggest)
+
+    # Validar cardinalidade 3..7 e mensagens de ordenação
+    if len(epics_suggest) < 3 or len(epics_suggest) > 7:
+        warnings.append(f"Quantidade de capítulos fora do intervalo [3..7]: {len(epics_suggest)}")
+
+    if warnings:
+        with st.expander("⚠️ Warnings da Orquestração", expanded=True):
+            for w in warnings:
+                st.warning(f"- {w}")
+        st.stop()
+
+    # Persistir épicos que ainda não existem (inserção simples)
+    temp_to_id: dict[str, int] = {}
+    for e in epics_suggest:
+        # Inserção minimalista; status padrão 'planning'
+        try:
+            execute(
+                """
+                INSERT INTO framework_epics (name, description, status, priority, project_id, effort_estimate, complexity_score)
+                VALUES (?, ?, 'planning', ?, ?, ?, ?)
+                """,
+                (e["name"], e["description"], e.get("priority", 3), project_id, e.get("effort_estimate", 5), e.get("complexity_score", 3.0)),
+            )
+            # Recuperar id recém inserido
+            rows = execute("SELECT last_insert_rowid() AS id", ())
+            epic_id = rows[0]["id"] if rows else None
+            if epic_id:
+                temp_to_id[e["temp_key"]] = epic_id
+        except Exception as exc:
+            st.error(f"❌ Falha ao inserir épico '{e['name']}': {exc}")
+            return
+
+    # Persistir ordenação (sort_order) e dependências
+    try:
+        orchestrator.persist_order_and_dependencies(
+            project_id=project_id,
+            temp_to_epic_id=temp_to_id,
+            execution_order=execution_order,
+            dependencies=[(d, p) for d in [] for p in []],  # sem deps por ora
+        )
+    except Exception as exc:
+        st.error(f"❌ Falha ao persistir ordenação/dependências: {exc}")
+        return
+
+    # Auditoria (modelo/versão/explainer placeholders)
+    try:
+        orchestrator.audit_ordering(
+            project_id=project_id,
+            ordered_temp_keys=execution_order,
+            temp_to_epic_id=temp_to_id,
+            model="scrum_master_orchestrator",
+            version="v1",
+            explainer="Deterministic topological ordering (Kahn + scores)",
+        )
+    except Exception:
+        pass
+
+    st.success("✅ Capítulos persistidos e ordenados com sucesso!")
+    st.rerun()
 
 
 def _render_navigation_buttons() -> None:

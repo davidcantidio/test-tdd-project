@@ -1,3 +1,10 @@
+# ⚠️ PRD Alignment — Overrides (2025‑09‑09)
+
+- SQLite definitivo; schema de épicos enxuto (migração 012) e auditoria IA (migração 013).
+- Agentes (sem perguntas): PO (Roteiro+épicos), Scrum Master (ordenação determinística com DETERMINISTIC_TOPOLOGICAL_ORDERING_DEMO.py + auditoria), Dev Team (Histórias e Tarefas com TDD/test_plan).
+- UX TDAH: “Resumo” do Roteiro colapsado por padrão; menu principal colapsável; Next/Back sticky.
+- DRY dos steps: este módulo usa product_vision_step/product_vision.py e capitulos_step/capitulos.py (sem main.py).
+
 # 🧙‍♂️ Project Wizard - Generic Framework Implementation
 
 **Module:** `streamlit_extension/pages/projetos`  

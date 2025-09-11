@@ -188,7 +188,9 @@ def _render_sidebar_filters(db_queries):
     
     # Epic filter
     epics = get_epics_for_filter()
-    epic_options = ["All Epics"] + [f"{epic['epic_key']}: {epic['name']}" for epic in epics]
+    def _epic_display_key(e):
+        return e.get('epic_key') or f"EPIC-{e.get('id', '')}"
+    epic_options = ["All Epics"] + [f"{_epic_display_key(epic)}: {epic['name']}" for epic in epics]
     selected_epic = st.sidebar.selectbox("Filter by Epic", epic_options)
     
     if selected_epic != "All Epics":
@@ -482,7 +484,7 @@ def _show_quick_add_modal(db_queries, epics: List[Dict[str, Any]]):
             
             col1, col2 = st.columns(2)
             with col1:
-                epic_options = ["Select Epic"] + [f"{e['epic_key']}: {e['name']}" for e in epics]
+                epic_options = ["Select Epic"] + [f"{_epic_display_key(e)}: {e['name']}" for e in epics]
                 selected_epic = st.selectbox("Epic", epic_options)
             
             with col2:
@@ -523,9 +525,9 @@ def _show_quick_add_modal(db_queries, epics: List[Dict[str, Any]]):
                 # Get epic ID
                 epic_id = None
                 if selected_epic != "Select Epic":
-                    epic_key = selected_epic.split(":")[0]
+                    sel = selected_epic.split(":")[0]
                     for epic in epics:
-                        if epic.get("epic_key") == epic_key:
+                        if epic.get("epic_key") == sel or f"EPIC-{epic.get('id', '')}" == sel:
                             epic_id = epic.get("id")
                             break
                 
@@ -566,7 +568,7 @@ def _render_create_task_form(db_queries, epics: List[Dict[str, Any]]):
             title = st.text_input("Task Title*", placeholder="Enter a descriptive title...")
             description = st.text_area("Description", placeholder="Optional task description...")
             
-            epic_options = ["Select Epic"] + [f"{e['epic_key']}: {e['name']}" for e in epics]
+            epic_options = ["Select Epic"] + [f"{_epic_display_key(e)}: {e['name']}" for e in epics]
             selected_epic = st.selectbox("Epic*", epic_options)
         
         with col2:
@@ -616,9 +618,9 @@ def _render_create_task_form(db_queries, epics: List[Dict[str, Any]]):
             else:
                 # Get epic ID
                 epic_id = None
-                epic_key = selected_epic.split(":")[0]
+                sel = selected_epic.split(":")[0]
                 for epic in epics:
-                    if epic.get("epic_key") == epic_key:
+                    if epic.get("epic_key") == sel or f"EPIC-{epic.get('id', '')}" == sel:
                         epic_id = epic.get("id")
                         break
                 

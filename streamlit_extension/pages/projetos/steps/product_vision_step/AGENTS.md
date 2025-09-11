@@ -1,3 +1,10 @@
+# ⚠️ PRD Alignment — Overrides (2025‑09‑09)
+
+- IA (sem perguntas): PO refina campos (individual/global) sem inventar fatos; gera 3–7 épicos com temp_key, name, description, dependencies[temp_key], complexity_score, effort_estimate.
+- Ordenação: autoridade do DETERMINISTIC_TOPOLOGICAL_ORDERING_DEMO.py; inconsistências (ciclos/deps) geram warnings e bloqueiam persistência.
+- Schema enxuto: sem epic_key persistente; auditoria IA em framework_epic_ai_audit.
+- UX TDAH: “Resumo” colapsado por padrão; Next/Back sticky.
+
 # 📘 AGENTS.md — Product Vision Step (estado atual)
 
 Módulo: `streamlit_extension/pages/projetos/steps/product_vision_step`
@@ -25,7 +32,7 @@ Status: ✅ Produção — UI estável, logs adicionados, refino global em modo 
 product_vision_step/
 ├── AGENTS.md          # Este documento (fonte da verdade)
 ├── CLAUDE.md          # Espelho exato de AGENTS.md
-└── product_vision.py  # Implementação consolidada (UI + handlers + IA)
+└── product_vision.py  # Implementação consolidada (UI + handlers + IA, sem perguntas)
 ```
 
 Dependências diretas do passo (fora da pasta):

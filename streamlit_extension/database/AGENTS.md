@@ -1,3 +1,9 @@
+# ⚠️ PRD Alignment — Overrides (2025‑09‑09)
+
+- SQLite definitivo; schema de épicos ENXUTO (migração 012): sem epic_key persistente e sem colunas legacy.
+- Auditoria IA (migração 013): framework_epic_ai_audit para model/version/explainer.
+- Queries devem tolerar ausência de epic_key: retornar alias "EPIC-{id} AS epic_key" quando necessário.
+
 # 📊 CLAUDE.md - Database Layer
 
 **Module:** database/  

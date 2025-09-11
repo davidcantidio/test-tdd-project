@@ -1,3 +1,9 @@
+# ⚠️ PRD Alignment — Overrides (2025‑09‑09)
+
+- Agentes não fazem perguntas ao usuário; PO/Dev Team refinam/geram saídas com warnings quando faltar dado; Scrum Master aplica ordenação determinística e registra auditoria.
+- SQLite definitivo; schema enxuto; auditoria IA (framework_epic_ai_audit).
+- Tarefas: sempre TDD com test_plan a priori.
+
 # 🤖 CLAUDE.md - AI Services Module
 
 **Module:** `src/ia/`  

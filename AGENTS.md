@@ -1,3 +1,18 @@
+# ⚠️ PRD Alignment — Overrides (2025‑09‑09)
+
+Estas instruções substituem qualquer conteúdo incoerente neste arquivo:
+- Posicionamento: Framework pessoal TDAH (não enterprise). SQLite definitivo; performance por índice/caching nativo.
+- Schema: framework_epics enxuto (migração 012 aplicada); auditoria IA em framework_epic_ai_audit (migração 013). Não usar “56 columns” nem epic_key persistente.
+- IA/Agentes (sem perguntas):
+  - PO: refina Roteiro (campo+global) e sugere 3–7 épicos com temp_key, name, description, dependencies[temp_key], complexity_score, effort_estimate. Sem perguntas, sem inventar fatos.
+  - Scrum Master: autoridade de ordenação. Aplica DETERMINISTIC_TOPOLOGICAL_ORDERING_DEMO.py, valida, persiste sort_order e deps N:N, registra auditoria.
+  - Dev Team: cria Histórias (INVEST) e Tarefas. Tarefas sempre no paradigma TDD (RED→GREEN→REFACTOR) com test_plan a priori.
+- UX (TDAH):
+  - Roteiro: coluna “Resumo” colapsada por padrão; botões Next/Back sticky no rodapé.
+  - Menu principal: colapsável por padrão; estado persiste na sessão.
+  - Menu “Projetos”: cards com abrir/editar/excluir; página de projeto com visão, capítulos (ordem topológica), analytics e gamificação.
+- DRY dos Steps: sem múltiplos main.py. Usar nomes descritivos: product_vision_step/product_vision.py, capitulos_step/capitulos.py, etc. __init__.py reexporta API pública do passo.
+
 # 🤖 CLAUDE.md - Enterprise TDD Framework Documentation
 
 ## 📋 Project Overview

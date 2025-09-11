@@ -1,3 +1,9 @@
+# ⚠️ PRD Alignment — Overrides (2025‑09‑09)
+
+- Validar paradigma TDD nas tarefas (test_plan por TaskDTO) quando implementado no pipeline.
+- Garantir comportamento “sem perguntas” dos agentes (PO/Dev Team) nos testes de IA.
+- Verificar auditoria IA (framework_epic_ai_audit) após ordenação e persistência.
+
 # 🤖 CLAUDE.md - Testing Framework
 
 **Module:** tests/  

@@ -209,8 +209,8 @@ def validate_epic_data(epic: Dict[str, Any]) -> Tuple[bool, List[str]]:
     """
     errors = []
     
-    # Required fields
-    required_fields = ["name", "epic_key"]
+    # Required fields (epic_key tornou-se opcional)
+    required_fields = ["name"]
     for field in required_fields:
         if field not in epic or not epic[field]:
             errors.append(f"Missing required field: {field}")
@@ -222,7 +222,7 @@ def validate_epic_data(epic: Dict[str, Any]) -> Tuple[bool, List[str]]:
     if len(name.strip()) == 0:
         errors.append("Epic name cannot be empty")
     
-    # Validate epic_key format
+    # Validate epic_key format (opcional)
     epic_key = epic.get("epic_key", "")
     if epic_key:
         if not re.match(r'^[A-Z][A-Z0-9_]{2,49}$', epic_key):
@@ -524,4 +524,3 @@ def is_valid_email(email: str) -> bool:
         return False
     _, addr = parseaddr(email)
     return "@" in addr and "." in addr.split("@")[-1]
-

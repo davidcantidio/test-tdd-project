@@ -1,3 +1,10 @@
+# ⚠️ PRD Alignment — Overrides (2025‑09‑09)
+
+- SQLite definitivo; schema enxuto de épicos (migração 012); auditoria IA em framework_epic_ai_audit (migração 013).
+- Agentes (sem perguntas): PO (Roteiro+épicos), Scrum Master (ordenação determinística + auditoria), Dev Team (Histórias e Tarefas com TDD).
+- UX TDAH: “Resumo” do Roteiro colapsado por padrão; menu principal colapsável; Next/Back sticky.
+- DRY dos steps: usar nomes descritivos (product_vision.py, capitulos.py etc.), sem múltiplos main.py; `__init__.py` reexporta API.
+
 # 🤖 CLAUDE.md - Streamlit Extension Module
 
 **Module:** streamlit_extension/  

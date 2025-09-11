@@ -1,3 +1,8 @@
+# ⚠️ PRD Alignment — Overrides (2025‑09‑09)
+
+- Framework pessoal (não enterprise); manter OAuth simples e não intrusivo.
+- Sem perguntas em fluxos IA; preservar session_state para UX TDAH.
+
 # 🔐 CLAUDE.md - Authentication System
 
 **Module:** auth/  

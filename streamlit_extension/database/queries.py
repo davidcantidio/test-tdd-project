@@ -5,6 +5,34 @@ from typing import Any, Dict, List, Optional
 
 from .connection import execute_cached_query, get_optimized_connection, get_connection_context
 
+# -----------------------------------------------------------------------------
+# Compat helpers: epic_key pode não existir após a migração 012.
+# Construímos fragmentos SQL dinamicamente para manter a API estável.
+# -----------------------------------------------------------------------------
+_EPIC_KEY_PRESENT: Optional[bool] = None
+
+
+def _has_epic_key_column() -> bool:
+    global _EPIC_KEY_PRESENT
+    if _EPIC_KEY_PRESENT is not None:
+        return _EPIC_KEY_PRESENT
+    try:
+        with get_connection_context() as conn:
+            rows = conn.execute("PRAGMA table_info('framework_epics')").fetchall()
+            names = [r[1] if isinstance(r, tuple) else r["name"] for r in rows]
+            _EPIC_KEY_PRESENT = "epic_key" in set(names)
+    except Exception:
+        # Padrão seguro enquanto o schema está em transição
+        _EPIC_KEY_PRESENT = True
+    return _EPIC_KEY_PRESENT
+
+
+def _epic_key_expr(alias: Optional[str] = None) -> str:
+    has = _has_epic_key_column()
+    if alias:
+        return f"{alias}.epic_key" if has else f"'EPIC-' || {alias}.id AS epic_key"
+    return "epic_key" if has else "'EPIC-' || id AS epic_key"
+
 # Removed legacy DatabaseManager dependencies
 
 
@@ -22,10 +50,11 @@ def list_epics() -> List[Dict[str, Any]]:
 
 def list_all_epics() -> List[Dict[str, Any]]:
     """Lista todos os epics (incluindo arquivados/deletados)."""
-    sql = """
+    ek = _epic_key_expr()
+    sql = f"""
         SELECT
-            id, epic_key, name, description, status, priority,
-            duration_days, progress, created_at, updated_at
+            id, {ek}, name, description, status, priority,
+            duration_days, created_at, updated_at
         FROM framework_epics
         ORDER BY created_at DESC
     """
@@ -39,12 +68,13 @@ def list_tasks(epic_id: int) -> List[Dict[str, Any]]:
 
 def list_all_tasks() -> List[Dict[str, Any]]:
     """Lista todas as tasks com dados do epic (otimizada)."""
-    sql = """
+    ek = _epic_key_expr("e")
+    sql = f"""
         SELECT
             t.id, t.task_key, t.epic_id, t.title, t.description,
             t.tdd_phase, t.status, t.estimate_minutes,
             t.created_at, t.updated_at,
-            e.name AS epic_name, e.epic_key
+            e.name AS epic_name, {ek}
         FROM framework_tasks AS t
         JOIN framework_epics AS e ON t.epic_id = e.id
         ORDER BY t.created_at DESC, t.id DESC
@@ -114,14 +144,15 @@ def list_epics_optimized(cache_ttl: int = 300) -> List[Dict[str, Any]]:
     """
     Lista epics com SELECT enxuto + cache.
 
-    Columns existentes (schema atual):
-      - id, epic_key, name, description, status, priority, duration_days,
-        created_at, updated_at
+    Columns retornadas:
+      - id, epic_key (ou EPIC-{id}), name, description, status, priority,
+        duration_days, created_at, updated_at
     """
-    sql = """
+    ek = _epic_key_expr()
+    sql = f"""
         SELECT
             id,
-            epic_key,
+            {ek},
             name,
             description,
             status,
@@ -139,12 +170,13 @@ def list_tasks_optimized(epic_id: int, cache_ttl: int = 120) -> List[Dict[str, A
     """
     Lista tasks de um epic com JOIN para trazer dados do epic.
 
-    Columns existentes (schema atual):
+    Columns retornadas:
       - tasks: id, task_key, epic_id, title, description, tdd_phase, status,
                estimate_minutes, created_at, updated_at
-      - epics: id, name, epic_key
+      - epics: id, name, epic_key (ou EPIC-{id})
     """
-    sql = """
+    ek = _epic_key_expr("e")
+    sql = f"""
         SELECT
             t.id,
             t.task_key,
@@ -157,7 +189,7 @@ def list_tasks_optimized(epic_id: int, cache_ttl: int = 120) -> List[Dict[str, A
             t.created_at,
             t.updated_at,
             e.name  AS epic_name,
-            e.epic_key
+            {ek}
         FROM framework_tasks AS t
         JOIN framework_epics AS e ON t.epic_id = e.id
         WHERE t.epic_id = ?
@@ -173,16 +205,16 @@ def get_epic_summary_optimized(epic_id: int, cache_ttl: int = 180) -> Optional[D
     Observações:
       - completion_percentage calculado como tasks concluídas / total.
     """
-    sql = """
+    ek_raw = _epic_key_expr("e")
+    sql = f"""
         SELECT
             e.id,
-            e.epic_key,
+            {ek_raw},
             e.name,
             e.description,
             e.status,
             e.priority,
             e.duration_days,
-            e.progress,
             COUNT(t.id) AS total_tasks,
             COUNT(CASE WHEN t.status = 'completed' THEN 1 END) AS completed_tasks,
             COUNT(CASE WHEN t.status = 'active' THEN 1 END) AS active_tasks,
@@ -198,9 +230,7 @@ def get_epic_summary_optimized(epic_id: int, cache_ttl: int = 180) -> Optional[D
         FROM framework_epics AS e
         LEFT JOIN framework_tasks AS t ON e.id = t.epic_id
         WHERE e.id = ?
-        GROUP BY
-            e.id, e.epic_key, e.name, e.description, e.status,
-            e.priority, e.duration_days, e.progress
+        GROUP BY e.id, e.name, e.description, e.status, e.priority, e.duration_days
     """
     results = execute_cached_query(sql, params=(epic_id,), cache_ttl=cache_ttl)
     return results[0] if results else None
@@ -242,7 +272,8 @@ def get_recent_timer_sessions_optimized(days: int = 7, cache_ttl: int = 60) -> L
       - Usa `datetime('now', ?)` com parâmetro '-{days} days' para evitar concatenação em SQL.
       - Limita a 100 resultados mais recentes.
     """
-    sql = """
+    ek = _epic_key_expr("e")
+    sql = f"""
         SELECT
             ws.id,
             ws.task_id,
@@ -254,7 +285,7 @@ def get_recent_timer_sessions_optimized(days: int = 7, cache_ttl: int = 60) -> L
             t.title AS task_title,
             t.task_key,
             e.name  AS epic_name,
-            e.epic_key
+            {ek}
         FROM work_sessions AS ws
         JOIN framework_tasks AS t ON ws.task_id = t.id
         JOIN framework_epics AS e ON t.epic_id = e.id

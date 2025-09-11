@@ -1,3 +1,8 @@
+# ⚠️ PRD Alignment — Overrides (2025‑09‑09)
+
+- Migração 012: slim de framework_epics (remoção de colunas legacy e epic_key persistente).
+- Migração 013: criação de framework_epic_ai_audit para auditoria IA (model/version/explainer).
+
 # 🤖 CLAUDE.md - Data Migration System
 
 **Module:** migration/  
