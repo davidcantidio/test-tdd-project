@@ -1,3 +1,0 @@
-[0;36m[info][0m Otimização do banco
-Usage: python database_maintenance.py [backup|health]
-[0;32m[ok][0m Otimização do banco concluído

@@ -4,7 +4,7 @@
 
 **Project:** Test-TDD-Project - Enterprise Streamlit Framework  
 **Status:** ✅ **PRODUCTION READY** - Phase 4.7 Complete  
-**Architecture:** Generic Project Framework (Universal Structure) + Clean Architecture  
+**Architecture:** API-First Transition (tdd_core domain module + adapters) + Clean Architecture  
 **Security:** **ENTERPRISE CERTIFIED** - Grade A+ Authentication Stack  
 **Performance:** 4,600x+ optimization with connection pooling & LRU cache (<10ms queries)  
 **Data:** Direct Projects → 12 Epics → 206 Tasks  
@@ -23,6 +23,7 @@
 - **Security:** Grade A+ compliance (GDPR, SOC 2, ISO 27001 ready)
 - **Navigation System:** ✅ **Generic Project Wizard with universal 4-phase structure - Applicable to any project type**
 - **Clean Architecture:** ✅ **Domain-Driven Design with Repository Pattern - Testable, maintainable, extensible**
+- **API-First Transition:** PRD definido; Marco 0 (extração do domínio em `tdd_core`) planejado/em andamento
 - **Multi-Step Wizard:** ✅ **Streamlined interface with macro phases (Roteiro → Capítulos → Histórias → Tarefas)**
 - **UI Design:** ✅ **Professional interface with ET icon, clean navigation, vertical forms, complete content display**
 - **System Reliability:** ✅ **Log optimization, unique widget keys, modular service architecture, enhanced error handling**
@@ -70,6 +71,11 @@ streamlit run streamlit_extension/streamlit_app.py
 # Access: http://localhost:8501
 ```
 
+### **Core Smoke Test (após Marco 0)**
+```bash
+python -c "import tdd_core; print(getattr(tdd_core, '__version__', 'unknown'))"
+```
+
 ### **Development Environment**
 ```bash
 # Development mode (default)
@@ -101,6 +107,8 @@ python cleanup_cache.py --dry-run
 ## 🏗️ System Architecture
 
 ### **📱 Core Modules**
+- **`tdd_core/`** - Core de domínio (DDD) para serviços, DTOs e orquestração
+  → Marco 0: ver `docs/marco_0_domain_extraction.md` e `docs/PLANO_HISTORIA_1_1.md`
 - **`streamlit_extension/`** - Enterprise Streamlit app with authentication & service layer
   → **[streamlit_extension/CLAUDE.md](streamlit_extension/CLAUDE.md)**
 - **`duration_system/`** - Duration calculation, security utilities, data protection
@@ -109,12 +117,13 @@ python cleanup_cache.py --dry-run
 ### **🗂️ Supporting Systems**
 ```
 test-tdd-project/
-├── 📱 streamlit_extension/     # Enterprise Streamlit application
-├── ⏱️ duration_system/        # Duration calculations & security
+├── 🧠 tdd_core/               # Core de domínio (Marco 0)
+├── 📱 streamlit_extension/    # Enterprise Streamlit application (via adapters)
+├── ⏱️ duration_system/       # Duration calculations & security
 ├── 🧪 tests/                  # Test suite (650+ focused tests)
 ├── 🔧 scripts/                # Maintenance & analysis tools
 ├── 🔄 migration/              # Data migration & sync
-├── 📚 docs/                   # User guides & documentation
+├── 📚 docs/                   # User guides & documentation (incl. PLANO_HISTORIA_1_1.md)
 ├── 📋 epics/                  # Epic data (12 epics, 206 tasks)
 ├── 🌍 config/                 # Multi-environment configuration
 └── 🗄️ framework.db + task_timer.db (databases)
@@ -133,6 +142,7 @@ test-tdd-project/
 - **[migration/CLAUDE.md](migration/CLAUDE.md)** - Migration system
 - **[config/CLAUDE.md](config/CLAUDE.md)** - Environment configuration
 - **[monitoring/CLAUDE.md](monitoring/CLAUDE.md)** - Observability stack
+- **Marco 0 — Domínio:** `docs/marco_0_domain_extraction.md` • Plano: `docs/PLANO_HISTORIA_1_1.md`
 
 ---
 
@@ -178,6 +188,12 @@ test-tdd-project/
 ---
 
 ## 🔜 Roadmap
+
+### **Architecture Transition (PRD)**
+- Marco 0 — Extração do Domínio (`tdd_core`): núcleo independente, adapters para Streamlit; zero regressões.
+- Marco 1 — API v1 + CLI MVP: endpoints básicos, wizard via API, pesos por projeto; CLI com modo online/offline.
+- Marco 2 — Web v1 (Nuxt): Wizard Web consumindo API; equivalência com CLI; SSE para refinamentos.
+- Marco 3 — Fluxos completos + métricas: Histórias→Tarefas com IA; persistência completa do wizard; painel de métricas.
 
 ### **✅ Phase 4.6 COMPLETED (2025-08-30)**
 - UI Polish with enhanced loading feedback and detailed progress indicators

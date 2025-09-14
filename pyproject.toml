@@ -26,7 +26,8 @@ classifiers = [
 ]
 packages = [
     {include = "tdah_tools"},
-    {include = "streamlit_extension"}
+    {include = "streamlit_extension"},
+    {include = "tdd_core"}
 ]
 include = [
     "README.md",
@@ -180,7 +181,7 @@ extend-exclude = '''
 profile = "black"
 multi_line_output = 3
 line_length = 88
-known_first_party = ["src", "tests", "tdah_tools", "scripts", "streamlit_extension"]
+known_first_party = ["src", "tests", "tdah_tools", "scripts", "streamlit_extension", "tdd_core"]
 known_third_party = ["pytest", "click", "pydantic", "rich", "typer", "streamlit", "sqlalchemy", "gql", "aiohttp"]
 skip = [".venv", "venv", "env", ".env"]
 sections = ["FUTURE", "STDLIB", "THIRDPARTY", "FIRSTPARTY", "LOCALFOLDER"]
@@ -229,6 +230,7 @@ addopts = [
     "--cov=tdah_tools", 
     "--cov=scripts",
     "--cov=streamlit_extension",
+    "--cov=tdd_core",
     "--cov-report=term-missing",
     "--cov-report=html:htmlcov",
     "--cov-report=xml",
@@ -271,7 +273,7 @@ filterwarnings = [
 
 # Coverage configuration
 [tool.coverage.run]
-source = ["src", "tdah_tools", "scripts", "streamlit_extension"]
+source = ["src", "tdah_tools", "scripts", "streamlit_extension", "tdd_core"]
 branch = true
 omit = [
     "*/tests/*",
