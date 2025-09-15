@@ -32,6 +32,7 @@ class Epic:
 
     # Identificação e status
     id: Optional[int] = None
+    product_vision_id: Optional[int] = None  # vínculo explícito com Product Vision
     status: str = "pending"
     priority: int = 3
 
@@ -106,4 +107,3 @@ class Epic:
 
     def is_high_confidence(self) -> bool:
         return self.ai_confidence >= 0.8
-

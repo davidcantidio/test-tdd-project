@@ -7,7 +7,7 @@
 **Architecture:** API-First Transition (tdd_core domain module + adapters) + Clean Architecture  
 **Security:** **ENTERPRISE CERTIFIED** - Grade A+ Authentication Stack  
 **Performance:** 4,600x+ optimization with connection pooling & LRU cache (<10ms queries)  
-**Data:** Direct Projects → 12 Epics → 206 Tasks  
+**Data:** Projects → Product Vision → Epics → User Stories → Tasks  
 **Tests:** 672+ focused tests • 98%+ coverage • Zero critical vulnerabilities  
 **Navigation:** ✅ **GENERIC PROJECT WIZARD** - Universal 4-phase structure (Roteiro → Capítulos → Histórias → Tarefas)  
 **Clean Architecture:** ✅ **DOMAIN-DRIVEN DESIGN WITH REPOSITORY PATTERN** - Project Wizard restructured  
@@ -148,20 +148,20 @@ test-tdd-project/
 
 ## 📊 Database Schema
 
-**Core Tables:** 8 tables with foreign key relationships, optimized indexes, automated triggers  
-- `framework_projects`, `framework_epics` **(enhanced for IA)**, `framework_tasks`  
-- `framework_priority_settings` **(new - História 3.2)**, `work_sessions`, `achievement_types`, `user_achievements`  
-- `user_streaks`, `github_sync_log`, `system_settings`  
+**Core Tables:** Foreign keys, optimized indexes, automated triggers  
+- `framework_projects`, `product_visions`, `framework_epics` **(enhanced for IA)**, `framework_user_stories`, `framework_tasks`  
+- `framework_priority_settings` **(História 3.2)**, `work_sessions`, `achievement_types`, `user_achievements`, `user_streaks`, `github_sync_log`, `system_settings`  
 - **Eliminated:** `framework_clients` (complete client layer removal - Phase 3.2)
 
-**Features:** JSON field support, automatic triggers, dashboard views, **IA-driven epic generation**
+**Features:** JSON field support (e.g., acceptance_criteria), automatic triggers, dashboard views, **IA-driven epic generation**
 
 ### **🧠 IA-Enhanced Epic Schema**
-**New Fields in framework_epics (Phase 5.1):**
+**Key Fields in framework_epics (Phase 5.1+):**
 - `complexity_score` DECIMAL(5,2) - AI-calculated complexity (1.0-5.0)
 - `effort_estimate` INTEGER - AI-estimated effort in days
 - `sort_order` INTEGER - Deterministic topological ordering
-- `epic_dependencies` JSON - Array of epic dependencies for ordering
+- `product_vision_id` INTEGER - FK to product_visions.id
+- Dependencies stored in junction table `framework_epic_dependencies (epic_id, depends_on_key)`
 - `unblock_potential` INTEGER - Number of epics this epic unblocks
 - `critical_path_weight` DECIMAL(5,2) - Weight in critical path calculation
 - `ai_generated` BOOLEAN - Flag indicating IA-generated epic
@@ -797,11 +797,11 @@ EOF
 
 
 #### **Ultra-Normalized Database Architecture (Phase 4.5) - ✅ COMPLETED - 2025-08-25**
-- **Product Visions Minimization:** Reduced from 44 to 15 fields (65.9% reduction)
+- **Product Vision Consolidation:** Reduced from 44 to 16 core fields (inclui must_have/cannot_have)
 - **Projects Hub Expansion:** Expanded from 57 to 78 fields (36.8% increase)
 - **Clear Separation:** Product visions = pure vision essence, Projects = comprehensive management hub
 - **Fields Migration:** 21 fields moved from product_visions to framework_projects
-- **New Constraints Field:** Added constraints list field to product_visions
+- **Constraints Field Removed:** Substituído por dois campos explícitos: must_have e cannot_have
 - **Zero Data Loss:** All functionality preserved with improved organization
 - **Performance Impact:** Faster queries on smaller product_visions table
 

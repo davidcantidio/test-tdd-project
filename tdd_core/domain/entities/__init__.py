@@ -1,16 +1,27 @@
 """Domain Entities - Core Business Objects
 
-Entities are objects that have identity and can change over time.
-They represent the core concepts of the business domain.
+Entities represent the core concepts of the business domain with identity.
+All entities are framework-independent and contain business logic.
 
-Future entities (História 1.2):
-    - ProductVision: Product vision with 15 required fields
-    - Project: Project entity with 78 fields (hub for all data)
-    - Epic: Epic entity with 56 fields including AI fields
-    - Task: Task entity with TDD workflow support
+Available entities:
+    - ProductVision: Product vision (16 fields, must_have/cannot_have)
+    - Project: Project hub with wizard metadata and metrics
+    - Epic: Epic with AI fields and topological ordering metadata
+    - Task: Task with TDD workflow and TDAH support
 
-Status: História 1.1 Complete - Structure Ready
-Next: História 1.2 - Entity Extraction
+Status: História 1.2 Complete - Entities Extracted
 """
 
-__all__: list[str] = []  # Will be populated in História 1.2
+from .product_vision import ProductVision
+from .project import Project
+from .epic import Epic
+from .task import Task
+from .user_story import UserStory
+
+__all__: list[str] = [
+    "ProductVision",
+    "Project",
+    "Epic",
+    "Task",
+    "UserStory",
+]

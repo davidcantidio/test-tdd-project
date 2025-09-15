@@ -12,4 +12,14 @@ Status: História 1.1 Complete - Structure Ready
 Next: História 3.1 - StreamlitAdapter Creation
 """
 
-__all__: list[str] = []
+from .relations_adapter import (
+    get_epics_for_product_vision,
+    get_user_stories_for_epic,
+    get_tasks_for_user_story,
+)
+
+__all__: list[str] = [
+    "get_epics_for_product_vision",
+    "get_user_stories_for_epic",
+    "get_tasks_for_user_story",
+]

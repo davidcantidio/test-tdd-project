@@ -8,13 +8,13 @@
 **Architecture:** ✅ **TDD_CORE IMPLEMENTED** - Clean Architecture + DDD (História 1.1/1.2 Complete)
 **Security:** **ENTERPRISE CERTIFIED** - Grade A+ Authentication Stack
 **Performance:** 4,600x+ optimization with connection pooling & LRU cache (<10ms queries)
-**Data:** Direct Projects → 12 Epics → 206 Tasks
+**Data:** Projects → Product Vision → Epics → User Stories → Tasks
 **Tests:** 690+ focused tests • 98%+ coverage • Zero critical vulnerabilities
 **Navigation:** ✅ **GENERIC PROJECT WIZARD** - Universal 4-phase structure (Roteiro → Capítulos → Histórias → Tarefas)
 **Clean Architecture:** ✅ **DOMAIN-DRIVEN DESIGN WITH REPOSITORY PATTERN** - tdd_core module operational
 **Multi-Step Wizard:** ✅ **STREAMLINED INTERFACE** - Clean navigation, vertical forms, complete content display
 **UI Design:** ✅ **PROFESSIONAL INTERFACE** - ET icon, macro phases, optimized layouts, intuitive flow
-**Last Updated:** 2025-09-14 - História 1.1/1.2 Complete - TDD Core Structure & ProductVision Entity
+**Last Updated:** 2025-09-15 - História 1.2.x Complete - New domain relationships and migrations (013/014)
 
 ### 🎯 Enterprise TDD Framework Features
 - **TDD Methodology:** Complete Red/Green/Refactor cycle management
@@ -159,20 +159,20 @@ test-tdd-project/
 
 ## 📊 Database Schema
 
-**Core Tables:** 8 tables with foreign key relationships, optimized indexes, automated triggers  
-- `framework_projects`, `framework_epics` **(enhanced for IA)**, `framework_tasks`  
-- `framework_priority_settings` **(new - História 3.2)**, `work_sessions`, `achievement_types`, `user_achievements`  
-- `user_streaks`, `github_sync_log`, `system_settings`  
+**Core Tables:** Foreign keys, optimized indexes, automated triggers  
+- `framework_projects`, `product_visions`, `framework_epics` **(enhanced for IA)**, `framework_user_stories`, `framework_tasks`  
+- `framework_priority_settings` **(História 3.2)**, `work_sessions`, `achievement_types`, `user_achievements`, `user_streaks`, `github_sync_log`, `system_settings`  
 - **Eliminated:** `framework_clients` (complete client layer removal - Phase 3.2)
 
-**Features:** JSON field support, automatic triggers, dashboard views, **IA-driven epic generation**
+**Features:** JSON field support (e.g., acceptance_criteria), automatic triggers, dashboard views, **IA-driven epic generation**
 
 ### **🧠 IA-Enhanced Epic Schema**
-**New Fields in framework_epics (Phase 5.1):**
+**Key Fields in framework_epics (Phase 5.1+):**
 - `complexity_score` DECIMAL(5,2) - AI-calculated complexity (1.0-5.0)
 - `effort_estimate` INTEGER - AI-estimated effort in days
 - `sort_order` INTEGER - Deterministic topological ordering
-- `epic_dependencies` JSON - Array of epic dependencies for ordering
+- `product_vision_id` INTEGER - FK to product_visions.id
+- Dependencies stored in junction table `framework_epic_dependencies (epic_id, depends_on_key)`
 - `unblock_potential` INTEGER - Number of epics this epic unblocks
 - `critical_path_weight` DECIMAL(5,2) - Weight in critical path calculation
 - `ai_generated` BOOLEAN - Flag indicating IA-generated epic
@@ -191,8 +191,8 @@ test-tdd-project/
 ## 📈 System Metrics
 
 **Performance:** Queries <1ms • 100% referential integrity • Zero database locks  
-**Data:** Direct Projects → 12 Epics → 206 Tasks (Client layer fully eliminated)  
-**Database:** Ultra-normalized - Product visions (15 fields) + Projects hub (78 fields)  
+**Data:** Projects → Product Vision → Epics → User Stories → Tasks (Client layer eliminated)  
+**Database:** Ultra-normalized - Product visions (16 fields) + Projects hub (78 fields)  
 **Testing:** 650+ focused tests passing • 98%+ coverage • Zero critical vulnerabilities  
 **Security:** Grade A+ compliance • CSRF/XSS protected • Enterprise certified
 
@@ -200,16 +200,18 @@ test-tdd-project/
 
 ## 🔜 Roadmap
 
-### **✅ TDD Core Implementation (2025-09-14)**
+### **✅ TDD Core Implementation (2025-09-15)**
 - **História 1.1 COMPLETE:** Core module structure with Clean Architecture + DDD
   - Domain, Application, Infrastructure layers created
   - All __init__.py files with proper metadata
   - 13 smoke tests passing (100% coverage)
-- **História 1.2 COMPLETE:** ProductVision entity implementation
-  - 16 required fields with validation
-  - SQLite repository with CRUD operations
-  - DB ↔ Entity mapper implementation
-  - 19 unit tests + integration tests passing
+- **História 1.2 COMPLETE:** Domain entities implemented (ProductVision, Project, Epic, UserStory, Task)
+  - ProductVision: 16 required fields (must_have, cannot_have) — constraints removido
+  - Epic: IA fields + product_vision_id (FK)
+  - UserStory: acceptance_criteria (JSON list)
+  - Task: TDD fields + user_story_id (FK) e epic_id (compatibilidade)
+  - Repositórios + mappers SQLite com round-trip tests
+  - Teste integrado imprime JSON completo do grafo (projeto → visão → épicos → histórias → tarefas)
 
 ### **Architecture Evolution (Next Steps)**
 - Marco 1 — API v1 + CLI MVP: endpoints básicos, wizard via API, pesos por projeto

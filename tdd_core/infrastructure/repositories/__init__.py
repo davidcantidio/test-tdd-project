@@ -13,7 +13,13 @@ Next: História 3.3 - Repository Implementation
 """
 
 from .sqlite_product_vision_repository import ProductVisionRepository
+from .sqlite_epic_repository import EpicRepository
+from .sqlite_task_repository import TaskRepository
+from .sqlite_user_story_repository import UserStoryRepository
 
 __all__: list[str] = [
     "ProductVisionRepository",
+    "EpicRepository",
+    "TaskRepository",
+    "UserStoryRepository",
 ]

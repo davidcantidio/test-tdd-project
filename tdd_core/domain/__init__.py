@@ -21,13 +21,18 @@ Status: História 1.1 - Structure Ready
 Next: História 1.2 - Domain Entities Extraction
 """
 
-# Future imports will be added as entities are created
-# from .entities import ProductVision, Project, Epic, Task
+from .entities import ProductVision, Project, Epic, Task, UserStory
 # from .value_objects import Priority, TddPhase, ComplexityScore
 # from .exceptions import DomainError, ValidationError
 # from .repositories import IProjectRepository, IEpicRepository
 
-__all__: list[str] = []  # Will be populated in História 1.2-1.3
+__all__: list[str] = [
+    "ProductVision",
+    "Project",
+    "Epic",
+    "Task",
+    "UserStory",
+]
 
 # Layer metadata
 LAYER_INFO = {

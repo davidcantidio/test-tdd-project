@@ -13,7 +13,13 @@ Next: História 3.2 - Mapper Implementation
 """
 
 from .product_vision_mapper import ProductVisionMapper
+from .epic_mapper import EpicMapper
+from .task_mapper import TaskMapper
+from .user_story_mapper import UserStoryMapper
 
 __all__: list[str] = [
     "ProductVisionMapper",
+    "EpicMapper",
+    "TaskMapper",
+    "UserStoryMapper",
 ]

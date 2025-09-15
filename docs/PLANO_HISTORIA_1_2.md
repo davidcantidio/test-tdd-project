@@ -138,6 +138,7 @@ class Epic:
 
     # Campos com defaults
     id: Optional[int] = None
+    product_vision_id: Optional[int] = None  # vínculo com Product Vision
     status: str = "pending"
     priority: int = 3
 
@@ -329,6 +330,7 @@ class Task:
 
     # Identificação e status
     id: Optional[int] = None
+    user_story_id: Optional[int] = None  # vínculo com User Story
     status: str = "todo"  # todo/in_progress/done/blocked
     tdd_status: str = "pending"  # pending/red/green/refactor
 
@@ -411,6 +413,47 @@ class Task:
             return (self.estimated_duration / self.actual_duration) * 100
         return None
 ```
+
+#### Nota de Persistência — framework_user_stories (User Stories)
+- Importante: a entidade Task persiste na tabela `framework_tasks`.
+- A tabela `framework_user_stories` (introduzida na migração 007) representa "User Stories" e NÃO deve ser confundida com Task.
+- Para manter o domínio limpo e o mapeamento fiel ao banco, a entidade "UserStory" será contemplada em história subsequente (1.2.x), mapeando para `framework_user_stories` com o seguinte alinhamento de campos (prévia):
+  - `story_key` ↔ `key`
+  - `title` ↔ `name`
+  - `user_story` (texto no formato "Como [usuário]...") ↔ `narrative` (campo da entidade)
+  - `acceptance_criteria` (JSON) ↔ `acceptance_criteria` (lista de strings/objetos)
+  - `epic_id` (FK) ↔ `epic_id`
+  - `status`, `workflow_stage`, `story_points`, `labels`, `components`, ... mapeados 1:1 conforme necessidade
+- Justificativa: separar User Story de Task mantém semântica correta (histórias como requisitos; tasks como itens de execução).
+
+#### Nova Cadeia Relacional (Atualizada)
+- Projeto (framework_projects)
+  → Product Vision (product_visions.project_id)
+    → Épicos (framework_epics.product_vision_id)
+      → User Stories (framework_user_stories.epic_id)
+        → Tasks (framework_tasks.user_story_id)  
+  Observação: framework_tasks mantém epic_id por compatibilidade e joins eficientes.
+
+#### Migrações Adicionais (História 1.2.x)
+1) 013_add_product_vision_id_to_epics.sql
+   - Adiciona coluna `product_vision_id` em `framework_epics` (FK → product_visions.id ON DELETE SET NULL)
+   - Reconstrói tabela e preserva dados
+   - Índice: `idx_epics_project_pv (project_id, product_vision_id)`
+
+2) 014_add_user_story_id_to_tasks.sql
+   - Adiciona coluna `user_story_id` em `framework_tasks` (FK → framework_user_stories.id ON DELETE SET NULL)
+   - Reconstrói tabela e preserva dados
+   - Índice: `idx_tasks_epic_user_story (epic_id, user_story_id)`
+
+#### Adapters/Repos atualizados
+- EpicRepository: `list_by_product_vision_id(product_vision_id)`
+- UserStoryRepository: `list_by_epic_id(epic_id)`
+- TaskRepository: `list_by_user_story_id(user_story_id)`
+- Relations Adapter (infra/adapters):
+  - `get_epics_for_product_vision(conn, pv_id)`
+  - `get_user_stories_for_epic(conn, epic_id)`
+  - `get_tasks_for_user_story(conn, us_id)`
+
 
 ### TASK-1.2.5: Atualizar __init__.py das entidades (1h)
 ```python

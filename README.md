@@ -1,6 +1,6 @@
-# 🚀 TDD Framework - Enterprise Streamlit Application
+# 🚀 TDD Framework - Enterprise Domain + Streamlit Application
 
-> **Production-ready Test-Driven Development** framework with **Project → Epic → Task** hierarchy (simplified architecture), enterprise authentication, and security stack.
+> **Production-ready Test-Driven Development** framework with **Project → Product Vision → Epic → User Story → Task** domain hierarchy, enterprise authentication, and security stack.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
@@ -11,11 +11,11 @@
 ## ✨ Key Features
 
 ### 🏗️ **Enterprise Architecture**
-- **3-Level Hierarchy**: Project → Epic → Task with streamlined relationships
+- **5-Level Hierarchy**: Project → Product Vision → Epic → User Story → Task
 - **Enterprise Security**: Grade A+ compliance with authentication, CSRF/XSS protection
-- **Service Layer**: 5 business services with clean architecture
+- **Clean Architecture + DDD**: `tdd_core` domain module with repositories/mappers/adapters
 - **Multi-Environment**: Development, staging, production configurations
-- **Ultra-Normalized Database**: Product visions (15 fields) + Projects hub (78 fields)
+- **Ultra-Normalized Database**: Product visions (16 fields) + Projects hub (78 fields)
 
 ### 🎯 **Core Functionality**
 - **📊 Interactive Dashboard**: Real-time metrics and progress tracking
@@ -105,6 +105,9 @@ export GOOGLE_CLIENT_SECRET="your_client_secret"
 ```bash
 pytest tests/  # Run tests
 streamlit run streamlit_extension/streamlit_app.py  # Start dashboard + timer
+
+# Optional: print full domain relationships (JSON dump)
+pytest -q -s tests/tdd_core/integration/test_domain_relationships.py::test_domain_relationships_mock_dump
 ```
 
 ## 📊 Dashboard Features
@@ -113,59 +116,24 @@ streamlit run streamlit_extension/streamlit_app.py  # Start dashboard + timer
 **Analytics:** Real-time progress, TDD metrics, focus sessions, productivity insights  
 **Management:** Complete CRUD operations via Streamlit interface
 
-## 🗄️ Database Architecture
+## 🗄️ Database & Domain Architecture
 
-**🏆 Hybrid Database Architecture - The Optimal Solution** (2025-08-18):
+### **Domain-Driven Design (DDD) + Clean Architecture**
+- `tdd_core/domain`: entidades puras (ProductVision, Project, Epic, UserStory, Task)
+- `tdd_core/infrastructure`: mappers, repositórios SQLite e adapters
+- `tdd_core/infrastructure/adapters/relations_adapter.py`: helpers para navegar relacionamentos
 
-*After comprehensive analysis of 42 files and extensive performance validation, our hybrid approach has been confirmed as the superior architecture, delivering exceptional performance while maintaining complete flexibility.*
+### **Relational Model (chaves estrangeiras)**
+- `product_visions.project_id` → `framework_projects.id`
+- `framework_epics.product_vision_id` → `product_visions.id`
+- `framework_user_stories.epic_id` → `framework_epics.id`
+- `framework_tasks.user_story_id` → `framework_user_stories.id`
+- `framework_tasks.epic_id` → `framework_epics.id` (compatibilidade e joins eficientes)
+- Dependências de épicos: tabela de junção `framework_epic_dependencies (epic_id, depends_on_key)`
 
-### **🎯 Flexible Dual API - Choose Your Preferred Pattern**
-```python
-# 🏢 Enterprise Pattern (DatabaseManager) - Proven & Stable
-from streamlit_extension.utils.database import DatabaseManager
-db = DatabaseManager()
-conn = db.get_connection()
-epics = db.get_epics()  # Familiar, well-tested API
-
-# ⚡ Modular Pattern (Specialized Functions) - Optimized & Modern  
-from streamlit_extension.database import get_connection, transaction, check_health
-conn = get_connection()
-with transaction():
-    # ACID-compliant operations with 4,600x+ performance
-
-# 🚀 Hybrid Pattern (Best of Both Worlds) - RECOMMENDED
-from streamlit_extension.utils.database import DatabaseManager
-from streamlit_extension.database import transaction, check_health
-db = DatabaseManager()  # Familiar API
-with transaction():     # Optimized transactions
-    db.create_client(data)     # Enterprise reliability
-    health = check_health()    # Modern monitoring
-```
-
-### **🏆 Why Our Hybrid Architecture is Superior**
-
-#### **📈 Exceptional Performance**
-- ✅ **4,600x+ Performance Improvement**: OptimizedConnectionPool + LRU cache + WAL mode
-- ✅ **Sub-millisecond Queries**: < 1ms average response time for all operations
-- ✅ **Enterprise-Grade Optimization**: Thread-safe connection pooling with automatic rollback
-
-#### **🛡️ Production Excellence**
-- ✅ **Zero Breaking Changes**: 42 files analyzed - all working optimally with hybrid approach
-- ✅ **Dual API Flexibility**: Teams choose patterns that work best for their needs
-- ✅ **Rock-Solid Stability**: 1,300+ tests passing with 98%+ coverage
-- ✅ **Enterprise Compliance**: Grade A+ security certification maintained
-
-#### **🚀 Developer Experience**
-- ✅ **Choose Your Style**: Enterprise (DatabaseManager) or Modern (Modular) or Hybrid (Both)
-- ✅ **Gradual Adoption**: Migrate at your own pace - no pressure, no deadlines
-- ✅ **Best of Both Worlds**: Mix patterns as needed - ultimate flexibility
-- ✅ **Future-Proof**: Architecture supports evolution without disruption
-
-#### **💼 Business Value**
-- ✅ **Immediate ROI**: 4,600x+ performance with zero migration effort
-- ✅ **Risk Elimination**: Proven stable architecture vs uncertain migration
-- ✅ **Team Productivity**: No learning curve - use familiar patterns
-- ✅ **Cost Efficiency**: No migration costs, immediate benefits
+### **Migrações recentes**
+- 013_add_product_vision_id_to_epics.sql — adiciona vínculo Epics → Product Vision
+- 014_add_user_story_id_to_tasks.sql — adiciona vínculo Tasks → User Story
 
 ## 🛠️ Commands
 
